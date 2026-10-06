@@ -43,6 +43,14 @@ decide before merging. Written 2026-10-06 against `ai-agent-workflow` at `816032
    `packages/cre-workflows/mirror/`. The review core's `paper.ts`, `core.ts` and `runner.ts` don't
    collide by name with `cre-scaffold`'s files, but the two `package.json` files do.
 
+8. **Two CRE projects.** The review core has a root `project.yaml` (target `simulation-settings`,
+   no RPCs) for `packages/cre-workflows/review-spike`; `cre-scaffold` has
+   `packages/cre-workflows/project.yaml` (targets `staging-settings` / `production-settings`,
+   private registry, deploy CI) for `mirror` and `review`. The CLI finds the nearest
+   `project.yaml`, so both work after a merge, but deploys go through
+   `packages/cre-workflows`. *Proposal:* move `review-spike` under that project and add its
+   targets there.
+
 ## Review core gates that `cre-scaffold` implements
 
 From `docs/agents/PAPER_INTEGRATION.md` "Required production adapters and gates":
