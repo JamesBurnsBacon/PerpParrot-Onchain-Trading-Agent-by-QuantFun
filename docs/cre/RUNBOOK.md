@@ -64,7 +64,14 @@ Unit tests per package: `bun test` in `packages/backend`, `packages/executor`,
 
 ### `mirror` workflow (`config.production.json`)
 
-`backendUrl`, `executorUrl`, `frozenConfigurationHash`, `spotCheckCount` (≤ 4: HTTP budget),
+Secret `mirrorSamplingKey` (`secrets.yaml` → env `MIRROR_SAMPLING_KEY`): 32 bytes as `0x` + 64 hex,
+e.g. `openssl rand -hex 32`. It seeds the spot-check sample, so **keep it away from the snapshot
+service** (if the backend knew it, it could predict which sources get checked). Simulation reads it
+from `packages/cre-workflows/.env` or the environment (`e2e-mirror.sh` generates one); deployed, it
+lives in the Vault DON: `CRE_CLI_SECRETS_ORG_OWNED=true cre secrets create secrets.yaml --target
+production-settings --secrets-auth=browser` from `packages/cre-workflows`.
+
+Config: `backendUrl`, `executorUrl`, `frozenConfigurationHash`, `spotCheckCount` (≤ 4: HTTP budget),
 `maxDeviationBps` (500), `maxSnapshotAgeSeconds` (120), `reportTtlSeconds` (300). No secrets.
 The production file holds placeholders until the services are deployed and the set is frozen.
 
@@ -80,7 +87,7 @@ The production file holds placeholders until the services are deployed and the s
    `packages/executor/railway.json` (Dockerfile build, `/health` check, one replica each).
    Keep the executor at **one replica**: it owns the HL nonce sequence and the run queue.
 3. **Executor:** set the variables above with `DRY_RUN` unset (dry run). Check `GET /status`.
-4. **`mirror`:** put the two Railway URLs and the configuration hash in
+4. **`mirror`:** create the `mirrorSamplingKey` secret (above), put the two Railway URLs and the configuration hash in
    `packages/cre-workflows/mirror/config.production.json`, merge, then run the **CRE deploy**
    GitHub Action (`mirror`, `production-settings`). Needs deploy access and `CRE_API_KEY`.
 5. **Watch a dry-run cycle:** `GET {executor}/runs?limit=3` should show a run every 10 minutes

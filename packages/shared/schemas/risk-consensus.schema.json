@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "risk-consensus",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0.0"
+    },
+    "snapshotHash": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{64}$"
+    },
+    "policyHash": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{64}$"
+    },
+    "promptHash": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{64}$"
+    },
+    "modelConfigHash": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{64}$"
+    },
+    "quorum": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "candidate": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 24
+          },
+          "drawdownRisk": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "leverageRisk": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "concentrationRisk": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "pathRisk": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "executionRisk": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "evidenceRisk": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "confidence": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          }
+        },
+        "required": [
+          "candidate",
+          "drawdownRisk",
+          "leverageRisk",
+          "concentrationRisk",
+          "pathRisk",
+          "executionRisk",
+          "evidenceRisk",
+          "confidence"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1,
+      "maxItems": 25
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "snapshotHash",
+    "policyHash",
+    "promptHash",
+    "modelConfigHash",
+    "quorum",
+    "results"
+  ],
+  "additionalProperties": false
+}

@@ -23,6 +23,8 @@ CONFIGURATION="$ROOT/packages/backend/fixtures/frozen-configuration.json"
 CONFIGURATION_HASH="$(bun -e "console.log((await Bun.file('$CONFIGURATION').json()).configurationHash)")"
 ACCOUNT="$(bun -e "console.log((await Bun.file('$CONFIGURATION').json()).account)")"
 ADMIN_TOKEN="e2e-$RANDOM$RANDOM"
+# The mirror's spot-check sampling secret (secrets.yaml); simulation reads it from the environment.
+export MIRROR_SAMPLING_KEY="${MIRROR_SAMPLING_KEY:-0x$(openssl rand -hex 32)}"
 PIDS=()
 
 cleanup() { for pid in "${PIDS[@]:-}"; do { kill "$pid" && wait "$pid"; } 2>/dev/null || true; done; }

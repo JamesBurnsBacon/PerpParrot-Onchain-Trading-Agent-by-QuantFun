@@ -32,7 +32,7 @@ describe("fixture configuration", () => {
   });
 
   test("matches the hash the mirror staging config pins", () => {
-    expect(configuration.configurationHash).toBe("0xe315a6608a1ba198c5d4b9e6786dce9276773452eaff3aead1edab8ad647c3a6");
+    expect(configuration.configurationHash).toBe("0x088fe80aef2b0d1d58a2e483073105c141fcf4d13ef80f934dfe811c81e6e1dd");
   });
 });
 
@@ -58,8 +58,8 @@ describe("checkFrozenConfiguration", () => {
     expect(pinnedTo(edited({ extra: 1 } as Partial<FrozenConfiguration>))).toThrow("unknown or missing configuration fields");
   });
 
-  test("rejects non-Balanced or non-live policies", () => {
-    const policy = { ...configuration.policy, bucket: "AGGRESSIVE" };
+  test("rejects non-Aggressive or non-live policies (Aggressive is the live bucket)", () => {
+    const policy = { ...configuration.policy, bucket: "BALANCED" };
     expect(pinnedTo(edited({ policy }))).toThrow("unsupported live policy");
   });
 

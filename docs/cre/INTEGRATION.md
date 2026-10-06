@@ -1,80 +1,66 @@
-# Integrating `cre-scaffold` with the review core (`ai-agent-workflow`)
+# Merging the review core with the CRE mirror path
 
-Both branches touch the mirror path. This note maps what each has, where they agree, and what to
-decide before merging. Written 2026-10-06 against `ai-agent-workflow` at `8160323`, updated for `f168b0d`.
+On 2026-10-06 the branches `ai-agent-workflow` (review core and a parallel paper mirror) and
+`cre-scaffold` (CRE mirror path, executor, snapshot service) were merged into `main`. Where both
+had an approach to the same thing, the better one was kept. This records each choice and why.
 
-## Shared contracts (already compatible)
+## Kept from each side
 
-| Contract | Review core | `cre-scaffold` | Status |
+| Area | Kept | From | Why |
 |---|---|---|---|
-| Commitment | `shared/src/commitments.ts`: keccak256(JCS({domain, payload})) | `packages/shared/commitments.ts` (dependency-free, runs in WASM) | Byte-identical; checked against the review core's code |
-| Frozen authority | `shared/src/frozen.ts` `FrozenConfiguration`, `perpparrot:frozen:v1` | `packages/shared/frozen.ts` `checkFrozenConfiguration` | Same shape and checks except the Ajv policy schema (not available in WASM). The fixture passes `validateFrozenConfiguration` |
-| Weights | integer `weightUnits`, `ceilingUnits`, `cashUnits` (1e6) | same units in bigint copy math | Same |
-| Renormalization | invested budget kept; fail past a ceiling | same (`checkActiveCeilings`) | Same |
-| Spot-check | Σ\|Δnotional\| and \|Δequity\| ≤ 5% of live equity | same (`deviationBps`) | Same |
-| Drift / min order | ≥ $10 and ≥ 10% of target; zero target = close | same (executor planner) | Same |
+| Review core, committee, schemas, prompts, evidence binding | `packages/cre-workflows/review/workflow.ts`, `packages/shared/src`, `packages/shared/schemas`, `review-spike`, `docs/agents` | review core | The AI workstream's domain; nothing on the mirror side overlapped |
+| Review in CRE | `review-spike` (every node calls the model, per-field median consensus) | review core | The committee needs one observation per DON node. The mirror side's Confidential HTTP spike makes a single enclave call, which can't provide that |
+| Frozen authority | `FrozenConfiguration` (`perpparrot:frozen:v1`), integer weight/ceiling/cash units | review core | Long-lived, unlike the expiring manifest. `packages/shared/frozen.ts` re-implements its checks without dependencies so they run in WASM; byte-identical commitments, checked against the review core's validator |
+| Freeze confirmation | `configurationHash` pinned in mirror config, backend and executor | mirror path | Team decision: no onchain contract. Dropped: `FrozenMirrorConsumer.sol`, `chain-authority.ts`, `evm-rpc.ts` |
+| Spot-check sampling | HMAC-SHA256 keyed by a CRE secret (`mirrorSamplingKey`) over run time and snapshot hash | review core (mirror spike) | Unpredictable to the backend. The mirror path's DON `Math.random()` seed is documented by Chainlink as not cryptographically secure |
+| Spot-check content | positions **and** equity within 5%; renormalized weights must stay under frozen ceilings | review core (paper mirror) | Already adopted into the mirror path before the merge |
+| CRE mirror workflow | `packages/cre-workflows/mirror` | mirror path | Runs end to end in `cre workflow simulate` against live HL data (six scenarios, soak, 25-source scale test). The review core's `mirror-spike` was paper-only and couldn't deliver reports |
+| Snapshot producer | `packages/backend` (immutable per-run snapshots built at `:x9`, served to every node) | mirror path | Supersedes `backend/src/snapshot.ts` + `info-client.ts` from the review core, which read only core-dex `accountValue` (see Equity) and pushed the whole snapshot through consensus (23 KB budget) |
+| Equity | HL `portfolio` account value | mirror path | The review core's adapter used core-dex `accountValue` and rejected unified/portfolio-margin accounts and HIP-3. Most leaderboard traders use unified or portfolio-margin accounts, and per-dex `accountValue` understates their equity 2–10× |
+| Consensus on live reads | identical on snapshot-derived values, **median** on the spot-check deviation | mirror path | The review core's mirror spike required identical account states across nodes, which it noted would HOLD whenever node reads straddle an exchange update |
+| Report and execution | DON-signed exposures report → executor (below) | mirror path | See "Report shape" |
+| Executor | `packages/executor` | mirror path | Dropped the review core's preview lane: `compiler.ts`, `recovery.ts`, `paper.ts`, `supabase-store.ts` (standard accounts, core dex only; never submitted) |
+| Durable state | `supabase/migrations/20261006120000_cre_mirror.sql` + `20261006130000_review_audit.sql` | both | The review core's `review_audit` table and `persist_review_audit` RPC were kept; its preview/nonce/alert-outbox tables belonged to the dropped preview lane |
+| Alerts, health | executor watchdog + Telegram | mirror path | The review core's outbox needed a scheduler that didn't exist yet |
+| Live bucket | **Aggressive** | README | Team decision 2026-10-06. The review core enforced Balanced-only live in three places; all now enforce Aggressive-only |
+| Tooling | both: pnpm + Node 24 for the review core (root `package.json`, `tests/`), Bun per package for the mirror path | both | `pnpm-workspace.yaml` covers only `packages/cre-workflows`, and the root `tsconfig.json` covers only the review core, so neither toolchain trips over the other. CI: `agent-review-checks.yaml` and `cre-checks.yml` |
 
-## Different choices to settle
+## Report shape: exposures, not orders
 
-1. **Freeze confirmation.** The review core expects a `ConfirmedFreeze` from a chain adapter
-   (a HyperEVM consumer). We dropped onchain contracts (2026-10-06): the `configurationHash` is
-   pinned in the deployed mirror config and checked by the backend, the mirror and the executor.
-   *Proposal:* treat the pinned hash as the confirmation and drop the chain adapter gate.
-2. **Report shape.** The review core's `rebalance-report.schema.json` carries ≤ 10 **orders**
-   (asset ID, side, limit price, size, cloid). `cre-scaffold` reports **exposures** (fractions of
-   our equity) and the executor builds targets and orders against the live account. *Proposal:*
-   exposures. Orders in the report need DON consensus on live prices, our equity and our live
-   positions, which differ per node; exposures are deterministic from an immutable snapshot.
-3. **Spot-check sample size.** The review core samples `min(10, sources)`. Each HL account needs
-   3 calls (core + `xyz` positions, `portfolio` equity), so 10 sources would be 30 calls, over
-   CRE's 15. `cre-scaffold` samples 4 (1 snapshot + 12 + 1 executor = 14).
-4. **Equity.** Read from HL's `portfolio` request (live account value), not Σ per-dex
-   `accountValue`, which understates equity for unified and portfolio-margin accounts (most
-   leaderboard traders). Worth using the same definition in the review core's evidence.
-5. **Snapshot commitment.** The review core hashes positions snapshots under
-   `perpparrot:positions:v1`; `cre-scaffold` uses keccak256 of the served JSON bytes (nodes agree
-   on bytes, not on a re-serialization). Either works; pick one before the dashboard verifies them.
-6. **Tooling.** Review core: pnpm workspace, Node 24 test runner, root `tsconfig.json` with
-   `NodeNext`. `cre-scaffold`: per-package Bun (`bun test`, `bun.lock`). The root `tsconfig.json`
-   includes `packages/**/*.ts`, which would also typecheck `cre-scaffold`'s extensionless imports.
-   *Proposal:* exclude `packages/{backend,executor,cre-workflows/mirror,cre-workflows/review}` from
-   the root tsconfig, or move them into the workspace with `moduleResolution: "bundler"`.
-7. **File collisions.** Both branches add `packages/executor/package.json` and files under
-   `packages/cre-workflows/mirror/`. The review core's `paper.ts`, `core.ts` and `runner.ts` don't
-   collide by name with `cre-scaffold`'s files, but the two `package.json` files do.
+The review core's `rebalance-report.schema.json` puts up to 10 **orders** in the DON-signed report
+(asset ID, side, limit price, size, client ID). The mirror path signs **exposures**: for each asset,
+the target position as a fraction of our equity. The executor turns those into orders when it runs.
 
-8. **Two CRE projects.** The review core has a root `project.yaml` (target `simulation-settings`,
-   no RPCs) for `packages/cre-workflows/review-spike`; `cre-scaffold` has
-   `packages/cre-workflows/project.yaml` (targets `staging-settings` / `production-settings`,
-   private registry, deploy CI) for `mirror` and `review`. The CLI finds the nearest
-   `project.yaml`, so both work after a merge, but deploys go through
-   `packages/cre-workflows`. *Proposal:* move `review-spike` under that project and add its
-   targets there.
+Exposures were kept, for five reasons:
 
-9. **New since `f168b0d` (2026-10-06 15:44).** The review core now also adds:
-   - `packages/backend/src/snapshot.ts` (`produceSnapshot`, its own snapshot shape and
-     `perpparrot:positions:v1` hash): **same path as `cre-scaffold`'s snapshot builder**, a
-     certain merge conflict, and a second snapshot format for the same `:x9` job.
-   - `packages/backend/migrations/001_execution_state.sql` (`preview_*`, `mirror_health`,
-     `alert_outbox`, `review_audit`): a second schema next to `supabase/migrations/`, which is
-     the directory the Supabase project is linked to.
-   - `packages/contracts/src/FrozenMirrorConsumer.sol`: a HyperEVM freeze consumer, which the
-     2026-10-06 decision to drop onchain contracts (item 1) rules out.
-   - `packages/cre-workflows/mirror-spike`: a second mirror workflow.
-   *Proposal:* one snapshot builder, one schema directory (`supabase/migrations/`), one mirror
-   workflow; keep `review_audit` (the review core's own table) and drop the contract.
+1. **Consensus.** Every DON node runs the workflow independently and the report needs consensus.
+   Exposures come only from the snapshot every node received byte for byte, so every node computes
+   exactly the same numbers. Orders also depend on live mark prices, our live equity and our live
+   positions, which each node reads at a slightly different moment. Identical consensus on those
+   fails whenever reads straddle a price tick or a fill, and median consensus on prices or sizes
+   can produce an order no node actually computed.
+2. **Staleness.** A report is signed at `:x0` and executed seconds later; prices and our account
+   move in between. With exposures, the executor sizes and prices orders against the account and
+   mark at the moment it trades ("account = truth", README §4.4). Orders frozen into the report would
+   trade at stale sizes and limits, and could double up if an earlier order filled after the read.
+3. **HTTP budget.** Orders in the report would need the mirror to read market metadata and our
+   positions on every DEX inside CRE's 15 HTTP calls per run. The mirror already uses 14; the
+   executor makes those reads outside CRE, with no limit.
+4. **Verifiability is the same.** Exposures are exactly what the copy model says to hold
+   (`Σ wᵢ · nᵢ,c / Eᵢ`), so anyone can recompute them from the stored snapshot
+   (`packages/executor/scripts/verify-run.ts`). The executor's plan, orders and fills are logged
+   per run next to the signed report.
+5. **Safety checks live in one place.** The $10 minimum (at the limit price), drift rule, 95%
+   margin rule, reduce-only, the executor's own eligibility check and lot/tick rounding all need the
+   live account, so they belong in the executor either way.
 
-## Review core gates that `cre-scaffold` implements
+The trade-off: the DON doesn't attest to the exact orders, only to the target. The executor is
+trusted to translate faithfully, which it would have to be anyway since it holds the trading key.
+Its run log publishes every plan beside the report it came from.
 
-From `docs/agents/PAPER_INTEGRATION.md` "Required production adapters and gates":
+## For the AI workstream after the merge
 
-| Gate | `cre-scaffold` |
-|---|---|
-| 2. Backend snapshot producer, independently queried account states, agreed entropy | `packages/backend` (immutable per-run snapshot at `:x9`); mirror reads accounts directly from HL in node mode; sample seeded by the snapshot ID, identical on every node |
-| 3. CRE SDK mirror wrapper | `packages/cre-workflows/mirror/main.ts`: `runInNodeMode` + per-field consensus, `report()`, `sendReport()`; passes `cre workflow simulate` against live HL data |
-| 4. Live report compiler: asset IDs, lot/tick rounding, slippage, margin | executor `src/planner.ts`, `src/hyperliquid.ts` (HIP-3 IDs `100000 + dex × 10000 + i`), `@nktkas/hyperliquid` formatting, 95% margin rule, reductions before increases |
-| 5. Durable claim/ledger, nonce ownership, partial fills, restart recovery, report provenance | Postgres `executor_reports` (claim), `executor_runs` (plans, results, raw signed reports); single executor process owns nonces; per-order statuses kept on partial failures; DON signatures verified against the Capability Registry. Exchange reconciliation = next run diffs against the live account |
-| 6. Failure state, watchdog, alerts | missed-report watchdog + Telegram alerts in the executor |
-
-Not covered by `cre-scaffold`: gate 1 (chain freeze adapter, proposed to drop) and gate 7 (review
-evidence bridge, model evaluation).
+- Rebase onto `main`. `ai-agent-workflow`'s mirror-lane files were removed in the merge
+  (listed above); its review-core files are unchanged except for the Aggressive-live rule.
+- The review's output feeds the mirror through `proposeFreeze` → `packages/backend/scripts/freeze.ts`.
+- Add new review checks to `tests/` (Node) and `agent-review-checks.yaml`.

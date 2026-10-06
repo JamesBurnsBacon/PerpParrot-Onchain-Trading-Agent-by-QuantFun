@@ -5,7 +5,7 @@
   "frozenAtMs": 1791244800000,
   "reviewHash": "0x5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
   "policy": {
-    "bucket": "BALANCED",
+    "bucket": "AGGRESSIVE",
     "mode": "LIVE",
     "capitalUsd": 470,
     "minOrderUsd": 10,
@@ -24,7 +24,7 @@
     "redTeamRebuildThreshold": 70,
     "redTeamExcludeThreshold": 85
   },
-  "policyHash": "0xbb3a3c8c38f7cc363ec91f34ee7dd1f35cf7d70124944b509b23a45a3db3cc49",
+  "policyHash": "0xaf8d29121bb2f14e087a7d44db24ee4b6dc33479123be2c4fea9fabfff21aad2",
   "sources": [
     {
       "candidate": 0,
@@ -70,5 +70,5 @@
     }
   ],
   "cashUnits": 250000,
-  "configurationHash": "0xe315a6608a1ba198c5d4b9e6786dce9276773452eaff3aead1edab8ad647c3a6"
+  "configurationHash": "0x088fe80aef2b0d1d58a2e483073105c141fcf4d13ef80f934dfe811c81e6e1dd"
 }

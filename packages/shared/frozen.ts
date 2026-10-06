@@ -71,7 +71,7 @@ export const checkFrozenConfiguration = (
 
   const { policy } = value;
   ensure(policy !== null && typeof policy === "object", "invalid frozen policy");
-  ensure(policy.mode === "LIVE" && policy.bucket === "BALANCED", "unsupported live policy");
+  ensure(policy.mode === "LIVE" && policy.bucket === "AGGRESSIVE", "unsupported live policy");
   ensure(unit(policy.maxSourceWeight) && unit(policy.cashBuffer), "invalid frozen policy");
   ensure(typeof policy.maxGrossLeverage === "number" && Number.isFinite(policy.maxGrossLeverage) && policy.maxGrossLeverage > 0, "invalid frozen policy");
   ensure(value.policyHash === commitment(keccakUtf8, "perpparrot:policy:v1", policy), "frozen policy mismatch");

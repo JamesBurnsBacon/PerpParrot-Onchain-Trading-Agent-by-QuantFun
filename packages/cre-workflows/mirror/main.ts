@@ -16,6 +16,9 @@ import {
   type Runtime,
   text,
 } from "@chainlink/cre-sdk";
+import { hmac } from "@noble/hashes/hmac.js";
+import { sha256 } from "@noble/hashes/sha2.js";
+import { bytesToHex as hexOf, hexToBytes as bytesOf } from "@noble/hashes/utils.js";
 import { z } from "zod";
 import { readAccountState, type PerpState, type PortfolioResponse } from "../../shared/account";
 import { capGrossExposure, computeExposures, deviationBps, EXPOSURE_SCALE } from "../../shared/copy";
@@ -58,7 +61,7 @@ type Observation = {
   maxDeviationBps: number;
 };
 
-const observe = (nodeRuntime: NodeRuntime<Config>, runAt: number, sampleSeed: string): Observation => {
+const observe = (nodeRuntime: NodeRuntime<Config>, runAt: number, samplingKey: string): Observation => {
   const { config } = nodeRuntime;
   const http = new HTTPClient();
 
@@ -95,7 +98,12 @@ const observe = (nodeRuntime: NodeRuntime<Config>, runAt: number, sampleSeed: st
       eligible,
     );
 
-  const sample = pickSample(sources, `${snapshot.snapshotId}:${sampleSeed}`, config.spotCheckCount);
+  // Which sources get spot-checked must be unpredictable to the backend, which built
+  // the snapshot: HMAC keyed by a CRE secret the backend never sees (the review core's
+  // mirror-spike design), over the snapshot the nodes are checking. Identical on every node.
+  const snapshotHash = keccakUtf8(raw);
+  const seed = hexOf(hmac(sha256, bytesOf(samplingKey.slice(2)), new TextEncoder().encode(`perpparrot:sample:v1:${runAt}:${snapshotHash}`)));
+  const sample = pickSample(sources, seed, config.spotCheckCount);
   const maxDev = Math.max(...sample.map((s) => deviationBps(s, liveSource(s.address))));
 
   const maxGrossE9 = BigInt(Math.round(snapshot.configuration.policy.maxGrossLeverage * Number(EXPOSURE_SCALE)));
@@ -104,7 +112,7 @@ const observe = (nodeRuntime: NodeRuntime<Config>, runAt: number, sampleSeed: st
   return {
     snapshotId: snapshot.snapshotId,
     account: snapshot.configuration.account,
-    snapshotHash: keccakUtf8(raw),
+    snapshotHash,
     exposures: JSON.stringify(exposures.map((e) => ({ asset: e.asset, exposureE9: e.exposureE9.toString() }))),
     maxDeviationBps: maxDev,
   };
@@ -129,10 +137,9 @@ export const onCronTrigger = (runtime: Runtime<Config>, payload: CronPayload): s
   const { config } = runtime;
   const runAt = Number(payload.scheduledExecutionTime?.seconds ?? BigInt(Math.floor(runtime.now().getTime() / 1000)));
 
-  // Which sources get spot-checked must be unpredictable to the backend, which built
-  // the snapshot before this execution existed. Math.random() in DON mode is seeded
-  // per execution and identical on every node (it differs per node only in node mode).
-  const sampleSeed = Math.floor(Math.random() * Number.MAX_SAFE_INTEGER).toString(16);
+  // 32-byte key from CRE secrets (Vault DON when deployed, .env in simulation).
+  const samplingKey = runtime.getSecret({ id: "mirrorSamplingKey" }).result().value;
+  if (!/^0x[0-9a-f]{64}$/.test(samplingKey) || /^0x0+$/.test(samplingKey)) throw new Error("invalid mirrorSamplingKey secret");
 
   const obs = runtime
     .runInNodeMode(
@@ -144,7 +151,7 @@ export const onCronTrigger = (runtime: Runtime<Config>, payload: CronPayload): s
         exposures: identical,
         maxDeviationBps: median,
       }),
-    )(runAt, sampleSeed)
+    )(runAt, samplingKey)
     .result();
 
   runtime.log(`${obs.snapshotId}: spot-check max deviation ${obs.maxDeviationBps} bps`);

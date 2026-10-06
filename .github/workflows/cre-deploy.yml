@@ -10,7 +10,7 @@ on:
       workflow:
         description: Workflow to deploy
         type: choice
-        options: [mirror, review]
+        options: [mirror]
       target:
         description: CRE target
         type: choice

@@ -2,7 +2,7 @@
 
 > Copy the best Hyperliquid perps traders and vaults, picked by quant screens and an AI agent, orchestrated by Chainlink CRE.
 >
-> **TOKEN2049 Origins Hackathon** · Tracks: **Chainlink (CRE)** · **AI x Crypto** · Status: design doc, no code yet
+> **TOKEN2049 Origins Hackathon** · Tracks: **Chainlink (CRE)** · **AI x Crypto** · Status: review core, CRE mirror path and executor built and simulated end to end; deploy gated on CRE access
 
 **TL;DR**
 - Score Hyperliquid addresses (traders, HyperCore vaults, ERC-4626 vaults) on risk-adjusted performance.
@@ -10,6 +10,8 @@
 - Every 10 minutes, Chainlink CRE verifies the sources' positions and emits a signed rebalance report.
 - An executor holds the **weighted, netted** copy of those positions in our own Hyperliquid account (5 HYPE ≈ $470).
 - **The backtest is the proof:** out-of-sample results over 2 weeks, 1 month, 6 weeks and 3 months vs. holding BTC. The ~5 h live run proves the machinery.
+
+> **Where things are:** review core (AI): [architecture](docs/agents/ARCHITECTURE.md), [system prompts](docs/agents/SYSTEM_PROMPTS.md), [acceptance cases](docs/agents/EVALUATION.md), [JSON contracts](packages/shared/schemas), [integration guide](docs/agents/INTEGRATION.md); checks: `pnpm test`, `pnpm typecheck`. CRE mirror path: README §4.7–4.14, [runbook](docs/cre/RUNBOOK.md), [how the two branches were merged](docs/cre/INTEGRATION.md); checks: `bun test` per package, `./scripts/e2e-mirror.sh all`. **Live bucket: Aggressive** (§4.3).
 
 ---
 
@@ -143,6 +145,9 @@
 | **B: performed badly** | The source's own drawdown from peak is ≥ N%, with **N set per tier** (❓ values) | **Immediate exit** of its slices on the next run |
 
 ### 4.6 AI layer: the agent in the CRE `review` workflow (hourly)
+
+Status: the offline review core (`packages/cre-workflows/review/workflow.ts`, role/risk/red-team committee with DON-node quorum) and a real-SDK review spike (`review-spike`: per-node structured output, per-field median consensus) are built; see [CRE_SPIKE.md](docs/agents/CRE_SPIKE.md) and [production integration status](docs/agents/PRODUCTION_INTEGRATION.md). Its output, a frozen configuration, is the mirror's only execution authority (§4.7). Authenticated model runs and the two-model evaluation remain.
+
 A dedicated workstream, integrated into the CRE flow.
 - **Before go-live:** the agent picks **5–25 sources from ~25 finalists**, assigns weights, and writes a rationale and red flags (martingale, wash-like behavior, concentration, near-liquidation). It also judges:
   - **diversification**, from the correlation matrix and vault ↔ leader links
@@ -159,8 +164,7 @@ A dedicated workstream, integrated into the CRE flow.
   - plus the correlation matrix
   - **Budget:** ≈ 25 × ≤ 4 KB, under CRE's 120 KB request limit.
 - **Models:** two (≥ 1 from OpenAI; ❓ which). The backtest winner selects the live set, and the loser is **shadow-tracked on paper**. Output is structured JSON. API keys are CRE secrets.
-- **Calling the model: Confidential HTTP.** The call runs **once, inside an enclave**, not on every node, so there is one answer and no per-field consensus. The API key is injected from the Vault DON through a `{{.openaiApiKey}}` header template, so nodes never see it. Limits: 125 KB request, 500 KB response, 90 s timeout (the simulator's production limits).
-  - **Spike status:** `review/` sends a fixture of 3 finalists to OpenAI Chat Completions (`gpt-5-mini`, strict JSON schema) and validates the picks: known IDs only, every finalist classified, weights sum to 1. **Passed in simulation on 2026-10-06:** ~8 s for the call; F01/F02 picked (0.65/0.35), F03 (22× leverage, 12-minute holds) rejected as martingale-like.
+- **Calling the model: every node, per-field consensus** (`review-spike`). The committee design needs one observation per DON node (quorum across nodes), so the review uses plain HTTP with per-field median consensus. A Confidential HTTP spike (one enclave call, key never on nodes; passed in simulation 2026-10-06) was dropped in the merge because a single call can't give per-node observations.
 - **Output format:** ❓ *a weight grid (0–3 units), continuous weights with median consensus, or a ranking plus a formula.*
 - **Logging:** full prompts and outputs go to Supabase with their hashes.
 - **First deliverable:** a CRE `review` spike proving an LLM call plus consensus works in `cre workflow simulate`. Then schemas in `packages/shared`, a prompt + offline eval, and the point-in-time backtest harness.
@@ -172,7 +176,7 @@ Each node runs steps 1–3 (`runInNodeMode`); the DON agrees per field, then sig
    - **Equity = HL's live account value** from the `portfolio` request (last point of the `day` window, live), not Σ per-dex `accountValue`. Most leaderboard traders use unified or portfolio-margin accounts (23 + 5 of 40 sampled), where per-dex `accountValue` is only the margin set aside on that dex; summing it understated equity, and so overstated leverage, by 2–10×. The portfolio value is also what the backtest's returns use.
    - The mirror rejects it if it's for another run, was taken > 120 s from `runAt`, contains an ineligible asset, doesn't cover exactly the frozen sources, or its configuration isn't the pinned one.
    - The backend only builds real run times (`:x0`) within 120 s of now, so nobody can pre-build a stale snapshot for a future run through the public endpoint.
-2. **Spot-check 4 sources**: `clearinghouseState` on the core dex **and** `xyz` (HIP-3 positions only come back per dex) plus `portfolio` for equity, 3 calls each. The sample is seeded with `Math.random()` drawn in DON mode, which the CRE platform seeds per execution and identically on every node, so nodes agree on the sample and it changes every run. Chainlink documents this randomness as *not cryptographically secure*, so the spot-check catches bugs and stale data but isn't proof against a deliberately malicious backend (we run it; it's trusted infra). The bounds on a bad snapshot are the executor's own eligibility check, the gross-exposure cap and the margin rule. Deviation = the larger of Σ |snapshot − live notional| and |snapshot − live equity|, over live equity. **Reject the run if the worst source exceeds 5%.**
+2. **Spot-check 4 sources**: `clearinghouseState` on the core dex **and** `xyz` (HIP-3 positions only come back per dex) plus `portfolio` for equity, 3 calls each. The sample is seeded with HMAC-SHA256 keyed by `mirrorSamplingKey`, a CRE secret the snapshot service never sees, over the run time and the snapshot hash (from the review core's mirror spike). Every node computes the same sample; the backend can't predict it. Deviation = the larger of Σ |snapshot − live notional| and |snapshot − live equity|, over live equity. **Reject the run if the worst source exceeds 5%.**
 3. **Exposures:** `exposure_c = Σᵢ wᵢ' · nᵢ,c / Eᵢ` per asset in bigint math (`packages/shared/copy.ts`), so every node gets identical results.
    - Weights are the frozen `weightUnits`; cash stays cash. Flat sources' weight goes to active ones (`wᵢ' = wᵢ · W_all / W_active`), but **never past a source's frozen ceiling** (the run fails instead). Gross exposure is capped at the policy's `maxGrossLeverage`.
    - **Consensus:** snapshot ID, snapshot hash, account and exposures are `identical`; the spot-check's max deviation is `median` (live reads differ slightly between nodes). Only ≤ 59 exposures go through consensus, not the snapshot, which stays under the 25 KB limit (a 25-source snapshot can be ~60 KB).
@@ -342,9 +346,9 @@ Budget ~1 h of testing per 2 h of features. Integrate only tested modules.
 - [ ] ❓ How to read sources' lending positions for Conservative
 - [ ] ❓ Per-tier type-B threshold N (production)
 - [ ] ❓ Org-owned CRE secrets on the private registry: confirm with the sponsor
-- [ ] ❓ Mirror → executor report: **exposures** (§4.13, built and tested) or **≤ 10 orders** (review core's `rebalance-report.schema.json`)? Exposures keep live prices, our equity and our positions out of DON consensus.
-- [ ] ❓ Live bucket: README says Aggressive; the review core only allows **Balanced** live (`requireFrozenLiveManifest`, `validateFrozenConfiguration`)
-- [ ] ❓ Freeze confirmation: the review core's docs plan a HyperEVM freeze consumer; we dropped onchain contracts and pin the `configurationHash` in the mirror config instead (§4.7)
+- [x] Mirror → executor report: **exposures** (§4.13); `rebalance-report.schema.json` (orders) is kept as a contract document only. Why: `docs/cre/INTEGRATION.md`
+- [x] Live bucket: **Aggressive** (team decision 2026-10-06); enforced in the review core and the frozen-configuration checks
+- [x] Freeze confirmation: `configurationHash` pinned in the mirror config, backend and executor; no HyperEVM contract
 - [ ] ❓ Our account mode: **unified** is simplest (one USDC balance margins core and `xyz`); standard mode needs USDC moved into each dex. Equity is read the same way either way
 
 ---

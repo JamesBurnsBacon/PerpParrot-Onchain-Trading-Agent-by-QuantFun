@@ -11,7 +11,7 @@ import { WEIGHT_UNITS, type FrozenConfiguration } from "../../shared/frozen";
 import { keccakUtf8 } from "../src/snapshot";
 
 const policy = {
-  bucket: "BALANCED",
+  bucket: "AGGRESSIVE",
   mode: "LIVE",
   capitalUsd: 470,
   minOrderUsd: 10,

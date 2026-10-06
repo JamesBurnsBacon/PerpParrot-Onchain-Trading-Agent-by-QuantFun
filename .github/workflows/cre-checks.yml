@@ -1,4 +1,5 @@
 # Tests, typechecks and WASM builds for the CRE mirror path (README §4.7–4.14).
+# The review core and review-spike are checked by agent-review-checks.yaml.
 # No secrets: simulation needs a CRE login and is run locally with scripts/e2e-mirror.sh.
 name: CRE checks
 
@@ -10,7 +11,6 @@ on:
       - "packages/executor/**"
       - "packages/shared/*.ts"
       - "packages/cre-workflows/mirror/**"
-      - "packages/cre-workflows/review/**"
       - "packages/cre-workflows/project.yaml"
       - "supabase/migrations/**"
       - ".github/workflows/cre-checks.yml"
@@ -25,7 +25,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: [backend, executor, cre-workflows/mirror, cre-workflows/review]
+        package: [backend, executor, cre-workflows/mirror]
     defaults:
       run:
         working-directory: packages/${{ matrix.package }}
@@ -67,8 +67,7 @@ jobs:
         run: |
           curl -sSL https://app.chain.link/cre/install.sh | bash
           echo "$HOME/.cre/bin" >> "$GITHUB_PATH"
-      - run: bun install --frozen-lockfile --cwd ./mirror && bun install --frozen-lockfile --cwd ./review
+      - run: bun install --frozen-lockfile --cwd ./mirror
       - name: Build WASM
         run: |
           cre workflow build mirror -o "$RUNNER_TEMP/mirror.wasm" --non-interactive
-          cre workflow build review -o "$RUNNER_TEMP/review.wasm" --non-interactive

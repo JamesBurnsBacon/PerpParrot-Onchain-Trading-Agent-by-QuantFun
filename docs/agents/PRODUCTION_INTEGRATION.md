@@ -1,0 +1,49 @@
+# Production integration status
+
+Updated 2026-10-06 when the review core (branch `ai-agent-workflow`) and the CRE mirror path
+(branch `cre-scaffold`) were merged; `docs/cre/INTEGRATION.md` records what came from where and
+why. Nothing here authorizes real trades.
+
+## Review core (this contribution)
+
+| Component | Ownership and verified behavior |
+| --- | --- |
+| Anonymous rich review evidence | `shared/src/committee-evidence.ts` binds the summary frame, full curve/positions/patterns and matrix, rejects contradictions, and bounds the combined finalist at 4 KB. It does not turn the spike's scores into specialist judgments. |
+| Audit persistence | `backend/review/audit.ts` persists bound prompt/evidence and strictly validated committee output through a service-only idempotent RPC (`persist_review_audit`, `supabase/migrations/20261006130000_review_audit.sql`). Real provider output has not been persisted yet. |
+| CRE review spike | `cre-workflows/review-spike`: real SDK HTTP calls, per-node structured output, per-field median consensus (see `CRE_SPIKE.md`). |
+| Frozen configuration | `shared/src/frozen.ts` (`proposeFreeze`): the review's output that becomes the mirror's only execution authority. LIVE is **Aggressive** only (README §4.3). |
+
+## Mirror path (moved)
+
+The paper mirror, execution preview compiler, recovery/nonce store, chain-authority adapter,
+HyperEVM freeze consumer and preview tables that were here were replaced by the CRE mirror path:
+
+| Need | Where it is now |
+| --- | --- |
+| Snapshot producer at `:x9` | `packages/backend` (immutable per-run snapshots, eligibility, Postgres) |
+| CRE mirror wrapper | `packages/cre-workflows/mirror` (HMAC-keyed spot-check sampling with a CRE secret, from this contribution's mirror spike) |
+| Live report + delivery | DON-signed exposures report, `sendReport()` → executor (README §4.13) |
+| Execution | `packages/executor`: signature verification, planner (HL lot/tick rounding via `@nktkas/hyperliquid`, $10 minimum at the limit price, 95% margin rule, reduce-only), dry run by default |
+| Freeze confirmation | `configurationHash` pinned in the mirror config, backend and executor (no onchain contract) |
+| Health and alerts | executor watchdog + Telegram |
+
+## Remaining gates for the review core
+
+1. Complete actual Role/Risk/Red-Team model capability adapters and bind full rich evidence;
+   post-freeze reviews must remain monitoring-only.
+2. Run the two-model point-in-time evaluation, select the winner and persist the full
+   sanitized prompt/output audit with verified hashes and paper shadow state.
+3. Configure CRE/model secrets; run authenticated LLM simulations and verify deployed
+   consensus and request quotas.
+4. Produce the Aggressive LIVE frozen configuration for our account and freeze it
+   (`packages/backend/scripts/freeze.ts`).
+
+## Local checks
+
+Review core: `pnpm install --frozen-lockfile`, `pnpm typecheck`, `pnpm test`, `pnpm test:cre`,
+`pnpm compile:review-spike`, and `python tests/validate_contracts.py` (with jsonschema installed).
+Mirror path: `bun test` in each of `packages/backend`, `packages/executor`,
+`packages/cre-workflows/mirror`, and `./scripts/e2e-mirror.sh all`.
+
+Server code and CRE handlers have separate TypeScript scopes because CRE globally restricts
+Node APIs. Do not import server HTTP, filesystem, SQL, timers or crypto modules into CRE.

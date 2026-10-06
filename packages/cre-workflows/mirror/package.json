@@ -9,6 +9,7 @@
   "license": "UNLICENSED",
   "dependencies": {
     "@chainlink/cre-sdk": "^1.22.0",
+    "@noble/hashes": "2.0.1",
     "viem": "^2.57.3",
     "zod": "3.25.76"
   },

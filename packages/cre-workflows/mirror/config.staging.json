@@ -2,7 +2,7 @@
   "schedule": "0 */10 * * * *",
   "backendUrl": "http://localhost:8788",
   "executorUrl": "http://localhost:8787/reports",
-  "frozenConfigurationHash": "0xe315a6608a1ba198c5d4b9e6786dce9276773452eaff3aead1edab8ad647c3a6",
+  "frozenConfigurationHash": "0x088fe80aef2b0d1d58a2e483073105c141fcf4d13ef80f934dfe811c81e6e1dd",
   "spotCheckCount": 4,
   "maxDeviationBps": 500,
   "maxSnapshotAgeSeconds": 600,
