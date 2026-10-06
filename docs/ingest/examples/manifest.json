@@ -1,0 +1,30 @@
+{
+  "schema": "research-screen-audit.v1",
+  "productionReferenceCommit": "b1937c9c8cc186b349dbb77ade829029d95e302b",
+  "localBaseCommit": "f991cb4",
+  "sourceSnapshot": {
+    "path": "research-screen-v1.ts.txt",
+    "originalPath": "packages/backend/src/ingest/screening.ts",
+    "sha256": "11543889fa274a5c76a5c01534725daaab244a0e7df8b50b0097ffcea5403e0c",
+    "status": "Local research implementation; not a production entrypoint in this PR"
+  },
+  "policy": "research-screen-v1.policy.json",
+  "cases": [
+    {
+      "name": "small-capital-account",
+      "address": "0x3e7c16408c6691e0218167cee78bec7ebad03909",
+      "evidence": "small-capital-account.evidence.json",
+      "expected": "small-capital-account.expected.json",
+      "portfolioSha256": "fc1bc1f9c5946ab9a340a9d6521c9196815cab7a025468db9685e9cb41875336",
+      "fetchedAt": "2026-10-06T10:50:51.931Z"
+    },
+    {
+      "name": "large-weekly-gain-account",
+      "address": "0xc44870bb72748b1c1f29cc5f932644253253a8dc",
+      "evidence": "large-weekly-gain-account.evidence.json",
+      "expected": "large-weekly-gain-account.expected.json",
+      "portfolioSha256": "b923c496fed67c8a38bf976e9b750975d5ac03f3ed480a0974730b435a6cd5eb",
+      "fetchedAt": "2026-10-06T10:41:31.976Z"
+    }
+  ]
+}

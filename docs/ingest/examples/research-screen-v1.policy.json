@@ -1,0 +1,15 @@
+{
+  "version": "research-screen.v1",
+  "minCapitalUsd": 10000,
+  "lookbackDays": 90,
+  "minStageDays": 30,
+  "recentReturn": 0.05,
+  "fullReturn": 0.1,
+  "bestStageReturn": 0.15,
+  "lossBlockReturn": -0.01,
+  "totalLossReturn": -0.05,
+  "riskReviewDrawdown": 0.6,
+  "maxGapDays": 10,
+  "staleHours": 24,
+  "inactivePnlRangeUsd": 1
+}

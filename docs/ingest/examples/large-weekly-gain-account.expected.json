@@ -1,0 +1,93 @@
+{
+  "address": "0xc44870bb72748b1c1f29cc5f932644253253a8dc",
+  "name": null,
+  "classification": "unverified-account",
+  "decision": "candidate-review",
+  "reasons": [
+    "recent-month-return-at-least-5pct",
+    "full-window-return-at-least-10pct",
+    "historical-stage-return-at-least-15pct"
+  ],
+  "flags": [
+    "large-coarse-gain"
+  ],
+  "evaluatedAt": "2026-10-06T13:44:58.445Z",
+  "fetchedAt": "2026-10-06T10:41:31.976Z",
+  "evidenceSha256": "b923c496fed67c8a38bf976e9b750975d5ac03f3ed480a0974730b435a6cd5eb",
+  "seedCapitalUsd": 131391.178412,
+  "capitalSource": "leaderboard-account-value",
+  "portfolioEquityUsd": 130188.576135,
+  "capitalAt": "2026-10-06T10:41:31.749Z",
+  "monthVolumeUsd": 22569061.1,
+  "observation": {
+    "start": "2026-07-08T23:34:00.037Z",
+    "end": "2026-10-06T10:41:31.749Z",
+    "days": 89.46356148148148,
+    "return": 7.569370064041495,
+    "pnlUsd": 92154.194546,
+    "maxDrawdown": 0.3869601982089722,
+    "drawdownPeak": "2026-09-12T23:14:00.011Z",
+    "drawdownTrough": "2026-09-15T23:14:00.065Z",
+    "maxGapDays": 7.027778032407407
+  },
+  "recentMonth": {
+    "start": "2026-09-05T23:54:00.075Z",
+    "end": "2026-10-06T10:41:31.749Z",
+    "days": 30.44967215277778,
+    "return": 0.20695227500734537,
+    "pnlUsd": 19992.227574999997,
+    "maxDrawdown": 0.3869601982089722,
+    "drawdownPeak": "2026-09-12T23:14:00.011Z",
+    "drawdownTrough": "2026-09-15T23:14:00.065Z",
+    "maxGapDays": 1.0330596296296297
+  },
+  "bestStage": {
+    "start": "2026-07-08T23:34:00.037Z",
+    "end": "2026-10-02T08:34:00.001Z",
+    "days": 85.37499958333333,
+    "return": 8.988178298930253,
+    "pnlUsd": 113709.177296,
+    "maxDrawdown": 0.3869601982089722,
+    "drawdownPeak": "2026-09-12T23:14:00.011Z",
+    "drawdownTrough": "2026-09-15T23:14:00.065Z",
+    "maxGapDays": 7.027778032407407
+  },
+  "lossBlocks": [
+    {
+      "start": "2026-07-08T23:34:00.037Z",
+      "end": "2026-08-05T22:14:00.037Z",
+      "days": 27.944444444444443,
+      "return": 0.7112966065310902,
+      "pnlUsd": 8170.345166000003,
+      "maxDrawdown": 0.24327319264033043,
+      "drawdownPeak": "2026-07-22T23:54:00.042Z",
+      "drawdownTrough": "2026-08-05T22:14:00.037Z",
+      "maxGapDays": 7.013888958333333
+    },
+    {
+      "start": "2026-08-05T22:14:00.037Z",
+      "end": "2026-09-05T23:54:00.075Z",
+      "days": 31.06944488425926,
+      "return": 3.148905196426898,
+      "pnlUsd": 63991.621805,
+      "maxDrawdown": 0.211261613436049,
+      "drawdownPeak": "2026-08-26T22:14:00.030Z",
+      "drawdownTrough": "2026-09-02T22:34:00.047Z",
+      "maxGapDays": 7.027778032407407
+    },
+    {
+      "start": "2026-09-05T23:54:00.075Z",
+      "end": "2026-10-06T10:41:31.749Z",
+      "days": 30.44967215277778,
+      "return": 0.20695227500734537,
+      "pnlUsd": 19992.227574999997,
+      "maxDrawdown": 0.3869601982089722,
+      "drawdownPeak": "2026-09-12T23:14:00.011Z",
+      "drawdownTrough": "2026-09-15T23:14:00.065Z",
+      "maxGapDays": 1.0330596296296297
+    }
+  ],
+  "fineTimeShare": 0.3403583721522277,
+  "score": null,
+  "eligible": null
+}
