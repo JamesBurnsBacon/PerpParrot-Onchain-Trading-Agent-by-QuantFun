@@ -7,11 +7,17 @@ CRE `mirror` workflow → executor. Design: README §4.7, §4.8, §4.13, §4.14.
 
 | Piece | Code | Runs on | Talks to |
 |---|---|---|---|
-| Snapshot service | `packages/backend` (`src/server.ts`) | Railway | HL Info API, Supabase |
+| Snapshot service | `packages/backend` (`src/server.ts`) | Vercel service `backend`, `/api/backend/*` | HL Info API, Supabase |
 | `mirror` workflow | `packages/cre-workflows/mirror` | Chainlink DON (private registry) | snapshot service, HL Info API, executor |
-| Executor | `packages/executor` (`src/server.ts`) | Railway | HL Info + Exchange API, Ethereum RPC (DON signers), Supabase, Telegram |
-| Paper books | `packages/backend/src/paper` (inside the snapshot service) | Railway | HL Info API (marks), Supabase |
-| Dashboard | `packages/dashboard` (Next.js) | Vercel | snapshot service, executor (browser fetches, read-only) |
+| Executor | `packages/executor` (`src/server.ts`) | Vercel service `executor`, `/api/executor/*` (dry run only) | HL Info + Exchange API, Ethereum RPC (DON signers), Supabase, Telegram |
+| Paper books | `packages/backend/src/paper` (inside the snapshot service) | Vercel service `backend` | HL Info API (marks), Supabase |
+| Dashboard | `packages/dashboard` (Next.js) | Vercel service `dashboard`, every other path | snapshot service, executor (browser fetches on the same origin, read-only) |
+
+All three deploy as one Vercel project from the root `vercel.json` (one domain, one deployment).
+On Vercel the two Bun services run as functions that stop between requests, so their timers are
+Vercel Cron jobs there: `/api/backend/cron/snapshot` at :x9 builds the coming run's snapshot, and
+`/api/executor/cron/watchdog` every 5 minutes alerts on missed runs. Both services also answer on
+their bare paths (`/health`, `/reports`, …), which is what local runs, Docker and the e2e scripts use.
 | Tables | `supabase/migrations/20261006120000_cre_mirror.sql` | Supabase | — |
 
 ## Run it locally
@@ -42,12 +48,13 @@ Unit tests per package: `bun test` in `packages/backend`, `packages/executor`,
 |---|---|---|
 | `CONFIGURATION_PATH` | yes | Frozen configuration JSON (the review core's freeze output) |
 | `FROZEN_CONFIGURATION_HASH` | yes | Its `configurationHash`; the service refuses any other |
-| `DATABASE_URL` | prod | Supabase Postgres (service role). Without it snapshots and the eligibility list live in memory |
+| `DATABASE_URL` | prod | Supabase Postgres (service role). Without it snapshots and the eligibility list live in memory. Required on Vercel |
+| `CRON_SECRET` | Vercel | Vercel Cron sends it to `/cron/snapshot`; required on Vercel (any random string, shared with the executor) |
 | `SNAPSHOT_MAX_LEAD_SECONDS` | no | How close to a run a snapshot may be built (default 120). `600` only for local simulation |
 | `PAPER_BALANCED_MULTIPLIER` | no | Balanced book = Aggressive weights × this (default 0.5) |
 | `PAPER_SLIPPAGE_BPS` | no | Paper fills at mark ± this (default 5) |
 | `ARTIFACTS_DIR` | no | Without `DATABASE_URL`: folder of `backtest.json` / `funnel.json` for the dashboard (default `artifacts`) |
-| `PORT` | no | Railway sets it |
+| `PORT` | no | Local and Docker only (default 8788) |
 
 ### Executor (`packages/executor`)
 
@@ -56,7 +63,8 @@ Unit tests per package: `bun test` in `packages/backend`, `packages/executor`,
 | `HL_ACCOUNT` | yes | — | Our HL master account (must equal the configuration's `account`) |
 | `FROZEN_CONFIGURATION_HASH` | yes | — | Same as the mirror's `frozenConfigurationHash` |
 | `WORKFLOW_OWNER` | yes | — | `0xc5feb3cf878c9ba42a776e9edf62a4558ab08b85` (org address, private registry) |
-| `NODE_ENV` | prod | — | `production` refuses `VERIFY_REPORTS=false` and requires `ADMIN_TOKEN` |
+| `NODE_ENV` | prod | — | `production` refuses `VERIFY_REPORTS=false` and requires `ADMIN_TOKEN`. Every Vercel deployment (previews too) counts as production |
+| `CRON_SECRET` | Vercel | — | Vercel Cron sends it to `/cron/watchdog`; required on Vercel |
 | `ADMIN_TOKEN` | prod | — | Bearer token for `/admin/*` |
 | `DRY_RUN` | no | `true` | Only the literal `false` sends orders |
 | `HL_API_WALLET_KEY` | live | — | API wallet (agent) key: trades, can't withdraw. Required when `DRY_RUN=false` |
@@ -78,11 +86,13 @@ Unit tests per package: `bun test` in `packages/backend`, `packages/executor`,
 
 | Variable | Meaning |
 |---|---|
-| `NEXT_PUBLIC_BACKEND_URL` | Snapshot service URL (no trailing slash) |
-| `NEXT_PUBLIC_EXECUTOR_URL` | Executor URL |
+| `NEXT_PUBLIC_BACKEND_URL` | Optional. Snapshot service URL (no trailing slash); default `/api/backend` (same origin) |
+| `NEXT_PUBLIC_EXECUTOR_URL` | Optional. Executor URL; default `/api/executor` |
 
-Both are baked in at build time: redeploy the dashboard after changing them. Locally they default to
-`localhost:8788` / `localhost:8787` (`bun run dev`, then `?theme=light|dark` pins a mode).
+Leave both unset on Vercel. If set, they are baked in at build time: redeploy after changing them.
+Locally, `next dev` on its own proxies `/api/backend` and `/api/executor` to `localhost:8788` /
+`localhost:8787` (`bun run dev` in each package; `?theme=light|dark` pins a mode), and `vercel dev`
+at the repository root runs all three services behind one port.
 
 ### `mirror` workflow (`config.production.json`)
 
@@ -110,29 +120,33 @@ To deploy everything before CRE deploy access and the freeze, follow
    both files in `supabase/migrations/` in order (SQL editor, or `supabase link
    --project-ref clheeepphmomkymawsfq && supabase db push`). Use the service-role connection
    string as `DATABASE_URL` for both services.
-2. **Railway:** two services from this repo, **root directory = repository root** (both import
-   `packages/shared`). Config file: `packages/backend/railway.json` and
-   `packages/executor/railway.json` (Dockerfile build, `/health` check, one replica each).
-   Keep the executor at **one replica**: it owns the HL nonce sequence and the run queue.
-3. **Executor:** set the variables above with `DRY_RUN` unset (dry run). Check `GET /status`.
-4. **`mirror`:** create the `mirrorSamplingKey` secret (above), put the two Railway URLs and the configuration hash in
+2. **Vercel:** one project from this repo, **Root Directory = repository root** (the root
+   `vercel.json` defines the three services, their routes and the two crons). Set the variables
+   above for both services in the project (they share one set; `DATABASE_URL` and `CRON_SECRET`
+   serve both), with `DRY_RUN` unset. Use the Supabase **Session pooler** connection string: Bun's
+   driver prepares statements, which the transaction pooler (port 6543) doesn't support. Deploy to
+   production (crons only run on production deployments).
+3. **Executor:** check `GET https://<domain>/api/executor/status` (dry run, `store: postgres`).
+4. **`mirror`:** create the `mirrorSamplingKey` secret (above), put `https://<domain>/api/backend`,
+   `https://<domain>/api/executor/reports` and the configuration hash in
    `packages/cre-workflows/mirror/config.production.json`, merge, then run the **CRE deploy**
    GitHub Action (`mirror`, `production-settings`). Needs deploy access and `CRE_API_KEY`.
-5. **Dashboard (Vercel):** new project from this repo, **Root Directory `packages/dashboard`**
-   (keep "Include files outside the root directory" on: it imports types from `packages/shared`).
-   Framework, install and build come from `packages/dashboard/vercel.json`. Set the two
-   `NEXT_PUBLIC_*` variables to the Railway URLs, deploy, and open it: the header should read
-   "Dry run · Copying" and the heartbeat gains a cell every 10 minutes.
+5. **Dashboard:** deployed with the other two at `https://<domain>/`; open it: the header should
+   read "Dry run · Copying" and the heartbeat gains a cell every 10 minutes.
 6. **Watch a dry-run cycle:** `GET {executor}/runs?limit=3` should show a run every 10 minutes
    with `status: "executed"`, `dryRun: true` and a plan you agree with. Then run
    `bun run scripts/verify-run.ts --executor … --backend …` in `packages/executor` and set
    `WORKFLOW_NAME` and `DON_ID` on the executor from what it prints.
 7. **Go live** (not part of the dry-run rehearsal):
-   1. Fund the account (README §4.8 Capital): USDC in the account, no other transfers needed in
+   1. Move the executor to one long-running process. It refuses `DRY_RUN=false` on Vercel:
+      Vercel may run several instances at once and stops them between requests, while live
+      trading needs one HL nonce sequence and one run queue (README §4.8). The Dockerfile and
+      `packages/executor/railway.json` still build that process; point `executorUrl` at it.
+   2. Fund the account (README §4.8 Capital): USDC in the account, no other transfers needed in
       unified mode.
-   2. Create the executor's API wallet key (a fresh key; its address is `GET /status` → `apiWallet`
+   3. Create the executor's API wallet key (a fresh key; its address is `GET /status` → `apiWallet`
       once `HL_API_WALLET_KEY` is set).
-   3. With the **master key**, on your own machine (never on Railway):
+   4. With the **master key**, on your own machine (never on a server):
       ```sh
       cd packages/executor
       HL_ACCOUNT=0x… HL_API_WALLET_ADDRESS=0x… bun run scripts/setup-account.ts            # status
@@ -140,7 +154,7 @@ To deploy everything before CRE deploy access and the freeze, follow
       ```
       This switches the account to **unified** mode (one USDC balance margins core and `xyz`
       perps) and approves the API wallet (trade, no withdraw). It never moves funds.
-   4. Set `HL_API_WALLET_KEY` and `DRY_RUN=false` on the executor and redeploy. Watch the next
+   5. Set `HL_API_WALLET_KEY` and `DRY_RUN=false` on the executor and redeploy. Watch the next
       run's `results` in `/runs`.
 
 ## Freeze (go-live set)
@@ -155,7 +169,7 @@ bun run scripts/freeze.ts path/to/frozen-configuration.json --account 0xOUR_ACCO
 ```
 
 `--write` saves it as `packages/backend/frozen/live.json` and pins its hash in
-`mirror/config.production.json`; the script prints the Railway variables to set
+`mirror/config.production.json`; the script prints the variables to set on Vercel
 (`CONFIGURATION_PATH=frozen/live.json` and `FROZEN_CONFIGURATION_HASH` on the snapshot service,
 `FROZEN_CONFIGURATION_HASH` and `HL_ACCOUNT` on the executor). Commit, redeploy **both services
 first**, then `mirror` (CRE deploy Action): the Action checks that the services already pin the
@@ -171,7 +185,8 @@ curl -X POST -H "Authorization: Bearer $ADMIN_TOKEN" -H "x-operator: $NAME" $EXE
 ```
 
 Flatten bypasses CRE and stays paused afterwards. It queues behind a run in progress; if a run is
-stuck (alert "still running after …"), restart the executor on Railway, then flatten. To stop CRE itself, pause the workflow in the
+stuck (alert "still running after …"), redeploy the executor (Vercel: Instant Rollback or a
+redeploy of the current deployment), then flatten. To stop CRE itself, pause the workflow in the
 CRE UI or with `cre workflow pause`.
 
 ## Data for the dashboard (README §4.11)

@@ -44,7 +44,7 @@
 
 ## 3. Architecture
 ```
- BACKEND (Railway)
+ BACKEND (Vercel)
  ┌──────────────────────────────┐
  │ leaderboard + vault list     │
  │ ingest → label → score       │──────┐
@@ -70,7 +70,7 @@
  └──┬───────────────────────────┘
     │ signed report
     v
- EXECUTOR (Railway)
+ EXECUTOR (Vercel)
  ┌──────────────────────────────┐
  │ verify DON signature         │
  │ dedupe report ID             │──> Hyperliquid (our account)
@@ -202,8 +202,8 @@ Each node runs steps 1–3 (`runInNodeMode`); the DON agrees per field, then sig
 - **Assets that lose eligibility:** the executor closes them (they're absent from the targets) rather than following sources' reductions (§4.4 reduce-only). Simpler, and HL allows reduce-only closes of any size; revisit if it costs too much.
 - **Status (2026-10-06):** `scripts/e2e-mirror.sh all` passes six scenarios in simulation on live HL data, with a frozen set covering every HL account mode (4 standard vaults, 2 unified and 1 portfolio-margin trader with HIP-3 positions): the happy path (configuration verified in WASM, report verified, planned and signed in dry run), a paused executor, backend down, executor down, a mismatched configuration (HTTP 422) and a tampered snapshot (spot-check fails). At full size (25 leaderboard traders, 201 positions, 18 holding HIP-3) the snapshot is 12.8 KB (limit 250 KB) and the report carries 46 exposures; soak runs every 90 s against long-running services show 0–30 bps spot-check deviation for production-age snapshots. Not exercised until deploy: real multi-node consensus and the registry signature check.
 
-### 4.8 Execute (executor service on Railway)
-Code: `packages/executor`. One long-running Bun service (Railway, `Dockerfile` + `railway.json`), so there's one HL nonce sequence, an in-process run queue and no function timeout.
+### 4.8 Execute (executor service)
+Code: `packages/executor`. A Bun service. Dry run deploys as the `executor` service of the Vercel project (root `vercel.json`, `/api/executor/*`). Live trading needs one long-running process (`Dockerfile` + `railway.json`) for one HL nonce sequence, an in-process run queue and no function timeout, so the executor refuses `DRY_RUN=false` on Vercel.
 - **Intake** (`POST /reports`): verify the report (≥ f+1 DON signatures, pinned workflow owner, optionally workflow name and DON, §4.13), then check the configuration hash, our account, expiry and lifetime (≤ 300 s), dedupe by report ID, **answer 200 at once** and execute in the background (DON nodes time out after 10 s). Runs are queued and never overlap, even when one is slow; expiry is re-checked when a run starts. A run still going after 60 s is alerted on and cancelled before its next leverage update or order batch (batches already sent can't be recalled), and database queries time out after 10 s.
 - **Plan** against the live account (`src/planner.ts`):
   - target = reported exposure × our live equity (HL portfolio value) for every eligible asset; anything we hold that isn't targeted goes to 0
@@ -324,8 +324,8 @@ Status: built (`packages/dashboard`): live account vs paper books vs BTC, target
 | Prices | Hyperliquid oracle/mark prices via the Info API (`metaAndAssetCtxs`). BTC history from `candleSnapshot`. No Chainlink Data Feeds. |
 | Orchestration | Chainlink CRE (`@chainlink/cre-sdk`, `cre` CLI), DON access from the sponsor on-site. No onchain contract. Private registry; deploys from GitHub Actions with `CRE_API_KEY` (§4.14). |
 | AI | Two LLMs (≥ 1 OpenAI), structured JSON |
-| Storage / hosting | Supabase. Backend and executor on Railway (the leaderboard download is too slow for serverless; the executor needs one long-running process for nonces and run ordering). Dashboard on Vercel. |
-| Secrets | Railway/Vercel env vars plus CRE secrets. `.env.example` only in the repo. Runbook: `docs/cre/RUNBOOK.md`. |
+| Storage / hosting | Supabase. One Vercel project with three services (root `vercel.json`): dashboard at `/`, backend at `/api/backend`, executor at `/api/executor`, Vercel Cron for the snapshot pre-build and the missed-run watchdog. Live trading moves the executor to one long-running process (nonces and run ordering; `Dockerfile` + `railway.json`); the leaderboard download, once built, may need one too (too slow for a function). |
+| Secrets | Vercel env vars plus CRE secrets. `.env.example` only in the repo. Runbook: `docs/cre/RUNBOOK.md`. |
 | Testing | Fixtures, then $10–20 mainnet runs before the freeze. No testnet. |
 | Optional / unused | NOWNodes (HyperEVM RPC + an Info API copy) if it helps with rate limits; not a track. No AgentKit. |
 

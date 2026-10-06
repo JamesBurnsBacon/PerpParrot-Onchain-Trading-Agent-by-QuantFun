@@ -1,9 +1,9 @@
 #!/usr/bin/env bun
 // Pre-deploy check (docs/cre/RUNBOOK.md § Deploy): do the mirror config, the frozen
-// configuration, both Railway services, the dashboard and Supabase agree? Read-only.
+// configuration, the backend and executor services, the dashboard and Supabase agree? Read-only.
 //
 //   bun scripts/predeploy-check.ts                                   # repo files only
-//   bun scripts/predeploy-check.ts --backend https://… --executor https://… [--dashboard https://…]
+//   bun scripts/predeploy-check.ts --backend https://…/api/backend --executor https://…/api/executor [--dashboard https://…]
 //   DATABASE_URL=postgres://… bun scripts/predeploy-check.ts …       # also the Supabase tables
 //
 // In the CRE deploy Action: --from-config takes the service URLs from the mirror's production
@@ -142,7 +142,7 @@ if (dashboard) {
   section(`dashboard ${dashboard}`);
   const page = await getJson(dashboard);
   if (page) check(page.status === 200, "page loads", `HTTP ${page.status}`);
-  warn("check in a browser that the header pills read “Dry run · Copying” (NEXT_PUBLIC_* URLs are baked in at build time)");
+  warn("check in a browser that the header pills read “Dry run · Copying” (the dashboard reads the services on its own origin unless NEXT_PUBLIC_* URLs are set)");
 }
 
 // 6. Supabase.
