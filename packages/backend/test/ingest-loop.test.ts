@@ -48,15 +48,17 @@ describe("durable Top 100 cycle", () => {
     const artifact = JSON.parse(store.raw(latest.artifactHash));
     expect(artifact.inputs).toHaveLength(100); expect(artifact.strict.config.allowUnknown).toEqual([]);
     expect(artifact.nextSelection).toHaveLength(100);
+    expect(store.state("foregroundNeedsRefresh")).toBeNull(); expect(store.state("bootstrapComplete")).not.toBeNull();
   });
-  test("second failed cycle retains the first complete artifact and next selection", async () => {
+  test("second failed cycle retains the first complete artifact while gating stale selection authority", async () => {
     const { store, selected } = setup(); let now = start;
     const first = new LoopService(store, { async collect(account) { return { account, historyWarnings: [] }; } }, async () => selected, () => now);
     await first.execute(first.trigger()); const latest = store.state<Latest>("latest");
     now += 600_000;
     const second = new LoopService(store, { async collect() { throw new Error("network down"); } }, async () => [], () => now);
     await expect(second.execute(second.trigger())).rejects.toThrow("network down");
-    expect(store.state<Latest>("latest")).toEqual(latest); expect(store.state<{ selected: Selection[] }>("selection")!.selected).toEqual(selected);
+    expect(store.state<Latest>("latest")).toEqual(latest); expect(store.state("selection")).toBeNull();
+    expect(store.state("foregroundNeedsRefresh")).not.toBeNull(); expect(store.run(runIdAt(now))!.selected).toEqual(selected);
   });
   test("duplicate trigger IDs share one immutable selection, and future/past triggers fail", () => {
     const { store, selected } = setup();
@@ -149,6 +151,8 @@ describe("durable Top 100 cycle", () => {
     const original = first.trigger(); await expect(first.start(original)).rejects.toThrow("restart");
     now += 600_000;
     const resumed = new LoopService(store, { async collect(account) { return { account: { ...account, fetchedAt: new Date(now).toISOString() }, historyWarnings: [] }; } }, async () => selected, () => now);
+    await resumed.tick(); // Probe the transiently failed account before resuming; no one-hour age wait.
+    expect(store.state("foregroundNeedsRefresh")).toBeNull(); expect(store.run(original.id)!.status).toBe("failed");
     await resumed.tick();
     expect(store.run(original.id)!.status).toBe("complete");
     expect(store.run(runIdAt(now))).toBeNull();

@@ -10,6 +10,7 @@ import { readGzipRows, scoreSourceHash, type Asset } from "./export-data";
 import { verifyAssets } from "./load-data";
 import { rankAsync } from "./ranking";
 import { LoopStore, TARGET_COUNT, type Account } from "./store";
+import { availableAccounts } from "./background";
 
 export const RELEASE_ASSETS = ["discovery.jsonl.gz", "score-inputs.jsonl.gz", "score-evidence.jsonl.gz"] as const;
 const point = z.tuple([z.number().int().nonnegative(), z.number().finite()]);
@@ -40,7 +41,7 @@ export function freshAccounts(accounts: Account[], now: number) {
 }
 
 export async function activateFreshRegistry(store: LoopStore, now: number, assertOwner: () => void = () => {}) {
-  const accounts = store.accounts(), fresh = freshAccounts(accounts, now), selected = await rankAsync(accounts, now);
+  const accounts = store.accounts(), fresh = freshAccounts(accounts, now), selected = await rankAsync(availableAccounts(store, accounts, now), now);
   const ready = selected.length === TARGET_COUNT, scoreSourceSha256 = await scoreSourceHash();
   const status = { at: now, ready, freshAccounts: fresh.length, totalAccounts: accounts.length,
     selectionScope: fresh.length === accounts.length ? "complete-imported-registry" : "fresh-subset-of-imported-registry",

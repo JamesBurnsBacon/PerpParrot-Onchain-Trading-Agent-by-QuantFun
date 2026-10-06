@@ -16,15 +16,23 @@ export async function refreshRegistry(store: LoopStore, collector: Collector, li
   let refreshed = 0;
   try {
     const fresh = new Set(freshAccounts(store.accounts(), now()).map(a => a.input.address));
-    for (const address of queue.filter(a => !fresh.has(a)).slice(0, limit)) {
+    for (const address of queue.filter(a => (!fresh.has(a) || store.health(a).consecutiveFailures >= 2)
+      && store.health(a).quarantinedUntil <= now()).slice(0, limit)) {
       combined.throwIfAborted(); store.assertOwner(owner, now());
-      const result = await collector.collect(store.account(address), combined);
+      store.accountAttempt(address, owner, now());
+      let result;
+      try { result = await collector.collect(store.account(address), combined); }
+      catch (error) {
+        if (!combined.aborted) store.accountAttempt(address, owner, now(), { error: String(error) });
+        throw error;
+      }
       if (result.account.input.address !== address || freshAccounts([result.account], now()).length !== 1) throw new Error("Refresh did not produce fresh bound evidence");
       store.raw(result.account.rawHash);
       store.db.transaction(() => {
-        store.assertOwner(owner, now()); store.putAccount(result.account); refreshed++;
+        store.assertOwner(owner, now()); store.putAccount(result.account);
+        store.accountAttempt(address, owner, now(), { success: true }); refreshed++; fresh.add(address);
         store.setState("releaseRefreshProgress", { at: now(), refreshedThisAttempt: refreshed,
-          freshAccounts: fresh.size + refreshed, totalAccounts: queue.length });
+          freshAccounts: fresh.size, totalAccounts: queue.length });
       })();
     }
     const readiness = await activateFreshRegistry(store, now(), () => store.assertOwner(owner, now()));

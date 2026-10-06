@@ -33,6 +33,8 @@ jobs:
           bun --no-env-file night-shift-integration/demo.ts
           bun --no-env-file night-shift-integration/demo.ts
           bun --no-env-file -e 'const e=await Bun.file("night-shift-integration/out/demo/evidence.json").json(); if(e.receipt.status!=="SUCCEEDED" || !e.receipt.steps.every(s=>s.reused)) process.exit(1);'
+      - name: Accelerated ingest recovery and rotation proof
+        run: bun --no-env-file night-shift-integration/accelerated-ingest.ts
       - uses: actions/upload-artifact@v4
         with:
           name: controlled-integration-evidence
@@ -41,3 +43,5 @@ jobs:
             night-shift-integration/out/demo/demo.html
             night-shift-integration/out/demo/return-first.json
             night-shift-integration/out/demo/drawdown-first.json
+            night-shift-integration/out/accelerated-ingest/report.json
+            night-shift-integration/out/accelerated-ingest/report.sha256

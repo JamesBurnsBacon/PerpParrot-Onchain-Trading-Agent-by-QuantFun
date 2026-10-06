@@ -10,7 +10,9 @@ export function loopHandler(store: LoopStore, service: LoopService, now: () => n
       const latest = store.state<Latest>("latest");
       return json({ status: !latest ? "initializing" : now() - latest.completedAt > 900_000 ? "stale" : "ready",
         bootstrap: store.state("bootstrapProgress"), bootstrapComplete: store.state("bootstrapComplete"),
-        progress: store.state("progress"), latest, lastRun: store.runs(1)[0] ?? null });
+        progress: store.state("progress"), latest, lastRun: store.runs(1)[0] ?? null,
+        background: { last: store.state("backgroundLast"), totals: store.state("backgroundTotals") },
+        quarantinedAccounts: [...store.healthMap().values()].filter(h => h.consecutiveFailures >= 2).length });
     }
     if (request.method === "GET" && path === "/ingest/latest") {
       const latest = store.state<Latest>("latest");

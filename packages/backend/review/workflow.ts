@@ -53,14 +53,33 @@ export function riskDecision(row: Row, policy: Policy) {
   const status = severity >= policy.riskRejectThreshold ? 'REJECT' : severity >= policy.riskWatchThreshold ? 'WATCHLIST' : 'CAP';
   return {status, bindingConstraint, ceiling: status === 'REJECT' ? 0 : policy.maxSourceWeight * (1-severity/100)};
 }
+/** The compiler's mandatory candidate gates, also exposed for faithful rejection diagnostics. */
+export function candidateCompileFailures(candidate:Frame['candidates'][number],policy:Policy,role:Row|undefined,risk:Row|undefined):string[] {
+  const m=candidate.metrics;
+  const checks:[string,boolean][]=[
+    ['HISTORY_TOO_SHORT',m.historyDays<policy.minHistoryDays],['NO_OOS_WINDOWS',m.oosWindows<1],
+    ['OOS_SHARPE_UNKNOWN',m.oosSharpe===null],['OOS_SORTINO_UNKNOWN',m.oosSortino===null],
+    ['OOS_DRAWDOWN_UNKNOWN',m.oosMaxDrawdown===null],['WINDOW_STABILITY_UNKNOWN',m.crossWindowStability===null],
+    ['AVERAGE_LEVERAGE_UNKNOWN',m.averageLeverage===null],['HOLDING_PERIOD_UNKNOWN',m.medianHoldMinutes===null],
+    ['HOLDING_BELOW_ONE_HOUR',m.medianHoldMinutes!==null&&m.medianHoldMinutes<60],
+    ['EXECUTION_FIT_UNKNOWN',m.executionFit===null],['EXECUTION_FIT_BELOW_POLICY',m.executionFit!==null&&m.executionFit<policy.minExecutionFit],
+    ['EXECUTION_COVERAGE_UNKNOWN',m.executionCoverage===null],['NO_EXECUTION_COVERAGE',m.executionCoverage!==null&&m.executionCoverage<=0],
+    ['ROLE_OBSERVATION_MISSING',role===undefined],['RISK_OBSERVATION_MISSING',risk===undefined],
+    ['ROLE_CONFIDENCE_BELOW_POLICY',role!==undefined&&role.confidence<policy.minConfidence],
+    ['RISK_CONFIDENCE_BELOW_POLICY',risk!==undefined&&risk.confidence<policy.minConfidence],
+    ['ROLE_REJECTED',role!==undefined&&role.reject>=policy.riskRejectThreshold],
+    ['RISK_REJECTED',risk!==undefined&&riskDecision(risk,policy).status==='REJECT'],
+  ];
+  return checks.filter(([,failed])=>failed).map(([reason])=>reason);
+}
 function compile(frame: Frame, policy: Policy, role: Row[], risk: Row[], addresses: ReadonlyMap<number,string>): Source[] {
   const fitKey = `${policy.bucket.toLowerCase()}Fit`;
   const ranked = frame.candidates.flatMap(c => {
     const r = role.find(r=>r.candidate===c.candidate)!, k = risk.find(r=>r.candidate===c.candidate)!;
     const m = c.metrics, decision = riskDecision(k, policy);
-    if (m.historyDays < policy.minHistoryDays || m.oosWindows < 1 || m.oosSharpe === null || m.oosSortino === null || m.oosMaxDrawdown === null || m.crossWindowStability === null || m.averageLeverage === null || m.medianHoldMinutes === null || m.medianHoldMinutes < 60 || m.executionFit === null || m.executionFit < policy.minExecutionFit || m.executionCoverage === null || m.executionCoverage <= 0 || r.confidence < policy.minConfidence || k.confidence < policy.minConfidence || r.reject >= policy.riskRejectThreshold || decision.status === 'REJECT') return [];
+    if (candidateCompileFailures(c,policy,r,k).length) return [];
     // Stronger latency penalty for 1–3h and softer for 3–6h; replay-calibrate.
-    const latency = m.medianHoldMinutes < 180 ? 0.5 : m.medianHoldMinutes < 360 ? 0.75 : 1;
+    const latency = m.medianHoldMinutes! < 180 ? 0.5 : m.medianHoldMinutes! < 360 ? 0.75 : 1;
     const score = r[fitKey] * latency;
     if (score <= 0) return [];
     return [{candidate:c.candidate, score, ceiling:decision.ceiling}];

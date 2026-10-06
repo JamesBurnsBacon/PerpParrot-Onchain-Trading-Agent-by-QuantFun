@@ -17,10 +17,15 @@ export type Account = {
   basis: "research-priority" | "verified-input";
 };
 export type Selection = { address: string; score: number; pool: string; rank: number; fetchedAt: string; basis: Account["basis"] };
+export type AccountHealth = { lastAttemptAt: number | null; lastSuccessAt: number | null; lastFailureAt: number | null;
+  consecutiveFailures: number; totalFailures: number; quarantinedUntil: number; lastError: string | null };
+export type AccountFailure = { address: string; slot: number; at: number; reason: string; consecutiveFailures: number };
+export type Substitution = { slot: number; from: string; to: string; at: number; reason: string; rankingSha256: string };
 export type Run = {
   id: string; bucket: number; status: "queued" | "running" | "failed" | "complete";
   selected: Selection[]; startedAt: number | null; finishedAt: number | null; attempts: number;
   error: string | null; artifactHash: string | null;
+  effectiveSelection?: Selection[]; substitutions?: Substitution[]; accountFailures?: AccountFailure[];
 };
 
 // One durable local worker database. WAL + FULL durability and an owner-fenced lease
@@ -37,6 +42,7 @@ export class LoopStore {
       CREATE TABLE IF NOT EXISTS runs(id TEXT PRIMARY KEY, bucket INTEGER UNIQUE NOT NULL, body TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS records(run_id TEXT NOT NULL, address TEXT NOT NULL, body TEXT NOT NULL, PRIMARY KEY(run_id,address));
       CREATE TABLE IF NOT EXISTS request_attempts(id TEXT PRIMARY KEY, run_id TEXT, body TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS account_health(address TEXT PRIMARY KEY, body TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS request_attempt_run ON request_attempts(run_id);
       CREATE TABLE IF NOT EXISTS lease(id INTEGER PRIMARY KEY CHECK(id=1), owner TEXT NOT NULL, expires INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS budget(id INTEGER PRIMARY KEY, scope TEXT NOT NULL, at INTEGER NOT NULL, weight INTEGER NOT NULL);
@@ -85,6 +91,28 @@ export class LoopStore {
   }
   putAccount(a: Account) {
     this.db.query("INSERT OR REPLACE INTO accounts VALUES(?,?)").run(a.input.address, JSON.stringify(a));
+  }
+  health(address: string): AccountHealth {
+    const row = this.db.query<{ body: string }, [string]>("SELECT body FROM account_health WHERE address=?").get(address);
+    return row ? JSON.parse(row.body) : { lastAttemptAt: null, lastSuccessAt: null, lastFailureAt: null,
+      consecutiveFailures: 0, totalFailures: 0, quarantinedUntil: 0, lastError: null };
+  }
+  healthMap(): Map<string, AccountHealth> {
+    return new Map(this.db.query<{ address: string; body: string }, []>("SELECT address,body FROM account_health").all().map(r => [r.address, JSON.parse(r.body)]));
+  }
+  accountAttempt(address: string, owner: string, now: number, outcome?: { success: true } | { error: string }): AccountHealth {
+    return this.db.transaction(() => {
+      this.assertOwner(owner, now);
+      const health = this.health(address); health.lastAttemptAt = now;
+      if (outcome && "success" in outcome) {
+        health.lastSuccessAt = now; health.consecutiveFailures = 0; health.quarantinedUntil = 0; health.lastError = null;
+      } else if (outcome && "error" in outcome) {
+        health.lastFailureAt = now; health.consecutiveFailures++; health.totalFailures++; health.lastError = outcome.error.slice(0, 240);
+        if (health.consecutiveFailures >= 2) health.quarantinedUntil = now + Math.min(6 * 3_600_000, 1_800_000 * 2 ** Math.min(4, health.consecutiveFailures - 2));
+      }
+      this.db.query("INSERT OR REPLACE INTO account_health VALUES(?,?)").run(address, JSON.stringify(health));
+      return health;
+    })();
   }
   seed(accounts: Account[], provenance: unknown) {
     this.db.transaction(() => {
@@ -149,15 +177,24 @@ export class LoopStore {
       if (run.bucket > now || now - run.bucket > INTERVAL_MS * 2) throw new Error("Invalid publication bucket");
       if (next.length !== TARGET_COUNT || new Set(next.map(a => a.address)).size !== TARGET_COUNT
         || next.some(a => a.basis !== "verified-input" || !Number.isFinite(a.score))) throw new Error("Invalid next strict selection");
-      if (accounts.length !== TARGET_COUNT || new Set(accounts.map(a => a.input.address)).size !== TARGET_COUNT
-        || accounts.some(a => !run.selected.some(s => s.address === a.input.address))) throw new Error("Incomplete batch cannot publish");
+      const effective = run.effectiveSelection ?? run.selected;
+      if (effective.length !== TARGET_COUNT || new Set(effective.map(s => s.address)).size !== TARGET_COUNT
+        || accounts.length !== TARGET_COUNT || new Set(accounts.map(a => a.input.address)).size !== TARGET_COUNT
+        || accounts.some(a => !effective.some(s => s.address === a.input.address))) throw new Error("Incomplete batch cannot publish");
+      const replay = run.selected.map(s => s.address);
+      for (const change of run.substitutions ?? []) {
+        if (replay[change.slot] !== change.from || replay.includes(change.to) || !change.reason || !/^[a-f0-9]{64}$/.test(change.rankingSha256)) throw new Error("Invalid substitution audit");
+        replay[change.slot] = change.to;
+      }
+      if (replay.some((address, i) => address !== effective[i].address)) throw new Error("Effective selection lacks a substitution audit");
       if (accounts.some(a => !Number.isFinite(Date.parse(a.fetchedAt)) || Date.parse(a.fetchedAt) > now
         || now - Date.parse(a.fetchedAt) > 540_000)) throw new Error("Invalid publication freshness");
       for (const a of accounts) { this.raw(a.rawHash); this.putAccount(a); }
       const hash = this.blob(JSON.stringify(artifact));
       const receiptHash = this.blob(JSON.stringify({ schema: "ingest-cycle-receipt.v1", runId: run.id,
         bucket: run.bucket, completedAt: now, count: accounts.length, scoreLabel: "STRICT_REPOSITORY_SCORE", allowUnknown: [],
-        artifactHash: hash, selected: run.selected.map(s => s.address), next: next.map(s => s.address),
+        artifactHash: hash, selected: effective.map(s => s.address), originalSelection: run.selected.map(s => s.address),
+        effectiveSelection: effective.map(s => s.address), substitutions: run.substitutions ?? [], next: next.map(s => s.address),
         oldestFetchedAt: Math.min(...accounts.map(a => Date.parse(a.fetchedAt))) }));
       this.saveRun({ ...run, status: "complete", finishedAt: now, artifactHash: hash, error: null });
       this.setState(`published:${hash}`, { runId: run.id });
@@ -166,6 +203,12 @@ export class LoopStore {
       this.setState(`publication:${run.id}`, publication);
       this.setState("latest", publication);
       this.setState("selection", { generatedAt: now, sourceRun: run.id, selected: next });
+      // An explicitly resumed successful batch also completes catch-up; it must
+      // not leave the scheduler gated by an obsolete earlier failure marker.
+      if (this.state("foregroundNeedsRefresh")) {
+        this.setState("foregroundNeedsRefresh", null);
+        this.setState("bootstrapComplete", { at: now, ready: true, selected: TARGET_COUNT, sourceRun: run.id });
+      }
       return hash;
     })();
   }

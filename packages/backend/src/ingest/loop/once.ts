@@ -40,6 +40,7 @@ if (values.help) {
         schema: "ingest-validation.v1", checkedAt: new Date().toISOString(), dataKind: "live-public-api-read",
         runId: run.id, bucket: run.bucket, artifactSha256: completed.artifactHash,
         success: artifact.count, failure: artifact.provenance.failure, selected: run.selected.length,
+        substitutions: artifact.substitutions?.length ?? 0, failedAccountAttempts: artifact.accountFailures?.length ?? 0,
         nextSelected: artifact.nextSelection.length, registryCount: artifact.registryCount,
         strictEligibleInBatch: artifact.strict.candidates.filter((c: { eligible: boolean }) => c.eligible).length,
         scoreSourceSha256: artifact.provenance.scoreSourceSha256,

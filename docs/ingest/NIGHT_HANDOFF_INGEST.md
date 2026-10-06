@@ -32,7 +32,7 @@ bun --no-env-file src/ingest/loop/once.ts \
 bun --no-env-file src/ingest/loop/once.ts \
   --db data/rehearsal/loop.sqlite --out data/rehearsal/proof
 
-# Optional single-host worker: current ten-minute bucket, checked every five seconds.
+# Optional single-host worker: ten-minute Top 100 + automatic idle candidate refresh.
 # Stop the old worker before replacing it; do not run two collectors on one budget.
 INGEST_LOOP_DB=data/rehearsal/loop.sqlite INGEST_LOOP_PORT=8791 \
   bun --no-env-file src/ingest/loop/server.ts
@@ -81,10 +81,21 @@ command. The default Git ignore excludes `packages/backend/data/`.
   official portfolio; update equity and normalized history; refresh stale account
   classification and vault state; fetch order evidence only when insufficient.
   Rank the registry again for the next bucket using the same Score implementation.
+- A collection failure or new strict-Score failure can replace that slot with the
+  highest ranked unused **fresh, strict-eligible** account. Every replacement is
+  fetched and checked before use; no eligibility filter is relaxed. At most 20
+  replacements are attempted per run. If 100 valid accounts cannot be obtained,
+  the previous complete publication remains authoritative.
 - Output: immutable `ingest-cycle.v1` artifact containing `inputs: ScoreInput[]`,
   the current-batch Score result, `nextSelection`, timestamps, raw evidence hashes,
   Score source/config hashes and request outcomes. Scores in this artifact are
   explicitly scoped to the refreshed batch; `nextSelection` ranks the registry.
+  `originalSelection` is the frozen requested list; `effectiveSelection` and the
+  backward-compatible `selected` field describe the actual 100 inputs.
+  `substitutions` records each slot, old/new address, reason, time and complete
+  ranking hash. `accountFailures` preserves failed attempts. A substitution is
+  committed before its replacement request, so restart resumes that exact slot.
+  Receipts include both lists. Publication verifies the substitution chain.
 - Success requires 100 distinct collected accounts, fresh responses and a complete
   next strict selection. A partial run retains its per-account checkpoints but
   never replaces the previous complete publication.
@@ -101,6 +112,54 @@ Consumers can use the loopback worker's `GET /ingest/latest`, then the returned
 returns that exact bucket, even after a newer bucket is published. Only committed
 artifacts are served; no generic raw-blob download exists. `/ingest/latest` returns
 503 when the last complete result is older than 15 minutes.
+
+## Automatic candidate rotation and quarantine
+
+The long-running worker gives the Top 100 cycle priority. Between cycles it visits
+other candidates whose portfolio is at least one hour old. The order is the oldest
+of each candidate's last observation/attempt time first, with address tie-breaking.
+Successful observations and attempted visits are durable; a restart resumes fair
+rotation instead of starting at the same address again. Accounts older than 24
+hours are re-fetched and can re-enter current Score; the freshness rule stays intact.
+
+Each background slice is bounded to **20 accounts or 45 seconds**, whichever comes
+first. No new background slice/request starts in the final **60 seconds** before
+the next ten-minute slot. These are work/deadline limits, not a narrower research
+universe. The same SQLite owner lease, collector and rolling API-weight budget
+serve both jobs. A foreground trigger cancels the same worker's background task,
+waits for it to release the lease, and starts the Top 100. Cancellation and deadline
+preemption do not count as account failures. `/health` reports background totals,
+the last slice and the quarantine count.
+
+Each saved refresh also marks ranking pending. If cancellation or the slice
+deadline interrupts ranking, the next background slice first retries that ranking
+without new API requests. The flag survives restart, so saved observations cannot
+be stranded just because the collection queue later becomes empty.
+
+Two consecutive completed collection failures quarantine an account for 30 minutes.
+Further failed probes back off to 1, 2, 4 and at most 6 hours. Cooldown expiry permits
+a new API probe; it does **not** promote the old failed cache. Only successful fresh
+collection clears the consecutive-failure state. Lifetime failure counts remain
+in `account_health`. A single bad account therefore cannot repeatedly block the
+entire batch or monopolize background rotation. Unknown or unprofitable accounts
+remain subject to the unchanged Score filters after collection.
+
+If a foreground batch cannot find a fresh strict replacement, a durable
+`foregroundNeedsRefresh` marker suspends foreground retries while the bounded
+background slices repair the registry. Previously selected accounts are not
+protected during this catch-up. A failed cache stays excluded until a successful
+fresh read; simply having its old Score is insufficient. Catch-up may probe a failed
+recent account after 60 seconds without waiting for the ordinary one-hour refresh
+age (quarantine still applies). Once the registry again
+contains 100 eligible fresh accounts, normal scheduling resumes. The pending run
+keeps its original selection and records any substitution; if its two-slot resume
+window expires, the next current slot starts from the repaired selection. This
+prevents repeated failed batches from starving refresh after a long outage.
+
+The one-shot CLI runs a single foreground cycle; automatic idle refresh belongs to
+the long-running worker. The earlier SQLite file remains readable: new health
+tables and run fields are additive. Existing artifacts with no substitutions retain
+their original meaning. Separate database files still do not coordinate an IP quota.
 
 ## Boundary with James's services
 
@@ -134,6 +193,11 @@ rate-limit backoff and order-count semantics. Registry import tests additionally
 check read-only source preservation, evidence disagreement, portable release-only
 initialization, corrupt/future evidence rejection, and resumable refresh of an
 expired archive without changing historical timestamps or promoting stale inputs.
+Rotation tests use a simulated 25-hour clock advance, process/store restart,
+foreground cancellation, a persistent bad account with a recorded replacement,
+rejection of stale/unknown replacements, and two database connections contending
+for the same quota/lease. This is accelerated failure testing, not a claimed
+24-hour production soak.
 The live rehearsal's timestamp and measured results are in the aggregate proof,
 not inferred from unit-test fixtures. Hosted deployment and funded execution are
 separate checks; neither is performed by these commands.

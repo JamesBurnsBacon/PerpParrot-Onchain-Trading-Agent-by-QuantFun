@@ -18,7 +18,7 @@ export function openAIPaperCommittee(options:PaperModelOptions,core:PaperModelCo
   // Default: the versioned prompts, byte-identical to docs/agents/SYSTEM_PROMPTS.md.
   const {apiKey,model}=options,prompts={...(options.prompts??{role:ROLE_PROMPT,risk:RISK_PROMPT,redteam:RED_TEAM_PROMPT})},fetcher=options.fetcher??fetch;
   const endpoint=options.endpoint??'https://api.openai.com/v1/chat/completions';
-  if(!apiKey||apiKey.length>2048||/[\r\n]/.test(apiKey)||!modelPattern.test(model)||!/^https?:\/\/[^\s]+$/.test(endpoint)||Object.values(prompts).some(value=>!value||value.length>10000))throw new Error('invalid paper model configuration');
+  if(!apiKey||apiKey.length>2048||/[\r\n]/.test(apiKey)||!modelPattern.test(model)||!/^https?:\/\/[^\s]+$/.test(endpoint)||Object.values(prompts).some(value=>!value||value.length>10000)||!Number.isSafeInteger(core.agentTimeoutMs)||core.agentTimeoutMs<1||core.agentTimeoutMs>60000)throw new Error('invalid paper model configuration');
   const promptHashes=Object.fromEntries(Object.entries(prompts).map(([stage,prompt])=>[stage,commitment('perpparrot:prompt:v1',prompt)])) as Record<CommitteeStage,string>;
   const modelConfigHash=commitment('perpparrot:model:v1',{provider:'openai',model,temperature:0,promptHashes});
   const request=async(stage:CommitteeStage,evidence:CommitteeEvidence,signal:AbortSignal,draft?:CritiqueInput):Promise<EvidenceObservation|EvidenceCritique>=>{
@@ -34,7 +34,9 @@ export function openAIPaperCommittee(options:PaperModelOptions,core:PaperModelCo
     const body={model,messages:[{role:'system',content:prompts[stage]},{role:'user',content:JSON.stringify(user)}],temperature:0,store:false,max_completion_tokens:8192,
       response_format:{type:'json_schema',json_schema:{name:`paper_${stage}`,strict:true,schema:{type:'object',additionalProperties:false,properties,required:Object.keys(properties)}}}};
     if(new TextEncoder().encode(JSON.stringify(body)).length>115000)throw new Error('paper model request exceeds budget');
-    const value=await postJson(endpoint,body,{Authorization:`Bearer ${apiKey}`},signal,fetcher);
+    // One request shares the existing committee deadline; database calls retain their 10s default.
+    // The enclosing stage's AbortSignal can still end this request earlier. No retries.
+    const value=await postJson(endpoint,body,{Authorization:`Bearer ${apiKey}`},signal,fetcher,core.agentTimeoutMs);
     const envelope=z.object({model:z.literal(model),choices:z.array(z.object({finish_reason:z.literal('stop'),message:z.object({content:z.string().max(200000),refusal:z.string().nullable().optional()})})).length(1)}).parse(value);
     if(envelope.choices[0].message.refusal)throw new Error('model refusal');
     const output:unknown=JSON.parse(envelope.choices[0].message.content);

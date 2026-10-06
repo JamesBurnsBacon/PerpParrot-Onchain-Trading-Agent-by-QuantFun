@@ -5,6 +5,10 @@ import { SCORE_LABEL } from "./rank";
 import type { Collected } from "./collect";
 import { digest } from "../store";
 import { scoreSourceHash } from "./export-data";
+import { availableAccounts, backgroundRefresh } from "./background";
+import { requireCollection, isStrictEligible } from "./checks";
+
+const MAX_SUBSTITUTIONS = 20;
 
 export type Collector = { collect(account: Account, signal: AbortSignal): Promise<Collected>;
   client?: { requests: number; retries: number; rateLimited: number;
@@ -13,6 +17,8 @@ export class LoopService {
   private active: Promise<unknown> | null = null;
   private stopping = false;
   private controller: AbortController | null = null;
+  private backgroundActive: Promise<unknown> | null = null;
+  private backgroundController: AbortController | null = null;
   constructor(readonly store: LoopStore, private collector: Collector,
     private rank: (accounts: Account[], now: number) => Promise<Selection[]> = rankAsync,
     private now: () => number = Date.now) {}
@@ -27,23 +33,34 @@ export class LoopService {
   start(run: Run): Promise<unknown> {
     if (this.active) return this.active;
     if (this.stopping) return Promise.reject(new Error("Worker is stopping"));
-    this.active = this.execute(run).finally(() => { this.active = null; });
+    this.backgroundController?.abort(new Error("Foreground Top 100 takes priority"));
+    this.active = (this.backgroundActive ? this.backgroundActive.catch(() => {}).then(() => this.execute(run)) : this.execute(run))
+      .finally(() => { this.active = null; });
     return this.active;
   }
   async tick() {
-    if (this.stopping || this.active || !this.store.state("bootstrapComplete")) return;
+    if (this.stopping || this.active) return;
     const latest = this.store.state<{ bucket: number }>("latest");
     const pending = this.store.runs().reverse().find(r => r.status !== "complete" && r.attempts < 3
       && (!latest || r.bucket > latest.bucket) && this.now() - r.bucket <= INTERVAL_MS * 2
       && (!r.finishedAt || this.now() - r.finishedAt >= 60_000));
-    const run = pending ?? this.trigger();
-    if (run.status === "complete" || run.attempts >= 3) return;
-    if (run.finishedAt && this.now() - run.finishedAt < 60_000) return;
-    return this.start(run);
+    // A failed batch without fresh replacements must let registry repair make
+    // progress, even while that batch is pending. The marker survives restart.
+    const run = this.store.state("foregroundNeedsRefresh") ? null
+      : pending ?? (this.store.state("bootstrapComplete") ? this.trigger() : null);
+    if (run && run.status !== "complete" && run.attempts < 3
+      && (!run.finishedAt || this.now() - run.finishedAt >= 60_000)) return this.start(run);
+    if (this.backgroundActive) return;
+    const abort = new AbortController(); this.backgroundController = abort;
+    this.backgroundActive = backgroundRefresh(this.store, this.collector, this.now, abort.signal).finally(() => {
+      this.backgroundActive = null; if (this.backgroundController === abort) this.backgroundController = null;
+    });
+    return this.backgroundActive;
   }
   async stop() {
     this.stopping = true; this.controller?.abort(new Error("Worker shutdown; progress saved"));
-    await this.active?.catch(() => {});
+    this.backgroundController?.abort(new Error("Worker shutdown; refresh progress saved"));
+    await Promise.all([this.active?.catch(() => {}), this.backgroundActive?.catch(() => {})]);
   }
   async execute(requested: Run) {
     const owner = this.store.claim(this.now());
@@ -57,6 +74,12 @@ export class LoopService {
       try { this.store.renew(owner, this.now()); } catch (error) { controller.abort(error); }
     }, 15_000);
     let run = this.store.run(requested.id)!;
+    const requireCatchup = (reason: string) => this.store.db.transaction(() => {
+      this.store.assertOwner(owner, this.now());
+      this.store.setState("foregroundNeedsRefresh", { runId: run.id, at: this.now(), reason,
+        failedAddresses: [...new Set(run.accountFailures?.map(f => f.address) ?? [])] });
+      this.store.setState("bootstrapComplete", null); this.store.setState("selection", null);
+    })();
     try {
       if (run.status === "complete") return run;
       if (run.attempts >= 3) return { runId: run.id, status: "retry-limit" };
@@ -65,38 +88,81 @@ export class LoopService {
       run = { ...run, status: "running", startedAt: run.startedAt ?? this.now(), attempts: run.attempts + 1, error: null };
       this.store.saveRun(run);
       const saved = this.store.records<Collected>(run.id), collected: Collected[] = [];
-      for (const [slot, selection] of run.selected.entries()) {
-        controller.signal.throwIfAborted(); this.store.assertOwner(owner, this.now());
-        this.collector.client?.setContext?.({ runId: run.id, slot, address: selection.address });
-        let result = saved.get(selection.address);
-        if (result && (this.now() - Date.parse(result.account.fetchedAt) > 300_000
-          || Date.parse(result.account.fetchedAt) > this.now())) result = undefined;
-        if (result) this.store.raw(result.account.rawHash);
-        else result = await this.collector.collect(this.store.account(selection.address), controller.signal);
-        if (result.account.input.address !== selection.address) throw new Error("Collected address mismatch");
-        collected.push(result);
-        this.store.saveRecord(run.id, selection.address, result, owner, this.now());
-        this.store.setState("progress", { runId: run.id, completed: collected.length, total: TARGET_COUNT, updatedAt: this.now() });
+      const effective = [...(run.effectiveSelection ?? run.selected)];
+      run = { ...run, effectiveSelection: effective, substitutions: run.substitutions ?? [], accountFailures: run.accountFailures ?? [] };
+      for (let slot = 0; slot < effective.length; slot++) {
+        for (;;) {
+          const selection = effective[slot];
+          controller.signal.throwIfAborted(); this.store.assertOwner(owner, this.now());
+          this.collector.client?.setContext?.({ runId: run.id, slot, address: selection.address });
+          let result = saved.get(selection.address);
+          if (result && (this.now() - Date.parse(result.account.fetchedAt) > 300_000
+            || Date.parse(result.account.fetchedAt) > this.now())) result = undefined;
+          try {
+            if (this.store.health(selection.address).quarantinedUntil > this.now()) throw new Error("Account is quarantined after repeated collection failures");
+            if (!result) {
+              this.store.accountAttempt(selection.address, owner, this.now());
+              result = await this.collector.collect(this.store.account(selection.address), controller.signal);
+            }
+            controller.signal.throwIfAborted(); requireCollection(this.store, result, selection.address, this.now());
+            if (!isStrictEligible(result)) throw new Error("Refreshed account fails strict Score eligibility");
+            this.store.accountAttempt(selection.address, owner, this.now(), { success: true });
+            collected.push(result);
+            this.store.saveRecord(run.id, selection.address, result, owner, this.now());
+            this.store.setState("progress", { runId: run.id, completed: collected.length, total: TARGET_COUNT, updatedAt: this.now() });
+            break;
+          } catch (error) {
+            controller.signal.throwIfAborted(); this.store.assertOwner(owner, this.now());
+            const reason = String(error).slice(0, 240), previous = this.store.health(selection.address);
+            const health = previous.quarantinedUntil > this.now() ? previous
+              : this.store.accountAttempt(selection.address, owner, this.now(), { error: reason });
+            run.accountFailures!.push({ address: selection.address, slot, at: this.now(), reason, consecutiveFailures: health.consecutiveFailures });
+            this.store.saveRun(run);
+            if (run.substitutions!.length >= MAX_SUBSTITUTIONS) {
+              requireCatchup("Bounded replacement limit reached");
+              throw new Error("Bounded replacement limit reached; retaining last complete publication");
+            }
+            const updates = new Map(collected.map(r => [r.account.input.address, r.account]));
+            const registry = availableAccounts(this.store, this.store.accounts().map(a => updates.get(a.input.address) ?? a), this.now());
+            const ranked = await rankAsync(registry, this.now(), Number.MAX_SAFE_INTEGER, controller.signal);
+            const used = new Set([...run.selected.map(s => s.address), ...effective.map(s => s.address), ...run.accountFailures!.map(f => f.address)]);
+            const replacement = ranked.find(s => !used.has(s.address));
+            if (!replacement) { requireCatchup("No fresh strict replacement available"); throw error; }
+            run.substitutions!.push({ slot, from: selection.address, to: replacement.address, at: this.now(), reason,
+              rankingSha256: digest(JSON.stringify(ranked)) });
+            effective[slot] = replacement;
+            this.store.saveRun(run); // Commit substitution before its request; restart uses this exact slot.
+          }
+        }
       }
       const updates = new Map(collected.map(r => [r.account.input.address, r.account]));
       const registry = this.store.accounts().map(a => updates.get(a.input.address) ?? a);
-      const next = await this.rank(registry, this.now());
+      const omitted = new Set(run.accountFailures!.map(f => f.address).filter(a => !effective.some(s => s.address === a)));
+      const next = await this.rank(availableAccounts(this.store, registry, this.now()).filter(a => !omitted.has(a.input.address)), this.now());
       controller.signal.throwIfAborted();
-      if (next.length !== TARGET_COUNT) throw new Error("Fewer than 100 strict Score accounts remain; retaining last complete publication");
+      if (next.length !== TARGET_COUNT) {
+        requireCatchup("Fewer than 100 fresh strict accounts remain");
+        throw new Error("Fewer than 100 strict Score accounts remain; retaining last complete publication");
+      }
       const accounts = collected.map(r => r.account), strict = scoreCandidates(accounts.map(a => a.input));
+      if (strict.candidates.some(c => !c.eligible)) throw new Error("All 100 effective inputs must pass strict Score before publication");
       const codeHash = await scoreSourceHash(), completedAt = this.now();
       const oldest = Math.min(...accounts.map(a => Date.parse(a.fetchedAt)));
       if (this.now() - oldest > 540_000) throw new Error("Collection too old to publish");
       const artifact = {
         schema: "ingest-cycle.v1", runId: run.id, bucket: run.bucket, completedAt,
         count: TARGET_COUNT, status: "complete", scoreLabel: SCORE_LABEL, scoreConfig: strict.config,
-        selected: run.selected, nextSelection: next,
+        selected: effective, originalSelection: run.selected, effectiveSelection: effective,
+        selectionSemantics: "effective-after-recorded-substitutions", substitutions: run.substitutions,
+        accountFailures: run.accountFailures, nextSelection: next,
         // The strict batch score is explicitly scoped to these 100 inputs;
         // nextSelection uses the full registry and the same unchanged Score.
         scoreScope: "current-100-account-batch", registryCount: registry.length,
-        provenance: { cohort: this.store.state("seed"), targetListSha256: digest(JSON.stringify(run.selected.map(s => s.address))),
+        provenance: { cohort: this.store.state("seed"), targetListSha256: digest(JSON.stringify(effective.map(s => s.address))),
+          originalTargetListSha256: digest(JSON.stringify(run.selected.map(s => s.address))),
           scoreSourceSha256: codeHash, scoreConfigSha256: digest(JSON.stringify(strict.config)), evaluationCutoff: completedAt,
-          success: TARGET_COUNT, failure: 0, notFetched: 0 },
+          success: TARGET_COUNT, failure: 0, notFetched: 0, failedAccountAttempts: run.accountFailures!.length,
+          substitutions: run.substitutions!.length },
         inputAsOfRange: { oldest: new Date(oldest).toISOString(), newest: accounts.map(a => a.fetchedAt).sort().at(-1) },
         inputs: accounts.map(a => a.input), strict,
         evidence: accounts.map(a => ({ address: a.input.address, fetchedAt: a.fetchedAt, portfolioSha256: a.rawHash,

@@ -12,7 +12,7 @@
     "typecheck": "tsc --noEmit",
     "ingest:once": "bun --no-env-file src/ingest/loop/once.ts",
     "ingest:worker": "bun --no-env-file src/ingest/loop/server.ts",
-    "test:ingest": "bun --no-env-file test test/ingest-history.test.ts test/ingest-score-input.test.ts test/ingest-loop.test.ts test/ingest-loop-collect.test.ts test/ingest-loop-export.test.ts test/ingest-loop-import.test.ts test/ingest-loop-release.test.ts"
+    "test:ingest": "bun --no-env-file test test/ingest-history.test.ts test/ingest-score-input.test.ts test/ingest-loop.test.ts test/ingest-loop-collect.test.ts test/ingest-loop-export.test.ts test/ingest-loop-import.test.ts test/ingest-loop-release.test.ts test/ingest-loop-rotation.test.ts"
   },
   "license": "UNLICENSED",
   "dependencies": {

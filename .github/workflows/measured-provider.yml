@@ -1,0 +1,64 @@
+name: Measured two-model paper probe
+on:
+  push:
+    branches: [codex/night-service-integration]
+    paths: [night-shift-integration/provider-request.json]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: measured-provider-probe
+  cancel-in-progress: false
+jobs:
+  measured-provider:
+    # No paid automatic retry, PR trigger, fork execution, or second run attempt.
+    if: github.repository == 'JamesBurnsBacon/PerpParrot-Onchain-Trading-Agent-by-QuantFun' && github.ref == 'refs/heads/codex/night-service-integration' && github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.4.2
+      - name: Install pinned dependencies without credentials
+        run: |
+          npm install --global pnpm@11.25.0
+          pnpm install --frozen-lockfile
+          bun --no-env-file install --frozen-lockfile --cwd packages/backend
+          bun --no-env-file install --frozen-lockfile --cwd packages/executor
+      - name: Download exact committed release asset and verify SHA-256
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import hashlib,json,pathlib,re,subprocess
+          request=json.loads(pathlib.Path('night-shift-integration/provider-request.json').read_text())
+          if set(request)!={'assetName','sha256'} or not re.fullmatch(r'measured-review-input-[A-Za-z0-9_-]+\.json',request['assetName']) or not re.fullmatch(r'[0-9a-f]{64}',request['sha256']):
+              raise SystemExit('INVALID_PROVIDER_REQUEST')
+          directory=pathlib.Path('night-shift-integration/out/provider-input')
+          directory.mkdir(parents=True,exist_ok=True)
+          subprocess.run(['gh','release','download','night-integration-2026-10-07','--repo','JamesBurnsBacon/PerpParrot-Onchain-Trading-Agent-by-QuantFun','--pattern',request['assetName'],'--dir',str(directory)],check=True)
+          asset=directory/request['assetName']
+          if asset.stat().st_size>32*1024*1024 or hashlib.sha256(asset.read_bytes()).hexdigest()!=request['sha256']:
+              raise SystemExit('PROVIDER_INPUT_SHA256_MISMATCH')
+          asset.rename(directory/'verified-input.json')
+          print('PROVIDER_INPUT_SHA256_VERIFIED')
+          PY
+      - name: Two model committees; at most six calls; paper-only services
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          DRY_RUN: 'true'
+        run: bun --no-env-file night-shift-integration/provider-probe.ts --input night-shift-integration/out/provider-input/verified-input.json --out night-shift-integration/out/provider
+      - name: Upload sanitized receipts and numeric audits only
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: measured-provider-receipts-${{ github.run_id }}
+          path: night-shift-integration/out/provider/public/*.json
+          if-no-files-found: warn
+          retention-days: 14

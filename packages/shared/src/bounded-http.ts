@@ -1,6 +1,7 @@
 /** Server-side transport only (bounded size and time); never used from the browser. */
-export async function postJson(url:string,body:unknown,headers:Record<string,string>,signal:AbortSignal,fetcher:typeof fetch=fetch):Promise<unknown> {
-  const bounded=AbortSignal.any([signal,AbortSignal.timeout(10000)]);
+export async function postJson(url:string,body:unknown,headers:Record<string,string>,signal:AbortSignal,fetcher:typeof fetch=fetch,timeoutMs=10000):Promise<unknown> {
+  if(!Number.isSafeInteger(timeoutMs)||timeoutMs<1||timeoutMs>60000)throw new Error('invalid upstream deadline');
+  const bounded=AbortSignal.any([signal,AbortSignal.timeout(timeoutMs)]);
   const response=await fetcher(url,{method:'POST',redirect:'error',signal:bounded,headers:{'Content-Type':'application/json',...headers},body:JSON.stringify(body)});
   if(!response.ok||!response.body)throw new Error('upstream request failed');
   const reader=response.body.getReader(),chunks:Uint8Array[]=[];let length=0;
