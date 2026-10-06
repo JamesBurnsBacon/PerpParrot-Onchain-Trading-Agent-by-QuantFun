@@ -1,7 +1,8 @@
 # Score module spec (README section 4.2)
 
-Status: **revision 2 (2026-10-06), ahead of the code.** The code in `src/score/` still implements revision 1; it changes
-to match this file in a follow-up. Revision 2 records the decisions from the review of PR #2 (see "Revision 2 decisions
+Status: **revision 2 (2026-10-06), implemented.** The code in `src/score/` follows this file; its test fixtures were
+produced by a separate Python reference written from this file alone (see `test/fixtures/score/README.md`). Revision 2
+records the decisions from the review of PR #2 (see "Revision 2 decisions
 and evidence" at the end). Values marked **[tune]** are provisional and are set in the tuning session on 2026-10-07.
 Where the README is silent, a choice is marked **[interpretation]**.
 
@@ -217,7 +218,8 @@ With `mu = sum(r) / T` (mean return per day):
   `annualisedReturn = C_last^(365 / T) - 1` (`-1` after `ruin`; non-finite is `null`).
   Sharpe and Sortino are **never annualised** in the output: scaling a 90-day ratio by sqrt(365) overstates how reliable it is.
 - `allTimeMaxDrawdown`: the same returns, dust guard and compounding over the whole valid `allTime` window at its own
-  resolution (no grid), then the drawdown over all curve points. `null` without a valid `allTime`.
+  resolution (no grid), then the drawdown over all curve points. `null` without a valid `allTime` or when no
+  `allTime` interval is used (dust-guard and ruin flags from this pass are not added to `flags`).
 
 Every number in `Metrics` is finite or `null`; a repeated flag appears once; flags are sorted.
 
@@ -293,9 +295,10 @@ against representatives, never against clones, so groups cannot chain. A clone g
 `cloneOf = { address, correlation }` (`correlation: null` for a link); its representative lists it in `clones`.
 Clones keep their percentiles, score and rank (they describe the account), but they are never finalists.
 
-On the fixtures with the prototype (16 ranked), the default 0.9 gives 12 distinct strategies: `addr-06` (rho 0.991)
-and `addr-02` (0.944) -> `addr-04`; `addr-24` (0.931) -> `addr-18`; `addr-17` (0.940) -> `addr-23`. At 0.8 it would
-be 9 (`addr-02`, `-04`, `-06` -> `addr-09` at 0.80-0.88; `addr-16` -> `addr-13`; `addr-19` -> `addr-23`); at 0.7, 8.
+On the 24-account sample (16 ranked), the default 0.9 gives 10 distinct strategies: `addr-06` (rho 0.991), `addr-09`
+(0.964) and `addr-02` (0.944) -> `addr-04`; `addr-24` (0.949) -> `addr-18`; `addr-19` (0.976) -> `addr-23`; `addr-17`
+(0.913) -> `addr-16`. At 0.8 it is 9 (`addr-16` joins `addr-23` at 0.886, and `addr-17` follows it there at 0.898);
+at 0.7, 8 (`addr-13` -> `addr-22` at 0.720). The TypeScript code and the Python reference agree on all of these.
 With 30 daily returns a measured rho of 0.9 has a 95% interval of about 0.80-0.95, and 0.8 about 0.62-0.90; the
 overlap, and so the precision, grows as snapshots accumulate.
 
@@ -368,22 +371,25 @@ gate until the backtest supplies out-of-sample values. This is intended.
 ## Code conventions (match `packages/backend`)
 TypeScript strict, ESM, extensionless imports, double quotes, semicolons, trailing commas, `const` arrow-function
 exports, no `any`, tests with `bun:test` in `test/score/*.test.ts`, comments cite the README section.
-Files: `src/score/{types,parse,stitch,returns,metrics,filters,score,clones,frame,index}.ts`.
+Files: `src/score/{types,config,parse,stitch,returns,metrics,filters,score,clones,frame,index}.ts`.
 
 ## To decide in tuning (2026-10-07)
 - The **[tune]** values: `lookbackDays` 90, `stillActiveDays` 7, `dustEquityFraction` 0.01, `maxSkippedTimeShare`
   0.20, `cloneCorrelation` 0.90, and the `finalistSplit` between traders and vaults (to be set after seeing how live traders and vaults differ).
-- **Near-cash accounts rank first.** In the fixture prototype, `addr-21` (+0.4% over 82 days, 0.1% drawdown, R² 0.94)
+- **Near-cash accounts rank first.** On the sample, `addr-21` (+0.4% over 82 days, 0.008% drawdown, R² 0.94)
   ranks #1. All five terms are risk-adjusted or shape-based, so an account with almost no risk and almost no return
   wins. A return hurdle (minimum `annualisedReturn`) or a return term may be needed.
-- **Clone threshold.** At 0.9, `addr-09` and the `addr-04` group (rho 0.80-0.88 between them) stay separate
-  finalists. Decide with live data whether that cluster is one strategy; 0.8 would merge it.
+- **Clone threshold and sampling phase.** At 0.9 the whole `addr-04` cluster (`-02`, `-06`, `-09`) is one group;
+  0.8 additionally merges `addr-16` into the `addr-23` group. Daily correlations from ~16-hour points depend on the
+  time of day they are sampled at: an early prototype sampling at a non-midnight phase measured `addr-04`~`addr-09` at
+  0.81, against 0.964 at UTC midnight. Check with live data whether a phase-robust measure (e.g. the mean over several
+  sampling phases) is needed before lowering the threshold.
 - **Old accounts are coarser.** Accounts older than about 2 years have 14-day `allTime` points (flag
   `coarse-history`) until snapshots accumulate.
 
 ## Revision 2 decisions and evidence
-Evidence is from the 24 public `month`/`allTime` windows in `test/fixtures/score/portfolio-sample.json` and a Python
-prototype of this revision (outside the repo).
+Evidence is from the 24 public `month`/`allTime` windows in `test/fixtures/score/portfolio-sample.json`, computed by
+the implementation and checked against the independent Python reference.
 
 | # | Revision 1 | Revision 2 | Why |
 |---|---|---|---|
@@ -403,10 +409,10 @@ prototype of this revision (outside the repo).
 | - | Cumulative funnel only | Plus `filterCounts` per filter | Shows which filter does the work. |
 | - | One ranking | Percentiles within pool (traders, vaults) | HyperCore vaults (legacy, profit share, lockups) have different return profiles. |
 | - | Duplicate window: last wins | Throws | A duplicated window is a malformed response. |
-| - | (none) | Clone grouping before the finalist cut: rho >= 0.9 on daily returns, or a known link | `addr-02`, `-04`, `-06`, `-09` (daily-return rho 0.80-0.99; `addr-04`/`-06` 0.991 with the same account value) took 4 of the top 6 places. Duplicates concentrate the copy portfolio in one strategy's idiosyncratic risk; widening the finalist set would only spend more slots on them. |
+| - | (none) | Clone grouping before the finalist cut: rho >= 0.9 on daily returns, or a known link | `addr-04`, `-06`, `-09`, `-02` are ranks 2-5 of the 16 ranked accounts, with daily-return rho 0.94-0.99 against `addr-04` (`addr-04`/`-06`: 0.991 and the same account value). Duplicates concentrate the copy portfolio in one strategy's idiosyncratic risk; widening the finalist set would only spend more slots on them. |
 
-Prototype funnel on the fixtures (synthetic `closed`/`tradeCount` overlay): 24 -> 23 (account value) -> 23 -> 22 (still
-active) -> 17 (trades) -> 17 -> 17 -> 16 (coverage: `addr-08`) -> 16 ranked -> 12 distinct -> 12 finalists.
+Funnel on the sample (synthetic `closed`/`tradeCount` overlay, default config): 24 -> 23 (account value) -> 23 -> 22
+(still active) -> 17 (trades) -> 17 -> 17 -> 16 (coverage: `addr-08`) -> 16 ranked -> 10 distinct -> 10 finalists.
 
 ## Other decisions made without a README basis (unchanged from revision 1)
 - Sortino uses a minimum acceptable return of 0 and per-day normalisation by elapsed time.

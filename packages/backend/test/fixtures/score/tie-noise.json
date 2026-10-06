@@ -1,100 +1,139 @@
 {
-  "note": "Mathematically tied totals whose floating-point sums differ in the last bit. The expected order is the exact integer order (ties by address).",
-  "entries": [
-    {
-      "address": "0x00",
-      "metrics": {
-        "sortino": 0.2,
-        "calmar": 2.0,
-        "maxDrawdown": 0.03,
-        "pnlConsistency": 0.4,
-        "realizedVol": 0.01,
-        "flags": []
-      }
-    },
-    {
-      "address": "0x03",
-      "metrics": {
-        "sortino": 0.4,
-        "calmar": 1.0,
-        "maxDrawdown": 0.01,
-        "pnlConsistency": 0.3,
-        "realizedVol": 0.01,
-        "flags": []
-      }
-    },
-    {
-      "address": "0x02",
-      "metrics": {
-        "sortino": 0.4,
-        "calmar": null,
-        "maxDrawdown": 0.04,
-        "pnlConsistency": 0.6,
-        "realizedVol": 0.01,
-        "flags": []
-      }
-    },
-    {
-      "address": "0x01",
-      "metrics": {
-        "sortino": null,
-        "calmar": null,
-        "maxDrawdown": 0.02,
-        "pnlConsistency": 0.5,
-        "realizedVol": 0.01,
-        "flags": []
-      }
-    }
-  ],
-  "finalists": 3,
-  "expected": [
-    {
-      "address": "0x03",
-      "percentiles": {
-        "sortino": 0.8333333333333334,
-        "calmar": 0.6666666666666666,
-        "negMaxDrawdown": 1.0,
-        "pnlConsistency": 0.0
-      },
-      "score": 0.625,
-      "rank": 1,
-      "finalist": true
-    },
-    {
-      "address": "0x00",
-      "percentiles": {
-        "sortino": 0.3333333333333333,
-        "calmar": 1.0,
-        "negMaxDrawdown": 0.3333333333333333,
-        "pnlConsistency": 0.3333333333333333
-      },
-      "score": 0.5,
-      "rank": 2,
-      "finalist": true
-    },
-    {
-      "address": "0x02",
-      "percentiles": {
-        "sortino": 0.8333333333333334,
-        "calmar": 0.16666666666666666,
-        "negMaxDrawdown": 0.0,
-        "pnlConsistency": 1.0
-      },
-      "score": 0.5,
-      "rank": 3,
-      "finalist": true
-    },
-    {
-      "address": "0x01",
-      "percentiles": {
-        "sortino": 0.0,
-        "calmar": 0.16666666666666666,
-        "negMaxDrawdown": 0.6666666666666666,
-        "pnlConsistency": 0.6666666666666666
-      },
-      "score": 0.375,
-      "rank": 4,
-      "finalist": false
-    }
-  ]
+ "note": "Pool of 4 entries with hand-made metrics (all values distinct per term, so k = 2L). 0x0b and 0x0a have the same scoreNumerator 14 (exact tie); 0x0b has the higher Sharpe, so the exact order puts 0x0b first. The naive float sum p_sharpe + p_sortino + p_calmar + p_negMDD + 2*p_consistency (left to right) is 2.333333333333333 for 0x0b and 2.3333333333333335 for 0x0a (they differ in the last bit), so ranking by that float sum would put 0x0a first, and so would ordering ties by address. expected = rankPool(entries) from the Python reference.",
+ "entries": [
+  {
+   "address": "0x0b",
+   "metrics": {
+    "sharpe": 0.15000000000000002,
+    "sortino": 0.1,
+    "calmar": 0.5,
+    "maxDrawdown": 0.24,
+    "consistency": 0.26,
+    "periodReturn": 0.12,
+    "annualisedReturn": 0.583457550582478,
+    "annualisedVol": 0.382099463490856,
+    "realizedVol": 0.02,
+    "allTimeMaxDrawdown": 0.24,
+    "lookbackDays": 90,
+    "coveredDays": 90,
+    "skippedTimeShare": 0,
+    "fineTimeShare": 1,
+    "flags": []
+   }
+  },
+  {
+   "address": "0x0a",
+   "metrics": {
+    "sharpe": 0.05,
+    "sortino": 0.5499999999999999,
+    "calmar": 2.5999999999999996,
+    "maxDrawdown": 0.27,
+    "consistency": 0.1,
+    "periodReturn": 0.702,
+    "annualisedReturn": 7.643095455339939,
+    "annualisedVol": 0.382099463490856,
+    "realizedVol": 0.02,
+    "allTimeMaxDrawdown": 0.27,
+    "lookbackDays": 90,
+    "coveredDays": 90,
+    "skippedTimeShare": 0,
+    "fineTimeShare": 1,
+    "flags": []
+   }
+  },
+  {
+   "address": "0x10",
+   "metrics": {
+    "sharpe": 0.25,
+    "sortino": 0.4,
+    "calmar": 1.2,
+    "maxDrawdown": 0.21,
+    "consistency": 0.18,
+    "periodReturn": 0.252,
+    "annualisedReturn": 1.4879392876942963,
+    "annualisedVol": 0.382099463490856,
+    "realizedVol": 0.02,
+    "allTimeMaxDrawdown": 0.21,
+    "lookbackDays": 90,
+    "coveredDays": 90,
+    "skippedTimeShare": 0,
+    "fineTimeShare": 1,
+    "flags": []
+   }
+  },
+  {
+   "address": "0x11",
+   "metrics": {
+    "sharpe": 0.35000000000000003,
+    "sortino": 0.25,
+    "calmar": 1.9,
+    "maxDrawdown": 0.3,
+    "consistency": 0.33999999999999997,
+    "periodReturn": 0.57,
+    "annualisedReturn": 5.229912165547648,
+    "annualisedVol": 0.382099463490856,
+    "realizedVol": 0.02,
+    "allTimeMaxDrawdown": 0.3,
+    "lookbackDays": 90,
+    "coveredDays": 90,
+    "skippedTimeShare": 0,
+    "fineTimeShare": 1,
+    "flags": []
+   }
+  }
+ ],
+ "expected": [
+  {
+   "address": "0x11",
+   "percentiles": {
+    "sharpe": 1.0,
+    "sortino": 0.3333333333333333,
+    "calmar": 0.6666666666666666,
+    "negMaxDrawdown": 0.0,
+    "consistency": 1.0
+   },
+   "scoreNumerator": 24,
+   "score": 0.6666666666666666,
+   "rank": 1
+  },
+  {
+   "address": "0x10",
+   "percentiles": {
+    "sharpe": 0.6666666666666666,
+    "sortino": 0.6666666666666666,
+    "calmar": 0.3333333333333333,
+    "negMaxDrawdown": 1.0,
+    "consistency": 0.3333333333333333
+   },
+   "scoreNumerator": 20,
+   "score": 0.5555555555555556,
+   "rank": 2
+  },
+  {
+   "address": "0x0b",
+   "percentiles": {
+    "sharpe": 0.3333333333333333,
+    "sortino": 0.0,
+    "calmar": 0.0,
+    "negMaxDrawdown": 0.6666666666666666,
+    "consistency": 0.6666666666666666
+   },
+   "scoreNumerator": 14,
+   "score": 0.3888888888888889,
+   "rank": 3
+  },
+  {
+   "address": "0x0a",
+   "percentiles": {
+    "sharpe": 0.0,
+    "sortino": 1.0,
+    "calmar": 1.0,
+    "negMaxDrawdown": 0.3333333333333333,
+    "consistency": 0.0
+   },
+   "scoreNumerator": 14,
+   "score": 0.3888888888888889,
+   "rank": 4
+  }
+ ]
 }

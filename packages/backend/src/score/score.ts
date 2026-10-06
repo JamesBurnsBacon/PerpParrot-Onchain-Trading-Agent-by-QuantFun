@@ -1,29 +1,28 @@
-import { computeFilters, isEligible } from "./filters";
-import { computeMetrics } from "./metrics";
-import { validateSeries } from "./returns";
-import type { Candidate, FilterName, FunnelStep, Metrics, ScoreConfig, ScoreInput } from "./types";
+import { correlation, dailyReturns, linked } from "./clones";
+import { DEFAULT_CONFIG, FILTER_ORDER, validateConfig } from "./config";
+import { activeDays, computeFilters, isEligible } from "./filters";
+import { type Analysis, analyse } from "./metrics";
+import type {
+  Candidate, Correlation, FilterCounts, FunnelStep, Metrics, Percentiles, Pool, Ratio, ScoreConfig, ScoreInput, ScoreResult,
+} from "./types";
 
-// Default screening thresholds and finalist count (README §4.2).
-export const DEFAULT_CONFIG: ScoreConfig = {
-  minAccountValue: 10_000,
-  minActiveDays: 30,
-  minTrades: 10,
-  minMonthPoints: 25,
-  finalists: 25,
-  allowUnknown: false,
+export { DEFAULT_CONFIG } from "./config";
+
+const TERMS = [
+  ["sharpe", 1], ["sortino", 1], ["calmar", 1], ["negMaxDrawdown", 1], ["consistency", 2],
+] as const satisfies readonly (readonly [keyof Percentiles, number])[];
+const WEIGHT_TOTAL = TERMS.reduce((sum, [, weight]) => sum + weight, 0);
+
+// null < every number < "+inf"; equal values compare equal (SPEC "Ranking").
+const compareValues = (a: Ratio, b: Ratio): number => {
+  if (a === b) return 0;
+  if (a === null || b === "+inf") return -1;
+  if (b === null || a === "+inf") return 1;
+  return a < b ? -1 : a > b ? 1 : 0;
 };
 
-const FILTER_ORDER: FilterName[] = ["minAccountValue", "minActiveDays", "minTrades", "notClosed", "minMonthPoints"];
-
-const validateConfig = (config: ScoreConfig): void => {
-  for (const name of ["minAccountValue", "minActiveDays", "minTrades", "minMonthPoints", "finalists"] as const) {
-    const value = config[name];
-    if (!Number.isFinite(value) || value < 0 ||
-      ((name === "finalists" || name === "minMonthPoints") && (!Number.isInteger(value) || value < 1))) {
-      throw new Error(`invalid config: ${name}`);
-    }
-  }
-};
+const termValue = (metrics: Metrics, term: keyof Percentiles): Ratio =>
+  term === "negMaxDrawdown" ? metrics.maxDrawdown === null ? null : -metrics.maxDrawdown : metrics[term];
 
 const compareAddresses = (a: { address: string }, b: { address: string }): number => {
   const left = a.address.toLowerCase();
@@ -31,79 +30,113 @@ const compareAddresses = (a: { address: string }, b: { address: string }): numbe
   return left < right ? -1 : left > right ? 1 : 0;
 };
 
-// Equal values share the integer midrank numerator; null is strictly worst (README §4.2).
-const rankNumeratorMap = (values: (number | null)[]): Map<number | null, number> => {
-  const sorted = [...values].sort((a, b) => a === b ? 0 : a === null ? -1 : b === null ? 1 : a - b);
-  const result = new Map<number | null, number>();
-  for (let start = 0; start < sorted.length;) {
-    let end = start + 1;
-    while (end < sorted.length && sorted[end] === sorted[start]) end++;
-    result.set(sorted[start], 2 * start + (end - start) - 1);
-    start = end;
+// k = 2L + E - 1 for each value, counting strictly worse (L) and equal (E) values in the pool.
+const rankNumerators = (values: Ratio[]): number[] =>
+  values.map((value) => {
+    let worse = 0;
+    let equal = 0;
+    for (const other of values) {
+      const order = compareValues(other, value);
+      if (order < 0) worse++;
+      else if (order === 0) equal++;
+    }
+    return 2 * worse + equal - 1;
+  });
+
+export type PoolRank = { address: string; percentiles: Percentiles; scoreNumerator: number; score: number; rank: number };
+
+// Exact integer ranking inside one pool; ties by raw Sharpe, then address (SPEC "Ranking").
+export const rankPool = (entries: { address: string; metrics: Metrics }[]): PoolRank[] => {
+  const count = entries.length;
+  const numerators = Object.fromEntries(TERMS.map(([term]) =>
+    [term, rankNumerators(entries.map(({ metrics }) => termValue(metrics, term)))])) as Record<keyof Percentiles, number[]>;
+  return entries.map(({ address, metrics }, i) => {
+    const percentiles = Object.fromEntries(TERMS.map(([term]) =>
+      [term, count === 1 ? 0.5 : numerators[term][i] / (2 * (count - 1))])) as Percentiles;
+    const scoreNumerator = count === 1 ? 0 : TERMS.reduce((sum, [term, weight]) => sum + weight * numerators[term][i], 0);
+    return { address, metrics, percentiles, scoreNumerator, score: count === 1 ? 0.5 : scoreNumerator / (2 * WEIGHT_TOTAL * (count - 1)) };
+  }).sort((a, b) => b.scoreNumerator - a.scoreNumerator || compareValues(b.metrics.sharpe, a.metrics.sharpe) || compareAddresses(a, b))
+    .map(({ address, percentiles, scoreNumerator, score }, index) => ({ address, percentiles, scoreNumerator, score, rank: index + 1 }));
+};
+
+const poolOf = (input: ScoreInput): Pool => input.kind === "trader" ? "trader" : "vault";
+
+type Ranked = Candidate & { metrics: Metrics; scoreNumerator: number; poolSize: number };
+
+// Scores from different pools compare exactly as fractions n / (12(N - 1)), 1/2 when N = 1 (SPEC "Ranking").
+const compareCrossPool = (a: Ranked, b: Ranked): number => {
+  const fraction = (c: Ranked): [number, number] =>
+    c.poolSize === 1 ? [1, 2] : [c.scoreNumerator, 2 * WEIGHT_TOTAL * (c.poolSize - 1)];
+  const [an, ad] = fraction(a);
+  const [bn, bd] = fraction(b);
+  return bn * ad - an * bd || compareValues(b.metrics.sharpe, a.metrics.sharpe) || compareAddresses(a, b);
+};
+
+// Slots per pool: proportional with largest remainder, or fixed with spill-over (SPEC "Finalists").
+const finalistSlots = (representatives: Record<Pool, number>, config: ScoreConfig): Record<Pool, number> => {
+  const total = representatives.trader + representatives.vault;
+  const slots = config.finalists;
+  if (total <= slots) return { ...representatives };
+  const split = config.finalistSplit;
+  if (split !== "proportional") {
+    const trader = Math.min(split.trader, representatives.trader);
+    const vault = Math.min(split.vault, representatives.vault);
+    return {
+      trader: Math.min(representatives.trader, trader + (split.vault - vault)),
+      vault: Math.min(representatives.vault, vault + (split.trader - trader)),
+    };
+  }
+  const result = {
+    trader: Math.floor((slots * representatives.trader) / total),
+    vault: Math.floor((slots * representatives.vault) / total),
+  };
+  const remainder = { trader: (slots * representatives.trader) % total, vault: (slots * representatives.vault) % total };
+  for (let left = slots - result.trader - result.vault; left > 0; left--) {
+    const pool: Pool = remainder.vault > remainder.trader ? "vault" : "trader";
+    result[pool]++;
+    remainder[pool] = -1;
+  }
+  for (const [pool, other] of [["trader", "vault"], ["vault", "trader"]] as const) {
+    if (representatives[pool] > 0 && result[pool] === 0 && result[other] >= 2) {
+      result[pool] = 1;
+      result[other]--;
+    }
   }
   return result;
 };
 
-const negMaxDrawdown = (metrics: Metrics): number | null =>
-  metrics.maxDrawdown === null ? null : -metrics.maxDrawdown;
-
-// Sum integer rank numerators so exact ties reach the address tie-break (README §4.2).
-export const rankByMetrics = (entries: { address: string; metrics: Metrics }[], finalists: number) => {
-  const sortino = rankNumeratorMap(entries.map(({ metrics }) => metrics.sortino));
-  const calmar = rankNumeratorMap(entries.map(({ metrics }) => metrics.calmar));
-  const drawdown = rankNumeratorMap(entries.map(({ metrics }) => negMaxDrawdown(metrics)));
-  const consistency = rankNumeratorMap(entries.map(({ metrics }) => metrics.pnlConsistency));
-  const count = entries.length;
-  return entries.map(({ address, metrics }) => {
-    const numerators = {
-      sortino: sortino.get(metrics.sortino)!,
-      calmar: calmar.get(metrics.calmar)!,
-      negMaxDrawdown: drawdown.get(negMaxDrawdown(metrics))!,
-      pnlConsistency: consistency.get(metrics.pnlConsistency)!,
-    };
-    const scoreNumerator = numerators.sortino + numerators.calmar + numerators.negMaxDrawdown + numerators.pnlConsistency;
-    return { address, metrics, numerators, scoreNumerator };
-  }).sort((a, b) => b.scoreNumerator - a.scoreNumerator || compareAddresses(a, b))
-    .map(({ address, metrics, numerators, scoreNumerator }, index) => ({
-      address,
-      metrics,
-      percentiles: {
-        sortino: count === 1 ? 0.5 : numerators.sortino / (2 * (count - 1)),
-        calmar: count === 1 ? 0.5 : numerators.calmar / (2 * (count - 1)),
-        negMaxDrawdown: count === 1 ? 0.5 : numerators.negMaxDrawdown / (2 * (count - 1)),
-        pnlConsistency: count === 1 ? 0.5 : numerators.pnlConsistency / (2 * (count - 1)),
-      },
-      score: count === 1 ? 0.5 : scoreNumerator / (8 * (count - 1)),
-      rank: index + 1,
-      finalist: index < finalists,
-    }));
-};
-
-// Rank eligible histories, then report the cumulative screening funnel (README §4.2).
-export const scoreCandidates = (
-  inputs: ScoreInput[],
-  overrides: Partial<ScoreConfig> = {},
-): { candidates: Candidate[]; finalists: string[]; funnel: FunnelStep[]; config: ScoreConfig } => {
+// Filter, rank within pools, group clones, then cut the finalists (README §4.2, SPEC revision 2).
+export const scoreCandidates = (inputs: ScoreInput[], overrides: Partial<ScoreConfig> = {}): ScoreResult => {
   const config: ScoreConfig = { ...DEFAULT_CONFIG, ...overrides };
   validateConfig(config);
-  const addresses = new Set<string>();
+  const byAddress = new Map<string, ScoreInput>();
   for (const input of inputs) {
     const address = input.address.toLowerCase();
-    if (addresses.has(address)) throw new Error(`duplicate address: ${input.address}`);
-    addresses.add(address);
+    if (byAddress.has(address)) throw new Error(`duplicate address: ${input.address}`);
+    byAddress.set(address, input);
   }
+  const inputOf = (address: string): ScoreInput => byAddress.get(address.toLowerCase())!;
 
+  const analyses = new Map<string, Analysis>();
   const candidates = inputs.map((input): Candidate => {
-    const filters = computeFilters(input, config);
+    const analysis = analyse(input, config);
+    if (analysis !== null) analyses.set(input.address, analysis);
+    const metrics = analysis?.metrics ?? null;
+    const filters = computeFilters(input, metrics, config);
     return {
       address: input.address,
       kind: input.kind,
+      pool: poolOf(input),
+      activeDays: activeDays(input),
       filters,
       eligible: isEligible(filters, config),
-      metrics: input.month !== null && validateSeries(input.month) ? computeMetrics(input.month) : null,
+      metrics,
       percentiles: null,
+      scoreNumerator: null,
       score: null,
       rank: null,
+      cloneOf: null,
+      clones: [],
       finalist: false,
       passthrough: {
         avgLeverage: input.avgLeverage ?? null,
@@ -114,26 +147,83 @@ export const scoreCandidates = (
     };
   });
 
-  const rankable = candidates.filter((candidate): candidate is Candidate & { metrics: Metrics } =>
-    candidate.eligible && candidate.metrics !== null,
-  );
-  const candidatesByAddress = new Map(rankable.map((candidate) => [candidate.address, candidate]));
-  const ranked = rankByMetrics(rankable, config.finalists).map((entry) => ({
-    ...candidatesByAddress.get(entry.address)!,
-    ...entry,
-  }));
-  const unranked = candidates.filter((candidate) => !candidate.eligible || candidate.metrics === null)
-    .sort(compareAddresses);
-  const finalists = ranked.filter((candidate) => candidate.finalist).map((candidate) => candidate.address);
+  const rankable = candidates.filter((c): c is Candidate & { metrics: Metrics } =>
+    c.eligible && c.metrics !== null && !c.metrics.flags.includes("no-intervals"));
+  const ranked: Ranked[] = [];
+  for (const pool of ["trader", "vault"] as const) {
+    const members = rankable.filter((c) => c.pool === pool);
+    const byPoolAddress = new Map(members.map((c) => [c.address, c]));
+    for (const entry of rankPool(members)) {
+      ranked.push({ ...byPoolAddress.get(entry.address)!, ...entry, poolSize: members.length });
+    }
+  }
+  ranked.sort(compareCrossPool);
+
+  // Greedy clone grouping against earlier representatives only, so groups cannot chain (SPEC "Clone grouping").
+  const returns = new Map(ranked.map((c) => [c.address, dailyReturns(analyses.get(c.address)!)]));
+  const rho = (a: string, b: string) => correlation(returns.get(a)!, returns.get(b)!, config.minOverlapDays);
+  const representatives: Ranked[] = [];
+  for (const candidate of ranked) {
+    for (const representative of representatives) {
+      if (linked(inputOf(candidate.address), inputOf(representative.address))) {
+        candidate.cloneOf = { address: representative.address, correlation: null };
+      } else {
+        const value = rho(candidate.address, representative.address);
+        if (value !== null && value >= config.cloneCorrelation) {
+          candidate.cloneOf = { address: representative.address, correlation: value };
+        }
+      }
+      if (candidate.cloneOf !== null) {
+        representative.clones.push(candidate.address);
+        break;
+      }
+    }
+    if (candidate.cloneOf === null) representatives.push(candidate);
+  }
+
+  const count = (pool: Pool) => representatives.filter((c) => c.pool === pool).length;
+  const slots = finalistSlots({ trader: count("trader"), vault: count("vault") }, config);
+  const taken: Record<Pool, number> = { trader: 0, vault: 0 };
+  for (const representative of representatives) {
+    if (taken[representative.pool] < slots[representative.pool]) {
+      taken[representative.pool]++;
+      representative.finalist = true;
+    }
+  }
+  const finalists = representatives.filter((c) => c.finalist).map((c) => c.address);
+  const correlations: Correlation[] = [];
+  for (let i = 0; i < finalists.length; i++) {
+    for (let j = i + 1; j < finalists.length; j++) {
+      correlations.push({
+        a: finalists[i],
+        b: finalists[j],
+        rho: rho(finalists[i], finalists[j]),
+        linked: linked(inputOf(finalists[i]), inputOf(finalists[j])),
+      });
+    }
+  }
+
+  const rankedAddresses = new Set(ranked.map((c) => c.address));
+  const unranked = candidates.filter((c) => !rankedAddresses.has(c.address)).sort(compareAddresses);
+  const output = [...ranked.map(({ poolSize: _, ...candidate }): Candidate => candidate), ...unranked];
 
   const funnel: FunnelStep[] = [{ stage: "universe", count: candidates.length }];
   let remaining = candidates;
   for (const stage of FILTER_ORDER) {
     remaining = remaining.filter(({ filters }) =>
-      filters[stage] === "pass" || (filters[stage] === "unknown" && config.allowUnknown),
-    );
+      filters[stage] === "pass" || (filters[stage] === "unknown" && config.allowUnknown.includes(stage)));
     funnel.push({ stage, count: remaining.length });
   }
-  funnel.push({ stage: "eligible", count: ranked.length }, { stage: "finalists", count: finalists.length });
-  return { candidates: [...ranked, ...unranked], finalists, funnel, config };
+  funnel.push(
+    { stage: "eligible", count: ranked.length },
+    { stage: "distinct", count: representatives.length },
+    { stage: "finalists", count: finalists.length },
+  );
+  const filterCounts = Object.fromEntries(FILTER_ORDER.map((name) => [name, {
+    pass: candidates.filter((c) => c.filters[name] === "pass").length,
+    fail: candidates.filter((c) => c.filters[name] === "fail").length,
+    unknown: candidates.filter((c) => c.filters[name] === "unknown").length,
+  }])) as FilterCounts;
+
+  return { candidates: output, finalists, correlations, funnel, filterCounts, config };
 };

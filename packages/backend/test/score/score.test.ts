@@ -1,144 +1,134 @@
 import { describe, expect, test } from "bun:test";
-import { DEFAULT_CONFIG, parsePortfolio, scoreCandidates, type ScoreConfig, type ScoreInput, type TimePoint } from "../../src/score";
+import { DEFAULT_CONFIG, scoreCandidates, type ScoreConfig, type ScoreInput, type ScoreResult } from "../../src/score";
+import clones from "../fixtures/score/clones.json";
 import ranking from "../fixtures/score/ranking-set.json";
-import sample from "../fixtures/score/portfolio-sample.json";
 import sampleExpected from "../fixtures/score/portfolio-sample.expected.json";
+import { expectFinite, expectOutput, sampleInputs, shuffle, toInput, type RawInput } from "./helpers";
 
-const rankingInputs = ranking.inputs.map((input): ScoreInput => {
-  if (input.kind !== "trader" && input.kind !== "hypercore-vault" && input.kind !== "erc4626-vault") {
-    throw new Error(`invalid fixture kind: ${input.kind}`);
-  }
-  return {
-    ...input,
-    kind: input.kind,
-    month: input.month === null ? null : {
-      accountValueHistory: input.month.accountValueHistory.map(([ts, value]): TimePoint => [ts, value]),
-      pnlHistory: input.month.pnlHistory.map(([ts, value]): TimePoint => [ts, value]),
-    },
-    allTime: input.allTime === null ? null : {
-      accountValueHistory: input.allTime.accountValueHistory.map(([ts, value]): TimePoint => [ts, value]),
-      pnlHistory: input.allTime.pnlHistory.map(([ts, value]): TimePoint => [ts, value]),
-    },
-  };
-});
+type Fixture = { inputs: RawInput[]; expected: Record<string, unknown> };
+const rankingInputs = (ranking as unknown as Fixture).inputs.map(toInput);
+const cloneInputs = (clones as unknown as Fixture).inputs.map(toInput);
+const configOf = (expected: unknown): Partial<ScoreConfig> => (expected as ScoreResult).config;
 
-const sampleInputs = sample.map((entry): ScoreInput => ({
-  address: entry.id,
-  kind: "trader",
-  accountValue: entry.accountValue,
-  closed: entry.closed,
-  tradeCount: entry.tradeCount,
-  ...parsePortfolio(entry.portfolio),
-}));
-
-// Compare the complete fixture output, allowing only numeric rounding (README §4.2).
-const expectOutput = (actual: unknown, expected: unknown, path = "result"): void => {
-  if (typeof expected === "number") {
-    expect(typeof actual, path).toBe("number");
-    if (typeof actual !== "number") throw new Error(`non-numeric ${path}`);
-    expect(Math.abs(actual - expected), path).toBeLessThanOrEqual(1e-9);
-  } else if (Array.isArray(expected)) {
-    expect(Array.isArray(actual), path).toBe(true);
-    if (!Array.isArray(actual)) throw new Error(`non-array ${path}`);
-    expect(actual.length, path).toBe(expected.length);
-    expected.forEach((value: unknown, i: number) => expectOutput(actual[i], value, `${path}[${i}]`));
-  } else if (expected !== null && typeof expected === "object") {
-    if (actual === null || typeof actual !== "object" || Array.isArray(actual)) {
-      throw new Error(`non-object ${path}`);
-    }
-    expect(Object.keys(actual).sort(), path).toEqual(Object.keys(expected).sort());
-    for (const [key, value] of Object.entries(expected)) {
-      expectOutput((actual as Record<string, unknown>)[key], value, `${path}.${key}`);
-    }
-  } else {
-    expect(actual, path).toBe(expected);
-  }
-};
-
-const expectFiniteOutput = (value: unknown): void => {
-  if (typeof value === "number") expect(Number.isFinite(value)).toBe(true);
-  else if (value !== null && typeof value === "object") Object.values(value).forEach(expectFiniteOutput);
-};
-
-const shuffle = (inputs: ScoreInput[]): ScoreInput[] => {
-  const result = [...inputs];
-  let seed = 42;
-  for (let i = result.length - 1; i > 0; i--) {
-    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
-    const j = seed % (i + 1);
-    [result[i], result[j]] = [result[j], result[i]];
-  }
-  return result;
-};
-
-const scenarios = [
-  { name: "finalists-3", inputs: rankingInputs, config: { finalists: 3 }, expected: ranking.expected["finalists-3"] },
-  { name: "single", inputs: rankingInputs.slice(0, 1), config: undefined, expected: ranking.expected.single },
-  { name: "strict", inputs: sampleInputs, config: undefined, expected: sampleExpected.strict },
-  { name: "permissive", inputs: sampleInputs, config: { allowUnknown: true, finalists: 5 }, expected: sampleExpected.permissive },
+// Every expected output carries its full config, so each scenario reruns exactly what the reference ran.
+const scenarios: { name: string; inputs: ScoreInput[]; expected: unknown }[] = [
+  { name: "ranking finalists-3", inputs: rankingInputs, expected: ranking.expected["finalists-3"] },
+  { name: "ranking single", inputs: rankingInputs.slice(0, 1), expected: ranking.expected.single },
+  { name: "ranking split", inputs: rankingInputs, expected: ranking.expected.split },
+  { name: "sample strict", inputs: sampleInputs, expected: sampleExpected.strict },
+  { name: "sample permissive", inputs: sampleInputs, expected: sampleExpected.permissive },
+  ...Object.entries((clones as unknown as Fixture).expected)
+    .map(([name, expected]) => ({ name: `clones ${name}`, inputs: cloneInputs, expected })),
 ];
 
-describe("scoreCandidates (README §4.2)", () => {
+describe("scoreCandidates fixtures (SPEC Output)", () => {
   for (const scenario of scenarios) {
     test(`full output: ${scenario.name}`, () => {
-      expectOutput(scoreCandidates(scenario.inputs, scenario.config), scenario.expected);
+      expectOutput(scoreCandidates(scenario.inputs, configOf(scenario.expected)), scenario.expected);
     });
 
-    test(`order invariance and output properties: ${scenario.name}`, () => {
-      const result = scoreCandidates(scenario.inputs, scenario.config);
-      expect(scoreCandidates(shuffle(scenario.inputs), scenario.config)).toEqual(result);
-      for (const candidate of result.candidates) {
-        if (candidate.percentiles !== null) {
-          for (const value of Object.values(candidate.percentiles)) {
-            expect(value).toBeGreaterThanOrEqual(0);
-            expect(value).toBeLessThanOrEqual(1);
-          }
-        }
-      }
-      result.funnel.slice(1).forEach((step, i) => expect(step.count).toBeLessThanOrEqual(result.funnel[i].count));
-      expect(result.funnel.slice(-2)).toEqual([
-        { stage: "eligible", count: result.candidates.filter((candidate) => candidate.rank !== null).length },
+    test(`invariants: ${scenario.name}`, () => {
+      const config = configOf(scenario.expected);
+      const result = scoreCandidates(scenario.inputs, config);
+      expect(scoreCandidates(shuffle(scenario.inputs), config)).toEqual(result);
+      expectFinite(result);
+
+      const counts = result.funnel.map(({ count }) => count);
+      counts.slice(1).forEach((count, i) => expect(count).toBeLessThanOrEqual(counts[i]));
+      const ranked = result.candidates.filter(({ rank }) => rank !== null);
+      const representatives = ranked.filter(({ cloneOf }) => cloneOf === null);
+      expect(result.funnel.slice(-3)).toEqual([
+        { stage: "eligible", count: ranked.length },
+        { stage: "distinct", count: representatives.length },
         { stage: "finalists", count: result.finalists.length },
       ]);
-      expectFiniteOutput(result);
+
+      // Clones are never finalists, point at a representative, and are listed by it.
+      for (const candidate of ranked) {
+        if (candidate.cloneOf === null) continue;
+        expect(candidate.finalist).toBe(false);
+        const representative = ranked.find(({ address }) => address === candidate.cloneOf!.address)!;
+        expect(representative.cloneOf).toBeNull();
+        expect(representative.clones).toContain(candidate.address);
+        if (candidate.cloneOf.correlation !== null) {
+          expect(candidate.cloneOf.correlation).toBeGreaterThanOrEqual(result.config.cloneCorrelation);
+        }
+      }
+      expect(result.finalists).toEqual(result.candidates.filter(({ finalist }) => finalist).map(({ address }) => address));
+      expect(result.finalists.length).toBeLessThanOrEqual(result.config.finalists);
+      expect(result.correlations).toHaveLength(result.finalists.length * (result.finalists.length - 1) / 2);
+      for (const name of Object.keys(result.filterCounts) as (keyof typeof result.filterCounts)[]) {
+        const { pass, fail, unknown } = result.filterCounts[name];
+        expect(pass + fail + unknown).toBe(result.candidates.length);
+      }
     });
   }
+});
 
-  for (const address of [rankingInputs[0].address, rankingInputs[0].address.toUpperCase()]) {
-    test(`rejects duplicate address ${address}`, () => {
-      expect(() => scoreCandidates([rankingInputs[0], { ...rankingInputs[0], address }])).toThrow("duplicate address");
-    });
-  }
-
-  const invalidConfigs: Partial<ScoreConfig>[] = [
-    { finalists: 0 }, { finalists: 1.5 }, { minMonthPoints: 0 }, { minMonthPoints: 1.5 },
-    ...(["minAccountValue", "minActiveDays", "minTrades", "minMonthPoints", "finalists"] as const)
-      .flatMap((key) => [-1, NaN, Infinity, -Infinity].map((value) => ({ [key]: value }))),
-  ];
-  invalidConfigs.forEach((config, i) => {
-    test(`rejects invalid config ${i}`, () => {
-      expect(() => scoreCandidates([], config)).toThrow(Error);
-    });
+describe("scoreCandidates behaviour", () => {
+  test("a near-duplicate takes no finalist slot, so the slot goes to the next distinct strategy", () => {
+    const [first] = rankingInputs.filter((input) => scoreCandidates([input]).candidates[0].rank !== null);
+    const copy = { ...first, address: `${first.address}-copy` };
+    const result = scoreCandidates([first, copy], { finalists: 2 });
+    const twin = result.candidates.find(({ address }) => address === copy.address)!;
+    expect(twin.cloneOf?.address ?? first.address).toBe(first.address);
+    expect(result.finalists).toEqual([result.candidates[0].address]);
   });
+
+  test("a link groups accounts whatever their correlation", () => {
+    const ranked = rankingInputs.filter((input) => scoreCandidates([input]).candidates[0].rank !== null).slice(0, 2);
+    const linked = [ranked[0], { ...ranked[1], links: [ranked[0].address.toUpperCase()] }];
+    const result = scoreCandidates(linked);
+    const clone = result.candidates.find(({ cloneOf }) => cloneOf !== null)!;
+    expect(clone.cloneOf!.correlation).toBeNull();
+    expect(result.finalists).toHaveLength(1);
+    expect(result.correlations).toEqual([]);
+  });
+
+  for (const address of ["Dup", "DUP"]) {
+    test(`rejects duplicate address ${address}`, () => {
+      expect(() => scoreCandidates([{ ...rankingInputs[0], address: "dup" }, { ...rankingInputs[0], address }]))
+        .toThrow("duplicate address");
+    });
+  }
+
+  const invalidConfigs: [string, Partial<ScoreConfig>][] = [
+    ...(["finalists", "minMonthPoints", "lookbackDays"] as const)
+      .flatMap((key) => [0, 1.5, -1, NaN, Infinity].map((value): [string, Partial<ScoreConfig>] => [key, { [key]: value }])),
+    ...(["minAccountValue", "minActiveDays", "stillActiveDays", "minTrades"] as const)
+      .flatMap((key) => [-1, NaN, Infinity, -Infinity].map((value): [string, Partial<ScoreConfig>] => [key, { [key]: value }])),
+    ...(["dustEquityFraction", "maxSkippedTimeShare"] as const)
+      .flatMap((key) => [-0.1, 1.1, NaN].map((value): [string, Partial<ScoreConfig>] => [key, { [key]: value }])),
+    ["cloneCorrelation", { cloneCorrelation: 0 }], ["cloneCorrelation", { cloneCorrelation: 1.01 }],
+    ["minOverlapDays", { minOverlapDays: 2 }], ["minOverlapDays", { minOverlapDays: 20.5 }],
+    ["coarseGridDays", { coarseGridDays: 0 }],
+    ["finalistSplit", { finalistSplit: { trader: 20, vault: 4 } }],
+    ["finalistSplit", { finalistSplit: { trader: -1, vault: 26 } }],
+    ["allowUnknown", { allowUnknown: ["minTrade" as "minTrades"] }],
+  ];
+  for (const [field, config] of invalidConfigs) {
+    test(`rejects invalid config ${JSON.stringify(config)} naming ${field}`, () => {
+      expect(() => scoreCandidates([], config)).toThrow(`invalid config: ${field}`);
+    });
+  }
 
   test("empty universe has zero counts and no ranked candidates", () => {
     const result = scoreCandidates([]);
     expect(result.candidates).toEqual([]);
     expect(result.finalists).toEqual([]);
+    expect(result.correlations).toEqual([]);
     expect(result.config).toEqual(DEFAULT_CONFIG);
-    expect(result.funnel.map(({ count }) => count)).toEqual(Array(8).fill(0));
-    expectFiniteOutput(result);
+    expect(result.funnel.map(({ count }) => count)).toEqual(Array(12).fill(0));
+    expect(Object.values(result.filterCounts)).toEqual(Array(8).fill({ pass: 0, fail: 0, unknown: 0 }));
   });
 
-  test("unknown month remains eligible but unranked and drops out of the eligible funnel", () => {
-    const result = scoreCandidates([{ ...rankingInputs[0], month: null, accountValue: NaN }], { allowUnknown: true });
+  test("an unknown month can be eligible but is never ranked", () => {
+    const allFilters = Object.keys(scoreCandidates([]).filterCounts) as ScoreConfig["allowUnknown"];
+    const result = scoreCandidates([{ ...rankingInputs[0], month: null }], { allowUnknown: allFilters });
     expect(result.candidates[0].eligible).toBe(true);
     expect(result.candidates[0].metrics).toBeNull();
     expect(result.candidates[0].rank).toBeNull();
-    expect(result.funnel.slice(-3)).toEqual([
-      { stage: "minMonthPoints", count: 1 }, { stage: "eligible", count: 0 }, { stage: "finalists", count: 0 },
-    ]);
-    expectFiniteOutput(result);
+    expect(result.funnel.slice(-3).map(({ count }) => count)).toEqual([0, 0, 0]);
   });
 
   test("preserves supplied passthrough values, including zero and null", () => {
@@ -146,13 +136,9 @@ describe("scoreCandidates (README §4.2)", () => {
     expect(scoreCandidates([{ ...rankingInputs[0], ...passthrough }]).candidates[0].passthrough).toEqual(passthrough);
   });
 
-  test("sorts tied and unranked addresses case-insensitively and preserves their spelling", () => {
-    const inputs: ScoreInput[] = [
-      { ...rankingInputs[0], address: "b" },
-      { ...rankingInputs[0], address: "A" },
-      { ...rankingInputs[0], address: "d", closed: true },
-      { ...rankingInputs[0], address: "C", closed: true },
-    ];
-    expect(scoreCandidates(inputs).candidates.map(({ address }) => address)).toEqual(["A", "b", "C", "d"]);
+  test("unranked addresses sort case-insensitively and keep their spelling", () => {
+    const closed = (address: string): ScoreInput => ({ ...rankingInputs[0], address, closed: true });
+    expect(scoreCandidates(["b", "A", "d", "C"].map(closed)).candidates.map(({ address }) => address))
+      .toEqual(["A", "b", "C", "d"]);
   });
 });
