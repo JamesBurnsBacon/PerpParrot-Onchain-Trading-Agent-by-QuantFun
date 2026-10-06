@@ -28,7 +28,7 @@ const valid: StrategyIntent = {
   reply: "Let's build a book.",
 };
 
-// All successful mapper calls, including repeated calls, go through runtime validation.
+// Successful calls with runtime-schema bases, including repeated calls, go through runtime validation.
 const map = (intent: StrategyIntent, policy: Policy = base) => {
   const result = intentToPolicy(intent, policy);
   validateRuntimePolicy(result.policy);
@@ -307,9 +307,9 @@ describe("shortlist", () => {
     finalist("0xg", 50, 0, 0),
   ];
   test.each([
-    ["aggressive", ["0xa", "0xB", "0xc"]],
-    ["balanced", ["0xd", "0xe", "0xB"]],
-    ["conservative", ["0xf", "0xc", "0xd"]],
+    ["aggressive", ["0xa", "0xB", "0xc", "0xd", "0xe"]],
+    ["balanced", ["0xg", "0xd", "0xe", "0xB", "0xc"]],
+    ["conservative", ["0xg", "0xf", "0xc", "0xd", "0xe"]],
   ] as const)("%s ordering is independent of input order", (riskStyle, expected) => {
     const before = structuredClone(candidates);
     const shuffled = [...candidates];
@@ -319,7 +319,7 @@ describe("shortlist", () => {
       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
     }
     for (const input of [candidates, [...candidates].reverse(), shuffled]) {
-      expect(shortlist(input, { ...valid, riskStyle }, 3)).toEqual([...expected]);
+      expect(shortlist(input, { ...valid, riskStyle }, 5)).toEqual([...expected]);
     }
     expect(candidates).toEqual(before);
   });
@@ -333,9 +333,13 @@ describe("shortlist", () => {
   test.each(["aggressive", "balanced", "conservative"] as const)("%s breaks ties at the score cutoff by lowercase address", (riskStyle) => {
     const input = [finalist("0xB", 100, 0, 0), finalist("0xa", 100, 0.1, 0.1),
       finalist("0x0", 100, 0.2, 0.2)];
-    const expected = riskStyle === "aggressive" ? ["0x0"] : ["0xa"];
-    expect(shortlist(input, { ...valid, riskStyle }, 1)).toEqual(expected);
-    expect(shortlist([...input].reverse(), { ...valid, riskStyle }, 1)).toEqual(expected);
+    // Fill four output slots (and eight score-window slots for risk styles).
+    const leaders = Array.from({ length: riskStyle === "aggressive" ? 4 : 8 }, (_, i) =>
+      finalist(`leader${i}`, 200 - i, i < 4 ? -1 : 1, i < 4 ? -1 : 1));
+    input.push(...leaders);
+    const expected = ["leader0", "leader1", "leader2", "leader3", riskStyle === "aggressive" ? "0x0" : "0xa"];
+    expect(shortlist(input, { ...valid, riskStyle }, 5)).toEqual(expected);
+    expect(shortlist([...input].reverse(), { ...valid, riskStyle }, 5)).toEqual(expected);
   });
 });
 
@@ -358,16 +362,16 @@ describe("review follow-ups", () => {
     expect(() => shortlist([], bad, 5)).toThrow("invalid strategy intent");
   });
 
-  test("a non-finite feasibility result is infeasible, not NaN", () => {
-    expect(() => intentToPolicy(valid, { ...base, maxSourceWeight: 0, cashBuffer: 1 })).toThrow("infeasible");
+  test("zero weight and full cash are invalid base policy, not infeasible", () => {
+    expect(() => intentToPolicy(valid, { ...base, maxSourceWeight: 0, cashBuffer: 1 })).toThrow("invalid base policy: maxSourceWeight");
   });
 
   test("balanced and conservative put a missing metric last", () => {
     const f = (address: string, score: number, maxDrawdown: number | null, annualisedVol: number | null): FinalistLike =>
       ({ address, kind: "trader", score, flags: [], maxDrawdown, annualisedVol, cloneOf: false });
     const list = [f("0xa", 0.9, null, 0.2), f("0xb", 0.8, 0.3, 0.5), f("0xc", 0.7, 0.1, null)];
-    expect(shortlist(list, { ...valid, riskStyle: "balanced" }, 3)).toEqual(["0xc", "0xb", "0xa"]);
-    expect(shortlist(list, { ...valid, riskStyle: "conservative" }, 3)).toEqual(["0xa", "0xb", "0xc"]);
+    expect(shortlist(list, { ...valid, riskStyle: "balanced" }, 5)).toEqual(["0xc", "0xb", "0xa"]);
+    expect(shortlist(list, { ...valid, riskStyle: "conservative" }, 5)).toEqual(["0xa", "0xb", "0xc"]);
   });
 });
 
@@ -438,7 +442,7 @@ describe("Gate A round 2", () => {
     expect(shortlist([
       finalist("clone", 100, 0, 0, { cloneOf: true }),
       finalist("score", 90, 0.5, 0.5), finalist("metric", 80, 0, 0),
-    ], input, 1)).toEqual(["score"]);
+    ], input, 5)).toEqual(["score", "metric"]);
     expect([...reads.values()]).toEqual(Object.keys(valid).map(() => 1));
   });
 
@@ -507,7 +511,7 @@ describe("Gate A round 2", () => {
           },
         });
         const input = [row, finalist("other", 90, 1, 1)];
-        expect(shortlist(reverse ? input.reverse() : input, { ...valid, riskStyle }, 1)).toEqual(["snapshot"]);
+        expect(shortlist(reverse ? input.reverse() : input, { ...valid, riskStyle }, 5)).toEqual(["snapshot", "other"]);
         expect([...reads.keys()].sort()).toEqual(Object.keys(finalist("", 0)).sort());
         expect([...reads.values()]).toEqual(Object.keys(finalist("", 0)).map(() => 1));
         expect(flagReads).toBe(1);
@@ -519,7 +523,7 @@ describe("Gate A round 2", () => {
     "%s collapses case-insensitive ties using original address code points", (riskStyle) => {
       const input = [finalist("a", 100, 0, 0), finalist("A", 100, 1, 1), finalist("b", 90, 2, 2)];
       for (const order of [input, [...input].reverse()]) {
-        expect(shortlist(order, { ...valid, riskStyle }, 2)).toEqual(["A", "b"]);
+        expect(shortlist(order, { ...valid, riskStyle }, 5)).toEqual(["A", "b"]);
       }
     },
   );
@@ -528,10 +532,17 @@ describe("Gate A round 2", () => {
     "%s keeps the higher-scoring duplicate before the score window", (riskStyle) => {
       const input = [finalist("A", 90, 0, 0), finalist("a", 100, 1, 1),
         finalist("b", 80, 0.5, 0.5), finalist("c", 70, 0, 0)];
+      const leaderCount = riskStyle === "aggressive" ? 4 : 8;
+      const leaders = Array.from({ length: leaderCount }, (_, i) =>
+        finalist(`leader${i}`, 200 - i, i < 4 ? -1 : 2, i < 4 ? -1 : 2));
+      input.push(...leaders);
       for (const order of [input, [...input].reverse()]) {
-        expect(shortlist(order, { ...valid, riskStyle }, 1)).toEqual(riskStyle === "aggressive" ? ["a"] : ["b"]);
-        expect(shortlist(order, { ...valid, riskStyle }, 4)).toEqual(
-          riskStyle === "aggressive" ? ["a", "b", "c"] : ["c", "b", "a"],
+        expect(shortlist(order, { ...valid, riskStyle }, 5)).toEqual(
+          ["leader0", "leader1", "leader2", "leader3", riskStyle === "aggressive" ? "a" : "b"],
+        );
+        expect(shortlist(order, { ...valid, riskStyle }, 25)).toEqual(
+          riskStyle === "aggressive" ? [...leaders.map((row) => row.address), "a", "b", "c"] :
+            ["leader0", "leader1", "leader2", "leader3", "c", "b", "a", ...leaders.slice(4).map((row) => row.address)],
         );
       }
     },
@@ -550,5 +561,116 @@ describe("Gate A round 2", () => {
   test("decimal integer feasibility raises to 15 rather than 16 and preserves the minimum of 5", () => {
     expect(map(valid, { ...base, cashBuffer: 0.7, maxSourceWeight: 0.02 }).effectiveMaxSources).toBe(15);
     expect(map(valid, { ...base, cashBuffer: 0.2, maxSourceWeight: 0.2 }).effectiveMaxSources).toBe(5);
+  });
+});
+
+
+describe("Gate A round 3", () => {
+  test("base getter keeps its first weight and consistent changes", () => {
+    let reads = 0;
+    const input = { ...base, get maxSourceWeight() { return ++reads === 1 ? 0.10 : 0.90; } };
+    const result = map({ ...valid, riskStyle: "balanced" }, input);
+    expect(result.policy.maxSourceWeight).toBe(0.10);
+    expect(result.changes.find((change) => change.field === "maxSourceWeight")).toBeUndefined();
+    expect(reads).toBe(1);
+    expect(Object.getPrototypeOf(result.policy)).toBe(Object.prototype);
+  });
+
+  test.each(["aggressive", "balanced"] as const)("%s snapshots all base fields once including enumerable extras", (riskStyle) => {
+    const symbol = Symbol("extra");
+    const values = { ...base, extra: "preserved", [symbol]: "symbol preserved" };
+    const reads = new Map<PropertyKey, number>();
+    const input = new Proxy(values, {
+      get(target, key, receiver) {
+        const count = (reads.get(key) ?? 0) + 1;
+        reads.set(key, count);
+        return count === 1 ? Reflect.get(target, key, receiver) : undefined;
+      },
+    });
+    const intent = { ...valid, riskStyle, diversification: "high" as const, leverageComfort: "low" as const };
+    // Extra keys are intentionally preserved by the mapper but forbidden by the runtime schema.
+    const result = intentToPolicy(intent, input);
+    expect(result).toEqual(intentToPolicy(intent, values));
+    const { extra: _extra, [symbol]: _symbol, ...runtimePolicy } = result.policy as Policy & typeof values;
+    validateRuntimePolicy(runtimePolicy);
+    expect(Reflect.ownKeys(result.policy)).toEqual(Reflect.ownKeys(values));
+    expect([...reads.keys()]).toEqual(Reflect.ownKeys(values));
+    expect([...reads.values()]).toEqual(Reflect.ownKeys(values).map(() => 1));
+    expect(Object.getPrototypeOf(result.policy)).toBe(Object.prototype);
+  });
+
+  test("infeasibility uses the captured base bounds", () => {
+    let reads = 0;
+    const input = { ...base, get maxSourceWeight() { return ++reads === 1 ? 0.03 : 0.9; } };
+    expect(() => intentToPolicy({ ...valid, riskStyle: "balanced" }, input))
+      .toThrow("infeasible: 0.03 per source and 0.2 cash need more than 25 sources");
+    expect(reads).toBe(1);
+  });
+
+  const invalidBase: [keyof Policy, unknown][] = [
+    ...(["maxSourceWeight", "maxGrossLeverage", "cashBuffer", "maxPairCorrelation", "maxExposureOverlap"] as const)
+      .flatMap((field) => [NaN, Infinity, -Infinity, -0.1, undefined, "0.5"].map(
+        (value): [keyof Policy, unknown] => [field, value],
+      )),
+    ["maxSourceWeight", 0], ["maxSourceWeight", 1.01], ["maxGrossLeverage", 0],
+    ["cashBuffer", 1], ["cashBuffer", 1.01], ["maxPairCorrelation", 1.01], ["maxExposureOverlap", 1.01],
+    ...(["bucket", "mode"] as const).flatMap((field) => [NaN, Infinity, -1, "", "invalid", undefined].map(
+      (value): [keyof Policy, unknown] => [field, value],
+    )),
+  ];
+  test.each(invalidBase)("invalid base policy: %s = %p", (field, value) => {
+    for (const riskStyle of ["aggressive", "balanced", "conservative"] as const) {
+      expect(() => intentToPolicy({ ...valid, riskStyle }, { ...base, [field]: value } as Policy))
+        .toThrow(new Error(`invalid base policy: ${field}`));
+    }
+  });
+
+  test("valid base numeric boundaries are accepted", () => {
+    for (const correlation of [0, 1]) {
+      expect(map(valid, { ...base, maxSourceWeight: 1, maxGrossLeverage: Number.MIN_VALUE,
+        cashBuffer: 0, maxPairCorrelation: correlation, maxExposureOverlap: correlation }).effectiveMaxSources).toBe(5);
+    }
+    expect(map(valid, { ...base, cashBuffer: 1 - Number.EPSILON }).effectiveMaxSources).toBe(5);
+  });
+
+  test("equal-score duplicate a keeps the lower drawdown in either order", () => {
+    const input = [finalist("a", 10, 0.9), finalist("a", 10, 0.1),
+      ...["b", "c", "d", "e", "f"].map((address, i) => finalist(address, 9 - i, 0.5))];
+    for (const order of [input, [...input].reverse()]) {
+      expect(shortlist(order, { ...valid, riskStyle: "balanced" }, 5)).toEqual(["a", "b", "c", "d", "e"]);
+    }
+  });
+
+  test.each([
+    ["drawdown", finalist("a", 10, null, 0.9), finalist("a", 10, 0.1, 0.1)],
+    ["volatility", finalist("a", 10, 0.1, 0.9), finalist("a", 10, 0.1, 0.1)],
+    ["null volatility", finalist("a", 10, 0.1, null), finalist("a", 10, 0.1, 0.1)],
+  ] as const)("duplicate tie-break uses %s ascending with null last", (_name, worse, better) => {
+    const input = [worse, better, ...["b", "c", "d", "e", "f"].map(
+      (address, i) => finalist(address, 9 - i, 0.5, 0.5),
+    )];
+    for (const order of [input, [...input].reverse()]) {
+      expect(shortlist(order, { ...valid, riskStyle: "conservative" }, 5)).toEqual(["a", "b", "c", "d", "e"]);
+    }
+  });
+
+  test("feasibility does not round 5.00000000025 down to five", () => {
+    expect(map(valid, { ...base, cashBuffer: 0, maxSourceWeight: 0.19999999999 }).effectiveMaxSources).toBe(6);
+  });
+
+  test.each([-1, 0, 4, 26, 5.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1])(
+    "shortlist rejects limit %p before inspecting any inputs", (limit) => {
+      const input = Proxy.revocable([] as FinalistLike[], {});
+      input.revoke();
+      expect(() => shortlist(input.proxy, null as unknown as StrategyIntent, limit))
+        .toThrow(new RangeError("effectiveMaxSources must be an integer from 5 to 25"));
+      expect(() => shortlist([], valid, limit))
+        .toThrow(new RangeError("effectiveMaxSources must be an integer from 5 to 25"));
+    },
+  );
+
+  test.each([5, 25])("shortlist accepts limit %p", (limit) => {
+    const rows = Array.from({ length: 30 }, (_, i) => finalist(`row${i}`, 30 - i));
+    expect(shortlist(rows, valid, limit)).toEqual(rows.slice(0, limit).map((row) => row.address));
   });
 });

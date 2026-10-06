@@ -156,23 +156,46 @@ export type PolicyResult = {
 export const intentToPolicy = (intent: StrategyIntent, base: Policy): PolicyResult => {
   // Callers should have parsed the model output already; checking again keeps the mapper fail-closed.
   intent = parseStrategyIntent(intent);
-  const policy = { ...base };
+  const fields = [
+    "bucket", "mode", "maxSourceWeight", "maxGrossLeverage", "cashBuffer", "maxPairCorrelation", "maxExposureOverlap",
+  ] as const;
+  // Spread captures every own enumerable value once, including extra and symbol keys.
+  const snapshot = { ...base };
+  for (const field of fields) {
+    // Required fields may be inherited or non-enumerable; capture those once too.
+    if (!Object.hasOwn(snapshot, field)) {
+      Object.defineProperty(snapshot, field, { value: base[field], enumerable: true });
+    }
+  }
+  const validFields = [
+    ["maxSourceWeight", Number.isFinite(snapshot.maxSourceWeight) && snapshot.maxSourceWeight > 0 && snapshot.maxSourceWeight <= 1],
+    ["maxGrossLeverage", Number.isFinite(snapshot.maxGrossLeverage) && snapshot.maxGrossLeverage > 0],
+    ["cashBuffer", Number.isFinite(snapshot.cashBuffer) && snapshot.cashBuffer >= 0 && snapshot.cashBuffer < 1],
+    ["maxPairCorrelation", Number.isFinite(snapshot.maxPairCorrelation) && snapshot.maxPairCorrelation >= 0 && snapshot.maxPairCorrelation <= 1],
+    ["maxExposureOverlap", Number.isFinite(snapshot.maxExposureOverlap) && snapshot.maxExposureOverlap >= 0 && snapshot.maxExposureOverlap <= 1],
+    ["bucket", inEnum(snapshot.bucket, ["CONSERVATIVE", "BALANCED", "AGGRESSIVE"])],
+    ["mode", inEnum(snapshot.mode, ["LIVE", "SIMULATION"])],
+  ] as const;
+  for (const [field, valid] of validFields) {
+    if (!valid) throw new Error(`invalid base policy: ${field}`);
+  }
+  const policy = { ...snapshot };
   const clamps: Clamp[] = [];
   const notes: string[] = [];
   // Each independent preference intersects the existing bounds, so none can loosen them.
   if (intent.riskStyle !== "aggressive") {
     const balanced = intent.riskStyle === "balanced";
-    policy.maxSourceWeight = Math.min(base.maxSourceWeight, balanced ? 0.20 : 0.12);
-    policy.maxGrossLeverage = Math.min(base.maxGrossLeverage, balanced ? 2 : 1);
-    policy.cashBuffer = Math.max(base.cashBuffer, balanced ? 0.20 : 0.35);
+    policy.maxSourceWeight = Math.min(snapshot.maxSourceWeight, balanced ? 0.20 : 0.12);
+    policy.maxGrossLeverage = Math.min(snapshot.maxGrossLeverage, balanced ? 2 : 1);
+    policy.cashBuffer = Math.max(snapshot.cashBuffer, balanced ? 0.20 : 0.35);
     policy.bucket = balanced ? "BALANCED" : "CONSERVATIVE";
     policy.mode = "SIMULATION";
     notes.push(`${intent.riskStyle} runs as a paper book: live is Aggressive-only`);
   }
   if (intent.diversification !== "low") {
     const medium = intent.diversification === "med";
-    policy.maxPairCorrelation = Math.min(base.maxPairCorrelation, medium ? 0.70 : 0.55);
-    policy.maxExposureOverlap = Math.min(base.maxExposureOverlap, medium ? 0.40 : 0.30);
+    policy.maxPairCorrelation = Math.min(snapshot.maxPairCorrelation, medium ? 0.70 : 0.55);
+    policy.maxExposureOverlap = Math.min(snapshot.maxExposureOverlap, medium ? 0.40 : 0.30);
   }
   if (intent.leverageComfort !== "high") {
     policy.maxGrossLeverage = Math.min(policy.maxGrossLeverage, intent.leverageComfort === "low" ? 1.5 : 2.5);
@@ -185,7 +208,7 @@ export const intentToPolicy = (intent: StrategyIntent, base: Policy): PolicyResu
   }
 
   // Human-chosen decimal bounds can put an integer ratio just above that integer.
-  const requiredSources = Math.ceil((1 - policy.cashBuffer) / policy.maxSourceWeight - 1e-9);
+  const requiredSources = Math.ceil((1 - policy.cashBuffer) / policy.maxSourceWeight - 1e-12);
   const effectiveMaxSources = Math.max(intent.maxSources, requiredSources);
   if (!Number.isFinite(effectiveMaxSources) || effectiveMaxSources > 25) {
     throw new Error(`infeasible: ${policy.maxSourceWeight} per source and ${policy.cashBuffer} cash need more than 25 sources`);
@@ -194,16 +217,13 @@ export const intentToPolicy = (intent: StrategyIntent, base: Policy): PolicyResu
     notes.push(`maxSources raised from ${intent.maxSources} to ${effectiveMaxSources} to fit the per-source cap and cash buffer`);
   }
 
-  const fields = [
-    "bucket", "mode", "maxSourceWeight", "maxGrossLeverage", "cashBuffer", "maxPairCorrelation", "maxExposureOverlap",
-  ] as const;
   return {
     policy,
-    changes: fields.filter((field) => policy[field] !== base[field])
-      .map((field) => ({ field, from: base[field], to: policy[field] })),
+    changes: fields.filter((field) => policy[field] !== snapshot[field])
+      .map((field) => ({ field, from: snapshot[field], to: policy[field] })),
     clamps,
     effectiveMaxSources,
-    liveEligible: intent.riskStyle === "aggressive" && base.bucket === "AGGRESSIVE" && base.mode === "LIVE",
+    liveEligible: intent.riskStyle === "aggressive" && snapshot.bucket === "AGGRESSIVE" && snapshot.mode === "LIVE",
     notes,
   };
 };
@@ -244,11 +264,23 @@ const snapshotFinalist = (value: unknown): FinalistLike | null => {
   }
 };
 
+const compareNullableMetric = (left: number | null, right: number | null): number =>
+  left === null ? (right === null ? 0 : 1) : right === null ? -1 : left - right;
+
+const compareText = (left: string, right: string): number => left < right ? -1 : left > right ? 1 : 0;
+
 export const shortlist = (finalists: FinalistLike[], intent: StrategyIntent, effectiveMaxSources: number): string[] => {
+  if (!Number.isSafeInteger(effectiveMaxSources) || effectiveMaxSources < 5 || effectiveMaxSources > 25) {
+    throw new RangeError("effectiveMaxSources must be an integer from 5 to 25");
+  }
   intent = parseStrategyIntent(intent);
   const excluded = new Set(["overflow", "ruin", "low-coverage", "no-intervals"]);
   const compareScore = (a: FinalistLike & { score: number }, b: FinalistLike & { score: number }): number =>
-    b.score - a.score || compareAddress(a, b);
+    b.score - a.score || compareAddress(a, b) ||
+    compareNullableMetric(a.maxDrawdown, b.maxDrawdown) ||
+    compareNullableMetric(a.annualisedVol, b.annualisedVol) ||
+    compareText(a.kind, b.kind) || compareText([...a.flags].sort().join(","), [...b.flags].sort().join(",")) ||
+    Number(a.cloneOf) - Number(b.cloneOf);
   const candidates = finalists.map(snapshotFinalist).filter((candidate): candidate is FinalistLike & { score: number } =>
     candidate !== null && candidate.score !== null && !candidate.flags.some((flag) => excluded.has(flag)) &&
     !(intent.avoidClones && candidate.cloneOf === true),
@@ -266,10 +298,6 @@ export const shortlist = (finalists: FinalistLike[], intent: StrategyIntent, eff
   }
   const metric = intent.riskStyle === "balanced" ? "maxDrawdown" : "annualisedVol";
   return ranked.slice(0, 2 * effectiveMaxSources).sort((a, b) => {
-    const left = a[metric];
-    const right = b[metric];
-    if (left === null && right !== null) return 1;
-    if (left !== null && right === null) return -1;
-    return (left !== null && right !== null ? left - right : 0) || compareScore(a, b);
+    return compareNullableMetric(a[metric], b[metric]) || compareScore(a, b);
   }).slice(0, effectiveMaxSources).map((candidate) => candidate.address);
 };
