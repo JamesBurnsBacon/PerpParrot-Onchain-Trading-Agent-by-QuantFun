@@ -12,6 +12,7 @@ on:
       - "packages/cre-workflows/mirror/**"
       - "packages/cre-workflows/review/**"
       - "packages/cre-workflows/project.yaml"
+      - "supabase/migrations/**"
       - ".github/workflows/cre-checks.yml"
   pull_request:
 
@@ -28,6 +29,21 @@ jobs:
     defaults:
       run:
         working-directory: packages/${{ matrix.package }}
+    # The Postgres store tests (backend, executor) run only when TEST_DATABASE_URL is set.
+    env:
+      TEST_DATABASE_URL: postgres://postgres:pp@localhost:5432/postgres
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: pp
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2

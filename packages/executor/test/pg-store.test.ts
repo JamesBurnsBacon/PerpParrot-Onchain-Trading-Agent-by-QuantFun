@@ -1,17 +1,22 @@
 // Runs against a real Postgres when TEST_DATABASE_URL is set (the migration is applied first):
 //   docker run -d --rm -e POSTGRES_PASSWORD=pp -p 54329:5432 postgres:16-alpine
 //   TEST_DATABASE_URL=postgres://postgres:pp@localhost:54329/postgres bun test
-import { describe, expect, test } from "bun:test";
+import { beforeAll, describe, expect, test } from "bun:test";
 import { SQL } from "bun";
 import { PostgresStore } from "../src/pg-store";
 import type { RunRecord } from "../src/store";
 
 const url = process.env.TEST_DATABASE_URL;
 
-describe.skipIf(!url)("PostgresStore", async () => {
-  const sql = new SQL(url!);
-  await sql.unsafe(await Bun.file(new URL("../../../supabase/migrations/20261006120000_cre_mirror.sql", import.meta.url)).text());
-  const store = new PostgresStore(sql);
+// skipIf still runs this callback to collect tests, so connect in beforeAll, which a skipped suite never runs.
+describe.skipIf(!url)("PostgresStore", () => {
+  let sql: SQL;
+  let store: PostgresStore;
+  beforeAll(async () => {
+    sql = new SQL(url!);
+    await sql.unsafe(await Bun.file(new URL("../../../supabase/migrations/20261006120000_cre_mirror.sql", import.meta.url)).text());
+    store = new PostgresStore(sql);
+  });
   const unique = `${Date.now()}-${Math.random()}`;
 
   test("claims a report ID exactly once, even concurrently", async () => {

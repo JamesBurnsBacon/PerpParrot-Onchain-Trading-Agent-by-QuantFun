@@ -1,14 +1,19 @@
 // Runs against a real Postgres when TEST_DATABASE_URL is set; see executor/test/pg-store.test.ts.
-import { describe, expect, test } from "bun:test";
+import { beforeAll, describe, expect, test } from "bun:test";
 import { SQL } from "bun";
 import { PostgresSnapshotStore } from "../src/pg-store";
 
 const url = process.env.TEST_DATABASE_URL;
 
-describe.skipIf(!url)("PostgresSnapshotStore", async () => {
-  const sql = new SQL(url!);
-  await sql.unsafe(await Bun.file(new URL("../../../supabase/migrations/20261006120000_cre_mirror.sql", import.meta.url)).text());
-  const store = new PostgresSnapshotStore(sql);
+// skipIf still runs this callback to collect tests, so connect in beforeAll, which a skipped suite never runs.
+describe.skipIf(!url)("PostgresSnapshotStore", () => {
+  let sql: SQL;
+  let store: PostgresSnapshotStore;
+  beforeAll(async () => {
+    sql = new SQL(url!);
+    await sql.unsafe(await Bun.file(new URL("../../../supabase/migrations/20261006120000_cre_mirror.sql", import.meta.url)).text());
+    store = new PostgresSnapshotStore(sql);
+  });
   const runAt = 2_000_000_000 + Math.floor(Math.random() * 1e6) * 600;
   // Key order and spacing that jsonb would normalize away.
   const body = (n: number) => `{"snapshotId":"snap-${runAt}","configuration":{"configurationHash":"0x${"ab".repeat(32)}"},  "n":${n}}`;
