@@ -370,3 +370,185 @@ describe("review follow-ups", () => {
     expect(shortlist(list, { ...valid, riskStyle: "conservative" }, 3)).toEqual(["0xa", "0xb", "0xc"]);
   });
 });
+
+describe("Gate A round 2", () => {
+  test("parse returns a fresh frozen snapshot isolated from caller mutations", () => {
+    const input = { ...valid };
+    const parsed = parseStrategyIntent(input);
+    expect(parsed).not.toBe(input);
+    expect(Object.isFrozen(parsed)).toBe(true);
+    expect(Object.getPrototypeOf(parsed)).toBe(Object.prototype);
+    input.requestedLeverage = NaN;
+    input.reply = "changed";
+    expect(parsed).toEqual(valid);
+  });
+
+  test("check reports getter and setter properties without invoking them", () => {
+    let reads = 0;
+    const input = {
+      ...valid,
+      get requestedLeverage() { reads++; return 1; },
+      set reply(_value: string) {},
+    };
+    expect(checkStrategyIntent(input)).toContain("accessor property: requestedLeverage");
+    expect(checkStrategyIntent(input)).toContain("accessor property: reply");
+    expect(reads).toBe(0);
+    expect(() => parseStrategyIntent(input)).toThrow("accessor property");
+  });
+
+  test("mapper rejects a leverage getter that becomes NaN", () => {
+    let reads = 0;
+    const input = { ...valid, get requestedLeverage() { return ++reads === 1 ? 1 : NaN; } };
+    expect(() => intentToPolicy(input, base)).toThrow("invalid strategy intent");
+    expect(reads).toBe(0);
+  });
+
+  test.each(["parse", "map"] as const)("%s reads each proxy field once and keeps leverage finite", (action) => {
+    const reads = new Map<PropertyKey, number>();
+    const input = new Proxy({ ...valid, requestedLeverage: 1 }, {
+      get(target, key, receiver) {
+        const count = (reads.get(key) ?? 0) + 1;
+        reads.set(key, count);
+        return count === 1 ? Reflect.get(target, key, receiver) : NaN;
+      },
+    });
+    if (action === "parse") {
+      const parsed = parseStrategyIntent(input);
+      expect(Object.isFrozen(parsed)).toBe(true);
+      expect(parsed.requestedLeverage).toBe(1);
+      expect(parsed.requestedLeverage).toBe(1);
+    } else {
+      expect(map(input).policy.maxGrossLeverage).toBe(1);
+    }
+    expect([...reads.keys()].sort()).toEqual(Object.keys(valid).sort());
+    expect([...reads.values()]).toEqual(Object.keys(valid).map(() => 1));
+  });
+
+  test("shortlist uses the validated intent snapshot for filtering and ranking", () => {
+    const reads = new Map<PropertyKey, number>();
+    const input = new Proxy({ ...valid, avoidClones: true }, {
+      get(target, key, receiver) {
+        const count = (reads.get(key) ?? 0) + 1;
+        reads.set(key, count);
+        if (count > 1 && key === "avoidClones") return false;
+        if (count > 1 && key === "riskStyle") return "conservative";
+        return Reflect.get(target, key, receiver);
+      },
+    });
+    expect(shortlist([
+      finalist("clone", 100, 0, 0, { cloneOf: true }),
+      finalist("score", 90, 0.5, 0.5), finalist("metric", 80, 0, 0),
+    ], input, 1)).toEqual(["score"]);
+    expect([...reads.values()]).toEqual(Object.keys(valid).map(() => 1));
+  });
+
+  test.each(["aggressive", "balanced", "conservative"] as const)(
+    "%s excludes malformed finalist fields in either input order", (riskStyle) => {
+      const invalid: [keyof FinalistLike, unknown][] = [
+        ["address", ""], ["address", 1], ["kind", null], ["kind", 1],
+        ["flags", null], ["flags", "ruin"], ["flags", [1]], ["flags", Array(1)],
+        ["cloneOf", 0], ["cloneOf", "false"],
+        ...(["score", "maxDrawdown", "annualisedVol"] as const).flatMap((key) =>
+          [NaN, Infinity, -Infinity, undefined, "0"].map((value): [keyof FinalistLike, unknown] => [key, value])),
+      ];
+      const good = [finalist("good", 1, 1, 1), finalist("nullable", 0)];
+      const bad: unknown[] = [null, undefined, 1, "row", {}];
+      for (const [key, value] of invalid) bad.push({ ...finalist(`bad-${key}`, 100, 0, 0), [key]: value });
+      for (const key of Object.keys(finalist("bad", 100))) {
+        const row: Record<string, unknown> = { ...finalist(`missing-${key}`, 100, 0, 0) };
+        delete row[key];
+        bad.push(row);
+        bad.push({ ...finalist(`undefined-${key}`, 100, 0, 0), [key]: undefined });
+      }
+      for (const row of bad) {
+        const input = [...good, row] as FinalistLike[];
+        for (const order of [input, [...input].reverse()]) {
+          expect(shortlist(order, { ...valid, riskStyle }, 25)).toEqual(["good", "nullable"]);
+        }
+      }
+    },
+  );
+
+  test("shortlist excludes throwing rows and revoked proxies without throwing", () => {
+    const revoked = Proxy.revocable(finalist("revoked", 100), {});
+    revoked.revoke();
+    const input = [finalist("good", 1), revoked.proxy,
+      { ...finalist("throwing", 100), get score(): number { throw new Error("bad row"); } }];
+    for (const order of [input, [...input].reverse()]) {
+      expect(shortlist(order, valid, 5)).toEqual(["good"]);
+    }
+  });
+
+  test.each(["score", "maxDrawdown", "annualisedVol"] as const)(
+    "shortlist excludes non-finite %s in either input order", (key) => {
+      for (const value of [NaN, Infinity, -Infinity, undefined]) {
+        const input = [finalist("good", 1, 1, 1), { ...finalist("bad", 100, 0, 0), [key]: value }];
+        for (const order of [input, [...input].reverse()]) {
+          for (const riskStyle of ["aggressive", "balanced", "conservative"] as const) {
+            expect(shortlist(order as FinalistLike[], { ...valid, riskStyle }, 5)).toEqual(["good"]);
+          }
+        }
+      }
+    },
+  );
+
+  test.each(["aggressive", "balanced", "conservative"] as const)(
+    "%s reads finalist fields and flag entries once before ranking", (riskStyle) => {
+      for (const reverse of [false, true]) {
+        const reads = new Map<PropertyKey, number>();
+        let flagReads = 0;
+        const flags = ["unrelated"];
+        Object.defineProperty(flags, "0", { get() { return ++flagReads === 1 ? "unrelated" : "ruin"; } });
+        const row = new Proxy(finalist("snapshot", 100, 0, 0, { flags }), {
+          get(target, key, receiver) {
+            const count = (reads.get(key) ?? 0) + 1;
+            reads.set(key, count);
+            return count === 1 ? Reflect.get(target, key, receiver) : undefined;
+          },
+        });
+        const input = [row, finalist("other", 90, 1, 1)];
+        expect(shortlist(reverse ? input.reverse() : input, { ...valid, riskStyle }, 1)).toEqual(["snapshot"]);
+        expect([...reads.keys()].sort()).toEqual(Object.keys(finalist("", 0)).sort());
+        expect([...reads.values()]).toEqual(Object.keys(finalist("", 0)).map(() => 1));
+        expect(flagReads).toBe(1);
+      }
+    },
+  );
+
+  test.each(["aggressive", "balanced", "conservative"] as const)(
+    "%s collapses case-insensitive ties using original address code points", (riskStyle) => {
+      const input = [finalist("a", 100, 0, 0), finalist("A", 100, 1, 1), finalist("b", 90, 2, 2)];
+      for (const order of [input, [...input].reverse()]) {
+        expect(shortlist(order, { ...valid, riskStyle }, 2)).toEqual(["A", "b"]);
+      }
+    },
+  );
+
+  test.each(["aggressive", "balanced", "conservative"] as const)(
+    "%s keeps the higher-scoring duplicate before the score window", (riskStyle) => {
+      const input = [finalist("A", 90, 0, 0), finalist("a", 100, 1, 1),
+        finalist("b", 80, 0.5, 0.5), finalist("c", 70, 0, 0)];
+      for (const order of [input, [...input].reverse()]) {
+        expect(shortlist(order, { ...valid, riskStyle }, 1)).toEqual(riskStyle === "aggressive" ? ["a"] : ["b"]);
+        expect(shortlist(order, { ...valid, riskStyle }, 4)).toEqual(
+          riskStyle === "aggressive" ? ["a", "b", "c"] : ["c", "b", "a"],
+        );
+      }
+    },
+  );
+
+  test("decimal feasibility accepts exactly 25 sources despite float rounding", () => {
+    expect(map({ ...valid, maxSources: 25 }, { ...base, cashBuffer: 0.7, maxSourceWeight: 0.012 })
+      .effectiveMaxSources).toBe(25);
+  });
+
+  test("decimal feasibility still rejects a genuinely fractional count above 25", () => {
+    expect(() => intentToPolicy({ ...valid, maxSources: 25 }, { ...base, cashBuffer: 0.7, maxSourceWeight: 0.0119 }))
+      .toThrow("infeasible");
+  });
+
+  test("decimal integer feasibility raises to 15 rather than 16 and preserves the minimum of 5", () => {
+    expect(map(valid, { ...base, cashBuffer: 0.7, maxSourceWeight: 0.02 }).effectiveMaxSources).toBe(15);
+    expect(map(valid, { ...base, cashBuffer: 0.2, maxSourceWeight: 0.2 }).effectiveMaxSources).toBe(5);
+  });
+});

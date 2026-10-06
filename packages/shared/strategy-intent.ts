@@ -50,26 +50,39 @@ const HIDDEN = /[\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/;
 const inEnum = (value: unknown, values: readonly string[]): boolean =>
   typeof value === "string" && values.includes(value);
 
-export const checkStrategyIntent = (value: unknown): string[] => {
+const inspectStrategyIntent = (value: unknown) => {
   const problems: string[] = [];
+  const snapshot: Record<string, unknown> = {};
   try {
     if (value === null || typeof value !== "object" || Array.isArray(value)) {
-      return ["strategy intent must be a plain object"];
+      return { snapshot, problems: ["strategy intent must be a plain object"] };
     }
     const prototype: unknown = Object.getPrototypeOf(value);
     if (prototype !== Object.prototype && prototype !== null) {
-      return ["strategy intent must be a plain object"];
+      return { snapshot, problems: ["strategy intent must be a plain object"] };
     }
     const input = value as Record<string, unknown>;
+    const descriptors = new Map<PropertyKey, PropertyDescriptor>();
     for (const key of Reflect.ownKeys(input)) {
       if (!intentKeys.some((expected) => expected === key)) problems.push(`extra key: ${String(key)}`);
+      const descriptor = Object.getOwnPropertyDescriptor(input, key);
+      if (descriptor) {
+        descriptors.set(key, descriptor);
+        if ("get" in descriptor || "set" in descriptor) problems.push(`accessor property: ${String(key)}`);
+      }
     }
     for (const key of intentKeys) {
-      if (!Object.hasOwn(input, key)) {
+      const descriptor = descriptors.get(key);
+      if (!descriptor) {
         problems.push(`missing key: ${key}`);
         continue;
       }
-      const field = input[key];
+      if (!("get" in descriptor || "set" in descriptor)) snapshot[key] = input[key];
+    }
+    // Only the captured values are validated; a proxy must not get a second read.
+    for (const key of intentKeys) {
+      if (!Object.hasOwn(snapshot, key)) continue;
+      const field = snapshot[key];
       switch (key) {
         case "riskStyle":
           if (!inEnum(field, ["aggressive", "balanced", "conservative"])) {
@@ -118,13 +131,15 @@ export const checkStrategyIntent = (value: unknown): string[] => {
     // Unknown callers can supply proxies or getters instead of decoded JSON.
     problems.push("strategy intent could not be inspected");
   }
-  return problems;
+  return { snapshot, problems };
 };
 
+export const checkStrategyIntent = (value: unknown): string[] => inspectStrategyIntent(value).problems;
+
 export const parseStrategyIntent = (value: unknown): StrategyIntent => {
-  const problems = checkStrategyIntent(value);
+  const { snapshot, problems } = inspectStrategyIntent(value);
   if (problems.length > 0) throw new Error(`invalid strategy intent: ${problems[0]}`);
-  return value as StrategyIntent;
+  return Object.freeze(snapshot) as StrategyIntent;
 };
 
 export type PolicyChange = { field: string; from: number | string; to: number | string };
@@ -140,7 +155,7 @@ export type PolicyResult = {
 
 export const intentToPolicy = (intent: StrategyIntent, base: Policy): PolicyResult => {
   // Callers should have parsed the model output already; checking again keeps the mapper fail-closed.
-  parseStrategyIntent(intent);
+  intent = parseStrategyIntent(intent);
   const policy = { ...base };
   const clamps: Clamp[] = [];
   const notes: string[] = [];
@@ -169,7 +184,9 @@ export const intentToPolicy = (intent: StrategyIntent, base: Policy): PolicyResu
     policy.maxGrossLeverage = Math.min(policy.maxGrossLeverage, intent.requestedLeverage);
   }
 
-  const effectiveMaxSources = Math.max(intent.maxSources, Math.ceil((1 - policy.cashBuffer) / policy.maxSourceWeight));
+  // Human-chosen decimal bounds can put an integer ratio just above that integer.
+  const requiredSources = Math.ceil((1 - policy.cashBuffer) / policy.maxSourceWeight - 1e-9);
+  const effectiveMaxSources = Math.max(intent.maxSources, requiredSources);
   if (!Number.isFinite(effectiveMaxSources) || effectiveMaxSources > 25) {
     throw new Error(`infeasible: ${policy.maxSourceWeight} per source and ${policy.cashBuffer} cash need more than 25 sources`);
   }
@@ -204,19 +221,46 @@ export type FinalistLike = {
 const compareAddress = (a: FinalistLike, b: FinalistLike): number => {
   const left = a.address.toLowerCase();
   const right = b.address.toLowerCase();
-  return left < right ? -1 : left > right ? 1 : 0;
+  return left < right ? -1 : left > right ? 1 : a.address < b.address ? -1 : a.address > b.address ? 1 : 0;
+};
+
+const nullableFinite = (value: unknown): value is number | null =>
+  value === null || (typeof value === "number" && Number.isFinite(value));
+
+const snapshotFinalist = (value: unknown): FinalistLike | null => {
+  try {
+    if (value === null || typeof value !== "object") return null;
+    const { address, kind, score, flags, maxDrawdown, annualisedVol, cloneOf } = value as Record<string, unknown>;
+    if (typeof address !== "string" || address.length === 0 || typeof kind !== "string" ||
+        !Array.isArray(flags) || !nullableFinite(score) || !nullableFinite(maxDrawdown) ||
+        !nullableFinite(annualisedVol) || typeof cloneOf !== "boolean") return null;
+    // Copy flag entries too: an array may itself contain getters or be a proxy.
+    const flagSnapshot: unknown[] = Array.from(flags);
+    if (!flagSnapshot.every((flag): flag is string => typeof flag === "string")) return null;
+    return { address, kind, score, flags: flagSnapshot, maxDrawdown, annualisedVol, cloneOf };
+  } catch {
+    // One malformed row, including a throwing getter or proxy, cannot break selection.
+    return null;
+  }
 };
 
 export const shortlist = (finalists: FinalistLike[], intent: StrategyIntent, effectiveMaxSources: number): string[] => {
-  parseStrategyIntent(intent);
+  intent = parseStrategyIntent(intent);
   const excluded = new Set(["overflow", "ruin", "low-coverage", "no-intervals"]);
   const compareScore = (a: FinalistLike & { score: number }, b: FinalistLike & { score: number }): number =>
     b.score - a.score || compareAddress(a, b);
-  // Filtering first gives sorting its own array and keeps caller-owned finalists unchanged.
-  const ranked = finalists.filter((candidate): candidate is FinalistLike & { score: number } =>
-    candidate.score !== null && !candidate.flags.some((flag) => excluded.has(flag)) &&
+  const candidates = finalists.map(snapshotFinalist).filter((candidate): candidate is FinalistLike & { score: number } =>
+    candidate !== null && candidate.score !== null && !candidate.flags.some((flag) => excluded.has(flag)) &&
     !(intent.avoidClones && candidate.cloneOf === true),
-  ).sort(compareScore);
+  );
+  // Collapse eligible snapshots before the score window or risk-metric ranking.
+  const unique = new Map<string, FinalistLike & { score: number }>();
+  for (const candidate of candidates) {
+    const key = candidate.address.toLowerCase();
+    const previous = unique.get(key);
+    if (!previous || compareScore(candidate, previous) < 0) unique.set(key, candidate);
+  }
+  const ranked = [...unique.values()].sort(compareScore);
   if (intent.riskStyle === "aggressive") {
     return ranked.slice(0, effectiveMaxSources).map((candidate) => candidate.address);
   }
