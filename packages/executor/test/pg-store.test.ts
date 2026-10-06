@@ -67,11 +67,26 @@ describe.skipIf(!url)("PostgresStore", async () => {
       orders: [{ asset: "BTC", assetId: 0, isBuy: true, price: "100", size: "1", reduceOnly: false, notionalUsd: 100, targetUsd: 100, currentUsd: 0 }],
       cloids: [`0x${"01".repeat(16)}` as `0x${string}`], kind: "orders",
     });
-    expect(await store.unresolvedOrderBatches()).toHaveLength(1);
-    await store.finishOrderBatch(id, [{ asset: "BTC", status: "unknown", error: "response lost" }]);
-    expect((await store.unresolvedOrderBatches())[0]).toMatchObject({ id, state: "uncertain" });
+    const [dispatching] = await store.unresolvedOrderBatches();
+    expect(dispatching).toMatchObject({
+      id,
+      state: "dispatching",
+      orders: [{ asset: "BTC", assetId: 0, isBuy: true, price: "100", size: "1" }],
+      cloids: [`0x${"01".repeat(16)}`],
+    });
+    const results = [{ asset: "BTC", status: "unknown" as const, error: "response lost" }];
+    await store.finishOrderBatch(id, results);
+    expect((await store.unresolvedOrderBatches())[0]).toMatchObject({ id, state: "uncertain", results });
     await store.reconcileOrderBatch(id, "test-operator", "verified exchange order status and position", Date.now());
     expect(await store.unresolvedOrderBatches()).toEqual([]);
+
+    const leverageId = `leverage-${unique}`;
+    const details = { asset: "BTC", assetId: 0, leverage: 3 };
+    await store.beginOrderBatch({
+      id: leverageId, reportId: `report-${unique}`, createdAt: Date.now(),
+      orders: [], cloids: [], kind: "leverage", details,
+    });
+    expect(await store.unresolvedOrderBatches()).toMatchObject([{ id: leverageId, kind: "leverage", details, orders: [], cloids: [] }]);
   });
 
   test("persists the kill switch", async () => {

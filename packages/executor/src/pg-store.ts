@@ -13,6 +13,12 @@ const deadline = <T>(query: Promise<T>): Promise<T> =>
     new Promise<never>((_, reject) => setTimeout(() => reject(new Error("database query timed out")), QUERY_TIMEOUT_MS).unref?.()),
   ]);
 
+// Bun.SQL treats a JavaScript string bound to a jsonb expression as a JSON
+// string scalar. Bind parsed JSON values instead so Postgres stores the
+// intended arrays/objects (and array checks and readers see the right shape).
+const jsonValue = (value: unknown): unknown =>
+  value === undefined ? null : JSON.parse(JSON.stringify(value, (_, item) => (typeof item === "bigint" ? item.toString() : item)));
+
 // executor_reports / executor_runs / executor_controls / executor_order_batches
 // (supabase/migrations/20261006120000_cre_mirror.sql and 20261006180000_executor_order_journal.sql).
 export class PostgresStore implements ExecutorStore {
@@ -34,13 +40,13 @@ export class PostgresStore implements ExecutorStore {
   async beginOrderBatch(batch: Omit<OrderBatch, "state" | "results" | "resolution">): Promise<void> {
     await deadline(this.sql`
       insert into executor_order_batches (id, report_id, created_at, kind, details, orders, cloids, state)
-      values (${batch.id}, ${batch.reportId}, ${new Date(batch.createdAt)}, ${batch.kind}, ${batch.details ? JSON.stringify(batch.details) : null}::jsonb, ${JSON.stringify(batch.orders)}::jsonb, ${JSON.stringify(batch.cloids)}::jsonb, 'dispatching')`);
+      values (${batch.id}, ${batch.reportId}, ${new Date(batch.createdAt)}, ${batch.kind}, ${jsonValue(batch.details)}::jsonb, ${jsonValue(batch.orders)}::jsonb, ${jsonValue(batch.cloids)}::jsonb, 'dispatching')`);
   }
 
   async finishOrderBatch(id: string, results: OrderResult[]): Promise<void> {
     const state = results.some((result) => result.status === "unknown") ? "uncertain" : "settled";
     const rows = await deadline(this.sql`
-      update executor_order_batches set state = ${state}, results = ${JSON.stringify(results)}::jsonb
+      update executor_order_batches set state = ${state}, results = ${jsonValue(results)}::jsonb
       where id = ${id} and state = 'dispatching' returning id`);
     if (rows.length !== 1) throw new Error("order batch is not dispatching");
   }
@@ -80,15 +86,13 @@ export class PostgresStore implements ExecutorStore {
   async saveRun(run: RunRecord): Promise<void> {
     // Plain JSON values (bigints as strings); Bun's SQL client encodes objects for jsonb.
     // Passing a JSON string instead would store a jsonb string scalar.
-    const json = (v: unknown) =>
-      v === undefined ? null : JSON.parse(JSON.stringify(v, (_, x) => (typeof x === "bigint" ? x.toString() : x)));
     await deadline(this.sql`
       insert into executor_runs
         (id, run_id, kind, status, dry_run, started_at, finished_at, equity_usd, plan, results, error, envelope)
       values (
         ${run.id}, ${run.runId}, ${run.kind}, ${run.status}, ${run.dryRun},
         ${new Date(run.startedAt)}, ${new Date(run.finishedAt)}, ${run.equityUsd ?? null},
-        ${json(run.plan)}::jsonb, ${json(run.results)}::jsonb, ${run.error ?? null}, ${json(run.envelope)}::jsonb
+        ${jsonValue(run.plan)}::jsonb, ${jsonValue(run.results)}::jsonb, ${run.error ?? null}, ${jsonValue(run.envelope)}::jsonb
       )
       on conflict (id) do update set
         status = excluded.status, finished_at = excluded.finished_at, equity_usd = excluded.equity_usd,
