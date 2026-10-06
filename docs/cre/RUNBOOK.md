@@ -116,6 +116,21 @@ curl -X POST -H "Authorization: Bearer $ADMIN_TOKEN" -H "x-operator: $NAME" $EXE
 Flatten bypasses CRE and stays paused afterwards. To stop CRE itself, pause the workflow in the
 CRE UI or with `cre workflow pause`.
 
+## Data for the dashboard (README §4.11)
+
+| Source | What | Access |
+|---|---|---|
+| `GET {executor}/status` | dry run on/off, account, API wallet, pinned configuration hash, last report time, kill-switch state | public, CORS `*` |
+| `GET {executor}/runs?limit=N` (≤ 200) | per run: `runId`, `status`, `dryRun`, equity, `plan` (orders, skipped legs with reasons, margin scale), `results` (per-order fill/error), `envelope` (raw DON-signed report) | public, CORS `*` |
+| Supabase `executor_runs` | same rows as `/runs` | anon `select` |
+| Supabase `cre_snapshots` | each run's snapshot JSON (`body`, exact bytes) and its keccak hash | anon `select` |
+| Supabase `executor_controls` | kill-switch state | anon `select` |
+
+Re-verifying a run's report: `envelope.report` is the raw report (109-byte header + ABI body,
+`packages/shared/report.ts`). `keccak256(report)` is the run `id`; the body's `snapshotHash` is
+`keccak256` of the stored snapshot `body`; signatures verify against the Capability Registry as in
+`packages/executor/src/verify.ts`.
+
 ## When something fails
 
 | Symptom | Where to look | Usual cause |
