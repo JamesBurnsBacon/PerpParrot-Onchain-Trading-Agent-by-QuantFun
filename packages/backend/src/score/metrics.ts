@@ -25,14 +25,20 @@ export const curveAt = (curve: CurvePoint[], ts: number): number => {
 };
 
 // The curve value at or before each grid time firstTs + k * step that falls before the first fine interval (SPEC
-// "Metrics"). Visiting the curve points instead of every tick keeps this finite for any coarseGridDays > 0; a segment
-// is sampled when a tick falls inside it, in time order, so the drawdown over the samples is the same.
-const gridSamples = (curve: CurvePoint[], firstTs: number, fineStart: number, step: number): number[] => {
+// "Metrics"). Visiting the curve segments instead of every tick keeps this finite for any step > 0: a segment is
+// sampled when a tick falls inside it, in time order, so the drawdown over the samples is the same.
+export const gridSamples = (curve: CurvePoint[], firstTs: number, fineStart: number, step: number): number[] => {
   const samples: number[] = [];
   for (let j = 0; j < curve.length && curve[j].ts < fineStart; j++) {
     const from = curve[j].ts;
     const to = Math.min(j + 1 < curve.length ? curve[j + 1].ts : Infinity, fineStart);
-    const k = Math.ceil((from - firstTs) / step);
+    const ticks = (from - firstTs) / step;
+    if (!(ticks < 2 ** 52)) {
+      samples.push(curve[j].value); // a grid denser than the timestamps can resolve: every segment holds a tick
+      continue;
+    }
+    let k = from > firstTs ? Math.max(1, Math.ceil(ticks)) : 0; // a step that overflows to Infinity leaves only k = 0
+    if (k > 1 && firstTs + (k - 1) * step >= from) k -= 1; // `ticks` rounded up past an exact tick
     const tick = k === 0 ? firstTs : firstTs + k * step;
     if (Math.max(tick, from) < to) samples.push(curve[j].value);
   }

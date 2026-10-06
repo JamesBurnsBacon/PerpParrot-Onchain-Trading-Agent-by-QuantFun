@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { computeMetrics, type Metrics, type ScoreConfig, type ScoreInput, type TimePoint } from "../../src/score";
+import { curveAt, gridSamples, type CurvePoint } from "../../src/score/metrics";
 import cases from "../fixtures/score/metrics-cases.json";
 import { expectFinite, expectOutput, sampleInputs, toInput, type RawInput } from "./helpers";
 
@@ -135,6 +136,41 @@ describe("computeMetrics edge cases", () => {
 
   test("a tiny coarseGridDays terminates and samples every curve point", () => {
     expect(metricsOf(drawdownCase, { coarseGridDays: 1e-30 }).maxDrawdown).toBeCloseTo(1 / 6, 12);
+  });
+
+  test("a step that overflows keeps only the first grid time; one denser than a millisecond samples every segment", () => {
+    expect(metricsOf(drawdownCase, { coarseGridDays: 1e300 }).maxDrawdown).toBe(0);
+    expect(metricsOf(drawdownCase, { coarseGridDays: 5e-324 }).maxDrawdown).toBeCloseTo(1 / 6, 12);
+  });
+
+  test("gridSamples visits the same curve values as walking every grid time (SPEC Metrics)", () => {
+    // Reference: the curve value at each firstTs + k * step before fineStart, consecutive repeats removed.
+    const reference = (curve: CurvePoint[], firstTs: number, fineStart: number, step: number): number[] => {
+      const values: number[] = [];
+      for (let k = 0; firstTs + k * step < fineStart; k++) values.push(curveAt(curve, firstTs + k * step));
+      return values.filter((value, i) => i === 0 || value !== values[i - 1]);
+    };
+    const compress = (values: number[]): number[] => values.filter((value, i) => i === 0 || value !== values[i - 1]);
+    let seed = 12_345;
+    const random = (): number => (seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648) / 2_147_483_648;
+    const steps = [DAY, 7 * DAY, DAY / 2, 3 * DAY + 5, 1_234_567.89, 86_400_000 * 0.1, 100_000];
+    for (let n = 0; n < 300; n++) {
+      const step = steps[Math.floor(random() * steps.length)];
+      const firstTs = BASE + Math.floor(random() * 1_000_000);
+      const count = 1 + Math.floor(random() * 10);
+      const curve: CurvePoint[] = [{ ts: firstTs, value: 1 }];
+      for (let i = 1; i < count; i++) {
+        // Half of the points sit exactly on a grid time (for an integer-millisecond step), the rest anywhere.
+        const onGrid = random() < 0.5 && Number.isInteger(step);
+        const ts = onGrid
+          ? firstTs + Math.max(Math.round((curve[i - 1].ts - firstTs) / step) + 1 + Math.floor(random() * 3), 1) * step
+          : curve[i - 1].ts + 1 + Math.floor(random() * 5 * step);
+        curve.push({ ts, value: 0.5 + random() });
+      }
+      const fineStart = curve[curve.length - 1].ts + Math.floor(random() * 2 * step);
+      if ((fineStart - firstTs) / step > 20_000 || fineStart <= firstTs) continue;
+      expect(compress(gridSamples(curve, firstTs, fineStart, step)), `case ${n}`).toEqual(reference(curve, firstTs, fineStart, step));
+    }
   });
 
   test("computeMetrics validates the configuration even without a month window", () => {
