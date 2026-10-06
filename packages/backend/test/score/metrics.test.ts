@@ -113,3 +113,49 @@ describe("computeMetrics properties", () => {
     }
   });
 });
+
+// Found by reviewing the revision 2 implementation against SPEC.md (independent fuzzing found no metric differences).
+describe("computeMetrics edge cases", () => {
+  // Account value = 1,000 + cumulative PnL, so there are no flows and the curve is AV / 1,000.
+  const flat = (days: number[], pnl: number[]) => ({
+    accountValueHistory: days.map((day, i): TimePoint => [BASE + day * DAY, 1_000 + pnl[i]]),
+    pnlHistory: days.map((day, i): TimePoint => [BASE + day * DAY, pnl[i]]),
+  });
+  const input = (month: ScoreInput["month"], allTime: ScoreInput["allTime"] = null): ScoreInput =>
+    ({ address: "a", kind: "trader", accountValue: 10_000, closed: false, tradeCount: 10, history: null, month, allTime });
+
+  // allTime points on days 0..4; the month window is days 3..4. The curve is 1, 1.5, 1.25, 1.3, 1.4, so the drawdown
+  // of 1/6 (1.5 -> 1.25) is only seen when the grid samples days 1 and 2.
+  const drawdownCase = input(flat([3, 4], [300, 400]), flat([0, 1, 2, 3, 4], [0, 500, 250, 300, 400]));
+
+  test("the drawdown grid follows coarseGridDays (SPEC Metrics)", () => {
+    expect(metricsOf(drawdownCase).maxDrawdown).toBe(0);
+    expect(metricsOf(drawdownCase, { coarseGridDays: 1 }).maxDrawdown).toBeCloseTo(1 / 6, 12);
+  });
+
+  test("a tiny coarseGridDays terminates and samples every curve point", () => {
+    expect(metricsOf(drawdownCase, { coarseGridDays: 1e-30 }).maxDrawdown).toBeCloseTo(1 / 6, 12);
+  });
+
+  test("computeMetrics validates the configuration even without a month window", () => {
+    expect(() => computeMetrics(input(null), { lookbackDays: 0 })).toThrow("lookbackDays");
+    expect(() => computeMetrics(drawdownCase, { coarseGridDays: Infinity })).toThrow("coarseGridDays");
+  });
+
+  test("skippedTimeShare is exact at the coverage limit", () => {
+    // Intervals of 0.2, 0.7 and 0.1 days; only the first starts from zero equity and is skipped.
+    const month = {
+      accountValueHistory: [[0, 0], [17_280_000, 0], [77_760_000, 1], [DAY, 2]] as TimePoint[],
+      pnlHistory: [[0, 0], [17_280_000, 0], [77_760_000, 0], [DAY, 1]] as TimePoint[],
+    };
+    const metrics = metricsOf(input(month));
+    expect(metrics.flags).toContain("dust-equity");
+    expect(metrics.skippedTimeShare).toBe(0.2);
+    expect(metrics.flags).not.toContain("low-coverage");
+  });
+
+  test("a non-finite timestamp makes the series invalid instead of leaking NaN", () => {
+    const month = { accountValueHistory: [[0, 100], [Infinity, 100]] as TimePoint[], pnlHistory: [[0, 0], [Infinity, 1]] as TimePoint[] };
+    expect(computeMetrics(input(month))).toBeNull();
+  });
+});

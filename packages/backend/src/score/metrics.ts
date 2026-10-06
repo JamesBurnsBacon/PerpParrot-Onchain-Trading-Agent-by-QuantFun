@@ -1,4 +1,4 @@
-import { DEFAULT_CONFIG } from "./config";
+import { DEFAULT_CONFIG, validateConfig } from "./config";
 import { computeIntervals } from "./returns";
 import { buildSeries, DAY_MS, validateSeries } from "./stitch";
 import type { Metrics, Ratio, ScoreConfig, ScoreInput, WindowHistory } from "./types";
@@ -22,6 +22,21 @@ export const curveAt = (curve: CurvePoint[], ts: number): number => {
     value = point.value;
   }
   return value;
+};
+
+// The curve value at or before each grid time firstTs + k * step that falls before the first fine interval (SPEC
+// "Metrics"). Visiting the curve points instead of every tick keeps this finite for any coarseGridDays > 0; a segment
+// is sampled when a tick falls inside it, in time order, so the drawdown over the samples is the same.
+const gridSamples = (curve: CurvePoint[], firstTs: number, fineStart: number, step: number): number[] => {
+  const samples: number[] = [];
+  for (let j = 0; j < curve.length && curve[j].ts < fineStart; j++) {
+    const from = curve[j].ts;
+    const to = Math.min(j + 1 < curve.length ? curve[j + 1].ts : Infinity, fineStart);
+    const k = Math.ceil((from - firstTs) / step);
+    const tick = k === 0 ? firstTs : firstTs + k * step;
+    if (Math.max(tick, from) < to) samples.push(curve[j].value);
+  }
+  return samples;
 };
 
 const maxDrawdownOf = (values: number[]): number => {
@@ -92,10 +107,12 @@ export const analyse = (input: ScoreInput, config: ScoreConfig): Analysis | null
   const flags = [...series.flags, ...returnFlags];
   const firstTs = points.length > 0 ? points[0].ts : 0;
   const lastTs = points.length > 0 ? points[points.length - 1].ts : 0;
-  const span = (lastTs - firstTs) / DAY_MS;
-  const total = intervals.reduce((sum, { dt }) => sum + dt, 0);
-  const skipped = intervals.reduce((sum, { dt, used }) => used ? sum : sum + dt, 0);
-  const fineTime = intervals.reduce((sum, { dt, fine }) => fine ? sum + dt : sum, 0);
+  const spanMs = lastTs - firstTs;
+  const span = spanMs / DAY_MS;
+  // Shares are sums of whole milliseconds divided once, so a share exactly at a limit compares exactly.
+  const total = intervals.reduce((sum, { start, end }) => sum + (end - start), 0);
+  const skipped = intervals.reduce((sum, { start, end, used }) => used ? sum : sum + (end - start), 0);
+  const fineTime = intervals.reduce((sum, { start, end, fine }) => fine ? sum + (end - start) : sum, 0);
   const used = intervals.filter((interval) => interval.used);
   const time = used.reduce((sum, { dt }) => sum + dt, 0);
   if (intervals.some(({ fine, dt }) => !fine && dt > 1.5 * config.coarseGridDays)) flags.push("coarse-history");
@@ -107,7 +124,7 @@ export const analyse = (input: ScoreInput, config: ScoreConfig): Analysis | null
     lookbackDays: span,
     coveredDays: time,
     skippedTimeShare: total > 0 ? skipped / total : 0,
-    fineTimeShare: span > 0 ? fineTime / span : 0,
+    fineTimeShare: spanMs > 0 ? fineTime / spanMs : 0,
   };
 
   if (used.length === 0 || time === 0) {
@@ -136,7 +153,7 @@ export const analyse = (input: ScoreInput, config: ScoreConfig): Analysis | null
 
   // Coarse part on a common grid so allTime resolution does not decide the drawdown (SPEC "Metrics").
   const drawdownPoints: number[] = [];
-  for (let ts = firstTs; ts < fineStart; ts += config.coarseGridDays * DAY_MS) drawdownPoints.push(curveAt(curve, ts));
+  drawdownPoints.push(...gridSamples(curve, firstTs, fineStart, config.coarseGridDays * DAY_MS));
   drawdownPoints.push(curveAt(curve, fineStart));
   for (const point of curve) if (point.ts > fineStart) drawdownPoints.push(point.value);
   const maxDrawdown = finiteOrNull(maxDrawdownOf(drawdownPoints));
@@ -163,5 +180,8 @@ export const analyse = (input: ScoreInput, config: ScoreConfig): Analysis | null
 };
 
 // Metrics for one input; null when the month window is missing or invalid (SPEC "Metrics").
-export const computeMetrics = (input: ScoreInput, config: Partial<ScoreConfig> = {}): Metrics | null =>
-  analyse(input, { ...DEFAULT_CONFIG, ...config })?.metrics ?? null;
+export const computeMetrics = (input: ScoreInput, config: Partial<ScoreConfig> = {}): Metrics | null => {
+  const resolved = { ...DEFAULT_CONFIG, ...config };
+  validateConfig(resolved);
+  return analyse(input, resolved)?.metrics ?? null;
+};
