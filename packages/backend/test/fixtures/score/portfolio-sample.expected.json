@@ -1,0 +1,1762 @@
+{
+ "strict": {
+  "candidates": [
+   {
+    "address": "addr-07",
+    "kind": "trader",
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sortino": 0.436986051363086,
+     "calmar": 2.4676690309619618,
+     "maxDrawdown": 0.023412503387107722,
+     "pnlConsistency": 0.6451612903225806,
+     "realizedVol": 0.007676879945264047,
+     "flags": []
+    },
+    "percentiles": {
+     "sortino": 0.875,
+     "calmar": 0.9375,
+     "negMaxDrawdown": 0.875,
+     "pnlConsistency": 0.9375
+    },
+    "score": 0.90625,
+    "rank": 1,
+    "finalist": true,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-18",
+    "kind": "trader",
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sortino": 0.3436003450064607,
+     "calmar": 2.210862524673416,
+     "maxDrawdown": 0.1190124264625108,
+     "pnlConsistency": 0.5161290322580645,
+     "realizedVol": 0.05707500654204713,
+     "flags": []
+    },
+    "percentiles": {
+     "sortino": 0.8125,
+     "calmar": 0.8125,
+     "negMaxDrawdown": 0.4375,
+     "pnlConsistency": 0.6875
+    },
+    "score": 0.6875,
+    "rank": 2,
+    "finalist": true,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-14",
+    "kind": "trader",
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sortino": 0.6475712155201677,
+     "calmar": 2.309576945867831,
+     "maxDrawdown": 0.8094385527191436,
+     "pnlConsistency": 0.5806451612903226,
+     "realizedVol": 0.4871330321259742,
+     "flags": []
+    },
+    "percentiles": {
+     "sortino": 0.9375,
+     "calmar": 0.875,
+     "negMaxDrawdown": 0.0,
+     "pnlConsistency": 0.875
+    },
+    "score": 0.671875,
+    "rank": 3,
+    "finalist": true,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-11",
+    "kind": "trader",
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sortino": 0.09924798578441632,
+     "calmar": 0.5177019821687627,
+     "maxDrawdown": 1.537309929773586e-07,
+     "pnlConsistency": 0.5483870967741935,
+     "realizedVol": 4.1725749473091104e-08,
+     "flags": []
+    },
+    "percentiles": {
+     "sortino": 0.3125,
+     "calmar": 0.4375,
+     "negMaxDrawdown": 0.9375,
+     "pnlConsistency": 0.8125
+    },
+    "score": 0.625,
+    "rank": 4,
+    "finalist": true,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-24",
+    "kind": "trader",
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sortino": 0.2582458543743587,
+     "calmar": 1.114297504427846,
+     "maxDrawdown": 0.22847184088109007,
+     "pnlConsistency": 0.5161290322580645,
+     "realizedVol": 0.07348132394662583,
+     "flags": []
+    },
+    "percentiles": {
+     "sortino": 0.75,
+     "calmar": 0.75,
+     "negMaxDrawdown": 0.1875,
+     "pnlConsistency": 0.6875
+    },
+    "score": 0.59375,
+    "rank": 5,
+    "finalist": true,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-08",
+    "kind": "trader",
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sortino": 46407.51592919626,
+     "calmar": 198396.09819342953,
+     "maxDrawdown": 0.12453404854986816,
+     "pnlConsistency": 0.3548387096774194,
+     "realizedVol": 4264.9332423750675,
+     "flags": []
+    },
+    "percentiles": {
+     "sortino": 1.0,
+     "calmar": 1.0,
+     "negMaxDrawdown": 0.3125,
+     "pnlConsistency": 0.03125
+    },
+    "score": 0.5859375,
+    "rank": 6,
+    "finalist": true,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-13",
+    "kind": "trader",
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sortino": 0.15122852439020026,
+     "calmar": 0.97143001439245,
+     "maxDrawdown": 0.036152671792549385,
+     "pnlConsistency": 0.45161290322580644,
+     "realizedVol": 0.013784016516887206,
+     "flags": []
+    },
+    "percentiles": {
+     "sortino": 0.375,
+     "calmar": 0.6875,
+     "negMaxDrawdown": 0.8125,
+     "pnlConsistency": 0.28125
+    },
+    "score": 0.5390625,
+    "rank": 7,
+    "finalist": true,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-16",
+    "kind": "trader",
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sortino": 0.22531835037547884,
+     "calmar": 0.8740438411458995,
+     "maxDrawdown": 0.12598012920502433,
+     "pnlConsistency": 0.4838709677419355,
+     "realizedVol": 0.03182369891443595,
+     "flags": []
+    },
+    "percentiles": {
+     "sortino": 0.6875,
+     "calmar": 0.625,
+     "negMaxDrawdown": 0.25,
+     "pnlConsistency": 0.5
+    },
+    "score": 0.515625,
+    "rank": 8,
+    "finalist": true,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-21",
+    "kind": "trader",
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sortino": null,
+     "calmar": null,
+     "maxDrawdown": 0.0,
+     "pnlConsistency": 1.0,
+     "realizedVol": 7.661321299817896e-05,
+     "flags": [
+      "no-downside",
+      "no-drawdown"
+     ]
+    },
+    "percentiles": {
+     "sortino": 0.0,
+     "calmar": 0.0,
+     "negMaxDrawdown": 1.0,
+     "pnlConsistency": 1.0
+    },
+    "score": 0.5,
+    "rank": 9,
+    "finalist": true,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-19",
+    "kind": "trader",
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sortino": 0.1660426743197037,
+     "calmar": 0.717147368640963,
+     "maxDrawdown": 0.11534143878050129,
+     "pnlConsistency": 0.45161290322580644,
+     "realizedVol": 0.0331645752138302,
+     "flags": []
+    },
+    "percentiles": {
+     "sortino": 0.5,
+     "calmar": 0.5,
+     "negMaxDrawdown": 0.5,
+     "pnlConsistency": 0.28125
+    },
+    "score": 0.4453125,
+    "rank": 10,
+    "finalist": true,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-06",
+    "kind": "trader",
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sortino": 0.05660380586283151,
+     "calmar": 0.17190167292590916,
+     "maxDrawdown": 0.10678284328915932,
+     "pnlConsistency": 0.4838709677419355,
+     "realizedVol": 0.03350275217413152,
+     "flags": []
+    },
+    "percentiles": {
+     "sortino": 0.1875,
+     "calmar": 0.3125,
+     "negMaxDrawdown": 0.71875,
+     "pnlConsistency": 0.5
+    },
+    "score": 0.4296875,
+    "rank": 11,
+    "finalist": true,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-22",
+    "kind": "trader",
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sortino": 0.15459989715452976,
+     "calmar": 0.31644613867748633,
+     "maxDrawdown": 0.3869601982089723,
+     "pnlConsistency": 0.5161290322580645,
+     "realizedVol": 0.14006383936312353,
+     "flags": []
+    },
+    "percentiles": {
+     "sortino": 0.4375,
+     "calmar": 0.375,
+     "negMaxDrawdown": 0.125,
+     "pnlConsistency": 0.6875
+    },
+    "score": 0.40625,
+    "rank": 12,
+    "finalist": true,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-23",
+    "kind": "trader",
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sortino": 0.17928265229521545,
+     "calmar": 0.7623548036179836,
+     "maxDrawdown": 0.12014962287240634,
+     "pnlConsistency": 0.3548387096774194,
+     "realizedVol": 0.03440227536799754,
+     "flags": []
+    },
+    "percentiles": {
+     "sortino": 0.5625,
+     "calmar": 0.5625,
+     "negMaxDrawdown": 0.375,
+     "pnlConsistency": 0.03125
+    },
+    "score": 0.3828125,
+    "rank": 13,
+    "finalist": true,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-04",
+    "kind": "trader",
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sortino": 0.05727921587381695,
+     "calmar": 0.171901672925905,
+     "maxDrawdown": 0.10678284328915932,
+     "pnlConsistency": 0.45161290322580644,
+     "realizedVol": 0.032962573045014265,
+     "flags": []
+    },
+    "percentiles": {
+     "sortino": 0.25,
+     "calmar": 0.25,
+     "negMaxDrawdown": 0.71875,
+     "pnlConsistency": 0.28125
+    },
+    "score": 0.375,
+    "rank": 14,
+    "finalist": true,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-17",
+    "kind": "trader",
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sortino": 0.18342650739935515,
+     "calmar": -0.05456223350642882,
+     "maxDrawdown": 0.6237114583993778,
+     "pnlConsistency": 0.4838709677419355,
+     "realizedVol": 0.2385667638083962,
+     "flags": []
+    },
+    "percentiles": {
+     "sortino": 0.625,
+     "calmar": 0.0625,
+     "negMaxDrawdown": 0.0625,
+     "pnlConsistency": 0.5
+    },
+    "score": 0.3125,
+    "rank": 15,
+    "finalist": true,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-09",
+    "kind": "trader",
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sortino": 0.04446779480970466,
+     "calmar": 0.09402390438246737,
+     "maxDrawdown": 0.11352123887401411,
+     "pnlConsistency": 0.45161290322580644,
+     "realizedVol": 0.031746584590327524,
+     "flags": []
+    },
+    "percentiles": {
+     "sortino": 0.125,
+     "calmar": 0.1875,
+     "negMaxDrawdown": 0.5625,
+     "pnlConsistency": 0.28125
+    },
+    "score": 0.2890625,
+    "rank": 16,
+    "finalist": true,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-02",
+    "kind": "trader",
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sortino": 0.0327470358484389,
+     "calmar": 0.030764248709239002,
+     "maxDrawdown": 0.11092750915923055,
+     "pnlConsistency": 0.41935483870967744,
+     "realizedVol": 0.03315481430616683,
+     "flags": []
+    },
+    "percentiles": {
+     "sortino": 0.0625,
+     "calmar": 0.125,
+     "negMaxDrawdown": 0.625,
+     "pnlConsistency": 0.125
+    },
+    "score": 0.234375,
+    "rank": 17,
+    "finalist": true,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-01",
+    "kind": "trader",
+    "filters": {
+     "minAccountValue": "fail",
+     "minActiveDays": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass"
+    },
+    "eligible": false,
+    "metrics": {
+     "sortino": 0.21386883479601979,
+     "calmar": 1.6690921136768908,
+     "maxDrawdown": 3.704200532976421e-05,
+     "pnlConsistency": 0.5483870967741935,
+     "realizedVol": 1.6171220483715634e-05,
+     "flags": []
+    },
+    "percentiles": null,
+    "score": null,
+    "rank": null,
+    "finalist": false,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-03",
+    "kind": "trader",
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "minTrades": "fail",
+     "notClosed": "pass",
+     "minMonthPoints": "pass"
+    },
+    "eligible": false,
+    "metrics": {
+     "sortino": 0.04338361184926281,
+     "calmar": 0.0808378587894303,
+     "maxDrawdown": 0.11645135061840683,
+     "pnlConsistency": 0.41935483870967744,
+     "realizedVol": 0.0344142852288095,
+     "flags": []
+    },
+    "percentiles": null,
+    "score": null,
+    "rank": null,
+    "finalist": false,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-05",
+    "kind": "trader",
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "minTrades": "unknown",
+     "notClosed": "pass",
+     "minMonthPoints": "pass"
+    },
+    "eligible": false,
+    "metrics": {
+     "sortino": 0.24622404594240224,
+     "calmar": 1.231829702646091,
+     "maxDrawdown": 0.055669481838942186,
+     "pnlConsistency": 0.5161290322580645,
+     "realizedVol": 0.019855180688997626,
+     "flags": []
+    },
+    "percentiles": null,
+    "score": null,
+    "rank": null,
+    "finalist": false,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-10",
+    "kind": "trader",
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "minTrades": "unknown",
+     "notClosed": "pass",
+     "minMonthPoints": "pass"
+    },
+    "eligible": false,
+    "metrics": {
+     "sortino": null,
+     "calmar": null,
+     "maxDrawdown": 0.0,
+     "pnlConsistency": 0.0,
+     "realizedVol": 0.0,
+     "flags": [
+      "no-downside",
+      "no-drawdown"
+     ]
+    },
+    "percentiles": null,
+    "score": null,
+    "rank": null,
+    "finalist": false,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-12",
+    "kind": "trader",
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "minTrades": "fail",
+     "notClosed": "pass",
+     "minMonthPoints": "pass"
+    },
+    "eligible": false,
+    "metrics": {
+     "sortino": 0.1787675631848747,
+     "calmar": 0.7132952371509614,
+     "maxDrawdown": 0.1268639173684079,
+     "pnlConsistency": 0.4838709677419355,
+     "realizedVol": 0.034233601914445945,
+     "flags": []
+    },
+    "percentiles": null,
+    "score": null,
+    "rank": null,
+    "finalist": false,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-15",
+    "kind": "trader",
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "minTrades": "unknown",
+     "notClosed": "pass",
+     "minMonthPoints": "pass"
+    },
+    "eligible": false,
+    "metrics": {
+     "sortino": -0.13721091769312774,
+     "calmar": -0.4837740792639242,
+     "maxDrawdown": 0.15559723412625248,
+     "pnlConsistency": 0.5806451612903226,
+     "realizedVol": 0.020756804483772828,
+     "flags": []
+    },
+    "percentiles": null,
+    "score": null,
+    "rank": null,
+    "finalist": false,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-20",
+    "kind": "trader",
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "minTrades": "unknown",
+     "notClosed": "pass",
+     "minMonthPoints": "pass"
+    },
+    "eligible": false,
+    "metrics": {
+     "sortino": 0.1687494426541529,
+     "calmar": 0.7081438354746777,
+     "maxDrawdown": 0.1232765116728616,
+     "pnlConsistency": 0.41935483870967744,
+     "realizedVol": 0.035359407479687896,
+     "flags": []
+    },
+    "percentiles": null,
+    "score": null,
+    "rank": null,
+    "finalist": false,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   }
+  ],
+  "finalists": [
+   "addr-07",
+   "addr-18",
+   "addr-14",
+   "addr-11",
+   "addr-24",
+   "addr-08",
+   "addr-13",
+   "addr-16",
+   "addr-21",
+   "addr-19",
+   "addr-06",
+   "addr-22",
+   "addr-23",
+   "addr-04",
+   "addr-17",
+   "addr-09",
+   "addr-02"
+  ],
+  "funnel": [
+   {
+    "stage": "universe",
+    "count": 24
+   },
+   {
+    "stage": "minAccountValue",
+    "count": 23
+   },
+   {
+    "stage": "minActiveDays",
+    "count": 23
+   },
+   {
+    "stage": "minTrades",
+    "count": 17
+   },
+   {
+    "stage": "notClosed",
+    "count": 17
+   },
+   {
+    "stage": "minMonthPoints",
+    "count": 17
+   },
+   {
+    "stage": "eligible",
+    "count": 17
+   },
+   {
+    "stage": "finalists",
+    "count": 17
+   }
+  ],
+  "config": {
+   "minAccountValue": 10000,
+   "minActiveDays": 30,
+   "minTrades": 10,
+   "minMonthPoints": 25,
+   "finalists": 25,
+   "allowUnknown": false
+  }
+ },
+ "permissive": {
+  "candidates": [
+   {
+    "address": "addr-07",
+    "kind": "trader",
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sortino": 0.436986051363086,
+     "calmar": 2.4676690309619618,
+     "maxDrawdown": 0.023412503387107722,
+     "pnlConsistency": 0.6451612903225806,
+     "realizedVol": 0.007676879945264047,
+     "flags": []
+    },
+    "percentiles": {
+     "sortino": 0.9,
+     "calmar": 0.95,
+     "negMaxDrawdown": 0.85,
+     "pnlConsistency": 0.95
+    },
+    "score": 0.9125,
+    "rank": 1,
+    "finalist": true,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-05",
+    "kind": "trader",
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "minTrades": "unknown",
+     "notClosed": "pass",
+     "minMonthPoints": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sortino": 0.24622404594240224,
+     "calmar": 1.231829702646091,
+     "maxDrawdown": 0.055669481838942186,
+     "pnlConsistency": 0.5161290322580645,
+     "realizedVol": 0.019855180688997626,
+     "flags": []
+    },
+    "percentiles": {
+     "sortino": 0.75,
+     "calmar": 0.8,
+     "negMaxDrawdown": 0.75,
+     "pnlConsistency": 0.675
+    },
+    "score": 0.74375,
+    "rank": 2,
+    "finalist": true,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-18",
+    "kind": "trader",
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sortino": 0.3436003450064607,
+     "calmar": 2.210862524673416,
+     "maxDrawdown": 0.1190124264625108,
+     "pnlConsistency": 0.5161290322580645,
+     "realizedVol": 0.05707500654204713,
+     "flags": []
+    },
+    "percentiles": {
+     "sortino": 0.85,
+     "calmar": 0.85,
+     "negMaxDrawdown": 0.45,
+     "pnlConsistency": 0.675
+    },
+    "score": 0.70625,
+    "rank": 3,
+    "finalist": true,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-14",
+    "kind": "trader",
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sortino": 0.6475712155201677,
+     "calmar": 2.309576945867831,
+     "maxDrawdown": 0.8094385527191436,
+     "pnlConsistency": 0.5806451612903226,
+     "realizedVol": 0.4871330321259742,
+     "flags": []
+    },
+    "percentiles": {
+     "sortino": 0.95,
+     "calmar": 0.9,
+     "negMaxDrawdown": 0.0,
+     "pnlConsistency": 0.875
+    },
+    "score": 0.68125,
+    "rank": 4,
+    "finalist": true,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-11",
+    "kind": "trader",
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sortino": 0.09924798578441632,
+     "calmar": 0.5177019821687627,
+     "maxDrawdown": 1.537309929773586e-07,
+     "pnlConsistency": 0.5483870967741935,
+     "realizedVol": 4.1725749473091104e-08,
+     "flags": []
+    },
+    "percentiles": {
+     "sortino": 0.35,
+     "calmar": 0.45,
+     "negMaxDrawdown": 0.9,
+     "pnlConsistency": 0.8
+    },
+    "score": 0.625,
+    "rank": 5,
+    "finalist": true,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-08",
+    "kind": "trader",
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sortino": 46407.51592919626,
+     "calmar": 198396.09819342953,
+     "maxDrawdown": 0.12453404854986816,
+     "pnlConsistency": 0.3548387096774194,
+     "realizedVol": 4264.9332423750675,
+     "flags": []
+    },
+    "percentiles": {
+     "sortino": 1.0,
+     "calmar": 1.0,
+     "negMaxDrawdown": 0.3,
+     "pnlConsistency": 0.075
+    },
+    "score": 0.59375,
+    "rank": 6,
+    "finalist": false,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-24",
+    "kind": "trader",
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sortino": 0.2582458543743587,
+     "calmar": 1.114297504427846,
+     "maxDrawdown": 0.22847184088109007,
+     "pnlConsistency": 0.5161290322580645,
+     "realizedVol": 0.07348132394662583,
+     "flags": []
+    },
+    "percentiles": {
+     "sortino": 0.8,
+     "calmar": 0.75,
+     "negMaxDrawdown": 0.15,
+     "pnlConsistency": 0.675
+    },
+    "score": 0.59375,
+    "rank": 7,
+    "finalist": false,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-13",
+    "kind": "trader",
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sortino": 0.15122852439020026,
+     "calmar": 0.97143001439245,
+     "maxDrawdown": 0.036152671792549385,
+     "pnlConsistency": 0.45161290322580644,
+     "realizedVol": 0.013784016516887206,
+     "flags": []
+    },
+    "percentiles": {
+     "sortino": 0.4,
+     "calmar": 0.7,
+     "negMaxDrawdown": 0.8,
+     "pnlConsistency": 0.325
+    },
+    "score": 0.55625,
+    "rank": 8,
+    "finalist": false,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-16",
+    "kind": "trader",
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sortino": 0.22531835037547884,
+     "calmar": 0.8740438411458995,
+     "maxDrawdown": 0.12598012920502433,
+     "pnlConsistency": 0.4838709677419355,
+     "realizedVol": 0.03182369891443595,
+     "flags": []
+    },
+    "percentiles": {
+     "sortino": 0.7,
+     "calmar": 0.65,
+     "negMaxDrawdown": 0.25,
+     "pnlConsistency": 0.5
+    },
+    "score": 0.525,
+    "rank": 9,
+    "finalist": false,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-21",
+    "kind": "trader",
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sortino": null,
+     "calmar": null,
+     "maxDrawdown": 0.0,
+     "pnlConsistency": 1.0,
+     "realizedVol": 7.661321299817896e-05,
+     "flags": [
+      "no-downside",
+      "no-drawdown"
+     ]
+    },
+    "percentiles": {
+     "sortino": 0.025,
+     "calmar": 0.025,
+     "negMaxDrawdown": 0.975,
+     "pnlConsistency": 1.0
+    },
+    "score": 0.50625,
+    "rank": 10,
+    "finalist": false,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-19",
+    "kind": "trader",
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sortino": 0.1660426743197037,
+     "calmar": 0.717147368640963,
+     "maxDrawdown": 0.11534143878050129,
+     "pnlConsistency": 0.45161290322580644,
+     "realizedVol": 0.0331645752138302,
+     "flags": []
+    },
+    "percentiles": {
+     "sortino": 0.5,
+     "calmar": 0.55,
+     "negMaxDrawdown": 0.5,
+     "pnlConsistency": 0.325
+    },
+    "score": 0.46875,
+    "rank": 11,
+    "finalist": false,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-06",
+    "kind": "trader",
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sortino": 0.05660380586283151,
+     "calmar": 0.17190167292590916,
+     "maxDrawdown": 0.10678284328915932,
+     "pnlConsistency": 0.4838709677419355,
+     "realizedVol": 0.03350275217413152,
+     "flags": []
+    },
+    "percentiles": {
+     "sortino": 0.25,
+     "calmar": 0.35,
+     "negMaxDrawdown": 0.675,
+     "pnlConsistency": 0.5
+    },
+    "score": 0.44375,
+    "rank": 12,
+    "finalist": false,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-23",
+    "kind": "trader",
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sortino": 0.17928265229521545,
+     "calmar": 0.7623548036179836,
+     "maxDrawdown": 0.12014962287240634,
+     "pnlConsistency": 0.3548387096774194,
+     "realizedVol": 0.03440227536799754,
+     "flags": []
+    },
+    "percentiles": {
+     "sortino": 0.6,
+     "calmar": 0.6,
+     "negMaxDrawdown": 0.4,
+     "pnlConsistency": 0.075
+    },
+    "score": 0.41875,
+    "rank": 13,
+    "finalist": false,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-22",
+    "kind": "trader",
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sortino": 0.15459989715452976,
+     "calmar": 0.31644613867748633,
+     "maxDrawdown": 0.3869601982089723,
+     "pnlConsistency": 0.5161290322580645,
+     "realizedVol": 0.14006383936312353,
+     "flags": []
+    },
+    "percentiles": {
+     "sortino": 0.45,
+     "calmar": 0.4,
+     "negMaxDrawdown": 0.1,
+     "pnlConsistency": 0.675
+    },
+    "score": 0.40625,
+    "rank": 14,
+    "finalist": false,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-04",
+    "kind": "trader",
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sortino": 0.05727921587381695,
+     "calmar": 0.171901672925905,
+     "maxDrawdown": 0.10678284328915932,
+     "pnlConsistency": 0.45161290322580644,
+     "realizedVol": 0.032962573045014265,
+     "flags": []
+    },
+    "percentiles": {
+     "sortino": 0.3,
+     "calmar": 0.3,
+     "negMaxDrawdown": 0.675,
+     "pnlConsistency": 0.325
+    },
+    "score": 0.4,
+    "rank": 15,
+    "finalist": false,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-20",
+    "kind": "trader",
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "minTrades": "unknown",
+     "notClosed": "pass",
+     "minMonthPoints": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sortino": 0.1687494426541529,
+     "calmar": 0.7081438354746777,
+     "maxDrawdown": 0.1232765116728616,
+     "pnlConsistency": 0.41935483870967744,
+     "realizedVol": 0.035359407479687896,
+     "flags": []
+    },
+    "percentiles": {
+     "sortino": 0.55,
+     "calmar": 0.5,
+     "negMaxDrawdown": 0.35,
+     "pnlConsistency": 0.175
+    },
+    "score": 0.39375,
+    "rank": 16,
+    "finalist": false,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-17",
+    "kind": "trader",
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sortino": 0.18342650739935515,
+     "calmar": -0.05456223350642882,
+     "maxDrawdown": 0.6237114583993778,
+     "pnlConsistency": 0.4838709677419355,
+     "realizedVol": 0.2385667638083962,
+     "flags": []
+    },
+    "percentiles": {
+     "sortino": 0.65,
+     "calmar": 0.15,
+     "negMaxDrawdown": 0.05,
+     "pnlConsistency": 0.5
+    },
+    "score": 0.3375,
+    "rank": 17,
+    "finalist": false,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-09",
+    "kind": "trader",
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sortino": 0.04446779480970466,
+     "calmar": 0.09402390438246737,
+     "maxDrawdown": 0.11352123887401411,
+     "pnlConsistency": 0.45161290322580644,
+     "realizedVol": 0.031746584590327524,
+     "flags": []
+    },
+    "percentiles": {
+     "sortino": 0.2,
+     "calmar": 0.25,
+     "negMaxDrawdown": 0.55,
+     "pnlConsistency": 0.325
+    },
+    "score": 0.33125000000000004,
+    "rank": 18,
+    "finalist": false,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-15",
+    "kind": "trader",
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "minTrades": "unknown",
+     "notClosed": "pass",
+     "minMonthPoints": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sortino": -0.13721091769312774,
+     "calmar": -0.4837740792639242,
+     "maxDrawdown": 0.15559723412625248,
+     "pnlConsistency": 0.5806451612903226,
+     "realizedVol": 0.020756804483772828,
+     "flags": []
+    },
+    "percentiles": {
+     "sortino": 0.1,
+     "calmar": 0.1,
+     "negMaxDrawdown": 0.2,
+     "pnlConsistency": 0.875
+    },
+    "score": 0.31875,
+    "rank": 19,
+    "finalist": false,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-02",
+    "kind": "trader",
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sortino": 0.0327470358484389,
+     "calmar": 0.030764248709239002,
+     "maxDrawdown": 0.11092750915923055,
+     "pnlConsistency": 0.41935483870967744,
+     "realizedVol": 0.03315481430616683,
+     "flags": []
+    },
+    "percentiles": {
+     "sortino": 0.15,
+     "calmar": 0.2,
+     "negMaxDrawdown": 0.6,
+     "pnlConsistency": 0.175
+    },
+    "score": 0.28125,
+    "rank": 20,
+    "finalist": false,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-10",
+    "kind": "trader",
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "minTrades": "unknown",
+     "notClosed": "pass",
+     "minMonthPoints": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sortino": null,
+     "calmar": null,
+     "maxDrawdown": 0.0,
+     "pnlConsistency": 0.0,
+     "realizedVol": 0.0,
+     "flags": [
+      "no-downside",
+      "no-drawdown"
+     ]
+    },
+    "percentiles": {
+     "sortino": 0.025,
+     "calmar": 0.025,
+     "negMaxDrawdown": 0.975,
+     "pnlConsistency": 0.0
+    },
+    "score": 0.25625,
+    "rank": 21,
+    "finalist": false,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-01",
+    "kind": "trader",
+    "filters": {
+     "minAccountValue": "fail",
+     "minActiveDays": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass"
+    },
+    "eligible": false,
+    "metrics": {
+     "sortino": 0.21386883479601979,
+     "calmar": 1.6690921136768908,
+     "maxDrawdown": 3.704200532976421e-05,
+     "pnlConsistency": 0.5483870967741935,
+     "realizedVol": 1.6171220483715634e-05,
+     "flags": []
+    },
+    "percentiles": null,
+    "score": null,
+    "rank": null,
+    "finalist": false,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-03",
+    "kind": "trader",
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "minTrades": "fail",
+     "notClosed": "pass",
+     "minMonthPoints": "pass"
+    },
+    "eligible": false,
+    "metrics": {
+     "sortino": 0.04338361184926281,
+     "calmar": 0.0808378587894303,
+     "maxDrawdown": 0.11645135061840683,
+     "pnlConsistency": 0.41935483870967744,
+     "realizedVol": 0.0344142852288095,
+     "flags": []
+    },
+    "percentiles": null,
+    "score": null,
+    "rank": null,
+    "finalist": false,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-12",
+    "kind": "trader",
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "minTrades": "fail",
+     "notClosed": "pass",
+     "minMonthPoints": "pass"
+    },
+    "eligible": false,
+    "metrics": {
+     "sortino": 0.1787675631848747,
+     "calmar": 0.7132952371509614,
+     "maxDrawdown": 0.1268639173684079,
+     "pnlConsistency": 0.4838709677419355,
+     "realizedVol": 0.034233601914445945,
+     "flags": []
+    },
+    "percentiles": null,
+    "score": null,
+    "rank": null,
+    "finalist": false,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   }
+  ],
+  "finalists": [
+   "addr-07",
+   "addr-05",
+   "addr-18",
+   "addr-14",
+   "addr-11"
+  ],
+  "funnel": [
+   {
+    "stage": "universe",
+    "count": 24
+   },
+   {
+    "stage": "minAccountValue",
+    "count": 23
+   },
+   {
+    "stage": "minActiveDays",
+    "count": 23
+   },
+   {
+    "stage": "minTrades",
+    "count": 21
+   },
+   {
+    "stage": "notClosed",
+    "count": 21
+   },
+   {
+    "stage": "minMonthPoints",
+    "count": 21
+   },
+   {
+    "stage": "eligible",
+    "count": 21
+   },
+   {
+    "stage": "finalists",
+    "count": 5
+   }
+  ],
+  "config": {
+   "minAccountValue": 10000,
+   "minActiveDays": 30,
+   "minTrades": 10,
+   "minMonthPoints": 25,
+   "finalists": 5,
+   "allowUnknown": true
+  }
+ }
+}
