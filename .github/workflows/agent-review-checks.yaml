@@ -1,0 +1,37 @@
+name: Agent review and mirror checks
+
+on:
+  push:
+    branches: [ai-agent-workflow]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: '1.4.2'
+      - run: npm install --global pnpm@11.25.0
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm test:cre
+      - name: Check original JSON contracts
+        run: |
+          python3 -m venv work/schema-check
+          work/schema-check/bin/python -m pip install jsonschema==4.25.1
+          work/schema-check/bin/python tests/validate_contracts.py
+      - run: pnpm compile:review-spike
+      - run: git diff --exit-code
+      # No model credentials, external LLM simulation, deployment or broadcast here.

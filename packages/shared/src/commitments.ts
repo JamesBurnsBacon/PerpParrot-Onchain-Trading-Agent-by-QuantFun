@@ -17,7 +17,8 @@ function jsonOnly(value: unknown, ancestors = new Set<object>()): void {
   if (Array.isArray(value)) {
     for(let i=0;i<value.length;i++){if(!Object.hasOwn(value,i))throw new Error('sparse JSON array');jsonOnly(value[i],ancestors);}
   } else {
-    for(const [key,child] of Object.entries(value)){jsonOnly(key,ancestors);jsonOnly(child,ancestors);}
+    const object = value as Record<string, unknown>;
+    for(const key of Object.keys(object).sort()){jsonOnly(key,ancestors);jsonOnly(object[key],ancestors);}
   }
   ancestors.delete(value);
 }

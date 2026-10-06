@@ -145,6 +145,10 @@
 | **B: performed badly** | The source's own drawdown from peak is ≥ N%, with **N set per tier** (❓ values) | **Immediate exit** of its slices on the next run |
 
 ### 4.6 AI layer: the agent in the CRE `review` workflow (hourly)
+
+Contribution status: [simulation-only real-SDK spike and PAPER mirror integration guide](docs/agents/CRE_SPIKE.md).
+WASM compilation is verified; a real LLM simulation, frozen-set consumer and live mirror adapters remain deployment gates.
+
 A dedicated workstream, integrated into the CRE flow.
 - **Before go-live:** the agent picks **5–25 sources from ~25 finalists**, assigns weights, and writes a rationale and red flags (martingale, wash-like behavior, concentration, near-liquidation). It also judges:
   - **diversification**, from the correlation matrix and vault ↔ leader links

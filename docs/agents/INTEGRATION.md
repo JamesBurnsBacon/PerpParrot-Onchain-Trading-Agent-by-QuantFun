@@ -1,5 +1,9 @@
 # Running and integrating the review core
 
+For the real-SDK simulation spike and PAPER mirror/freeze primitives, see
+[CRE_SPIKE.md](CRE_SPIKE.md). They are separate from the offline `runReview` pipeline;
+the actual model simulation and deployed adapters remain explicit integration gates.
+
 This repository now has an offline TypeScript review implementation, independent of
 CRE networking and exchange submission. Requires Node 24+ and pnpm. Run `pnpm install
 --frozen-lockfile`, `pnpm test`, and `pnpm typecheck` from the repository root.
