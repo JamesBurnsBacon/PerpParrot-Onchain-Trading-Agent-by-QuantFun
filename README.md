@@ -96,6 +96,8 @@
   - **ERC-4626 vault** if `eth_getCode` on HyperEVM returns code *and* `asset()` / `totalAssets()` succeed. This runs on the shortlist only.
   - Trader otherwise.
 - **History:** `portfolio` PnL history for the pre-filtered top few hundred.
+  - **Daily snapshots:** save each tracked address's `month` points (in the `allTime` PnL baseline). `allTime` is coarse (7–14 days between points for older accounts), so this is the only way to get ~16-hour resolution beyond 30 days.
+- **Fills** (trade count, leverage, holding times, maker share): only for addresses that pass the cheap filters.
 - Cache the leaderboard every few hours and save every snapshot.
 
 ### 4.2 Score (backend)
@@ -105,8 +107,19 @@
   - ≥ 10 trades
   - not closed
   - **≥ 25 points in the `portfolio` `month` window**. History length varies a lot by address (issue #1), so "≥ 30 days active" alone doesn't guarantee enough points for Sortino/Calmar. Short-history addresses are **excluded**, with no fallback metric.
-- **Score = average percentile rank** of 30-day **Sortino**, **Calmar / −max drawdown** and **PnL consistency**. Computed from PnL history, so deposits and withdrawals don't count as returns. **Top ~25 → finalists.**
+  - still active (a PnL change in the last 7 days)
+  - no ruin in the lookback, and ≤ 20% of it in near-zero-equity ("dust") intervals
+  - Missing data is **fail-closed**: an unknown filter fails unless that filter is explicitly allowed (e.g. trade counts before fills are ingested).
+- **Lookback: 90 days** (30 days is the minimum history, not the window). The last 30 days come from the `month` window, older days from `allTime`, joined exactly on their shared timestamps; daily snapshots (§4.1) replace the coarse part over time.
+- **Returns** are computed from PnL with flows backed out (`flow = Δaccount value − ΔPnL`), so deposits and withdrawals never count as returns. A deposit counts as capital for the whole interval, so a deposit into a near-empty account cannot create a huge return.
+- **Score = weighted average percentile rank, within pool** (traders, vaults), in three equal blocks:
+  - risk-adjusted return: **Sharpe** and **Sortino**
+  - drawdown: **Calmar** and **−max drawdown**
+  - **PnL consistency**: R² of the log equity curve against time (0 if it trends down)
+- **Clone grouping before the cut:** accounts whose daily returns correlate ≥ 0.9 (❓ *tuned*), or that are known to be linked (vault ↔ leader, sub-accounts), are grouped and only the best-scoring one can be a finalist. Duplicates would concentrate the portfolio in one strategy's idiosyncratic risk.
+- **Top ~25 distinct strategies → finalists**, with slots split between traders and vaults (❓ *split set in tuning*). Full definitions: `packages/backend/src/score/SPEC.md`.
 - **Also computed** for the agent:
+  - annualized return and volatility, all-time max drawdown (reported, not ranked)
   - realized volatility and average leverage
   - time in market and holding times
   - **maker/taker volume split** (from `crossed` on fills, or `userFees`; verify). A high maker share suggests sophistication, but market-maker inventory may not be copyable. ❓ *Plus or exclusion?*
