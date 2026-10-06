@@ -116,7 +116,14 @@ if (devs.length) console.log(`spot-check deviation: ${Math.min(...devs)}–${Mat
 const reasons = {};
 for (const r of failed) reasons[r.err || "unknown"] = (reasons[r.err || "unknown"] ?? 0) + 1;
 for (const [err, n] of Object.entries(reasons)) console.log(`  ${n}× ${err}`);
-const runs = await (await fetch("http://localhost:8787/runs?limit=200")).json();
+// The executor answers the mirror before it runs the plan: give the last run time to be saved.
+const runIds = new Set(rows.map((r) => r.snap).filter(Boolean).map((s) => `mirror-${s.slice(5)}`));
+let runs = [];
+for (let i = 0; i < 30; i++) {
+  runs = await (await fetch("http://localhost:8787/runs?limit=200")).json();
+  if ([...runIds].every((id) => runs.some((r) => r.runId === id))) break;
+  await Bun.sleep(500);
+}
 const byStatus = {};
 for (const r of runs) byStatus[r.status] = (byStatus[r.status] ?? 0) + 1;
 console.log(`executor runs: ${JSON.stringify(byStatus)} (repeat rounds in one 10-min window are deduplicated)`);
