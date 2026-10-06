@@ -33,7 +33,7 @@ export type ScoreInput = {
   allTime: WindowHistory | null; // Hyperliquid `portfolio` "allTime" window
   history: WindowHistory | null; // month-resolution points older than `month`, from ingest's daily snapshots,
                                  // PnL already in the allTime baseline (see "Snapshots"); null = none stored
-  tradeCount: number | null;     // from fills; null = unknown
+  tradeCount: number | null;     // distinct filled (coin, oid) orders; partial fills count once; null = unknown
   links?: string[];              // addresses known to be the same operator (vault <-> leader from `vaultDetails`,
                                  // sub-accounts); grouped as clones regardless of correlation. See "Clone grouping".
   // Fill-derived values are copied to the output unchanged. Score does not compute them.
@@ -233,6 +233,9 @@ curve). Such metrics remain reported, but the candidate is never ranked. The `no
 - `stillActive`: pass if some `month` interval with `ts_i >= E - stillActiveDays * 86_400_000` has `dpnl_i != 0`;
   otherwise `fail`. Invalid `month`: `unknown`.
 - `minTrades`: `tradeCount === null` -> `unknown`; else pass if `>= minTrades`.
+  Ingest counts distinct filled `(coin, oid)` orders observed by the scoring endpoint, not executions;
+  multiple partial fills of one order count once. This is an observed lower bound, not a complete lifetime count.
+  The stored loader supplies `null` below 10 observed orders (the default threshold), since missing history cannot prove failure.
 - `notClosed`: `closed === null` -> `unknown`; `false` -> pass; `true` -> fail.
 - `minMonthPoints`: invalid `month` -> `unknown`; else pass if its number of points `>= minMonthPoints`.
 - `minCoverage`: invalid `month` -> `unknown`; `no-intervals` -> `fail`; else pass if
@@ -355,9 +358,12 @@ Hyperliquid serves `month` at about 16-hour resolution but older history only th
 Ingest therefore saves, once a day for every address it tracks, each `month` point as
 `(address, tsMs, accountValue, pnlAllTimeBaseline)`, with `pnlAllTimeBaseline = month.pnl + offset` computed from the
 same response (see "Baselines"). Rows are keyed by `(address, tsMs)`; a re-fetched row must agree within the tolerance
-above, or ingest keeps the newer row and logs the mismatch. Score receives the stored rows older than the current
-`month` window as `history`. After 60 days of snapshots, the 90-day lookback is at month resolution for every
-tracked address.
+above, or ingest keeps the newer row for audit and logs the mismatch. If any supplied historical observations for
+an address conflict, the stored loader sets that address's `history` to `null`, retaining current `month`/`allTime`.
+It reports the address in `historyAudit.excludedAddresses` and a history issue (which blocks a complete downstream
+frame). This also catches revisions at timestamps outside the current `allTime` grid. Other addresses are unaffected.
+Without conflicts, Score receives stored rows older than the current `month` window as `history`. After 60 days of
+consistent snapshots, the 90-day lookback is at month resolution for every tracked address.
 
 ## Frame adapter (review `candidate-curation-frame`)
 The review workflow consumes `packages/shared/schemas/candidate-curation-frame.schema.json`. Its `oos*` and

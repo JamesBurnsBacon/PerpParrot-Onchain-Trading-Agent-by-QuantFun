@@ -35,7 +35,7 @@ Score 源码与该主分支一致。本次数据对接随 PR #11 提交；以下
 
 1. `offset = allTime.pnl[last] - month.pnl[last]`；保存 `month.pnl + offset`。
 2. 归一化前检查窗口末点时间、权益及重合点是否相符。
-3. 跨运行按 `(address, tsMs)` 去重。超过容差的修订保留较新观察，并输出旧、新 run ID。
+3. 跨运行按 `(address, tsMs)` 去重。超过容差的修订保留较新观察用于审计，并输出旧、新 run ID；该地址的 `history` 设为 null，继续使用当前 `month/allTime`。报告的 `historyAudit.excludedAddresses` 与 history issue 明确记录此降级，并阻止完整下游 frame 输出；其他地址不受影响。这也覆盖不在 allTime 时间网格上的修订。
 4. 未来完成的批次不加入旧报告；重叠采集批次中，比目标账户获取时间更晚的历史观察也不加入。
 5. 当前 month 优先，存量历史只补它之前的点。只有同一天的几个批次不会凭空产生 90 天密集历史。
 6. 新采集拒绝重复或倒序时间戳。旧数据库中的非法序列会被审计并交给 Score 判定 unknown/unrankable；不偷偷排序修补。
@@ -102,6 +102,25 @@ Supabase 有更多旧批次后，可重复添加 `--history-run <完整旧批次
 历史窗口冲突及未来观察排除。证据见 `verification.json`、`backend-tests.log`。
 
 ## Handoff for Masa
+
+### Review follow-up, 2026-10-06
+
+- Applied option (b) from the off-grid revision review: any cross-run history mismatch for an address excludes
+  its stored history. The current month/allTime remain available; the audit retains both run IDs and records
+  `excludedAddresses`. A history issue prevents `rankingComplete` and the downstream frame from being emitted.
+- `minTrades` means distinct filled `(coin, oid)` orders. Partial executions of the same order count once;
+  fewer than ten observed orders remain unknown. This clarifies the existing behavior in Score SPEC and types.
+- Excluded internal child vaults from both discovery sources; retained parent and ordinary vaults.
+- Validation: **381 backend tests passed, 0 failed**, backend TypeScript check passed. The new synthetic regression
+  first reproduced an unflagged drawdown above 59% from an off-grid revision, then verified the guarded loader
+  retains zero drawdown and leaves another account's consistent history intact.
+- Replayed the saved 500-account batch: all 500 inputs loaded, zero input issues, and input bytes plus strict/preview
+  Score results are identical to the previous handoff. These same-day batches still have no older usable history;
+  321 otherwise-eligible accounts still lack trade-count evidence. This does not establish a complete ranking.
+- Replayed hash-checked discovery archives: seven child vaults were excluded and none remained among candidates.
+  No fresh collection, Supabase mutation, automated schedule, deployment, or live trading was performed.
+
+### Original integration handoff
 
 The loader is implemented against main `537e0c1`. `buildScoreInputs()` accepts the same
 row shapes as the ingest tables; `readScoreSnapshot()` uses SELECT only and requires a completed run.

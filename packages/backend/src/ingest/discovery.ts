@@ -12,6 +12,7 @@ const vaultRow = z.object({ summary: z.object({
   isClosed: z.boolean(),
   name: z.string(),
   leader: addressSchema,
+  relationship: z.object({ type: z.string() }).nullable().optional(),
 }) });
 
 export function discover(leaderboard: unknown, vaultList: unknown, limit: number) {
@@ -24,7 +25,7 @@ export function discover(leaderboard: unknown, vaultList: unknown, limit: number
   const byAddress = new Map<string, Candidate>();
   for (const row of rows) {
     const vault = vaultByAddress.get(row.ethAddress);
-    if (vault?.isClosed) continue;
+    if (vault?.isClosed || vault?.relationship?.type === "child") continue;
     if (byAddress.has(row.ethAddress)) throw new Error("Duplicate addresses in leaderboard");
     byAddress.set(row.ethAddress, {
       address: row.ethAddress,
@@ -37,7 +38,7 @@ export function discover(leaderboard: unknown, vaultList: unknown, limit: number
     });
   }
   for (const vault of vaults) {
-    if (vault.isClosed || byAddress.has(vault.vaultAddress)) continue;
+    if (vault.isClosed || vault.relationship?.type === "child" || byAddress.has(vault.vaultAddress)) continue;
     byAddress.set(vault.vaultAddress, {
       address: vault.vaultAddress, accountValueOrTvlUsd: vault.tvl,
       valueSource: "hypercore-vault-tvl", sources: ["hypercore-vault-list"],
@@ -55,6 +56,7 @@ export function discover(leaderboard: unknown, vaultList: unknown, limit: number
       leaderboardAboveMinimum: rows.filter((r) => compareUsd(r.accountValue, MIN_EQUITY_USD) >= 0).length,
       openVaultsAboveMinimum: vaults.filter((v) => !v.isClosed && compareUsd(v.tvl, MIN_EQUITY_USD) >= 0).length,
       eligibleUniqueAddresses: candidates.length,
+      excludedChildVaults: vaults.filter((v) => v.relationship?.type === "child").length,
       shortlisted: Math.min(limit, candidates.length),
     },
     candidates,

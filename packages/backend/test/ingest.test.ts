@@ -51,6 +51,17 @@ describe("universe discovery", () => {
     expect(result.candidates.map((c) => c.address)).toEqual([address(10), address(11)]);
     expect(result.candidates[0].knownHypercoreVault).toBe(true);
   });
+  test("excludes child vaults from both sources while retaining their parent and ordinary vaults", () => {
+    const related = (n: number, type: string) => ({ summary: { ...vault(n, "50000").summary, relationship: { type } } });
+    const result = discover({ leaderboardRows: [row(1, "999999"), row(3, "50000")] }, [
+      related(1, "child"), related(2, "child"), related(3, "parent"), vault(4, "40000"),
+      { summary: { ...vault(5, "30000").summary, relationship: null } },
+    ], 10);
+    expect(result.candidates.map(c => c.address)).toEqual([address(3), address(4), address(5)]);
+    expect(result.shortlist).toEqual(result.candidates);
+    expect(result.stats.excludedChildVaults).toBe(2);
+    expect(result.stats.eligibleUniqueAddresses).toBe(3);
+  });
   test("rejects changed or ambiguous upstream schema instead of silently dropping data", () => {
     expect(() => discover({ rows: [] }, [], 200)).toThrow();
     expect(() => discover({ leaderboardRows: [row(1, "10000"), row(1, "20000")] }, [], 200)).toThrow("Duplicate");

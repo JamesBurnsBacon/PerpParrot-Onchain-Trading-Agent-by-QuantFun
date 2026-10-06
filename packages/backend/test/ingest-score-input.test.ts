@@ -19,3 +19,10 @@ test("adapter maps candidate funding separately from portfolio returns and prese
   expect(toScoreInput(c,{...record,classification:null},raw)).toBeNull();
   expect(()=>toScoreInput(c,{...record,address:"0x0000000000000000000000000000000000000002"},raw)).toThrow("address mismatch");
 });
+
+test("partial executions do not inflate minTrades; order identity includes the coin", () => {
+  const partials = Array.from({ length: 20 }, (_, i) => ({ coin: "BTC", oid: 1, time: 1000 + i, sz: "0.1" }));
+  expect(orderEvidence(partials, 2000)).toEqual({ observed: 1, tradeCount: null });
+  expect(orderEvidence([...partials, { coin: "ETH", oid: 1, time: 1000, sz: "1" }], 2000))
+    .toEqual({ observed: 2, tradeCount: null });
+});

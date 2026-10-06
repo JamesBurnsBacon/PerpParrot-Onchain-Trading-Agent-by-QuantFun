@@ -12,7 +12,7 @@ export type ScoreInput = {
   month: WindowHistory | null;
   allTime: WindowHistory | null;
   history: WindowHistory | null;
-  tradeCount: number | null;
+  tradeCount: number | null; // distinct filled (coin, oid) orders; partial fills count once; null = unknown
   links?: string[];
   avgLeverage?: number | null;
   timeInMarket?: number | null;

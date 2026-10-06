@@ -135,6 +135,9 @@ export function buildScoreInputs(current: ScoreSnapshot, older: ScoreSnapshot[] 
     }
   }
   const merged = mergeHistory(historyRows);
+  // Score can only compare shared timestamps. Off-grid revisions must not silently
+  // enter its return series; preserve the audit and fall back to the current windows.
+  const excludedAddresses = new Set(merged.mismatches.map(m => m.address.toLowerCase()));
   const inputs: ScoreInput[] = [];
   for (const { candidate, record, raw } of target.rows) {
     try {
@@ -150,7 +153,12 @@ export function buildScoreInputs(current: ScoreSnapshot, older: ScoreSnapshot[] 
       if (histories.some(h => [...h.accountValueHistory, ...h.pnlHistory].some(([ts]) => ts > Date.parse(record.portfolio!.fetchedAt)))) {
         throw new Error("Portfolio timestamp after fetch");
       }
-      input.history = historyBefore(merged.rows, input.address, month?.pnlHistory[0]?.[0] ?? 0);
+      if (excludedAddresses.has(input.address)) {
+        issues.push({ runId: target.run.run_id, address: input.address, stage: "history",
+          reason: "Conflicting stored history; history excluded, current month/allTime retained" });
+      } else {
+        input.history = historyBefore(merged.rows, input.address, month?.pnlHistory[0]?.[0] ?? 0);
+      }
       inputs.push(input);
     } catch (error) {
       issues.push({ runId: target.run.run_id, address: candidate.address, stage: "input", reason: String(error) });
@@ -163,6 +171,7 @@ export function buildScoreInputs(current: ScoreSnapshot, older: ScoreSnapshot[] 
     counts: { selected: target.rows.length, loaded: inputs.length, omitted: target.rows.length - inputs.length,
       unknownTradeCount: inputs.filter(i => i.tradeCount === null).length,
       withHistory: inputs.filter(i => i.history !== null).length },
-    historyAudit: { inputPoints: historyRows.length, uniquePoints: merged.rows.length, mismatches: merged.mismatches },
+    historyAudit: { inputPoints: historyRows.length, uniquePoints: merged.rows.length, mismatches: merged.mismatches,
+      excludedAddresses: [...excludedAddresses].sort() },
   };
 }

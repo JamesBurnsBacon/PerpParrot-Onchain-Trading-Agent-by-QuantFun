@@ -2,6 +2,7 @@ import { parsePortfolio } from "../score/parse";
 import type { ScoreInput } from "../score/types";
 import { addressSchema, decimalSchema, type Candidate, type CollectionRecord } from "./types";
 
+// minTrades counts unique (coin, oid) filled orders, not partial executions.
 // Observed filled orders are a lower bound, not a claim of complete lifetime history.
 export function orderEvidence(payload: unknown, endTime: number) {
   if (!Array.isArray(payload)) return { observed: null, tradeCount: null };

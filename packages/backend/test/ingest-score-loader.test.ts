@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { buildScoreInputs, readScoreSnapshot, type ScoreSnapshot } from "../src/ingest/score-loader";
-import { scoreCandidates } from "../src/score";
+import { computeMetrics, scoreCandidates } from "../src/score";
 import { SupabaseRemote, PROJECT_URL } from "../src/ingest/supabase";
 import type { DbRow, Table } from "../src/ingest/sync-snapshot";
 
@@ -60,11 +60,59 @@ describe("stored ingest -> Score contract", () => {
     expect(result.historyAudit).toMatchObject({ inputPoints: 7, uniquePoints: 4, mismatches: [] });
     expect(scoreCandidates(result.inputs, { allowUnknown: ["minTrades"] }).candidates[0].metrics!.flags).not.toContain("history-mismatch");
   });
-  test("same-time restatements use the newer observation and leave an audit trail", () => {
+  test("same-time restatements quarantine stored history and leave an audit trail", () => {
     const newer = snapshot("newer", 3); newer.portfolioRows[0].portfolio = payload(3, 501);
     const result = buildScoreInputs(snapshot("current", 34), [newer, snapshot("old", 2)]);
     expect(result.historyAudit.mismatches).toHaveLength(3);
-    expect(result.inputs[0].history!.pnlHistory[0][1]).toBe(501);
+    expect(result.inputs[0].history).toBeNull();
+    expect(result.historyAudit.excludedAddresses).toEqual([address(1)]);
+    expect(result.issues).toEqual([{ runId: "current", address: address(1), stage: "history",
+      reason: "Conflicting stored history; history excluded, current month/allTime retained" }]);
+  });
+  test("off-grid revisions cannot silently change drawdown; unaffected accounts keep history", () => {
+    const old = snapshot("old", 60);
+    const revised = snapshot("revised", 61);
+    const current = snapshot("current", 91);
+    // 6-hour stored points, daily current month, weekly allTime; the revision is off-grid.
+    for (const [s, end] of [[old, 60], [revised, 61], [current, 91]] as const) {
+      s.portfolioRows[0].portfolio = ["month", "allTime"].map(name => {
+        const step = name === "allTime" ? 7 : s === current ? 1 : .25;
+        const start = name === "allTime" ? 0 : end - 30;
+        const times: number[] = [];
+        for (let t = start; t < end; t += step) times.push(t);
+        times.push(end);
+        return [name, { accountValueHistory: times.map(t => [base + t * day, "100000"]),
+          pnlHistory: times.map(t => [base + t * day, String(t * 100)]) }];
+      });
+      // An identical, independent account must not be quarantined with the revised one.
+      const c = structuredClone(s.candidateRows[0]);
+      c.address = address(3); (c.candidate as any).address = address(3);
+      const p = structuredClone(s.portfolioRows[0]);
+      p.address = address(3); (p.record as any).address = address(3);
+      s.candidateRows.push(c); s.portfolioRows.push(p);
+      s.run.candidate_count = 2; s.run.portfolio_count = 2;
+    }
+    const clean = buildScoreInputs(current, [old, revised]);
+    const restated = (revised.portfolioRows[0].portfolio as any)[0][1];
+    const ts = base + 45.25 * day;
+    restated.accountValueHistory.find(([t]: [number]) => t === ts)[1] = "40000";
+    restated.pnlHistory.find(([t]: [number]) => t === ts)[1] = String(4525 - 60000);
+    // Demonstrate the prior failure independently of the loader guard.
+    const unsafe = structuredClone(clean.inputs[0]);
+    unsafe.history = {
+      accountValueHistory: unsafe.history!.accountValueHistory.map(([t, v]) => [t, t === ts ? 40000 : v]),
+      pnlHistory: unsafe.history!.pnlHistory.map(([t, v]) => [t, t === ts ? 4525 - 60000 : v]),
+    };
+    expect(computeMetrics(unsafe)!.maxDrawdown).toBeGreaterThan(.59);
+    expect(computeMetrics(unsafe)!.flags).not.toContain("history-mismatch");
+    const result = buildScoreInputs(current, [revised, old]);
+    expect(result.historyAudit.mismatches).toHaveLength(1);
+    expect(result.historyAudit.excludedAddresses).toEqual([address(1)]);
+    expect(result.inputs[0].history).toBeNull();
+    expect(computeMetrics(result.inputs[0])!.maxDrawdown).toBe(0);
+    expect(result.inputs[1].history).toEqual(clean.inputs[1].history);
+    expect(result.counts.withHistory).toBe(1);
+    expect(result.issues).toHaveLength(1);
   });
   test("future observations cannot change a historical run; duplicate run IDs are rejected", () => {
     const s = snapshot("current", 34);

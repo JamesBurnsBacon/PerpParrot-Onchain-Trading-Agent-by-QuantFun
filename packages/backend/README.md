@@ -40,7 +40,8 @@ bun run typecheck
 
 1. 下载完整 `leaderboard` 和 `vaults` 原始 JSON，保存采集时间、URL、字节数和 SHA-256。
    这两个 stats-data 地址是当前项目采用的公开但未正式文档化的数据源；结构变化会明确失败。
-2. 合并并按小写地址去重。已知 HyperCore 金库以 `summary.tvl` 为资金值，并排除关闭金库；
+2. 合并并按小写地址去重。已知 HyperCore 金库以 `summary.tvl` 为资金值，并排除关闭金库及
+   `relationship.type === "child"` 的内部子金库（保留父金库，避免重复跟踪）；
    其他地址用排行榜 `accountValue`。保留 **≥ $10,000** 的地址，金额比较不经过浮点数。
 3. 默认按资金值从高到低、地址从小到大取前 200 个。**这只是采集优先级，不是表现评分。**
    完整预筛名单保存在 `candidates.json`，实际采集范围保存在 `shortlist.json`。
