@@ -101,6 +101,34 @@ describe("Runner.executeReport (dry run)", () => {
     expect(await store.recentRuns(1)).toEqual([run]);
   });
 
+  test("expiry during leverage setup prevents the order batch", async () => {
+    const { runnerDeps, exchange } = setup(fakeInfo({ equity: "400" }));
+    let clock = AS_OF * 1000;
+    runnerDeps.now = () => clock;
+    const original = exchange.setLeverage;
+    exchange.setLeverage = async (asset, leverage) => {
+      await original(asset, leverage);
+      clock = (AS_OF + 301) * 1000;
+    };
+    const run = await new Runner(runnerDeps).executeReport(await verified(), {});
+    expect(run.status).toBe("failed");
+    expect(run.error).toContain("expired before exchange action");
+    expect(exchange.recorded()).toHaveLength(1);
+  });
+
+  test("pause during leverage setup prevents further exchange actions", async () => {
+    const { runnerDeps, exchange, store } = setup(fakeInfo({ equity: "400" }));
+    const original = exchange.setLeverage;
+    exchange.setLeverage = async (asset, leverage) => {
+      await original(asset, leverage);
+      await store.setControls({ paused: true, updatedAt: AS_OF, updatedBy: "test" });
+    };
+    const run = await new Runner(runnerDeps).executeReport(await verified(), {});
+    expect(run.status).toBe("failed");
+    expect(run.error).toBe("execution paused");
+    expect(exchange.recorded()).toHaveLength(1);
+  });
+
   test("sets leverage once per asset across runs", async () => {
     const { runner, exchange } = setup(fakeInfo({ equity: "400" }));
     await runner.executeReport(await verified(), {});

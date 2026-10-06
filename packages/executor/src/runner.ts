@@ -79,7 +79,7 @@ export class Runner {
       const equity = Math.max(account.equityUsd, 0);
       const targets = new Map(exposures.map((e) => [e.asset, e.fraction * equity]));
       return planOrders(targets, account, markets, this.deps.config.plan);
-    }));
+    }, Number(body.expiresAt) * 1000));
   }
 
   // Kill switch: close everything, bypassing CRE (README §4.8).
@@ -97,6 +97,7 @@ export class Runner {
     envelope: unknown,
     token: CancelToken,
     makePlan: (markets: Map<string, Market>, account: Awaited<ReturnType<typeof loadAccount>>) => Promise<Plan>,
+    expiresAt?: number,
   ): Promise<RunRecord> {
     const { store, exchange, info, alert, now, config } = this.deps;
     const record: RunRecord = { id, runId, kind, status: "executed", dryRun: exchange.dryRun, startedAt: now(), finishedAt: 0, envelope };
@@ -111,11 +112,27 @@ export class Runner {
       const plan = await makePlan(markets, account);
       record.plan = plan;
 
+      // Re-read durable controls after asynchronous work and before each exchange
+      // action. A pause or expiry while loading accounts/updating leverage must
+      // prevent subsequent orders, including later batches.
+      const stopReason = async (): Promise<string | undefined> => {
+        if (token.cancelled) return `run timed out after ${config.runTimeoutMs / 1000}s`;
+        if (kind === "report" && (await store.getControls()).paused) return "execution paused";
+        // Check time after the database read as it can itself be slow.
+        if (token.cancelled) return `run timed out after ${config.runTimeoutMs / 1000}s`;
+        if (expiresAt !== undefined && now() > expiresAt) return "report expired before exchange action";
+        return undefined;
+      };
+      const assertActive = async (): Promise<void> => {
+        const reason = await stopReason();
+        if (reason) throw new Error(reason);
+      };
+
       // Cross margin at each asset's max leverage, set once per asset (README §4.8). If HL
       // refuses for one asset, skip only that asset's order; reductions still go out.
       const failedLeverage = new Set<string>();
       for (const o of plan.orders) {
-        if (token.cancelled) throw new Error(`run timed out after ${config.runTimeoutMs / 1000}s`);
+        await assertActive();
         if (o.reduceOnly || this.leverageSet.has(o.assetId)) continue;
         try {
           await exchange.setLeverage(o.assetId, markets.get(o.asset)!.maxLeverage);
@@ -133,13 +150,26 @@ export class Runner {
         );
         plan.orders = plan.orders.filter((o) => !failedLeverage.has(o.asset));
       }
-      if (token.cancelled) throw new Error(`run timed out after ${config.runTimeoutMs / 1000}s`);
+      await assertActive();
       record.results = await exchange.submit(
         plan.orders,
         plan.orders.map((o) => cloidFor(id, o.asset)),
-        () => token.cancelled,
+        async () => {
+          try {
+            const reason = await stopReason();
+            if (reason) record.error = reason;
+            return reason !== undefined;
+          } catch (e) {
+            // Preserve already returned fills if the control store fails between
+            // batches; remaining orders are explicitly recorded as not sent.
+            record.error = `execution guard failed: ${(e as Error).message}`;
+            return true;
+          }
+        },
       );
+      if (record.results.some((r) => r.status === "not_sent")) record.status = "failed";
       if (token.cancelled) record.error = `run timed out after ${config.runTimeoutMs / 1000}s; later batches not sent`;
+      if (record.status === "failed") await alert(`${runId}: stopped remaining orders: ${record.error}`);
       const errors = record.results.filter((r) => r.status === "error");
       if (errors.length > 0) await alert(`${runId}: ${errors.length} order(s) failed: ${errors[0].error}`);
     } catch (e) {

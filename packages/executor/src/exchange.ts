@@ -42,7 +42,7 @@ export type Exchange = {
   dryRun: boolean;
   signer: Hex;
   // Stops between batches once shouldStop() is true; unsent orders are reported as not sent.
-  submit(orders: PlannedOrder[], cloids: Hex[], shouldStop?: () => boolean): Promise<OrderResult[]>;
+  submit(orders: PlannedOrder[], cloids: Hex[], shouldStop?: () => boolean | Promise<boolean>): Promise<OrderResult[]>;
   setLeverage(assetId: number, leverage: number): Promise<void>;
   // Signed requests captured in dry-run (for logs and tests).
   recorded(): SignedRequest[];
@@ -84,7 +84,7 @@ export const createExchange = (opts: { privateKey?: Hex; dryRun: boolean; transp
       const results: OrderResult[] = [];
       for (let i = 0; i < orders.length; i += ORDER_BATCH_SIZE) {
         const batch = orders.slice(i, i + ORDER_BATCH_SIZE);
-        if (shouldStop?.()) {
+        if (await shouldStop?.()) {
           results.push(...orders.slice(i).map((o) => ({ asset: o.asset, status: "not_sent" as const })));
           break;
         }
