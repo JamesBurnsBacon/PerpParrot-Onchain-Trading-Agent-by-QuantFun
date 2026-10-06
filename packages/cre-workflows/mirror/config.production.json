@@ -1,5 +1,10 @@
 {
   "schedule": "0 */10 * * * *",
+  "frozenSetHash": "0xf169c1cec9f53dbc068305c9147d11410e7b5ced85363fe994ad191e411e4a32",
+  "spotCheckCount": 5,
+  "maxDeviationBps": 500,
+  "maxSnapshotAgeSeconds": 120,
+  "backendUrl": "https://REPLACE-backend.up.railway.app",
   "executorUrl": "https://REPLACE-executor.vercel.app/reports",
-  "frozenSetHash": "0x0000000000000000000000000000000000000000000000000000000000000001"
+  "account": "0x0000000000000000000000000000000000000000"
 }

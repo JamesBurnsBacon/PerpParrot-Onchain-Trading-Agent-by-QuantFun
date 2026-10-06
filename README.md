@@ -30,7 +30,7 @@
 1. **Funnel:** ~14.5k "profitable" addresses → filters → source set, and why most fail.
 2. **Backtest** vs. BTC: the value claim.
 3. **Finalist drill-down:** metrics, the agent's rationale, red flags.
-4. **Live:** CRE run log, HyperEVM hashes, fills, per-source PnL.
+4. **Live:** CRE run log with the DON-signed reports, fills, per-source PnL.
 
 ## 2. Terminology
 | Term | Meaning |
@@ -64,7 +64,7 @@
  │ fetch positions snapshot (1) │<─────┘
  │ spot-check ~10 sources (HL)  │
  │ slices → net → diff vs. ours │
- │ report() → executor+HyperEVM │
+ │ sendReport() → executor      │
  └──┬───────────────────────────┘
     │ signed report
     v
@@ -166,14 +166,20 @@ A dedicated workstream, integrated into the CRE flow.
 - **First deliverable:** a CRE `review` spike proving an LLM call plus consensus works in `cre workflow simulate`. Then schemas in `packages/shared`, a prompt + offline eval, and the point-in-time backtest harness.
 
 ### 4.7 Mirror (CRE workflow, every 10 min: `0 */10 * * * *`)
-1. Fetch the **positions snapshot** for all sources (1 call). The backend refreshes it at `:x9`, just before each run.
-2. **Spot-check** ~10 random sources plus our account via `clearinghouseState`. **Reject the run if any source's notional differs by more than 5% of its equity.**
-3. Slices → net → diff → drift rule.
-4. `report()` → `sendReport()` POSTs it to the executor (§4.13), plus the hash → HyperEVM consumer contract.
+Each node runs steps 1–3 (`runInNodeMode`); the DON agrees per field, then signs and sends in step 4.
+1. **Fetch the positions snapshot** for this run: `GET {backendUrl}/snapshots/{runAt}` (1 call). The backend builds it at `:x9` and never changes it, so every node gets identical bytes. Contract: `packages/shared/snapshot.ts`.
+   - Per source: address, weight, equity and eligible positions (signed USD notional), plus the eligible-asset list and the frozen-set hash. Amounts are decimal strings × 1e6.
+   - The mirror rejects it if it's for another run, was taken > 120 s from `runAt`, contains an ineligible asset, or its sources don't hash to the frozen set in config.
+2. **Spot-check 5 sources** and read our account via `clearinghouseState` on the core dex **and** `xyz` (HIP-3 positions and margin only come back per dex, so 2 calls per account). The sample is seeded by the snapshot ID, so every node checks the same sources. Deviation = Σ |snapshot − live notional| / live equity. **Reject the run if the worst source exceeds 5%.**
+3. **Exposures:** `exposure_c = Σᵢ wᵢ' · nᵢ,c / Eᵢ` per asset, in bigint math (`packages/shared/copy.ts`), so every node gets identical results.
+   - **Consensus:** snapshot ID and exposures are `identical`; max deviation and our equity are `median` (live reads differ slightly between nodes). Only ≤ 59 exposures go through consensus, not the snapshot, which stays under the 25 KB limit (a 25-source snapshot can be ~60 KB).
+4. **Targets** = exposure × our equity → `report()` → `sendReport()` POSTs it to the executor (§4.13). The drift rule (§4.4) and the 95% margin rule (§4.8) run in the executor, against the live account.
 
-That is ≤ 13 HTTP calls, under CRE's limit of 15.
+**HTTP calls: 14 of CRE's 15** (1 snapshot + 2 own account + 10 spot-check + 1 executor), enforced by the simulator.
+- **Spike status (2026-10-06):** passed end to end in simulation on live HL data: 6 real vaults as the frozen set, 59 eligible assets (21 on `xyz`), a 4.5 KB snapshot, 0 bps spot-check deviation, 30 net targets delivered and executed once. The stand-in "our account" is a large vault until our wallet exists.
+- **Not built yet:** eligibility hysteresis ($15M exit) and reduce-only for assets that lose eligibility (both need yesterday's state); whether our spot USDC counts toward equity.
 - **On failure** (consensus, spot-check, timeout): hold positions, retry on the next run, and send a Telegram alert after 2 consecutive failures. There is no backend fallback.
-- **Freeze commitment:** before the first live trade, `review` writes a hash of the frozen set + weights to HyperEVM.
+- **Freeze commitment:** the frozen-set hash (sources + weights) is pinned in `mirror`'s config, so it's part of the deployed workflow ID, and it's inside every DON-signed report. The executor rejects reports with any other hash. **No onchain contract:** everything trades in our own HL account, and the signed reports (stored in Supabase, shown on the dashboard) are the verifiable record. Anyone can check them against the Capability Registry.
 
 ### 4.8 Execute (serverless executor)
 - **Checks:**
@@ -220,7 +226,7 @@ That is ≤ 13 HTTP calls, under CRE's limit of 15.
   - buckets and paper books
   - live positions vs. targets
   - per-source PnL
-  - the CRE run log with HyperEVM hashes
+  - the CRE run log with the raw signed reports, so anyone can verify them
 - The Pause/Flatten admin actions sit behind auth.
 
 ### 4.12 Module contracts
@@ -231,19 +237,19 @@ That is ≤ 13 HTTP calls, under CRE's limit of 15.
 | `backtest` | `snapshots`, `candidates`, agent picks | `backtests` per OOS window |
 | `review` (CRE) | finalists | `reviews`, `buckets`, freeze hash |
 | `positions` | source set | positions snapshot API |
-| `mirror` (CRE) | snapshot + spot-checks + `ledger` | signed report + HyperEVM hash |
+| `mirror` (CRE) | snapshot + spot-checks | signed report |
 | `execute` | report | `orders`, `fills`, `ledger` |
 | `paper` | snapshot, buckets, mark prices | `paper_books` |
 | `dashboard` | all tables | — |
 
 ### 4.13 Mirror → executor report
 - **Transport:** `runtime.report()` (`evm` / `ecdsa` / `keccak256`), then `sendReport()` POSTs JSON `{report, context, signatures}` (hex, no `0x`) to the executor. **Every DON node POSTs its own copy.** `cacheSettings` only trims duplicates, because each node's signatures differ.
-- **Body** (ABI-encoded, after the 109-byte header): `runId`, `snapshotId`, `asOf`, `frozenSetHash`, `equity`, and `targets[]` (asset, signed notional in USD). ❓ *Exact types in `packages/shared`.*
+- **Body** (ABI-encoded after the 109-byte header, `packages/shared/report.ts`): `string runId, string snapshotId, uint64 asOf, bytes32 frozenSetHash, int256 equityE6, (string asset, int256 notionalE6)[] targets`.
   - **Targets, not orders.** The executor diffs targets against the live account when it runs, so price moves between report and execution don't matter.
 - **Report ID** = `keccak256(rawReport)`, identical across nodes. The first valid copy is executed; later copies get `200 duplicate`.
 - **Verification** in the executor:
   - ≥ f+1 signatures from the DON's signers, read from the Capability Registry `0x76c9cf548b4179F8901cda1f8623568b58215E62` on **Ethereum mainnet**. Cache the signers per DON ID. The executor therefore needs an Ethereum mainnet RPC.
-  - `workflowOwner` in the header = our **organization address** (private registry, §4.14; shown in the CRE platform UI). **Don't pin the workflow ID:** it is a hash of the binary + config and changes on every update.
+  - `workflowOwner` in the header = our **organization address** `0xc5feb3cf878c9ba42a776e9edf62a4558ab08b85` (private registry, §4.14; from `cre whoami -v` → `derivedWorkflowOwners`). The executor reads it from `WORKFLOW_OWNER`: `packages/executor/.env` locally, Vercel env vars in production. **Don't pin the workflow ID:** it is a hash of the binary + config and changes on every update.
   - Reject reports whose `asOf` is older than 5 minutes.
 - **Simulation:** `cre workflow simulate` signs with local test keys, which fail verification. `VERIFY_REPORTS=false` is allowed only outside production; the executor refuses to start with it in production.
 - **Spike status (2026-10-06):** passed end to end in simulation.
@@ -258,7 +264,7 @@ That is ≤ 13 HTTP calls, under CRE's limit of 15.
 - **Registry: private (Chainlink-hosted)**, set per target with `deployment-registry: "private"` in each `workflow.yaml`.
   - Deploys are authorized by a CRE login or `CRE_API_KEY`. No linked wallet, no ETH, no deployer key.
   - The workflow owner is the **organization address**, so it stays the same across redeploys and teammates. The executor pins it (§4.13).
-  - Trade-off: the list of deployed workflows lives in Chainlink's hosted registry, not the Ethereum `WorkflowRegistry`. Execution, DON signatures and our HyperEVM hashes are unchanged.
+  - Trade-off: the list of deployed workflows lives in Chainlink's hosted registry, not the Ethereum `WorkflowRegistry`. Execution and DON signatures are unchanged.
   - Switching to the onchain registry is one line per target (`onchain:ethereum-mainnet`), but then needs a linked wallet (`cre account link-key`, permanent) and mainnet ETH.
 - **Deploys: GitHub Actions** (`.github/workflows/cre-deploy.yml`, run manually), so any teammate with write access to the repo can deploy. It runs the tests, simulates, then `cre workflow deploy <workflow> --target production-settings --yes --non-interactive`.
   - Secret: `CRE_API_KEY` (CRE platform → Organization → APIs → **+ Organization API**), in the GitHub `production` environment.
@@ -269,7 +275,7 @@ That is ≤ 13 HTTP calls, under CRE's limit of 15.
   - **Deployed:** Vault DON, org-owned: `CRE_CLI_SECRETS_ORG_OWNED=true cre secrets create secrets.yaml --target production-settings --secrets-auth=browser`, so any member can rotate them. The workflow's `secretsOwner` config is `""` in simulation and the org ID in production. ❓ *Confirm with the sponsor.*
 - **Project:** `packages/cre-workflows/` holds `project.yaml`, `secrets.yaml`, and the `mirror/` and `review/` workflows, each with a `workflow.yaml` and `config.{staging,production}.json`.
   - Targets: `staging-settings` (simulate) and `production-settings` (deploy).
-  - RPC: `hyperliquid-mainnet` (`https://rpc.hyperliquid.xyz/evm`). Forwarder `0x9eF6468C5f37b976E57d52054c693269479A784d`, mock forwarder (simulation) `0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1`.
+  - No chain writes, so no forwarder or consumer contract. `project.yaml` keeps the `hyperliquid-mainnet` RPC only because targets need one.
   - Toolchain: CRE CLI v1.37, `@chainlink/cre-sdk` 1.23, **Bun ≥ 1.2.21** (older Bun fails simulation with a `wasm unreachable` trap at `subscribe`).
 - **Local setup:**
   ```
@@ -283,10 +289,10 @@ That is ≤ 13 HTTP calls, under CRE's limit of 15.
 ## 5. Stack
 | Layer | Choice |
 |---|---|
-| Language / repo | TypeScript. **pnpm monorepo:** `packages/{backend, cre-workflows, executor, dashboard, contracts, shared}`. No license yet. |
+| Language / repo | TypeScript. **pnpm monorepo:** `packages/{backend, cre-workflows, executor, dashboard, shared}`. No license yet. |
 | Hyperliquid | [`@nktkas/hyperliquid`](https://github.com/nktkas/hyperliquid) in the backend and executor; raw HTTP inside CRE |
 | Prices | Hyperliquid oracle/mark prices via the Info API (`metaAndAssetCtxs`). BTC history from `candleSnapshot`. No Chainlink Data Feeds. |
-| Orchestration | Chainlink CRE (`@chainlink/cre-sdk`, `cre` CLI), DON access from the sponsor on-site. Consumer contract on HyperEVM. Private registry; deploys from GitHub Actions with `CRE_API_KEY` (§4.14). |
+| Orchestration | Chainlink CRE (`@chainlink/cre-sdk`, `cre` CLI), DON access from the sponsor on-site. No onchain contract. Private registry; deploys from GitHub Actions with `CRE_API_KEY` (§4.14). |
 | AI | Two LLMs (≥ 1 OpenAI), structured JSON |
 | Storage / hosting | Supabase. Backend on Railway (the leaderboard download is too slow for serverless). Executor + dashboard on Vercel. |
 | Secrets | Railway/Vercel env vars plus CRE secrets. `.env.example` only in the repo. |
@@ -303,7 +309,7 @@ Budget ~1 h of testing per 2 h of features. Integrate only tested modules.
 | Tue 16–24 | `ingest` + `score` · kind labeling · start saving snapshots |
 | Wed 00–08 | `backtest` (4 windows, algo vs. model A vs. model B) · `review` workflow |
 | Wed 08–15 | `positions` · `mirror` · executor + ledger · end-to-end tiny-size run |
-| Wed 15–19 | Dashboard · HyperEVM contract · paper books · **freeze + commit the set** |
+| Wed 15–19 | Dashboard · paper books · **freeze the set** (hash into `mirror` config, redeploy) |
 | **Wed 19:00** | **Go live.** Gate: backtest winner chosen, set committed, and a $10–20 end-to-end run passed |
 | Wed 19–Thu 00 | Monitor, record the video. Make the README judge-facing and move design content to `docs/DESIGN.md`. Submit. |
 

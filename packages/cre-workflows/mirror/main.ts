@@ -1,55 +1,133 @@
 import {
   bytesToBase64,
+  ConsensusAggregationByFields,
   consensusIdenticalAggregation,
   CronCapability,
   type CronPayload,
   handler,
   HTTPClient,
+  identical,
+  json,
+  median,
+  type NodeRuntime,
   ok,
   prepareReportRequest,
   Runner,
   type Runtime,
 } from "@chainlink/cre-sdk";
 import { z } from "zod";
+import { computeExposures, deviationBps, parseAccount, toTargetE6 } from "../../shared/copy";
 import type { MirrorReport } from "../../shared/report";
+import { ELIGIBLE_DEXES } from "../../shared/snapshot";
 import { encodeReportBody, toEnvelope } from "./report";
+import { checkSnapshot, pickSample, snapshotSchema } from "./snapshot";
+
+const HL_INFO_URL = "https://api.hyperliquid.xyz/info";
 
 const configSchema = z.object({
   schedule: z.string(),
   // z.string().url() needs URL, which the WASM runtime lacks.
+  backendUrl: z.string().startsWith("http"),
   executorUrl: z.string().startsWith("http"),
+  // Our HL account; its equity sizes the targets.
+  account: z.string().regex(/^0x[0-9a-fA-F]{40}$/),
   frozenSetHash: z.string().regex(/^0x[0-9a-f]{64}$/),
+  // 2 HTTP calls per source (core + xyz). Budget: 1 snapshot + 2 own account
+  // + 2 × spotCheckCount + 1 executor ≤ 15.
+  spotCheckCount: z.number().int().min(1).max(5),
+  maxDeviationBps: z.number().int().positive(),
+  maxSnapshotAgeSeconds: z.number().int().positive(),
 });
 
 export type Config = z.infer<typeof configSchema>;
 
-// Spike fixture until slices → net → diff is built (README §4.7 step 3).
-const FIXTURE = {
-  snapshotId: "fixture-0001",
-  equityE6: 470_000_000n,
-  targets: [
-    { asset: "BTC", notionalE6: 1_200_000_000n },
-    { asset: "ETH", notionalE6: -350_000_000n },
-    { asset: "xyz:MSFT", notionalE6: 60_000_000n },
-  ],
+// What each node observes. Fields derived from the immutable snapshot must be
+// identical across nodes; live HL reads differ slightly, so they take the median.
+type Observation = {
+  snapshotId: string;
+  // JSON [{asset, exposureE9}] — kept small for the 25 KB consensus limit.
+  exposures: string;
+  maxDeviationBps: number;
+  equityE6: bigint;
 };
 
-export const buildMirrorReport = (config: Config, scheduledSeconds: bigint): MirrorReport => ({
-  runId: `mirror-${scheduledSeconds}`,
-  snapshotId: FIXTURE.snapshotId,
-  asOf: scheduledSeconds,
-  frozenSetHash: config.frozenSetHash as `0x${string}`,
-  equityE6: FIXTURE.equityE6,
-  targets: FIXTURE.targets,
-});
+const observe = (nodeRuntime: NodeRuntime<Config>, runAt: number): Observation => {
+  const { config } = nodeRuntime;
+  const http = new HTTPClient();
 
-// Spike: sign a targets report and POST it to the executor (README §4.13).
-// Every DON node sends its own copy; the executor dedupes by keccak256(rawReport).
+  const snapRes = http.sendRequest(nodeRuntime, { url: `${config.backendUrl}/snapshots/${runAt}`, method: "GET" }).result();
+  if (!ok(snapRes)) throw new Error(`snapshot fetch failed: ${snapRes.statusCode}`);
+  const snapshot = snapshotSchema.parse(json(snapRes));
+  checkSnapshot(snapshot, { frozenSetHash: config.frozenSetHash, runAt, maxSnapshotAgeSeconds: config.maxSnapshotAgeSeconds });
+
+  const eligible = new Set(snapshot.eligibleAssets);
+  const account = (user: string) =>
+    parseAccount(
+      ELIGIBLE_DEXES.map((dex) => {
+        const body = JSON.stringify({ type: "clearinghouseState", user, ...(dex ? { dex } : {}) });
+        const res = http
+          .sendRequest(nodeRuntime, {
+            url: HL_INFO_URL,
+            method: "POST",
+            body: bytesToBase64(new TextEncoder().encode(body)),
+            headers: { "Content-Type": "application/json" },
+          })
+          .result();
+        if (!ok(res)) throw new Error(`HL clearinghouseState failed: ${res.statusCode}`);
+        return json(res) as Parameters<typeof parseAccount>[0][number];
+      }),
+      eligible,
+    );
+
+  const sample = pickSample(snapshot.sources, snapshot.snapshotId, config.spotCheckCount);
+  const maxDev = Math.max(...sample.map((s) => deviationBps(s, account(s.address))));
+
+  return {
+    snapshotId: snapshot.snapshotId,
+    exposures: JSON.stringify(
+      computeExposures(snapshot.sources).map((e) => ({ asset: e.asset, exposureE9: e.exposureE9.toString() })),
+    ),
+    maxDeviationBps: maxDev,
+    equityE6: account(config.account).equityE6,
+  };
+};
+
+export const buildMirrorReport = (config: Config, runAt: number, obs: Observation): MirrorReport => {
+  const exposures = JSON.parse(obs.exposures) as { asset: string; exposureE9: string }[];
+  return {
+    runId: `mirror-${runAt}`,
+    snapshotId: obs.snapshotId,
+    asOf: BigInt(runAt),
+    frozenSetHash: config.frozenSetHash as `0x${string}`,
+    equityE6: obs.equityE6,
+    targets: exposures.map((e) => ({ asset: e.asset, notionalE6: toTargetE6(BigInt(e.exposureE9), obs.equityE6) })),
+  };
+};
+
+// README §4.7: snapshot → spot-check → targets → DON-signed report → executor.
+// On any failure the run throws and the executor holds positions until the next run.
 export const onCronTrigger = (runtime: Runtime<Config>, payload: CronPayload): string => {
   const { config } = runtime;
-  const scheduled = payload.scheduledExecutionTime?.seconds ?? BigInt(Math.floor(runtime.now().getTime() / 1000));
-  const mirrorReport = buildMirrorReport(config, scheduled);
+  const runAt = Number(payload.scheduledExecutionTime?.seconds ?? BigInt(Math.floor(runtime.now().getTime() / 1000)));
 
+  const obs = runtime
+    .runInNodeMode(
+      observe,
+      ConsensusAggregationByFields<Observation>({
+        snapshotId: identical,
+        exposures: identical,
+        maxDeviationBps: median,
+        equityE6: median,
+      }),
+    )(runAt)
+    .result();
+
+  runtime.log(`${obs.snapshotId}: spot-check max deviation ${obs.maxDeviationBps} bps, equity ${Number(obs.equityE6) / 1e6} USD`);
+  if (obs.maxDeviationBps > config.maxDeviationBps) {
+    throw new Error(`spot-check failed: ${obs.maxDeviationBps} bps > ${config.maxDeviationBps} bps`);
+  }
+
+  const mirrorReport = buildMirrorReport(config, runAt, obs);
   const report = runtime.report(prepareReportRequest(encodeReportBody(mirrorReport))).result();
 
   const delivered = new HTTPClient()
