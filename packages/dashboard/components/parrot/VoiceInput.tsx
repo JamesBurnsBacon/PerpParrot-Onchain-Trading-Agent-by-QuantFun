@@ -3,10 +3,21 @@ import { useCallback, useEffect, useRef, useState } from "react";
 type Recognition = {
   lang: string; continuous: boolean; interimResults: boolean;
   onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
-  onerror: (() => void) | null; onend: (() => void) | null; onstart: (() => void) | null;
+  onerror: ((event: { error?: string }) => void) | null; onend: (() => void) | null; onstart: (() => void) | null;
   start: () => void; stop: () => void; abort: () => void;
 };
 type SpeechWindow = Window & { SpeechRecognition?: new () => Recognition; webkitSpeechRecognition?: new () => Recognition };
+
+export function describeVoiceError(code?: string): string {
+  switch (code) {
+    case "not-allowed": case "service-not-allowed": return "Microphone is blocked. Allow it for this site in the browser's site settings, then try again (or type your message).";
+    case "audio-capture": return "No microphone found. Check that one is connected, or type your message.";
+    case "no-speech": return "I didn't hear anything. Hold the button while you speak, or type your message.";
+    case "network": return "Speech recognition needs a network connection to the browser's speech service. Try Chrome, or type your message.";
+    case "aborted": return "";
+    default: return `Voice input failed${code ? ` (${code})` : ""}. You can still type your message.`;
+  }
+}
 
 export function VoiceInput({ disabled, onTranscript, onListening }: { disabled: boolean; onTranscript: (text: string) => void; onListening: (value: boolean) => void }) {
   const [supported, setSupported] = useState(false);
@@ -25,7 +36,6 @@ export function VoiceInput({ disabled, onTranscript, onListening }: { disabled: 
     const speech = window as SpeechWindow;
     setSupported(!!(speech.SpeechRecognition || speech.webkitSpeechRecognition));
     const hide = () => { if (document.hidden) stop(); };
-    window.addEventListener("blur", stop);
     document.addEventListener("visibilitychange", hide);
     return () => {
       if (recognition.current) {
@@ -33,7 +43,7 @@ export function VoiceInput({ disabled, onTranscript, onListening }: { disabled: 
         recognition.current.onend = null; recognition.current.onstart = null;
         recognition.current.abort();
       }
-      window.removeEventListener("blur", stop); document.removeEventListener("visibilitychange", hide);
+      document.removeEventListener("visibilitychange", hide);
     };
   }, [stop]);
   useEffect(() => { if (disabled) stop(); }, [disabled, stop]);
@@ -55,7 +65,7 @@ export function VoiceInput({ disabled, onTranscript, onListening }: { disabled: 
       const text = Array.from(event.results, result => result[0]?.transcript ?? "").join(" ").slice(0, 500);
       if (text) onTranscript(text); // Deliberately never sends the transcript.
     };
-    instance.onerror = () => { setError("I couldn't hear you. Check microphone permission, or type your message."); stop(); };
+    instance.onerror = event => { setError(describeVoiceError(event.error)); stop(); };
     instance.onend = () => { recognition.current = null; held.current = false; setListening(false); onListening(false); };
     setError("");
     try { instance.start(); } catch { recognition.current = null; held.current = false; setError("Microphone unavailable. You can still type your message."); }
