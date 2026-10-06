@@ -14,6 +14,25 @@ bun --no-env-file night-shift-integration/verify-evidence.ts
 The verifier independently checks the reviewed receipt commitment, frozen configuration,
 exact snapshot bytes, recomputed exposures and stored dry-run results, beyond file checksums.
 
+## Final local result
+
+Implementation commit: `9e80758a65700f869866330e6a6c224e806ae673`. Evidence collected at **2026-10-07T02:47:48.005632+08:00**.
+
+| Check | Result |
+|---|---|
+| Backend tests | 412 passed, 0 failed |
+| Executor tests | 76 passed, 0 failed; 1 Postgres advisory-lock check skipped locally |
+| Night integration | 8 passed, 50 assertions |
+| Root / contracts | 11 Node test files passed; 34 JSON schema checks |
+| TypeScript | root, backend, executor, night integration passed |
+| Dashboard | production build passed |
+| Full real archive | 10,934 inputs; 8 complete A/B window evaluations; 2 logical buckets |
+| Re-run / recovery | all 5 stages reused per bucket; interrupted run reused 2; final chain matched clean run |
+| Evidence integrity | 36 run JSON checksums checked; exported bundle verifier passed |
+| Independent audit | Runner regression and complete exported evidence independently re-verified |
+
+One local PostgreSQL network/advisory-lock test required a server and was skipped; Service checks CI includes PostgreSQL. The HTML was generated; automatic local-file browser preview was unavailable because the app forbids `file://`.
+
 ## Live data observed this night
 
 - Official API Top 100 cycle completed **2026-10-07 02:37:22 +08:00**.

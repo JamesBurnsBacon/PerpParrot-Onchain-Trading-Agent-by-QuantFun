@@ -1,0 +1,12 @@
+(pass) bounded transient retry, timeout, concurrent owner and checkpoint corruption [113.92ms]
+(pass) a permanent validation error is not retried; a TICK cannot replay an old archive [48.08ms]
+(pass) deposit-aware returns, no future selection leakage, missing test coverage never replaces a selected source [1.86ms]
+(pass) both rule adapters use production Score, Review, database, freeze, HTTP targets and durable executor contracts [5465.23ms]
+
+night-shift-integration/service-loop.test.ts:
+(pass) actual service modules: HTTP targets, durable execution receipt, faults and recovery [1815.43ms]
+
+ 8 pass
+ 0 fail
+ 50 expect() calls
+Ran 8 tests across 2 files. [7.82s]

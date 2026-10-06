@@ -1,0 +1,184 @@
+{
+  "schemaVersion": "night-service-proof.v1",
+  "mode": "controlled-fixture-http-dry-run",
+  "storage": "actual-production-store-queries-on-local-pglite",
+  "configurationHash": "0xcea9fc60cc1e880cd99e5c9cdef63b565bbcbf5ed2fa639b0583b52a02107911",
+  "snapshotHash": "0xcb0f860fc54e80109cdfb981b60f5d7cf9a9624770fb160ff5150d1e1ce6c091",
+  "runId": "mirror-1791301200",
+  "plannedOrders": 5,
+  "equityUsd": 10000,
+  "plan": {
+    "orders": [
+      {
+        "asset": "AVAX",
+        "assetId": 0,
+        "isBuy": true,
+        "price": "100.5",
+        "size": "15.06482",
+        "reduceOnly": false,
+        "notionalUsd": 1506.482,
+        "targetUsd": 1506.48258,
+        "currentUsd": 0
+      },
+      {
+        "asset": "BTC",
+        "assetId": 1,
+        "isBuy": true,
+        "price": "100500",
+        "size": "0.01506",
+        "reduceOnly": false,
+        "notionalUsd": 1506,
+        "targetUsd": 1506.47471,
+        "currentUsd": 0
+      },
+      {
+        "asset": "ETH",
+        "assetId": 2,
+        "isBuy": true,
+        "price": "2512.5",
+        "size": "0.60263",
+        "reduceOnly": false,
+        "notionalUsd": 1506.575,
+        "targetUsd": 1506.57745,
+        "currentUsd": 0
+      },
+      {
+        "asset": "HYPE",
+        "assetId": 3,
+        "isBuy": true,
+        "price": "103.5",
+        "size": "14.62413",
+        "reduceOnly": false,
+        "notionalUsd": 1506.28539,
+        "targetUsd": 1506.28568,
+        "currentUsd": 0
+      },
+      {
+        "asset": "SOL",
+        "assetId": 4,
+        "isBuy": true,
+        "price": "104.5",
+        "size": "14.48634",
+        "reduceOnly": false,
+        "notionalUsd": 1506.57936,
+        "targetUsd": 1506.5800800000002,
+        "currentUsd": 0
+      }
+    ],
+    "skipped": [],
+    "marginScale": 1,
+    "initialMarginUsd": 753.24005
+  },
+  "liveOrdersSubmitted": 0,
+  "publicDashboardRunCount": 12,
+  "paperBookCount": 4,
+  "checks": {
+    "sameFrozenConfiguration": true,
+    "snapshotHashRecomputed": true,
+    "targetExposuresRecomputed": true,
+    "nonemptyDryRunResults": true,
+    "concurrentDuplicateNoOp": true,
+    "restartDuplicateNoOp": true,
+    "restartSnapshotUnchanged": true,
+    "restartPausePersisted": true,
+    "restartPaperPersisted": true,
+    "journalFaultHeldAfterRestart": true,
+    "orderJournalFaultHeldAfterRestart": true,
+    "lastBatchFailureRecorded": true,
+    "unresolvedResumeBlocked": true,
+    "reconciliationStaysPaused": true,
+    "nextRunRecovered": true
+  },
+  "scenarios": [
+    {
+      "name": "success",
+      "runId": "mirror-1791301200",
+      "status": "executed",
+      "dryRunActions": 6,
+      "error": null
+    },
+    {
+      "name": "wrong-configuration",
+      "runId": "mirror-1791301800",
+      "status": "failed",
+      "dryRunActions": 0,
+      "error": "configuration mismatch: targets from 0xcea9fc60cc1e880cd99e5c9cdef63b565bbcbf5ed2fa639b0583b52a02107911"
+    },
+    {
+      "name": "wrong-account",
+      "runId": "mirror-1791302400",
+      "status": "failed",
+      "dryRunActions": 0,
+      "error": "account mismatch: targets for 0xffffffffffffffffffffffffffffffffffffffff"
+    },
+    {
+      "name": "expired-run",
+      "runId": "mirror-1791303000",
+      "status": "failed",
+      "dryRunActions": 0,
+      "error": "run expired before execution"
+    },
+    {
+      "name": "backend-unavailable",
+      "runId": "mirror-1791303600",
+      "status": "failed",
+      "dryRunActions": 0,
+      "error": "backend targets for 1791303600: HTTP 503 {\"error\":\"INJECTED_BACKEND_UNAVAILABLE\"}"
+    },
+    {
+      "name": "paused",
+      "runId": "mirror-1791304200",
+      "status": "skipped_paused",
+      "dryRunActions": 0,
+      "error": null
+    },
+    {
+      "name": "database-before-dispatch",
+      "runId": "mirror-1791304800",
+      "status": "failed",
+      "dryRunActions": 0,
+      "error": "INJECTED_DATABASE_BEFORE_DISPATCH"
+    },
+    {
+      "name": "database-after-leverage-dispatch",
+      "runId": "mirror-1791305400",
+      "status": "failed",
+      "dryRunActions": 1,
+      "error": "INJECTED_DATABASE_AFTER_DISPATCH"
+    },
+    {
+      "name": "restart-unresolved-journal",
+      "runId": "mirror-1791306000",
+      "status": "skipped_paused",
+      "dryRunActions": 0,
+      "error": "1 order batch(es) need reconciliation"
+    },
+    {
+      "name": "database-after-order-dispatch",
+      "runId": "mirror-1791306600",
+      "status": "failed",
+      "dryRunActions": 6,
+      "error": "journal write failed after dispatch (batch 0 needs reconciliation): INJECTED_DATABASE_AFTER_ORDER_DISPATCH"
+    },
+    {
+      "name": "restart-unresolved-order-journal",
+      "runId": "mirror-1791307200",
+      "status": "skipped_paused",
+      "dryRunActions": 0,
+      "error": "1 order batch(es) need reconciliation"
+    },
+    {
+      "name": "recovered",
+      "runId": "mirror-1791307800",
+      "status": "executed",
+      "dryRunActions": 6,
+      "error": null
+    }
+  ],
+  "boundaries": [
+    "Synthetic source/account/market inputs and local dry-run exchange transport; no real orders or provider calls.",
+    "Actual production SnapshotService, copy math, executor HTTP app, Runner, SDK dry transport, stores and SQL migrations.",
+    "Backend HTTP routing is a thin test adapter; embedded PGlite replaces Bun SQL transport, not production table queries.",
+    "Local database close/reopen and fault injection; no hosted deployment, multi-process advisory-lock, pooler or funded-execution claim."
+  ]
+}

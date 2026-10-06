@@ -1,0 +1,12 @@
+(pass) score filters (SPEC Filters, Eligibility) > month-non-increasing, allowUnknown=none [0.02ms]
+(pass) score filters (SPEC Filters, Eligibility) > month-non-increasing, allowUnknown=all [0.02ms]
+(pass) score filters (SPEC Filters, Eligibility) > month-single-point, allowUnknown=none [0.01ms]
+(pass) score filters (SPEC Filters, Eligibility) > month-single-point, allowUnknown=all [0.02ms]
+(pass) score filters (SPEC Filters, Eligibility) > month-null, allowUnknown=none [0.03ms]
+(pass) score filters (SPEC Filters, Eligibility) > month-null, allowUnknown=all [0.01ms]
+(pass) score filters (SPEC Filters, Eligibility) > allowUnknown relaxes only the listed filters, never a fail [0.08ms]
+
+ 412 pass
+ 0 fail
+ 55291 expect() calls
+Ran 412 tests across 24 files. [1.72s]

@@ -1,0 +1,9 @@
+{
+  "status": "PASS",
+  "checkedAt": "2026-10-06T18:40:36.812Z",
+  "runId": "ingest-1791311400",
+  "storeReopened": true,
+  "newCollectionCalls": 0,
+  "samePublication": true,
+  "artifactHash": "ed32fb87d7d345c214048db7814954d24b1a75f86db9658ec5669da924a5aef0"
+}

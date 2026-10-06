@@ -1,0 +1,17 @@
+{
+  "sourceKind": "LIVE_PUBLIC_API_READ",
+  "command": "./scripts/e2e-mirror.sh all",
+  "upstreamBaseCommit": "af7e857",
+  "storage": "memory",
+  "scenariosPassed": [
+    "ok",
+    "paused",
+    "backend-down",
+    "wrong-configuration",
+    "duplicate"
+  ],
+  "normalRunPlannedOrders": 180,
+  "realOrdersSubmitted": 0,
+  "configuration": "repository public fixture; separate from Review controlled lane",
+  "evidenceScope": "actual service processes and live Info API; aggregate outcome copied from local smoke log"
+}

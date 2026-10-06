@@ -1,0 +1,36 @@
+{
+  "schema": "ingest-validation.v1",
+  "checkedAt": "2026-10-06T18:37:22.640Z",
+  "dataKind": "live-public-api-read",
+  "runId": "ingest-1791311400",
+  "bucket": 1791311400000,
+  "artifactSha256": "ed32fb87d7d345c214048db7814954d24b1a75f86db9658ec5669da924a5aef0",
+  "success": 100,
+  "failure": 0,
+  "selected": 100,
+  "nextSelected": 100,
+  "registryCount": 10987,
+  "strictEligibleInBatch": 100,
+  "scoreSourceSha256": "a70bc846997af28246c2af14a59fe106953a702d004570ecc4fd97ca7d778066",
+  "targetListSha256": "97feb17d86bd3960126fb1917ab927e5ae4863932ce4736f26c2ea273137778b",
+  "scoreConfigSha256": "def126da84a60d886a426f4d5fe181d6a83fd96f7a811f53133730f960792635",
+  "scoreScope": "current-100-account-batch",
+  "allowUnknown": [],
+  "inputAsOfRange": {
+    "oldest": "2026-10-06T18:35:05.159Z",
+    "newest": "2026-10-06T18:37:09.055Z"
+  },
+  "durationSeconds": 137.577,
+  "upstream": {
+    "requests": 100,
+    "retries": 0,
+    "rateLimited": 0,
+    "scope": "current-worker-attempt",
+    "fullRunRequestAttempts": 100
+  },
+  "requestAttempts": 100,
+  "historyWarningCount": 0,
+  "externalWrites": 0,
+  "ordersSubmitted": 0,
+  "databaseKind": "local-sqlite"
+}

@@ -1,0 +1,45 @@
+{
+  "marker": "INGEST_RELEASE_IMPORTED",
+  "imported": 10934,
+  "at": 1791312138194,
+  "ready": true,
+  "freshAccounts": 10934,
+  "totalAccounts": 10934,
+  "selectionScope": "complete-imported-registry",
+  "selected": 100,
+  "scoreSourceSha256": "a70bc846997af28246c2af14a59fe106953a702d004570ecc4fd97ca7d778066",
+  "provenance": {
+    "schema": "ingest-release-import.v1",
+    "importedAt": "2026-10-06T18:42:18.194Z",
+    "accounts": 10934,
+    "source": "github-score-data-release",
+    "releaseManifestSha256": "aa3e6db3a90e61743c4750f712e134a84ae75d855bde810f63ca3c83835cf7da",
+    "releaseCodeCommit": "afc8358b57d69fdd12dcdde19358fb2f497fcd40",
+    "releaseScoreSourceSha256": "9143e27dfba046a8c39a4c998bf42d754e5980b6f2c6fd5b653ad74163bed414",
+    "releaseExportedAt": "2026-10-06T15:30:10.181Z",
+    "assets": [
+      {
+        "file": "discovery.jsonl.gz",
+        "format": "jsonl+gzip",
+        "rows": 20869,
+        "bytes": 704205,
+        "sha256": "8e19c4d2de15e4ec9af820fe31c92955efff5d64044bf0346b9241cd9d08ecde"
+      },
+      {
+        "file": "score-inputs.jsonl.gz",
+        "format": "jsonl+gzip",
+        "rows": 10934,
+        "bytes": 23442696,
+        "sha256": "17d2f793a11bdc5ec1cf22d779d9a599304642cc431cf21df82dc72381f6fe6a"
+      },
+      {
+        "file": "score-evidence.jsonl.gz",
+        "format": "jsonl+gzip",
+        "rows": 10934,
+        "bytes": 445187395,
+        "sha256": "87bf73a0d0df63fe3c4ba918d233c0274bbb0305811d71b85ae34bed59e7c293"
+      }
+    ],
+    "excludedBeforeEvidence": 53
+  }
+}

@@ -1,0 +1,12 @@
+(pass) loadConfig > requires the API wallet key to trade live [0.04ms]
+(pass) loadConfig > on Vercel: production rules, dry run only, Postgres and a cron secret [0.07ms]
+(pass) loadConfig > validates hex settings, numbers and the backend URL [0.06ms]
+
+1 tests skipped:
+(skip) postgresRunLock > one holder across connections; released for the next; times out while held
+
+ 76 pass
+ 1 skip
+ 0 fail
+ 218 expect() calls
+Ran 77 tests across 5 files. [1474.00ms]

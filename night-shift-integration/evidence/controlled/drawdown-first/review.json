@@ -1,0 +1,3187 @@
+{
+  "sourceKind": "SYNTHETIC_FIXTURE",
+  "economicAuthority": false,
+  "receipt": {
+    "schemaVersion": "1.0.0",
+    "mode": "PAPER",
+    "economicAuthority": false,
+    "evidenceHash": "0x87ea5ba92d17fdb418bf5e8f98b38eb887623ffa26880428fb15b7098cf24a4a",
+    "modelConfigHash": "0x518f372ac7127259a9c1e0b05b58888c9c39b933eb04cd476b35ae9b2846bd6d",
+    "manifest": {
+      "schemaVersion": "1.1.0",
+      "snapshotHash": "0x4c44d9cdf2222c0ce794b4ddfcf356541e16bcc92b918ac640cdfa275609c3c4",
+      "policyHash": "0xd69f50ce3526cae00921b1dbb6bade6c4bf791d694a099b2a060a26ddf69fa0d",
+      "createdAtMs": 1791301200000,
+      "expiresAtMs": 1791301210000,
+      "bucket": "AGGRESSIVE",
+      "mode": "LIVE",
+      "status": "VALID",
+      "rebuildCount": 0,
+      "policy": {
+        "bucket": "AGGRESSIVE",
+        "mode": "LIVE",
+        "capitalUsd": 1000,
+        "minOrderUsd": 10,
+        "minExecutableTargets": 1,
+        "maxSourceWeight": 0.3,
+        "maxGrossLeverage": 2,
+        "cashBuffer": 0.2,
+        "maxPairCorrelation": 0.7,
+        "maxExposureOverlap": 0.5,
+        "minHistoryDays": 30,
+        "maxFrameAgeMs": 10000,
+        "minExecutionFit": 60,
+        "riskRejectThreshold": 80,
+        "riskWatchThreshold": 50,
+        "minConfidence": 60,
+        "redTeamRebuildThreshold": 60,
+        "redTeamExcludeThreshold": 60
+      },
+      "sources": [
+        {
+          "candidate": 0,
+          "sourceAddress": "0x1111111111111111111111111111111111111111",
+          "weight": 0.16,
+          "maxAllocation": 0.24
+        },
+        {
+          "candidate": 1,
+          "sourceAddress": "0x2222222222222222222222222222222222222222",
+          "weight": 0.16,
+          "maxAllocation": 0.24
+        },
+        {
+          "candidate": 2,
+          "sourceAddress": "0x3333333333333333333333333333333333333333",
+          "weight": 0.16,
+          "maxAllocation": 0.24
+        },
+        {
+          "candidate": 3,
+          "sourceAddress": "0x4444444444444444444444444444444444444444",
+          "weight": 0.16,
+          "maxAllocation": 0.24
+        },
+        {
+          "candidate": 4,
+          "sourceAddress": "0x5555555555555555555555555555555555555555",
+          "weight": 0.16,
+          "maxAllocation": 0.24
+        }
+      ],
+      "cashWeight": 0.19999999999999996,
+      "reason": "OK",
+      "manifestHash": "0x349e69cb83d5c6865a895362d68c2cd7a691bef8d38c7afe3b8d8af1642bbc91"
+    },
+    "auditIds": [
+      "0x0320e2050ffe5c563c69593eff86e35843bede00318a51b45dbf01d98721af5b",
+      "0xa6115082015ea734d3d3bbce98f304ca72881b93ef67459b09e1c3dafd30eb4c",
+      "0xb41909f3e46e7c767d4c5a9c746147911bb7c65b9ad4bcb95ea360441accd870"
+    ],
+    "receiptHash": "0x080f1b4ed88940e866c6e853c04d78f2781cc83d18df09e11d05b1079646eb60"
+  },
+  "configuration": {
+    "schemaVersion": "1.0.0",
+    "account": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "chainId": 999,
+    "frozenAtMs": 1791301200000,
+    "reviewHash": "0x080f1b4ed88940e866c6e853c04d78f2781cc83d18df09e11d05b1079646eb60",
+    "policy": {
+      "mode": "LIVE",
+      "bucket": "AGGRESSIVE",
+      "capitalUsd": 1000,
+      "cashBuffer": 0.2,
+      "minOrderUsd": 10,
+      "maxFrameAgeMs": 10000,
+      "minConfidence": 60,
+      "minHistoryDays": 30,
+      "maxSourceWeight": 0.3,
+      "minExecutionFit": 60,
+      "maxGrossLeverage": 2,
+      "maxExposureOverlap": 0.5,
+      "maxPairCorrelation": 0.7,
+      "riskWatchThreshold": 50,
+      "riskRejectThreshold": 80,
+      "minExecutableTargets": 1,
+      "redTeamExcludeThreshold": 60,
+      "redTeamRebuildThreshold": 60
+    },
+    "policyHash": "0xd69f50ce3526cae00921b1dbb6bade6c4bf791d694a099b2a060a26ddf69fa0d",
+    "sources": [
+      {
+        "candidate": 0,
+        "sourceAddress": "0x1111111111111111111111111111111111111111",
+        "weightUnits": 160000,
+        "ceilingUnits": 240000
+      },
+      {
+        "candidate": 1,
+        "sourceAddress": "0x2222222222222222222222222222222222222222",
+        "weightUnits": 160000,
+        "ceilingUnits": 240000
+      },
+      {
+        "candidate": 2,
+        "sourceAddress": "0x3333333333333333333333333333333333333333",
+        "weightUnits": 160000,
+        "ceilingUnits": 240000
+      },
+      {
+        "candidate": 3,
+        "sourceAddress": "0x4444444444444444444444444444444444444444",
+        "weightUnits": 160000,
+        "ceilingUnits": 240000
+      },
+      {
+        "candidate": 4,
+        "sourceAddress": "0x5555555555555555555555555555555555555555",
+        "weightUnits": 160000,
+        "ceilingUnits": 240000
+      }
+    ],
+    "cashUnits": 200000,
+    "configurationHash": "0x859fc8ce76d1b76766d420d1e94626052f39e3f0e9b849284a49825e98564fd7"
+  },
+  "audit": [
+    {
+      "id": "0x0320e2050ffe5c563c69593eff86e35843bede00318a51b45dbf01d98721af5b",
+      "snapshot_hash": "0x4c44d9cdf2222c0ce794b4ddfcf356541e16bcc92b918ac640cdfa275609c3c4",
+      "prompt_hash": "0x2e4d0c8100c7289772cf521d012dcc4d5a5d6888ae0d53d1b34a2fb811f41a50",
+      "output_hash": "0xeb6210a88f86199a55085e9eb60a681d0f303d5f262e4eef20616eedddb876ee",
+      "model_version": "drawdown-first.v1/local-0",
+      "prompt": {
+        "system": "Deterministic fixture risk v1",
+        "evidence": {
+          "pairs": [
+            {
+              "a": 0,
+              "b": 1,
+              "correlation": 0.2,
+              "linkedSource": false,
+              "currentExposureOverlap": 0
+            },
+            {
+              "a": 0,
+              "b": 2,
+              "correlation": 0.2,
+              "linkedSource": false,
+              "currentExposureOverlap": 0
+            },
+            {
+              "a": 0,
+              "b": 3,
+              "correlation": 0.2,
+              "linkedSource": false,
+              "currentExposureOverlap": 0
+            },
+            {
+              "a": 0,
+              "b": 4,
+              "correlation": 0.2,
+              "linkedSource": false,
+              "currentExposureOverlap": 0
+            },
+            {
+              "a": 1,
+              "b": 2,
+              "correlation": 0.2,
+              "linkedSource": false,
+              "currentExposureOverlap": 0
+            },
+            {
+              "a": 1,
+              "b": 3,
+              "correlation": 0.2,
+              "linkedSource": false,
+              "currentExposureOverlap": 0
+            },
+            {
+              "a": 1,
+              "b": 4,
+              "correlation": 0.2,
+              "linkedSource": false,
+              "currentExposureOverlap": 0
+            },
+            {
+              "a": 2,
+              "b": 3,
+              "correlation": 0.2,
+              "linkedSource": false,
+              "currentExposureOverlap": 0
+            },
+            {
+              "a": 2,
+              "b": 4,
+              "correlation": 0.2,
+              "linkedSource": false,
+              "currentExposureOverlap": 0
+            },
+            {
+              "a": 3,
+              "b": 4,
+              "correlation": 0.2,
+              "linkedSource": false,
+              "currentExposureOverlap": 0
+            }
+          ],
+          "asOfMs": 1791301199000,
+          "finalists": [
+            {
+              "kind": "TRADER",
+              "metrics": {
+                "btcBeta": null,
+                "isCalmar": 4.697956718670141,
+                "isSharpe": 0.24758347984721152,
+                "isSortino": 0.45745951069780383,
+                "oosSharpe": 1,
+                "cloneCount": 0,
+                "makerShare": 0.5,
+                "oosSortino": 1,
+                "oosWindows": 2,
+                "scoreFlags": [],
+                "historyDays": 90,
+                "maxDrawdown": 0.013214726142292459,
+                "executionFit": 90,
+                "lookbackDays": 90,
+                "timeInMarket": 0.8,
+                "concentration": 1,
+                "oosMaxDrawdown": 0.1,
+                "pnlConsistency": 0.8947374514411711,
+                "averageLeverage": 1,
+                "executionCoverage": 1,
+                "medianHoldMinutes": 480,
+                "liquidationDistance": 0.5,
+                "survivorshipQuality": "CURRENT_SNAPSHOT",
+                "crossWindowStability": 0.8
+              },
+              "patterns": {
+                "observedFills": null,
+                "increasesAfterLoss": null,
+                "repeatedRoundTrips": null
+              },
+              "candidate": 0,
+              "positions": [
+                {
+                  "market": "BTC",
+                  "leverage": 1,
+                  "signedNotionalUsd": 100000,
+                  "liquidationDistance": 0.5
+                }
+              ],
+              "equityCurve": [
+                {
+                  "atMs": 1788709199000,
+                  "pnlUsd": 3894.42
+                },
+                {
+                  "atMs": 1788795599000,
+                  "pnlUsd": 4211.09
+                },
+                {
+                  "atMs": 1788881999000,
+                  "pnlUsd": 4633.36
+                },
+                {
+                  "atMs": 1788968399000,
+                  "pnlUsd": 5107.21
+                },
+                {
+                  "atMs": 1789054799000,
+                  "pnlUsd": 5570.44
+                },
+                {
+                  "atMs": 1789141199000,
+                  "pnlUsd": 5962.56
+                },
+                {
+                  "atMs": 1789227599000,
+                  "pnlUsd": 6234.29
+                },
+                {
+                  "atMs": 1789313999000,
+                  "pnlUsd": 6355.35
+                },
+                {
+                  "atMs": 1789400399000,
+                  "pnlUsd": 6319.27
+                },
+                {
+                  "atMs": 1789486799000,
+                  "pnlUsd": 6144.38
+                },
+                {
+                  "atMs": 1789573199000,
+                  "pnlUsd": 5870.91
+                },
+                {
+                  "atMs": 1789659599000,
+                  "pnlUsd": 5554.66
+                },
+                {
+                  "atMs": 1789745999000,
+                  "pnlUsd": 5258.21
+                },
+                {
+                  "atMs": 1789832399000,
+                  "pnlUsd": 5040.98
+                },
+                {
+                  "atMs": 1789918799000,
+                  "pnlUsd": 4949.89
+                },
+                {
+                  "atMs": 1790005199000,
+                  "pnlUsd": 5011.97
+                },
+                {
+                  "atMs": 1790091599000,
+                  "pnlUsd": 5230.03
+                },
+                {
+                  "atMs": 1790177999000,
+                  "pnlUsd": 5582.28
+                },
+                {
+                  "atMs": 1790264399000,
+                  "pnlUsd": 6025.75
+                },
+                {
+                  "atMs": 1790350799000,
+                  "pnlUsd": 6503.04
+                },
+                {
+                  "atMs": 1790437199000,
+                  "pnlUsd": 6951.43
+                },
+                {
+                  "atMs": 1790523599000,
+                  "pnlUsd": 7312.76
+                },
+                {
+                  "atMs": 1790609999000,
+                  "pnlUsd": 7542.62
+                },
+                {
+                  "atMs": 1790696399000,
+                  "pnlUsd": 7617.34
+                },
+                {
+                  "atMs": 1790782799000,
+                  "pnlUsd": 7537.77
+                },
+                {
+                  "atMs": 1790869199000,
+                  "pnlUsd": 7329.08
+                },
+                {
+                  "atMs": 1790955599000,
+                  "pnlUsd": 7036.87
+                },
+                {
+                  "atMs": 1791041999000,
+                  "pnlUsd": 6719.89
+                },
+                {
+                  "atMs": 1791128399000,
+                  "pnlUsd": 6440.82
+                },
+                {
+                  "atMs": 1791214799000,
+                  "pnlUsd": 6256.34
+                },
+                {
+                  "atMs": 1791301199000,
+                  "pnlUsd": 6208.22
+                }
+              ]
+            },
+            {
+              "kind": "TRADER",
+              "metrics": {
+                "btcBeta": null,
+                "isCalmar": 3.9564894690493886,
+                "isSharpe": 0.13604110217927554,
+                "isSortino": 0.22122614426347478,
+                "oosSharpe": 1,
+                "cloneCount": 0,
+                "makerShare": 0.5,
+                "oosSortino": 1,
+                "oosWindows": 2,
+                "scoreFlags": [],
+                "historyDays": 90,
+                "maxDrawdown": 0.015672930683814545,
+                "executionFit": 90,
+                "lookbackDays": 90,
+                "timeInMarket": 0.8,
+                "concentration": 1,
+                "oosMaxDrawdown": 0.1,
+                "pnlConsistency": 0.8956606560766032,
+                "averageLeverage": 1,
+                "executionCoverage": 1,
+                "medianHoldMinutes": 480,
+                "liquidationDistance": 0.5,
+                "survivorshipQuality": "CURRENT_SNAPSHOT",
+                "crossWindowStability": 0.8
+              },
+              "patterns": {
+                "observedFills": null,
+                "increasesAfterLoss": null,
+                "repeatedRoundTrips": null
+              },
+              "candidate": 1,
+              "positions": [
+                {
+                  "market": "ETH",
+                  "leverage": 1,
+                  "signedNotionalUsd": 100000,
+                  "liquidationDistance": 0.5
+                }
+              ],
+              "equityCurve": [
+                {
+                  "atMs": 1788709199000,
+                  "pnlUsd": 5650.9
+                },
+                {
+                  "atMs": 1788795599000,
+                  "pnlUsd": 5860.68
+                },
+                {
+                  "atMs": 1788881999000,
+                  "pnlUsd": 5544.2
+                },
+                {
+                  "atMs": 1788968399000,
+                  "pnlUsd": 4914.22
+                },
+                {
+                  "atMs": 1789054799000,
+                  "pnlUsd": 4351.75
+                },
+                {
+                  "atMs": 1789141199000,
+                  "pnlUsd": 4201.53
+                },
+                {
+                  "atMs": 1789227599000,
+                  "pnlUsd": 4587.12
+                },
+                {
+                  "atMs": 1789313999000,
+                  "pnlUsd": 5344.52
+                },
+                {
+                  "atMs": 1789400399000,
+                  "pnlUsd": 6110.23
+                },
+                {
+                  "atMs": 1789486799000,
+                  "pnlUsd": 6516.28
+                },
+                {
+                  "atMs": 1789573199000,
+                  "pnlUsd": 6387.71
+                },
+                {
+                  "atMs": 1789659599000,
+                  "pnlUsd": 5836.43
+                },
+                {
+                  "atMs": 1789745999000,
+                  "pnlUsd": 5201.21
+                },
+                {
+                  "atMs": 1789832399000,
+                  "pnlUsd": 4865.85
+                },
+                {
+                  "atMs": 1789918799000,
+                  "pnlUsd": 5053.24
+                },
+                {
+                  "atMs": 1790005199000,
+                  "pnlUsd": 5705.75
+                },
+                {
+                  "atMs": 1790091599000,
+                  "pnlUsd": 6516.16
+                },
+                {
+                  "atMs": 1790177999000,
+                  "pnlUsd": 7092.52
+                },
+                {
+                  "atMs": 1790264399000,
+                  "pnlUsd": 7168.47
+                },
+                {
+                  "atMs": 1790350799000,
+                  "pnlUsd": 6746.18
+                },
+                {
+                  "atMs": 1790437199000,
+                  "pnlUsd": 6095.19
+                },
+                {
+                  "atMs": 1790523599000,
+                  "pnlUsd": 5607.77
+                },
+                {
+                  "atMs": 1790609999000,
+                  "pnlUsd": 5588.41
+                },
+                {
+                  "atMs": 1790696399000,
+                  "pnlUsd": 6090.43
+                },
+                {
+                  "atMs": 1790782799000,
+                  "pnlUsd": 6887.36
+                },
+                {
+                  "atMs": 1790869199000,
+                  "pnlUsd": 7594.48
+                },
+                {
+                  "atMs": 1790955599000,
+                  "pnlUsd": 7875.27
+                },
+                {
+                  "atMs": 1791041999000,
+                  "pnlUsd": 7621.97
+                },
+                {
+                  "atMs": 1791128399000,
+                  "pnlUsd": 7013.45
+                },
+                {
+                  "atMs": 1791214799000,
+                  "pnlUsd": 6419.17
+                },
+                {
+                  "atMs": 1791301199000,
+                  "pnlUsd": 6200.98
+                }
+              ]
+            },
+            {
+              "kind": "TRADER",
+              "metrics": {
+                "btcBeta": null,
+                "isCalmar": 3.795282650903397,
+                "isSharpe": 0.09718756186874984,
+                "isSortino": 0.15171314831489482,
+                "oosSharpe": 1,
+                "cloneCount": 0,
+                "makerShare": 0.5,
+                "oosSortino": 1,
+                "oosWindows": 2,
+                "scoreFlags": [],
+                "historyDays": 90,
+                "maxDrawdown": 0.016338159067909693,
+                "executionFit": 90,
+                "lookbackDays": 90,
+                "timeInMarket": 0.8,
+                "concentration": 1,
+                "oosMaxDrawdown": 0.1,
+                "pnlConsistency": 0.8960942449673566,
+                "averageLeverage": 1,
+                "executionCoverage": 1,
+                "medianHoldMinutes": 480,
+                "liquidationDistance": 0.5,
+                "survivorshipQuality": "CURRENT_SNAPSHOT",
+                "crossWindowStability": 0.8
+              },
+              "patterns": {
+                "observedFills": null,
+                "increasesAfterLoss": null,
+                "repeatedRoundTrips": null
+              },
+              "candidate": 2,
+              "positions": [
+                {
+                  "market": "SOL",
+                  "leverage": 1,
+                  "signedNotionalUsd": 100000,
+                  "liquidationDistance": 0.5
+                }
+              ],
+              "equityCurve": [
+                {
+                  "atMs": 1788709199000,
+                  "pnlUsd": 4773.45
+                },
+                {
+                  "atMs": 1788795599000,
+                  "pnlUsd": 3977.06
+                },
+                {
+                  "atMs": 1788881999000,
+                  "pnlUsd": 4167.41
+                },
+                {
+                  "atMs": 1788968399000,
+                  "pnlUsd": 5223.91
+                },
+                {
+                  "atMs": 1789054799000,
+                  "pnlUsd": 6079.43
+                },
+                {
+                  "atMs": 1789141199000,
+                  "pnlUsd": 5886.48
+                },
+                {
+                  "atMs": 1789227599000,
+                  "pnlUsd": 4943.34
+                },
+                {
+                  "atMs": 1789313999000,
+                  "pnlUsd": 4368.11
+                },
+                {
+                  "atMs": 1789400399000,
+                  "pnlUsd": 4876.82
+                },
+                {
+                  "atMs": 1789486799000,
+                  "pnlUsd": 6000.98
+                },
+                {
+                  "atMs": 1789573199000,
+                  "pnlUsd": 6599.52
+                },
+                {
+                  "atMs": 1789659599000,
+                  "pnlUsd": 6105.77
+                },
+                {
+                  "atMs": 1789745999000,
+                  "pnlUsd": 5146.74
+                },
+                {
+                  "atMs": 1789832399000,
+                  "pnlUsd": 4857.88
+                },
+                {
+                  "atMs": 1789918799000,
+                  "pnlUsd": 5642.29
+                },
+                {
+                  "atMs": 1790005199000,
+                  "pnlUsd": 6730.18
+                },
+                {
+                  "atMs": 1790091599000,
+                  "pnlUsd": 7020.13
+                },
+                {
+                  "atMs": 1790177999000,
+                  "pnlUsd": 6282.69
+                },
+                {
+                  "atMs": 1790264399000,
+                  "pnlUsd": 5411.18
+                },
+                {
+                  "atMs": 1790350799000,
+                  "pnlUsd": 5445.41
+                },
+                {
+                  "atMs": 1790437199000,
+                  "pnlUsd": 6435.4
+                },
+                {
+                  "atMs": 1790523599000,
+                  "pnlUsd": 7386.71
+                },
+                {
+                  "atMs": 1790609999000,
+                  "pnlUsd": 7347.16
+                },
+                {
+                  "atMs": 1790696399000,
+                  "pnlUsd": 6447.4
+                },
+                {
+                  "atMs": 1790782799000,
+                  "pnlUsd": 5758.12
+                },
+                {
+                  "atMs": 1790869199000,
+                  "pnlUsd": 6119.99
+                },
+                {
+                  "atMs": 1790955599000,
+                  "pnlUsd": 7224.98
+                },
+                {
+                  "atMs": 1791041999000,
+                  "pnlUsd": 7952.98
+                },
+                {
+                  "atMs": 1791128399000,
+                  "pnlUsd": 7595.84
+                },
+                {
+                  "atMs": 1791214799000,
+                  "pnlUsd": 6631.27
+                },
+                {
+                  "atMs": 1791301199000,
+                  "pnlUsd": 6200.79
+                }
+              ]
+            },
+            {
+              "kind": "TRADER",
+              "metrics": {
+                "btcBeta": null,
+                "isCalmar": 3.7208014207052824,
+                "isSharpe": 0.07842310114398465,
+                "isSortino": 0.12019048378702232,
+                "oosSharpe": 1,
+                "cloneCount": 0,
+                "makerShare": 0.5,
+                "oosSortino": 1,
+                "oosWindows": 2,
+                "scoreFlags": [],
+                "historyDays": 90,
+                "maxDrawdown": 0.01668368099123364,
+                "executionFit": 90,
+                "lookbackDays": 90,
+                "timeInMarket": 0.8,
+                "concentration": 1,
+                "oosMaxDrawdown": 0.1,
+                "pnlConsistency": 0.8964209570145643,
+                "averageLeverage": 1,
+                "executionCoverage": 1,
+                "medianHoldMinutes": 480,
+                "liquidationDistance": 0.5,
+                "survivorshipQuality": "CURRENT_SNAPSHOT",
+                "crossWindowStability": 0.8
+              },
+              "patterns": {
+                "observedFills": null,
+                "increasesAfterLoss": null,
+                "repeatedRoundTrips": null
+              },
+              "candidate": 3,
+              "positions": [
+                {
+                  "market": "AVAX",
+                  "leverage": 1,
+                  "signedNotionalUsd": 100000,
+                  "liquidationDistance": 0.5
+                }
+              ],
+              "equityCurve": [
+                {
+                  "atMs": 1788709199000,
+                  "pnlUsd": 3978.18
+                },
+                {
+                  "atMs": 1788795599000,
+                  "pnlUsd": 5346.57
+                },
+                {
+                  "atMs": 1788881999000,
+                  "pnlUsd": 5894.26
+                },
+                {
+                  "atMs": 1788968399000,
+                  "pnlUsd": 4798.6
+                },
+                {
+                  "atMs": 1789054799000,
+                  "pnlUsd": 4127.56
+                },
+                {
+                  "atMs": 1789141199000,
+                  "pnlUsd": 5202.22
+                },
+                {
+                  "atMs": 1789227599000,
+                  "pnlUsd": 6272.98
+                },
+                {
+                  "atMs": 1789313999000,
+                  "pnlUsd": 5597.09
+                },
+                {
+                  "atMs": 1789400399000,
+                  "pnlUsd": 4504.16
+                },
+                {
+                  "atMs": 1789486799000,
+                  "pnlUsd": 5057.37
+                },
+                {
+                  "atMs": 1789573199000,
+                  "pnlUsd": 6424.34
+                },
+                {
+                  "atMs": 1789659599000,
+                  "pnlUsd": 6341.31
+                },
+                {
+                  "atMs": 1789745999000,
+                  "pnlUsd": 5095.04
+                },
+                {
+                  "atMs": 1789832399000,
+                  "pnlUsd": 5018.44
+                },
+                {
+                  "atMs": 1789918799000,
+                  "pnlUsd": 6386.96
+                },
+                {
+                  "atMs": 1790005199000,
+                  "pnlUsd": 6934.1
+                },
+                {
+                  "atMs": 1790091599000,
+                  "pnlUsd": 5838.16
+                },
+                {
+                  "atMs": 1790177999000,
+                  "pnlUsd": 5167.61
+                },
+                {
+                  "atMs": 1790264399000,
+                  "pnlUsd": 6242.66
+                },
+                {
+                  "atMs": 1790350799000,
+                  "pnlUsd": 7313.03
+                },
+                {
+                  "atMs": 1790437199000,
+                  "pnlUsd": 6636.66
+                },
+                {
+                  "atMs": 1790523599000,
+                  "pnlUsd": 5544.01
+                },
+                {
+                  "atMs": 1790609999000,
+                  "pnlUsd": 6097.76
+                },
+                {
+                  "atMs": 1790696399000,
+                  "pnlUsd": 7464.59
+                },
+                {
+                  "atMs": 1790782799000,
+                  "pnlUsd": 7380.97
+                },
+                {
+                  "atMs": 1790869199000,
+                  "pnlUsd": 6134.71
+                },
+                {
+                  "atMs": 1790955599000,
+                  "pnlUsd": 6058.69
+                },
+                {
+                  "atMs": 1791041999000,
+                  "pnlUsd": 7427.35
+                },
+                {
+                  "atMs": 1791128399000,
+                  "pnlUsd": 7973.95
+                },
+                {
+                  "atMs": 1791214799000,
+                  "pnlUsd": 6877.73
+                },
+                {
+                  "atMs": 1791301199000,
+                  "pnlUsd": 6207.67
+                }
+              ]
+            },
+            {
+              "kind": "TRADER",
+              "metrics": {
+                "btcBeta": null,
+                "isCalmar": 3.728681160524622,
+                "isSharpe": 0.06806426021070618,
+                "isSortino": 0.10328514781797236,
+                "oosSharpe": 1,
+                "cloneCount": 0,
+                "makerShare": 0.5,
+                "oosSortino": 1,
+                "oosWindows": 2,
+                "scoreFlags": [],
+                "historyDays": 90,
+                "maxDrawdown": 0.0166856574251343,
+                "executionFit": 90,
+                "lookbackDays": 90,
+                "timeInMarket": 0.8,
+                "concentration": 1,
+                "oosMaxDrawdown": 0.1,
+                "pnlConsistency": 0.8967479360012343,
+                "averageLeverage": 1,
+                "executionCoverage": 1,
+                "medianHoldMinutes": 480,
+                "liquidationDistance": 0.5,
+                "survivorshipQuality": "CURRENT_SNAPSHOT",
+                "crossWindowStability": 0.8
+              },
+              "patterns": {
+                "observedFills": null,
+                "increasesAfterLoss": null,
+                "repeatedRoundTrips": null
+              },
+              "candidate": 4,
+              "positions": [
+                {
+                  "market": "HYPE",
+                  "leverage": 1,
+                  "signedNotionalUsd": 100000,
+                  "liquidationDistance": 0.5
+                }
+              ],
+              "equityCurve": [
+                {
+                  "atMs": 1788709199000,
+                  "pnlUsd": 5726.82
+                },
+                {
+                  "atMs": 1788795599000,
+                  "pnlUsd": 5035.11
+                },
+                {
+                  "atMs": 1788881999000,
+                  "pnlUsd": 3962.7
+                },
+                {
+                  "atMs": 1788968399000,
+                  "pnlUsd": 5338.06
+                },
+                {
+                  "atMs": 1789054799000,
+                  "pnlUsd": 5981.86
+                },
+                {
+                  "atMs": 1789141199000,
+                  "pnlUsd": 4510.3
+                },
+                {
+                  "atMs": 1789227599000,
+                  "pnlUsd": 4731.54
+                },
+                {
+                  "atMs": 1789313999000,
+                  "pnlUsd": 6298.92
+                },
+                {
+                  "atMs": 1789400399000,
+                  "pnlUsd": 5561.81
+                },
+                {
+                  "atMs": 1789486799000,
+                  "pnlUsd": 4525.73
+                },
+                {
+                  "atMs": 1789573199000,
+                  "pnlUsd": 5929.99
+                },
+                {
+                  "atMs": 1789659599000,
+                  "pnlUsd": 6524.32
+                },
+                {
+                  "atMs": 1789745999000,
+                  "pnlUsd": 5046.35
+                },
+                {
+                  "atMs": 1789832399000,
+                  "pnlUsd": 5319.97
+                },
+                {
+                  "atMs": 1789918799000,
+                  "pnlUsd": 6869.96
+                },
+                {
+                  "atMs": 1790005199000,
+                  "pnlUsd": 6088.37
+                },
+                {
+                  "atMs": 1790091599000,
+                  "pnlUsd": 5089.88
+                },
+                {
+                  "atMs": 1790177999000,
+                  "pnlUsd": 6521.54
+                },
+                {
+                  "atMs": 1790264399000,
+                  "pnlUsd": 7065.83
+                },
+                {
+                  "atMs": 1790350799000,
+                  "pnlUsd": 5583.2
+                },
+                {
+                  "atMs": 1790437199000,
+                  "pnlUsd": 5908.98
+                },
+                {
+                  "atMs": 1790523599000,
+                  "pnlUsd": 7439.93
+                },
+                {
+                  "atMs": 1790609999000,
+                  "pnlUsd": 6614.83
+                },
+                {
+                  "atMs": 1790696399000,
+                  "pnlUsd": 5655.16
+                },
+                {
+                  "atMs": 1790782799000,
+                  "pnlUsd": 7112.69
+                },
+                {
+                  "atMs": 1790869199000,
+                  "pnlUsd": 7606.4
+                },
+                {
+                  "atMs": 1790955599000,
+                  "pnlUsd": 6120.88
+                },
+                {
+                  "atMs": 1791041999000,
+                  "pnlUsd": 6498.55
+                },
+                {
+                  "atMs": 1791128399000,
+                  "pnlUsd": 8008.81
+                },
+                {
+                  "atMs": 1791214799000,
+                  "pnlUsd": 7141.22
+                },
+                {
+                  "atMs": 1791301199000,
+                  "pnlUsd": 6221.55
+                }
+              ]
+            }
+          ],
+          "policyHash": "0xd69f50ce3526cae00921b1dbb6bade6c4bf791d694a099b2a060a26ddf69fa0d",
+          "evidenceHash": "0x87ea5ba92d17fdb418bf5e8f98b38eb887623ffa26880428fb15b7098cf24a4a",
+          "snapshotHash": "0x4c44d9cdf2222c0ce794b4ddfcf356541e16bcc92b918ac640cdfa275609c3c4",
+          "schemaVersion": "1.1.0"
+        }
+      },
+      "output": {
+        "quorum": 1,
+        "results": [
+          {
+            "pathRisk": 20,
+            "candidate": 0,
+            "confidence": 90,
+            "drawdownRisk": 20,
+            "evidenceRisk": 20,
+            "leverageRisk": 20,
+            "executionRisk": 20,
+            "concentrationRisk": 20
+          },
+          {
+            "pathRisk": 20,
+            "candidate": 1,
+            "confidence": 90,
+            "drawdownRisk": 20,
+            "evidenceRisk": 20,
+            "leverageRisk": 20,
+            "executionRisk": 20,
+            "concentrationRisk": 20
+          },
+          {
+            "pathRisk": 20,
+            "candidate": 2,
+            "confidence": 90,
+            "drawdownRisk": 20,
+            "evidenceRisk": 20,
+            "leverageRisk": 20,
+            "executionRisk": 20,
+            "concentrationRisk": 20
+          },
+          {
+            "pathRisk": 20,
+            "candidate": 3,
+            "confidence": 90,
+            "drawdownRisk": 20,
+            "evidenceRisk": 20,
+            "leverageRisk": 20,
+            "executionRisk": 20,
+            "concentrationRisk": 20
+          },
+          {
+            "pathRisk": 20,
+            "candidate": 4,
+            "confidence": 90,
+            "drawdownRisk": 20,
+            "evidenceRisk": 20,
+            "leverageRisk": 20,
+            "executionRisk": 20,
+            "concentrationRisk": 20
+          }
+        ],
+        "policyHash": "0xd69f50ce3526cae00921b1dbb6bade6c4bf791d694a099b2a060a26ddf69fa0d",
+        "promptHash": "0x3d97d631a057379832447d54cbacc21730aca00aef6ee73d5becd97e115fddff",
+        "snapshotHash": "0x4c44d9cdf2222c0ce794b4ddfcf356541e16bcc92b918ac640cdfa275609c3c4",
+        "schemaVersion": "1.1.0",
+        "modelConfigHash": "0x518f372ac7127259a9c1e0b05b58888c9c39b933eb04cd476b35ae9b2846bd6d"
+      },
+      "created_at_ms": 1791301200000
+    },
+    {
+      "id": "0xa6115082015ea734d3d3bbce98f304ca72881b93ef67459b09e1c3dafd30eb4c",
+      "snapshot_hash": "0x4c44d9cdf2222c0ce794b4ddfcf356541e16bcc92b918ac640cdfa275609c3c4",
+      "prompt_hash": "0xec16e3794daa6f7abaa08611d4a09bd781a011d006a0c54b2ce68e0f0fcc6148",
+      "output_hash": "0xde32c381e561513cdd7460670611fa1294b49c8b31edd612df84b9aeca4b1dae",
+      "model_version": "drawdown-first.v1/local-0",
+      "prompt": {
+        "system": "Deterministic equal-weight selection v1",
+        "evidence": {
+          "pairs": [
+            {
+              "a": 0,
+              "b": 1,
+              "correlation": 0.2,
+              "linkedSource": false,
+              "currentExposureOverlap": 0
+            },
+            {
+              "a": 0,
+              "b": 2,
+              "correlation": 0.2,
+              "linkedSource": false,
+              "currentExposureOverlap": 0
+            },
+            {
+              "a": 0,
+              "b": 3,
+              "correlation": 0.2,
+              "linkedSource": false,
+              "currentExposureOverlap": 0
+            },
+            {
+              "a": 0,
+              "b": 4,
+              "correlation": 0.2,
+              "linkedSource": false,
+              "currentExposureOverlap": 0
+            },
+            {
+              "a": 1,
+              "b": 2,
+              "correlation": 0.2,
+              "linkedSource": false,
+              "currentExposureOverlap": 0
+            },
+            {
+              "a": 1,
+              "b": 3,
+              "correlation": 0.2,
+              "linkedSource": false,
+              "currentExposureOverlap": 0
+            },
+            {
+              "a": 1,
+              "b": 4,
+              "correlation": 0.2,
+              "linkedSource": false,
+              "currentExposureOverlap": 0
+            },
+            {
+              "a": 2,
+              "b": 3,
+              "correlation": 0.2,
+              "linkedSource": false,
+              "currentExposureOverlap": 0
+            },
+            {
+              "a": 2,
+              "b": 4,
+              "correlation": 0.2,
+              "linkedSource": false,
+              "currentExposureOverlap": 0
+            },
+            {
+              "a": 3,
+              "b": 4,
+              "correlation": 0.2,
+              "linkedSource": false,
+              "currentExposureOverlap": 0
+            }
+          ],
+          "asOfMs": 1791301199000,
+          "finalists": [
+            {
+              "kind": "TRADER",
+              "metrics": {
+                "btcBeta": null,
+                "isCalmar": 4.697956718670141,
+                "isSharpe": 0.24758347984721152,
+                "isSortino": 0.45745951069780383,
+                "oosSharpe": 1,
+                "cloneCount": 0,
+                "makerShare": 0.5,
+                "oosSortino": 1,
+                "oosWindows": 2,
+                "scoreFlags": [],
+                "historyDays": 90,
+                "maxDrawdown": 0.013214726142292459,
+                "executionFit": 90,
+                "lookbackDays": 90,
+                "timeInMarket": 0.8,
+                "concentration": 1,
+                "oosMaxDrawdown": 0.1,
+                "pnlConsistency": 0.8947374514411711,
+                "averageLeverage": 1,
+                "executionCoverage": 1,
+                "medianHoldMinutes": 480,
+                "liquidationDistance": 0.5,
+                "survivorshipQuality": "CURRENT_SNAPSHOT",
+                "crossWindowStability": 0.8
+              },
+              "patterns": {
+                "observedFills": null,
+                "increasesAfterLoss": null,
+                "repeatedRoundTrips": null
+              },
+              "candidate": 0,
+              "positions": [
+                {
+                  "market": "BTC",
+                  "leverage": 1,
+                  "signedNotionalUsd": 100000,
+                  "liquidationDistance": 0.5
+                }
+              ],
+              "equityCurve": [
+                {
+                  "atMs": 1788709199000,
+                  "pnlUsd": 3894.42
+                },
+                {
+                  "atMs": 1788795599000,
+                  "pnlUsd": 4211.09
+                },
+                {
+                  "atMs": 1788881999000,
+                  "pnlUsd": 4633.36
+                },
+                {
+                  "atMs": 1788968399000,
+                  "pnlUsd": 5107.21
+                },
+                {
+                  "atMs": 1789054799000,
+                  "pnlUsd": 5570.44
+                },
+                {
+                  "atMs": 1789141199000,
+                  "pnlUsd": 5962.56
+                },
+                {
+                  "atMs": 1789227599000,
+                  "pnlUsd": 6234.29
+                },
+                {
+                  "atMs": 1789313999000,
+                  "pnlUsd": 6355.35
+                },
+                {
+                  "atMs": 1789400399000,
+                  "pnlUsd": 6319.27
+                },
+                {
+                  "atMs": 1789486799000,
+                  "pnlUsd": 6144.38
+                },
+                {
+                  "atMs": 1789573199000,
+                  "pnlUsd": 5870.91
+                },
+                {
+                  "atMs": 1789659599000,
+                  "pnlUsd": 5554.66
+                },
+                {
+                  "atMs": 1789745999000,
+                  "pnlUsd": 5258.21
+                },
+                {
+                  "atMs": 1789832399000,
+                  "pnlUsd": 5040.98
+                },
+                {
+                  "atMs": 1789918799000,
+                  "pnlUsd": 4949.89
+                },
+                {
+                  "atMs": 1790005199000,
+                  "pnlUsd": 5011.97
+                },
+                {
+                  "atMs": 1790091599000,
+                  "pnlUsd": 5230.03
+                },
+                {
+                  "atMs": 1790177999000,
+                  "pnlUsd": 5582.28
+                },
+                {
+                  "atMs": 1790264399000,
+                  "pnlUsd": 6025.75
+                },
+                {
+                  "atMs": 1790350799000,
+                  "pnlUsd": 6503.04
+                },
+                {
+                  "atMs": 1790437199000,
+                  "pnlUsd": 6951.43
+                },
+                {
+                  "atMs": 1790523599000,
+                  "pnlUsd": 7312.76
+                },
+                {
+                  "atMs": 1790609999000,
+                  "pnlUsd": 7542.62
+                },
+                {
+                  "atMs": 1790696399000,
+                  "pnlUsd": 7617.34
+                },
+                {
+                  "atMs": 1790782799000,
+                  "pnlUsd": 7537.77
+                },
+                {
+                  "atMs": 1790869199000,
+                  "pnlUsd": 7329.08
+                },
+                {
+                  "atMs": 1790955599000,
+                  "pnlUsd": 7036.87
+                },
+                {
+                  "atMs": 1791041999000,
+                  "pnlUsd": 6719.89
+                },
+                {
+                  "atMs": 1791128399000,
+                  "pnlUsd": 6440.82
+                },
+                {
+                  "atMs": 1791214799000,
+                  "pnlUsd": 6256.34
+                },
+                {
+                  "atMs": 1791301199000,
+                  "pnlUsd": 6208.22
+                }
+              ]
+            },
+            {
+              "kind": "TRADER",
+              "metrics": {
+                "btcBeta": null,
+                "isCalmar": 3.9564894690493886,
+                "isSharpe": 0.13604110217927554,
+                "isSortino": 0.22122614426347478,
+                "oosSharpe": 1,
+                "cloneCount": 0,
+                "makerShare": 0.5,
+                "oosSortino": 1,
+                "oosWindows": 2,
+                "scoreFlags": [],
+                "historyDays": 90,
+                "maxDrawdown": 0.015672930683814545,
+                "executionFit": 90,
+                "lookbackDays": 90,
+                "timeInMarket": 0.8,
+                "concentration": 1,
+                "oosMaxDrawdown": 0.1,
+                "pnlConsistency": 0.8956606560766032,
+                "averageLeverage": 1,
+                "executionCoverage": 1,
+                "medianHoldMinutes": 480,
+                "liquidationDistance": 0.5,
+                "survivorshipQuality": "CURRENT_SNAPSHOT",
+                "crossWindowStability": 0.8
+              },
+              "patterns": {
+                "observedFills": null,
+                "increasesAfterLoss": null,
+                "repeatedRoundTrips": null
+              },
+              "candidate": 1,
+              "positions": [
+                {
+                  "market": "ETH",
+                  "leverage": 1,
+                  "signedNotionalUsd": 100000,
+                  "liquidationDistance": 0.5
+                }
+              ],
+              "equityCurve": [
+                {
+                  "atMs": 1788709199000,
+                  "pnlUsd": 5650.9
+                },
+                {
+                  "atMs": 1788795599000,
+                  "pnlUsd": 5860.68
+                },
+                {
+                  "atMs": 1788881999000,
+                  "pnlUsd": 5544.2
+                },
+                {
+                  "atMs": 1788968399000,
+                  "pnlUsd": 4914.22
+                },
+                {
+                  "atMs": 1789054799000,
+                  "pnlUsd": 4351.75
+                },
+                {
+                  "atMs": 1789141199000,
+                  "pnlUsd": 4201.53
+                },
+                {
+                  "atMs": 1789227599000,
+                  "pnlUsd": 4587.12
+                },
+                {
+                  "atMs": 1789313999000,
+                  "pnlUsd": 5344.52
+                },
+                {
+                  "atMs": 1789400399000,
+                  "pnlUsd": 6110.23
+                },
+                {
+                  "atMs": 1789486799000,
+                  "pnlUsd": 6516.28
+                },
+                {
+                  "atMs": 1789573199000,
+                  "pnlUsd": 6387.71
+                },
+                {
+                  "atMs": 1789659599000,
+                  "pnlUsd": 5836.43
+                },
+                {
+                  "atMs": 1789745999000,
+                  "pnlUsd": 5201.21
+                },
+                {
+                  "atMs": 1789832399000,
+                  "pnlUsd": 4865.85
+                },
+                {
+                  "atMs": 1789918799000,
+                  "pnlUsd": 5053.24
+                },
+                {
+                  "atMs": 1790005199000,
+                  "pnlUsd": 5705.75
+                },
+                {
+                  "atMs": 1790091599000,
+                  "pnlUsd": 6516.16
+                },
+                {
+                  "atMs": 1790177999000,
+                  "pnlUsd": 7092.52
+                },
+                {
+                  "atMs": 1790264399000,
+                  "pnlUsd": 7168.47
+                },
+                {
+                  "atMs": 1790350799000,
+                  "pnlUsd": 6746.18
+                },
+                {
+                  "atMs": 1790437199000,
+                  "pnlUsd": 6095.19
+                },
+                {
+                  "atMs": 1790523599000,
+                  "pnlUsd": 5607.77
+                },
+                {
+                  "atMs": 1790609999000,
+                  "pnlUsd": 5588.41
+                },
+                {
+                  "atMs": 1790696399000,
+                  "pnlUsd": 6090.43
+                },
+                {
+                  "atMs": 1790782799000,
+                  "pnlUsd": 6887.36
+                },
+                {
+                  "atMs": 1790869199000,
+                  "pnlUsd": 7594.48
+                },
+                {
+                  "atMs": 1790955599000,
+                  "pnlUsd": 7875.27
+                },
+                {
+                  "atMs": 1791041999000,
+                  "pnlUsd": 7621.97
+                },
+                {
+                  "atMs": 1791128399000,
+                  "pnlUsd": 7013.45
+                },
+                {
+                  "atMs": 1791214799000,
+                  "pnlUsd": 6419.17
+                },
+                {
+                  "atMs": 1791301199000,
+                  "pnlUsd": 6200.98
+                }
+              ]
+            },
+            {
+              "kind": "TRADER",
+              "metrics": {
+                "btcBeta": null,
+                "isCalmar": 3.795282650903397,
+                "isSharpe": 0.09718756186874984,
+                "isSortino": 0.15171314831489482,
+                "oosSharpe": 1,
+                "cloneCount": 0,
+                "makerShare": 0.5,
+                "oosSortino": 1,
+                "oosWindows": 2,
+                "scoreFlags": [],
+                "historyDays": 90,
+                "maxDrawdown": 0.016338159067909693,
+                "executionFit": 90,
+                "lookbackDays": 90,
+                "timeInMarket": 0.8,
+                "concentration": 1,
+                "oosMaxDrawdown": 0.1,
+                "pnlConsistency": 0.8960942449673566,
+                "averageLeverage": 1,
+                "executionCoverage": 1,
+                "medianHoldMinutes": 480,
+                "liquidationDistance": 0.5,
+                "survivorshipQuality": "CURRENT_SNAPSHOT",
+                "crossWindowStability": 0.8
+              },
+              "patterns": {
+                "observedFills": null,
+                "increasesAfterLoss": null,
+                "repeatedRoundTrips": null
+              },
+              "candidate": 2,
+              "positions": [
+                {
+                  "market": "SOL",
+                  "leverage": 1,
+                  "signedNotionalUsd": 100000,
+                  "liquidationDistance": 0.5
+                }
+              ],
+              "equityCurve": [
+                {
+                  "atMs": 1788709199000,
+                  "pnlUsd": 4773.45
+                },
+                {
+                  "atMs": 1788795599000,
+                  "pnlUsd": 3977.06
+                },
+                {
+                  "atMs": 1788881999000,
+                  "pnlUsd": 4167.41
+                },
+                {
+                  "atMs": 1788968399000,
+                  "pnlUsd": 5223.91
+                },
+                {
+                  "atMs": 1789054799000,
+                  "pnlUsd": 6079.43
+                },
+                {
+                  "atMs": 1789141199000,
+                  "pnlUsd": 5886.48
+                },
+                {
+                  "atMs": 1789227599000,
+                  "pnlUsd": 4943.34
+                },
+                {
+                  "atMs": 1789313999000,
+                  "pnlUsd": 4368.11
+                },
+                {
+                  "atMs": 1789400399000,
+                  "pnlUsd": 4876.82
+                },
+                {
+                  "atMs": 1789486799000,
+                  "pnlUsd": 6000.98
+                },
+                {
+                  "atMs": 1789573199000,
+                  "pnlUsd": 6599.52
+                },
+                {
+                  "atMs": 1789659599000,
+                  "pnlUsd": 6105.77
+                },
+                {
+                  "atMs": 1789745999000,
+                  "pnlUsd": 5146.74
+                },
+                {
+                  "atMs": 1789832399000,
+                  "pnlUsd": 4857.88
+                },
+                {
+                  "atMs": 1789918799000,
+                  "pnlUsd": 5642.29
+                },
+                {
+                  "atMs": 1790005199000,
+                  "pnlUsd": 6730.18
+                },
+                {
+                  "atMs": 1790091599000,
+                  "pnlUsd": 7020.13
+                },
+                {
+                  "atMs": 1790177999000,
+                  "pnlUsd": 6282.69
+                },
+                {
+                  "atMs": 1790264399000,
+                  "pnlUsd": 5411.18
+                },
+                {
+                  "atMs": 1790350799000,
+                  "pnlUsd": 5445.41
+                },
+                {
+                  "atMs": 1790437199000,
+                  "pnlUsd": 6435.4
+                },
+                {
+                  "atMs": 1790523599000,
+                  "pnlUsd": 7386.71
+                },
+                {
+                  "atMs": 1790609999000,
+                  "pnlUsd": 7347.16
+                },
+                {
+                  "atMs": 1790696399000,
+                  "pnlUsd": 6447.4
+                },
+                {
+                  "atMs": 1790782799000,
+                  "pnlUsd": 5758.12
+                },
+                {
+                  "atMs": 1790869199000,
+                  "pnlUsd": 6119.99
+                },
+                {
+                  "atMs": 1790955599000,
+                  "pnlUsd": 7224.98
+                },
+                {
+                  "atMs": 1791041999000,
+                  "pnlUsd": 7952.98
+                },
+                {
+                  "atMs": 1791128399000,
+                  "pnlUsd": 7595.84
+                },
+                {
+                  "atMs": 1791214799000,
+                  "pnlUsd": 6631.27
+                },
+                {
+                  "atMs": 1791301199000,
+                  "pnlUsd": 6200.79
+                }
+              ]
+            },
+            {
+              "kind": "TRADER",
+              "metrics": {
+                "btcBeta": null,
+                "isCalmar": 3.7208014207052824,
+                "isSharpe": 0.07842310114398465,
+                "isSortino": 0.12019048378702232,
+                "oosSharpe": 1,
+                "cloneCount": 0,
+                "makerShare": 0.5,
+                "oosSortino": 1,
+                "oosWindows": 2,
+                "scoreFlags": [],
+                "historyDays": 90,
+                "maxDrawdown": 0.01668368099123364,
+                "executionFit": 90,
+                "lookbackDays": 90,
+                "timeInMarket": 0.8,
+                "concentration": 1,
+                "oosMaxDrawdown": 0.1,
+                "pnlConsistency": 0.8964209570145643,
+                "averageLeverage": 1,
+                "executionCoverage": 1,
+                "medianHoldMinutes": 480,
+                "liquidationDistance": 0.5,
+                "survivorshipQuality": "CURRENT_SNAPSHOT",
+                "crossWindowStability": 0.8
+              },
+              "patterns": {
+                "observedFills": null,
+                "increasesAfterLoss": null,
+                "repeatedRoundTrips": null
+              },
+              "candidate": 3,
+              "positions": [
+                {
+                  "market": "AVAX",
+                  "leverage": 1,
+                  "signedNotionalUsd": 100000,
+                  "liquidationDistance": 0.5
+                }
+              ],
+              "equityCurve": [
+                {
+                  "atMs": 1788709199000,
+                  "pnlUsd": 3978.18
+                },
+                {
+                  "atMs": 1788795599000,
+                  "pnlUsd": 5346.57
+                },
+                {
+                  "atMs": 1788881999000,
+                  "pnlUsd": 5894.26
+                },
+                {
+                  "atMs": 1788968399000,
+                  "pnlUsd": 4798.6
+                },
+                {
+                  "atMs": 1789054799000,
+                  "pnlUsd": 4127.56
+                },
+                {
+                  "atMs": 1789141199000,
+                  "pnlUsd": 5202.22
+                },
+                {
+                  "atMs": 1789227599000,
+                  "pnlUsd": 6272.98
+                },
+                {
+                  "atMs": 1789313999000,
+                  "pnlUsd": 5597.09
+                },
+                {
+                  "atMs": 1789400399000,
+                  "pnlUsd": 4504.16
+                },
+                {
+                  "atMs": 1789486799000,
+                  "pnlUsd": 5057.37
+                },
+                {
+                  "atMs": 1789573199000,
+                  "pnlUsd": 6424.34
+                },
+                {
+                  "atMs": 1789659599000,
+                  "pnlUsd": 6341.31
+                },
+                {
+                  "atMs": 1789745999000,
+                  "pnlUsd": 5095.04
+                },
+                {
+                  "atMs": 1789832399000,
+                  "pnlUsd": 5018.44
+                },
+                {
+                  "atMs": 1789918799000,
+                  "pnlUsd": 6386.96
+                },
+                {
+                  "atMs": 1790005199000,
+                  "pnlUsd": 6934.1
+                },
+                {
+                  "atMs": 1790091599000,
+                  "pnlUsd": 5838.16
+                },
+                {
+                  "atMs": 1790177999000,
+                  "pnlUsd": 5167.61
+                },
+                {
+                  "atMs": 1790264399000,
+                  "pnlUsd": 6242.66
+                },
+                {
+                  "atMs": 1790350799000,
+                  "pnlUsd": 7313.03
+                },
+                {
+                  "atMs": 1790437199000,
+                  "pnlUsd": 6636.66
+                },
+                {
+                  "atMs": 1790523599000,
+                  "pnlUsd": 5544.01
+                },
+                {
+                  "atMs": 1790609999000,
+                  "pnlUsd": 6097.76
+                },
+                {
+                  "atMs": 1790696399000,
+                  "pnlUsd": 7464.59
+                },
+                {
+                  "atMs": 1790782799000,
+                  "pnlUsd": 7380.97
+                },
+                {
+                  "atMs": 1790869199000,
+                  "pnlUsd": 6134.71
+                },
+                {
+                  "atMs": 1790955599000,
+                  "pnlUsd": 6058.69
+                },
+                {
+                  "atMs": 1791041999000,
+                  "pnlUsd": 7427.35
+                },
+                {
+                  "atMs": 1791128399000,
+                  "pnlUsd": 7973.95
+                },
+                {
+                  "atMs": 1791214799000,
+                  "pnlUsd": 6877.73
+                },
+                {
+                  "atMs": 1791301199000,
+                  "pnlUsd": 6207.67
+                }
+              ]
+            },
+            {
+              "kind": "TRADER",
+              "metrics": {
+                "btcBeta": null,
+                "isCalmar": 3.728681160524622,
+                "isSharpe": 0.06806426021070618,
+                "isSortino": 0.10328514781797236,
+                "oosSharpe": 1,
+                "cloneCount": 0,
+                "makerShare": 0.5,
+                "oosSortino": 1,
+                "oosWindows": 2,
+                "scoreFlags": [],
+                "historyDays": 90,
+                "maxDrawdown": 0.0166856574251343,
+                "executionFit": 90,
+                "lookbackDays": 90,
+                "timeInMarket": 0.8,
+                "concentration": 1,
+                "oosMaxDrawdown": 0.1,
+                "pnlConsistency": 0.8967479360012343,
+                "averageLeverage": 1,
+                "executionCoverage": 1,
+                "medianHoldMinutes": 480,
+                "liquidationDistance": 0.5,
+                "survivorshipQuality": "CURRENT_SNAPSHOT",
+                "crossWindowStability": 0.8
+              },
+              "patterns": {
+                "observedFills": null,
+                "increasesAfterLoss": null,
+                "repeatedRoundTrips": null
+              },
+              "candidate": 4,
+              "positions": [
+                {
+                  "market": "HYPE",
+                  "leverage": 1,
+                  "signedNotionalUsd": 100000,
+                  "liquidationDistance": 0.5
+                }
+              ],
+              "equityCurve": [
+                {
+                  "atMs": 1788709199000,
+                  "pnlUsd": 5726.82
+                },
+                {
+                  "atMs": 1788795599000,
+                  "pnlUsd": 5035.11
+                },
+                {
+                  "atMs": 1788881999000,
+                  "pnlUsd": 3962.7
+                },
+                {
+                  "atMs": 1788968399000,
+                  "pnlUsd": 5338.06
+                },
+                {
+                  "atMs": 1789054799000,
+                  "pnlUsd": 5981.86
+                },
+                {
+                  "atMs": 1789141199000,
+                  "pnlUsd": 4510.3
+                },
+                {
+                  "atMs": 1789227599000,
+                  "pnlUsd": 4731.54
+                },
+                {
+                  "atMs": 1789313999000,
+                  "pnlUsd": 6298.92
+                },
+                {
+                  "atMs": 1789400399000,
+                  "pnlUsd": 5561.81
+                },
+                {
+                  "atMs": 1789486799000,
+                  "pnlUsd": 4525.73
+                },
+                {
+                  "atMs": 1789573199000,
+                  "pnlUsd": 5929.99
+                },
+                {
+                  "atMs": 1789659599000,
+                  "pnlUsd": 6524.32
+                },
+                {
+                  "atMs": 1789745999000,
+                  "pnlUsd": 5046.35
+                },
+                {
+                  "atMs": 1789832399000,
+                  "pnlUsd": 5319.97
+                },
+                {
+                  "atMs": 1789918799000,
+                  "pnlUsd": 6869.96
+                },
+                {
+                  "atMs": 1790005199000,
+                  "pnlUsd": 6088.37
+                },
+                {
+                  "atMs": 1790091599000,
+                  "pnlUsd": 5089.88
+                },
+                {
+                  "atMs": 1790177999000,
+                  "pnlUsd": 6521.54
+                },
+                {
+                  "atMs": 1790264399000,
+                  "pnlUsd": 7065.83
+                },
+                {
+                  "atMs": 1790350799000,
+                  "pnlUsd": 5583.2
+                },
+                {
+                  "atMs": 1790437199000,
+                  "pnlUsd": 5908.98
+                },
+                {
+                  "atMs": 1790523599000,
+                  "pnlUsd": 7439.93
+                },
+                {
+                  "atMs": 1790609999000,
+                  "pnlUsd": 6614.83
+                },
+                {
+                  "atMs": 1790696399000,
+                  "pnlUsd": 5655.16
+                },
+                {
+                  "atMs": 1790782799000,
+                  "pnlUsd": 7112.69
+                },
+                {
+                  "atMs": 1790869199000,
+                  "pnlUsd": 7606.4
+                },
+                {
+                  "atMs": 1790955599000,
+                  "pnlUsd": 6120.88
+                },
+                {
+                  "atMs": 1791041999000,
+                  "pnlUsd": 6498.55
+                },
+                {
+                  "atMs": 1791128399000,
+                  "pnlUsd": 8008.81
+                },
+                {
+                  "atMs": 1791214799000,
+                  "pnlUsd": 7141.22
+                },
+                {
+                  "atMs": 1791301199000,
+                  "pnlUsd": 6221.55
+                }
+              ]
+            }
+          ],
+          "policyHash": "0xd69f50ce3526cae00921b1dbb6bade6c4bf791d694a099b2a060a26ddf69fa0d",
+          "evidenceHash": "0x87ea5ba92d17fdb418bf5e8f98b38eb887623ffa26880428fb15b7098cf24a4a",
+          "snapshotHash": "0x4c44d9cdf2222c0ce794b4ddfcf356541e16bcc92b918ac640cdfa275609c3c4",
+          "schemaVersion": "1.1.0"
+        }
+      },
+      "output": {
+        "quorum": 1,
+        "results": [
+          {
+            "reject": 0,
+            "candidate": 0,
+            "convexity": 0,
+            "preserver": 80,
+            "compounder": 80,
+            "confidence": 90,
+            "balancedFit": 80,
+            "directional": 50,
+            "diversifier": 80,
+            "aggressiveFit": 80,
+            "opportunistic": 50,
+            "conservativeFit": 80
+          },
+          {
+            "reject": 0,
+            "candidate": 1,
+            "convexity": 0,
+            "preserver": 80,
+            "compounder": 80,
+            "confidence": 90,
+            "balancedFit": 80,
+            "directional": 50,
+            "diversifier": 80,
+            "aggressiveFit": 80,
+            "opportunistic": 50,
+            "conservativeFit": 80
+          },
+          {
+            "reject": 0,
+            "candidate": 2,
+            "convexity": 0,
+            "preserver": 80,
+            "compounder": 80,
+            "confidence": 90,
+            "balancedFit": 80,
+            "directional": 50,
+            "diversifier": 80,
+            "aggressiveFit": 80,
+            "opportunistic": 50,
+            "conservativeFit": 80
+          },
+          {
+            "reject": 0,
+            "candidate": 3,
+            "convexity": 0,
+            "preserver": 80,
+            "compounder": 80,
+            "confidence": 90,
+            "balancedFit": 80,
+            "directional": 50,
+            "diversifier": 80,
+            "aggressiveFit": 80,
+            "opportunistic": 50,
+            "conservativeFit": 80
+          },
+          {
+            "reject": 0,
+            "candidate": 4,
+            "convexity": 0,
+            "preserver": 80,
+            "compounder": 80,
+            "confidence": 90,
+            "balancedFit": 80,
+            "directional": 50,
+            "diversifier": 80,
+            "aggressiveFit": 80,
+            "opportunistic": 50,
+            "conservativeFit": 80
+          }
+        ],
+        "policyHash": "0xd69f50ce3526cae00921b1dbb6bade6c4bf791d694a099b2a060a26ddf69fa0d",
+        "promptHash": "0xa58c21717766fc2b7c6efba984e685546ea668c1a639b46693c1a4f8c0645acb",
+        "snapshotHash": "0x4c44d9cdf2222c0ce794b4ddfcf356541e16bcc92b918ac640cdfa275609c3c4",
+        "schemaVersion": "1.1.0",
+        "modelConfigHash": "0x518f372ac7127259a9c1e0b05b58888c9c39b933eb04cd476b35ae9b2846bd6d"
+      },
+      "created_at_ms": 1791301200000
+    },
+    {
+      "id": "0xb41909f3e46e7c767d4c5a9c746147911bb7c65b9ad4bcb95ea360441accd870",
+      "snapshot_hash": "0x4c44d9cdf2222c0ce794b4ddfcf356541e16bcc92b918ac640cdfa275609c3c4",
+      "prompt_hash": "0x2e628d4faeb805ce05f21c1b3c01ba9d355752e0fc1402b54d3d9e65bf50effd",
+      "output_hash": "0xc01ac472242b1f3572131a3f645a4c23905af076cf813dd41c2a8a3d01a6104c",
+      "model_version": "drawdown-first.v1/local-0",
+      "prompt": {
+        "draft": {
+          "policy": {
+            "mode": "LIVE",
+            "bucket": "AGGRESSIVE",
+            "capitalUsd": 1000,
+            "cashBuffer": 0.2,
+            "minOrderUsd": 10,
+            "maxFrameAgeMs": 10000,
+            "minConfidence": 60,
+            "minHistoryDays": 30,
+            "maxSourceWeight": 0.3,
+            "minExecutionFit": 60,
+            "maxGrossLeverage": 2,
+            "maxExposureOverlap": 0.5,
+            "maxPairCorrelation": 0.7,
+            "riskWatchThreshold": 50,
+            "riskRejectThreshold": 80,
+            "minExecutableTargets": 1,
+            "redTeamExcludeThreshold": 60,
+            "redTeamRebuildThreshold": 60
+          },
+          "sources": [
+            {
+              "weight": 0.16,
+              "candidate": 0,
+              "maxAllocation": 0.24
+            },
+            {
+              "weight": 0.16,
+              "candidate": 1,
+              "maxAllocation": 0.24
+            },
+            {
+              "weight": 0.16,
+              "candidate": 2,
+              "maxAllocation": 0.24
+            },
+            {
+              "weight": 0.16,
+              "candidate": 3,
+              "maxAllocation": 0.24
+            },
+            {
+              "weight": 0.16,
+              "candidate": 4,
+              "maxAllocation": 0.24
+            }
+          ],
+          "draftHash": "0x1e40d834a7b978e99f06df955045854147606fc8d74a6109e0890c32f50913b9",
+          "cashWeight": 0.19999999999999996
+        },
+        "system": "Deterministic fixture portfolio check v1",
+        "evidence": {
+          "pairs": [
+            {
+              "a": 0,
+              "b": 1,
+              "correlation": 0.2,
+              "linkedSource": false,
+              "currentExposureOverlap": 0
+            },
+            {
+              "a": 0,
+              "b": 2,
+              "correlation": 0.2,
+              "linkedSource": false,
+              "currentExposureOverlap": 0
+            },
+            {
+              "a": 0,
+              "b": 3,
+              "correlation": 0.2,
+              "linkedSource": false,
+              "currentExposureOverlap": 0
+            },
+            {
+              "a": 0,
+              "b": 4,
+              "correlation": 0.2,
+              "linkedSource": false,
+              "currentExposureOverlap": 0
+            },
+            {
+              "a": 1,
+              "b": 2,
+              "correlation": 0.2,
+              "linkedSource": false,
+              "currentExposureOverlap": 0
+            },
+            {
+              "a": 1,
+              "b": 3,
+              "correlation": 0.2,
+              "linkedSource": false,
+              "currentExposureOverlap": 0
+            },
+            {
+              "a": 1,
+              "b": 4,
+              "correlation": 0.2,
+              "linkedSource": false,
+              "currentExposureOverlap": 0
+            },
+            {
+              "a": 2,
+              "b": 3,
+              "correlation": 0.2,
+              "linkedSource": false,
+              "currentExposureOverlap": 0
+            },
+            {
+              "a": 2,
+              "b": 4,
+              "correlation": 0.2,
+              "linkedSource": false,
+              "currentExposureOverlap": 0
+            },
+            {
+              "a": 3,
+              "b": 4,
+              "correlation": 0.2,
+              "linkedSource": false,
+              "currentExposureOverlap": 0
+            }
+          ],
+          "asOfMs": 1791301199000,
+          "finalists": [
+            {
+              "kind": "TRADER",
+              "metrics": {
+                "btcBeta": null,
+                "isCalmar": 4.697956718670141,
+                "isSharpe": 0.24758347984721152,
+                "isSortino": 0.45745951069780383,
+                "oosSharpe": 1,
+                "cloneCount": 0,
+                "makerShare": 0.5,
+                "oosSortino": 1,
+                "oosWindows": 2,
+                "scoreFlags": [],
+                "historyDays": 90,
+                "maxDrawdown": 0.013214726142292459,
+                "executionFit": 90,
+                "lookbackDays": 90,
+                "timeInMarket": 0.8,
+                "concentration": 1,
+                "oosMaxDrawdown": 0.1,
+                "pnlConsistency": 0.8947374514411711,
+                "averageLeverage": 1,
+                "executionCoverage": 1,
+                "medianHoldMinutes": 480,
+                "liquidationDistance": 0.5,
+                "survivorshipQuality": "CURRENT_SNAPSHOT",
+                "crossWindowStability": 0.8
+              },
+              "patterns": {
+                "observedFills": null,
+                "increasesAfterLoss": null,
+                "repeatedRoundTrips": null
+              },
+              "candidate": 0,
+              "positions": [
+                {
+                  "market": "BTC",
+                  "leverage": 1,
+                  "signedNotionalUsd": 100000,
+                  "liquidationDistance": 0.5
+                }
+              ],
+              "equityCurve": [
+                {
+                  "atMs": 1788709199000,
+                  "pnlUsd": 3894.42
+                },
+                {
+                  "atMs": 1788795599000,
+                  "pnlUsd": 4211.09
+                },
+                {
+                  "atMs": 1788881999000,
+                  "pnlUsd": 4633.36
+                },
+                {
+                  "atMs": 1788968399000,
+                  "pnlUsd": 5107.21
+                },
+                {
+                  "atMs": 1789054799000,
+                  "pnlUsd": 5570.44
+                },
+                {
+                  "atMs": 1789141199000,
+                  "pnlUsd": 5962.56
+                },
+                {
+                  "atMs": 1789227599000,
+                  "pnlUsd": 6234.29
+                },
+                {
+                  "atMs": 1789313999000,
+                  "pnlUsd": 6355.35
+                },
+                {
+                  "atMs": 1789400399000,
+                  "pnlUsd": 6319.27
+                },
+                {
+                  "atMs": 1789486799000,
+                  "pnlUsd": 6144.38
+                },
+                {
+                  "atMs": 1789573199000,
+                  "pnlUsd": 5870.91
+                },
+                {
+                  "atMs": 1789659599000,
+                  "pnlUsd": 5554.66
+                },
+                {
+                  "atMs": 1789745999000,
+                  "pnlUsd": 5258.21
+                },
+                {
+                  "atMs": 1789832399000,
+                  "pnlUsd": 5040.98
+                },
+                {
+                  "atMs": 1789918799000,
+                  "pnlUsd": 4949.89
+                },
+                {
+                  "atMs": 1790005199000,
+                  "pnlUsd": 5011.97
+                },
+                {
+                  "atMs": 1790091599000,
+                  "pnlUsd": 5230.03
+                },
+                {
+                  "atMs": 1790177999000,
+                  "pnlUsd": 5582.28
+                },
+                {
+                  "atMs": 1790264399000,
+                  "pnlUsd": 6025.75
+                },
+                {
+                  "atMs": 1790350799000,
+                  "pnlUsd": 6503.04
+                },
+                {
+                  "atMs": 1790437199000,
+                  "pnlUsd": 6951.43
+                },
+                {
+                  "atMs": 1790523599000,
+                  "pnlUsd": 7312.76
+                },
+                {
+                  "atMs": 1790609999000,
+                  "pnlUsd": 7542.62
+                },
+                {
+                  "atMs": 1790696399000,
+                  "pnlUsd": 7617.34
+                },
+                {
+                  "atMs": 1790782799000,
+                  "pnlUsd": 7537.77
+                },
+                {
+                  "atMs": 1790869199000,
+                  "pnlUsd": 7329.08
+                },
+                {
+                  "atMs": 1790955599000,
+                  "pnlUsd": 7036.87
+                },
+                {
+                  "atMs": 1791041999000,
+                  "pnlUsd": 6719.89
+                },
+                {
+                  "atMs": 1791128399000,
+                  "pnlUsd": 6440.82
+                },
+                {
+                  "atMs": 1791214799000,
+                  "pnlUsd": 6256.34
+                },
+                {
+                  "atMs": 1791301199000,
+                  "pnlUsd": 6208.22
+                }
+              ]
+            },
+            {
+              "kind": "TRADER",
+              "metrics": {
+                "btcBeta": null,
+                "isCalmar": 3.9564894690493886,
+                "isSharpe": 0.13604110217927554,
+                "isSortino": 0.22122614426347478,
+                "oosSharpe": 1,
+                "cloneCount": 0,
+                "makerShare": 0.5,
+                "oosSortino": 1,
+                "oosWindows": 2,
+                "scoreFlags": [],
+                "historyDays": 90,
+                "maxDrawdown": 0.015672930683814545,
+                "executionFit": 90,
+                "lookbackDays": 90,
+                "timeInMarket": 0.8,
+                "concentration": 1,
+                "oosMaxDrawdown": 0.1,
+                "pnlConsistency": 0.8956606560766032,
+                "averageLeverage": 1,
+                "executionCoverage": 1,
+                "medianHoldMinutes": 480,
+                "liquidationDistance": 0.5,
+                "survivorshipQuality": "CURRENT_SNAPSHOT",
+                "crossWindowStability": 0.8
+              },
+              "patterns": {
+                "observedFills": null,
+                "increasesAfterLoss": null,
+                "repeatedRoundTrips": null
+              },
+              "candidate": 1,
+              "positions": [
+                {
+                  "market": "ETH",
+                  "leverage": 1,
+                  "signedNotionalUsd": 100000,
+                  "liquidationDistance": 0.5
+                }
+              ],
+              "equityCurve": [
+                {
+                  "atMs": 1788709199000,
+                  "pnlUsd": 5650.9
+                },
+                {
+                  "atMs": 1788795599000,
+                  "pnlUsd": 5860.68
+                },
+                {
+                  "atMs": 1788881999000,
+                  "pnlUsd": 5544.2
+                },
+                {
+                  "atMs": 1788968399000,
+                  "pnlUsd": 4914.22
+                },
+                {
+                  "atMs": 1789054799000,
+                  "pnlUsd": 4351.75
+                },
+                {
+                  "atMs": 1789141199000,
+                  "pnlUsd": 4201.53
+                },
+                {
+                  "atMs": 1789227599000,
+                  "pnlUsd": 4587.12
+                },
+                {
+                  "atMs": 1789313999000,
+                  "pnlUsd": 5344.52
+                },
+                {
+                  "atMs": 1789400399000,
+                  "pnlUsd": 6110.23
+                },
+                {
+                  "atMs": 1789486799000,
+                  "pnlUsd": 6516.28
+                },
+                {
+                  "atMs": 1789573199000,
+                  "pnlUsd": 6387.71
+                },
+                {
+                  "atMs": 1789659599000,
+                  "pnlUsd": 5836.43
+                },
+                {
+                  "atMs": 1789745999000,
+                  "pnlUsd": 5201.21
+                },
+                {
+                  "atMs": 1789832399000,
+                  "pnlUsd": 4865.85
+                },
+                {
+                  "atMs": 1789918799000,
+                  "pnlUsd": 5053.24
+                },
+                {
+                  "atMs": 1790005199000,
+                  "pnlUsd": 5705.75
+                },
+                {
+                  "atMs": 1790091599000,
+                  "pnlUsd": 6516.16
+                },
+                {
+                  "atMs": 1790177999000,
+                  "pnlUsd": 7092.52
+                },
+                {
+                  "atMs": 1790264399000,
+                  "pnlUsd": 7168.47
+                },
+                {
+                  "atMs": 1790350799000,
+                  "pnlUsd": 6746.18
+                },
+                {
+                  "atMs": 1790437199000,
+                  "pnlUsd": 6095.19
+                },
+                {
+                  "atMs": 1790523599000,
+                  "pnlUsd": 5607.77
+                },
+                {
+                  "atMs": 1790609999000,
+                  "pnlUsd": 5588.41
+                },
+                {
+                  "atMs": 1790696399000,
+                  "pnlUsd": 6090.43
+                },
+                {
+                  "atMs": 1790782799000,
+                  "pnlUsd": 6887.36
+                },
+                {
+                  "atMs": 1790869199000,
+                  "pnlUsd": 7594.48
+                },
+                {
+                  "atMs": 1790955599000,
+                  "pnlUsd": 7875.27
+                },
+                {
+                  "atMs": 1791041999000,
+                  "pnlUsd": 7621.97
+                },
+                {
+                  "atMs": 1791128399000,
+                  "pnlUsd": 7013.45
+                },
+                {
+                  "atMs": 1791214799000,
+                  "pnlUsd": 6419.17
+                },
+                {
+                  "atMs": 1791301199000,
+                  "pnlUsd": 6200.98
+                }
+              ]
+            },
+            {
+              "kind": "TRADER",
+              "metrics": {
+                "btcBeta": null,
+                "isCalmar": 3.795282650903397,
+                "isSharpe": 0.09718756186874984,
+                "isSortino": 0.15171314831489482,
+                "oosSharpe": 1,
+                "cloneCount": 0,
+                "makerShare": 0.5,
+                "oosSortino": 1,
+                "oosWindows": 2,
+                "scoreFlags": [],
+                "historyDays": 90,
+                "maxDrawdown": 0.016338159067909693,
+                "executionFit": 90,
+                "lookbackDays": 90,
+                "timeInMarket": 0.8,
+                "concentration": 1,
+                "oosMaxDrawdown": 0.1,
+                "pnlConsistency": 0.8960942449673566,
+                "averageLeverage": 1,
+                "executionCoverage": 1,
+                "medianHoldMinutes": 480,
+                "liquidationDistance": 0.5,
+                "survivorshipQuality": "CURRENT_SNAPSHOT",
+                "crossWindowStability": 0.8
+              },
+              "patterns": {
+                "observedFills": null,
+                "increasesAfterLoss": null,
+                "repeatedRoundTrips": null
+              },
+              "candidate": 2,
+              "positions": [
+                {
+                  "market": "SOL",
+                  "leverage": 1,
+                  "signedNotionalUsd": 100000,
+                  "liquidationDistance": 0.5
+                }
+              ],
+              "equityCurve": [
+                {
+                  "atMs": 1788709199000,
+                  "pnlUsd": 4773.45
+                },
+                {
+                  "atMs": 1788795599000,
+                  "pnlUsd": 3977.06
+                },
+                {
+                  "atMs": 1788881999000,
+                  "pnlUsd": 4167.41
+                },
+                {
+                  "atMs": 1788968399000,
+                  "pnlUsd": 5223.91
+                },
+                {
+                  "atMs": 1789054799000,
+                  "pnlUsd": 6079.43
+                },
+                {
+                  "atMs": 1789141199000,
+                  "pnlUsd": 5886.48
+                },
+                {
+                  "atMs": 1789227599000,
+                  "pnlUsd": 4943.34
+                },
+                {
+                  "atMs": 1789313999000,
+                  "pnlUsd": 4368.11
+                },
+                {
+                  "atMs": 1789400399000,
+                  "pnlUsd": 4876.82
+                },
+                {
+                  "atMs": 1789486799000,
+                  "pnlUsd": 6000.98
+                },
+                {
+                  "atMs": 1789573199000,
+                  "pnlUsd": 6599.52
+                },
+                {
+                  "atMs": 1789659599000,
+                  "pnlUsd": 6105.77
+                },
+                {
+                  "atMs": 1789745999000,
+                  "pnlUsd": 5146.74
+                },
+                {
+                  "atMs": 1789832399000,
+                  "pnlUsd": 4857.88
+                },
+                {
+                  "atMs": 1789918799000,
+                  "pnlUsd": 5642.29
+                },
+                {
+                  "atMs": 1790005199000,
+                  "pnlUsd": 6730.18
+                },
+                {
+                  "atMs": 1790091599000,
+                  "pnlUsd": 7020.13
+                },
+                {
+                  "atMs": 1790177999000,
+                  "pnlUsd": 6282.69
+                },
+                {
+                  "atMs": 1790264399000,
+                  "pnlUsd": 5411.18
+                },
+                {
+                  "atMs": 1790350799000,
+                  "pnlUsd": 5445.41
+                },
+                {
+                  "atMs": 1790437199000,
+                  "pnlUsd": 6435.4
+                },
+                {
+                  "atMs": 1790523599000,
+                  "pnlUsd": 7386.71
+                },
+                {
+                  "atMs": 1790609999000,
+                  "pnlUsd": 7347.16
+                },
+                {
+                  "atMs": 1790696399000,
+                  "pnlUsd": 6447.4
+                },
+                {
+                  "atMs": 1790782799000,
+                  "pnlUsd": 5758.12
+                },
+                {
+                  "atMs": 1790869199000,
+                  "pnlUsd": 6119.99
+                },
+                {
+                  "atMs": 1790955599000,
+                  "pnlUsd": 7224.98
+                },
+                {
+                  "atMs": 1791041999000,
+                  "pnlUsd": 7952.98
+                },
+                {
+                  "atMs": 1791128399000,
+                  "pnlUsd": 7595.84
+                },
+                {
+                  "atMs": 1791214799000,
+                  "pnlUsd": 6631.27
+                },
+                {
+                  "atMs": 1791301199000,
+                  "pnlUsd": 6200.79
+                }
+              ]
+            },
+            {
+              "kind": "TRADER",
+              "metrics": {
+                "btcBeta": null,
+                "isCalmar": 3.7208014207052824,
+                "isSharpe": 0.07842310114398465,
+                "isSortino": 0.12019048378702232,
+                "oosSharpe": 1,
+                "cloneCount": 0,
+                "makerShare": 0.5,
+                "oosSortino": 1,
+                "oosWindows": 2,
+                "scoreFlags": [],
+                "historyDays": 90,
+                "maxDrawdown": 0.01668368099123364,
+                "executionFit": 90,
+                "lookbackDays": 90,
+                "timeInMarket": 0.8,
+                "concentration": 1,
+                "oosMaxDrawdown": 0.1,
+                "pnlConsistency": 0.8964209570145643,
+                "averageLeverage": 1,
+                "executionCoverage": 1,
+                "medianHoldMinutes": 480,
+                "liquidationDistance": 0.5,
+                "survivorshipQuality": "CURRENT_SNAPSHOT",
+                "crossWindowStability": 0.8
+              },
+              "patterns": {
+                "observedFills": null,
+                "increasesAfterLoss": null,
+                "repeatedRoundTrips": null
+              },
+              "candidate": 3,
+              "positions": [
+                {
+                  "market": "AVAX",
+                  "leverage": 1,
+                  "signedNotionalUsd": 100000,
+                  "liquidationDistance": 0.5
+                }
+              ],
+              "equityCurve": [
+                {
+                  "atMs": 1788709199000,
+                  "pnlUsd": 3978.18
+                },
+                {
+                  "atMs": 1788795599000,
+                  "pnlUsd": 5346.57
+                },
+                {
+                  "atMs": 1788881999000,
+                  "pnlUsd": 5894.26
+                },
+                {
+                  "atMs": 1788968399000,
+                  "pnlUsd": 4798.6
+                },
+                {
+                  "atMs": 1789054799000,
+                  "pnlUsd": 4127.56
+                },
+                {
+                  "atMs": 1789141199000,
+                  "pnlUsd": 5202.22
+                },
+                {
+                  "atMs": 1789227599000,
+                  "pnlUsd": 6272.98
+                },
+                {
+                  "atMs": 1789313999000,
+                  "pnlUsd": 5597.09
+                },
+                {
+                  "atMs": 1789400399000,
+                  "pnlUsd": 4504.16
+                },
+                {
+                  "atMs": 1789486799000,
+                  "pnlUsd": 5057.37
+                },
+                {
+                  "atMs": 1789573199000,
+                  "pnlUsd": 6424.34
+                },
+                {
+                  "atMs": 1789659599000,
+                  "pnlUsd": 6341.31
+                },
+                {
+                  "atMs": 1789745999000,
+                  "pnlUsd": 5095.04
+                },
+                {
+                  "atMs": 1789832399000,
+                  "pnlUsd": 5018.44
+                },
+                {
+                  "atMs": 1789918799000,
+                  "pnlUsd": 6386.96
+                },
+                {
+                  "atMs": 1790005199000,
+                  "pnlUsd": 6934.1
+                },
+                {
+                  "atMs": 1790091599000,
+                  "pnlUsd": 5838.16
+                },
+                {
+                  "atMs": 1790177999000,
+                  "pnlUsd": 5167.61
+                },
+                {
+                  "atMs": 1790264399000,
+                  "pnlUsd": 6242.66
+                },
+                {
+                  "atMs": 1790350799000,
+                  "pnlUsd": 7313.03
+                },
+                {
+                  "atMs": 1790437199000,
+                  "pnlUsd": 6636.66
+                },
+                {
+                  "atMs": 1790523599000,
+                  "pnlUsd": 5544.01
+                },
+                {
+                  "atMs": 1790609999000,
+                  "pnlUsd": 6097.76
+                },
+                {
+                  "atMs": 1790696399000,
+                  "pnlUsd": 7464.59
+                },
+                {
+                  "atMs": 1790782799000,
+                  "pnlUsd": 7380.97
+                },
+                {
+                  "atMs": 1790869199000,
+                  "pnlUsd": 6134.71
+                },
+                {
+                  "atMs": 1790955599000,
+                  "pnlUsd": 6058.69
+                },
+                {
+                  "atMs": 1791041999000,
+                  "pnlUsd": 7427.35
+                },
+                {
+                  "atMs": 1791128399000,
+                  "pnlUsd": 7973.95
+                },
+                {
+                  "atMs": 1791214799000,
+                  "pnlUsd": 6877.73
+                },
+                {
+                  "atMs": 1791301199000,
+                  "pnlUsd": 6207.67
+                }
+              ]
+            },
+            {
+              "kind": "TRADER",
+              "metrics": {
+                "btcBeta": null,
+                "isCalmar": 3.728681160524622,
+                "isSharpe": 0.06806426021070618,
+                "isSortino": 0.10328514781797236,
+                "oosSharpe": 1,
+                "cloneCount": 0,
+                "makerShare": 0.5,
+                "oosSortino": 1,
+                "oosWindows": 2,
+                "scoreFlags": [],
+                "historyDays": 90,
+                "maxDrawdown": 0.0166856574251343,
+                "executionFit": 90,
+                "lookbackDays": 90,
+                "timeInMarket": 0.8,
+                "concentration": 1,
+                "oosMaxDrawdown": 0.1,
+                "pnlConsistency": 0.8967479360012343,
+                "averageLeverage": 1,
+                "executionCoverage": 1,
+                "medianHoldMinutes": 480,
+                "liquidationDistance": 0.5,
+                "survivorshipQuality": "CURRENT_SNAPSHOT",
+                "crossWindowStability": 0.8
+              },
+              "patterns": {
+                "observedFills": null,
+                "increasesAfterLoss": null,
+                "repeatedRoundTrips": null
+              },
+              "candidate": 4,
+              "positions": [
+                {
+                  "market": "HYPE",
+                  "leverage": 1,
+                  "signedNotionalUsd": 100000,
+                  "liquidationDistance": 0.5
+                }
+              ],
+              "equityCurve": [
+                {
+                  "atMs": 1788709199000,
+                  "pnlUsd": 5726.82
+                },
+                {
+                  "atMs": 1788795599000,
+                  "pnlUsd": 5035.11
+                },
+                {
+                  "atMs": 1788881999000,
+                  "pnlUsd": 3962.7
+                },
+                {
+                  "atMs": 1788968399000,
+                  "pnlUsd": 5338.06
+                },
+                {
+                  "atMs": 1789054799000,
+                  "pnlUsd": 5981.86
+                },
+                {
+                  "atMs": 1789141199000,
+                  "pnlUsd": 4510.3
+                },
+                {
+                  "atMs": 1789227599000,
+                  "pnlUsd": 4731.54
+                },
+                {
+                  "atMs": 1789313999000,
+                  "pnlUsd": 6298.92
+                },
+                {
+                  "atMs": 1789400399000,
+                  "pnlUsd": 5561.81
+                },
+                {
+                  "atMs": 1789486799000,
+                  "pnlUsd": 4525.73
+                },
+                {
+                  "atMs": 1789573199000,
+                  "pnlUsd": 5929.99
+                },
+                {
+                  "atMs": 1789659599000,
+                  "pnlUsd": 6524.32
+                },
+                {
+                  "atMs": 1789745999000,
+                  "pnlUsd": 5046.35
+                },
+                {
+                  "atMs": 1789832399000,
+                  "pnlUsd": 5319.97
+                },
+                {
+                  "atMs": 1789918799000,
+                  "pnlUsd": 6869.96
+                },
+                {
+                  "atMs": 1790005199000,
+                  "pnlUsd": 6088.37
+                },
+                {
+                  "atMs": 1790091599000,
+                  "pnlUsd": 5089.88
+                },
+                {
+                  "atMs": 1790177999000,
+                  "pnlUsd": 6521.54
+                },
+                {
+                  "atMs": 1790264399000,
+                  "pnlUsd": 7065.83
+                },
+                {
+                  "atMs": 1790350799000,
+                  "pnlUsd": 5583.2
+                },
+                {
+                  "atMs": 1790437199000,
+                  "pnlUsd": 5908.98
+                },
+                {
+                  "atMs": 1790523599000,
+                  "pnlUsd": 7439.93
+                },
+                {
+                  "atMs": 1790609999000,
+                  "pnlUsd": 6614.83
+                },
+                {
+                  "atMs": 1790696399000,
+                  "pnlUsd": 5655.16
+                },
+                {
+                  "atMs": 1790782799000,
+                  "pnlUsd": 7112.69
+                },
+                {
+                  "atMs": 1790869199000,
+                  "pnlUsd": 7606.4
+                },
+                {
+                  "atMs": 1790955599000,
+                  "pnlUsd": 6120.88
+                },
+                {
+                  "atMs": 1791041999000,
+                  "pnlUsd": 6498.55
+                },
+                {
+                  "atMs": 1791128399000,
+                  "pnlUsd": 8008.81
+                },
+                {
+                  "atMs": 1791214799000,
+                  "pnlUsd": 7141.22
+                },
+                {
+                  "atMs": 1791301199000,
+                  "pnlUsd": 6221.55
+                }
+              ]
+            }
+          ],
+          "policyHash": "0xd69f50ce3526cae00921b1dbb6bade6c4bf791d694a099b2a060a26ddf69fa0d",
+          "evidenceHash": "0x87ea5ba92d17fdb418bf5e8f98b38eb887623ffa26880428fb15b7098cf24a4a",
+          "snapshotHash": "0x4c44d9cdf2222c0ce794b4ddfcf356541e16bcc92b918ac640cdfa275609c3c4",
+          "schemaVersion": "1.1.0"
+        }
+      },
+      "output": {
+        "quorum": 1,
+        "draftHash": "0x1e40d834a7b978e99f06df955045854147606fc8d74a6109e0890c32f50913b9",
+        "penalties": [
+          {
+            "candidate": 0,
+            "multiplier": 1,
+            "excludeScore": 0
+          },
+          {
+            "candidate": 1,
+            "multiplier": 1,
+            "excludeScore": 0
+          },
+          {
+            "candidate": 2,
+            "multiplier": 1,
+            "excludeScore": 0
+          },
+          {
+            "candidate": 3,
+            "multiplier": 1,
+            "excludeScore": 0
+          },
+          {
+            "candidate": 4,
+            "multiplier": 1,
+            "excludeScore": 0
+          }
+        ],
+        "policyHash": "0xd69f50ce3526cae00921b1dbb6bade6c4bf791d694a099b2a060a26ddf69fa0d",
+        "promptHash": "0xbe1f8adb55208110dddbc08fb572fa4596d52b50531165f94792d84785cdbaf9",
+        "rebuildScore": 0,
+        "snapshotHash": "0x4c44d9cdf2222c0ce794b4ddfcf356541e16bcc92b918ac640cdfa275609c3c4",
+        "portfolioRisk": 20,
+        "schemaVersion": "1.1.0",
+        "modelConfigHash": "0x518f372ac7127259a9c1e0b05b58888c9c39b933eb04cd476b35ae9b2846bd6d"
+      },
+      "created_at_ms": 1791301200000
+    }
+  ]
+}

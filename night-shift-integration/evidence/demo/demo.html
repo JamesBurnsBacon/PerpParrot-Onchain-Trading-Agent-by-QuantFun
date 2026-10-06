@@ -1,0 +1,528 @@
+<!doctype html><html lang="en"><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PerpParrot — integration evidence</title><style>
+body{font-family:system-ui,sans-serif;margin:0;background:#0b1421;color:#e7eef8}main{max-width:1100px;margin:auto;padding:40px 24px}h1{font-size:36px;margin-bottom:8px}p{line-height:1.65;color:#b9c9dd}.tag{display:inline-block;padding:7px 12px;border-radius:6px;background:#254538;color:#aff0cc;margin:4px 8px 4px 0}.scope{border-left:4px solid #e9b863;background:#252433;padding:16px}.flow{display:flex;gap:9px;flex-wrap:wrap;margin:26px 0}.flow span{border:1px solid #39506a;padding:15px;border-radius:8px}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}.card{background:#142338;padding:22px;border-radius:12px}table{width:100%;border-collapse:collapse}td,th{padding:10px;text-align:left;border-bottom:1px solid #314258}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;background:#09111d;padding:16px;border-radius:8px}summary{cursor:pointer;padding:16px 0}small{color:#9aacbe}a{color:#a9d0ff}.hash{overflow-wrap:anywhere}h2{font-size:22px;margin:12px 0}</style><main>
+<small>PerpParrot · Night handoff · 2026-10-06T18:46:26.514Z</small><h1>One pipeline. Inspectable evidence.</h1>
+<p>James’s backend / executor interfaces, Masa’s Score and the team’s Review / freeze modules, exercised together.</p>
+<div class="scope"><strong>Controlled integration demonstration</strong><br>Inputs and model decisions below are synthetic and deterministic. Real team modules, HTTP transport, SQL migrations and dry-run execution are used. This verifies integration and recovery; it is not a live trading result or a two-LLM performance comparison.</div>
+<div class="flow"><span>Score</span> → <span>Review + audit</span> → <span>Freeze + restart</span> → <span>Snapshot → HTTP targets</span> → <span>Executor dry run</span> → <span>Stored run → dashboard read</span></div>
+<span class="tag">SUCCEEDED</span><span class="tag">2 replaceable rule adapters</span><span class="tag">0 exchange orders submitted</span>
+<div class="cards"><section class="card"><h2>return-first.v1</h2><table><tr><td>Score finalists</td><td>5</td></tr><tr><td>Review</td><td>VALID</td></tr><tr><td>Persistent audit rows</td><td>3</td></tr><tr><td>After freeze / reopen</td><td>MONITOR</td></tr><tr><td>Planned legs</td><td>5</td></tr><tr><td>Freeze retained</td><td>PASS</td></tr></table><p class="hash"><small>Configuration commitment<br>0xcea9fc60cc1e880cd99e5c9cdef63b565bbcbf5ed2fa639b0583b52a02107911</small></p><details><summary>HTTP, persistence and fault evidence</summary><pre>{
+  &quot;schemaVersion&quot;: &quot;night-service-proof.v1&quot;,
+  &quot;mode&quot;: &quot;controlled-fixture-http-dry-run&quot;,
+  &quot;storage&quot;: &quot;actual-production-store-queries-on-local-pglite&quot;,
+  &quot;configurationHash&quot;: &quot;0xcea9fc60cc1e880cd99e5c9cdef63b565bbcbf5ed2fa639b0583b52a02107911&quot;,
+  &quot;snapshotHash&quot;: &quot;0xcb0f860fc54e80109cdfb981b60f5d7cf9a9624770fb160ff5150d1e1ce6c091&quot;,
+  &quot;runId&quot;: &quot;mirror-1791301200&quot;,
+  &quot;plannedOrders&quot;: 5,
+  &quot;equityUsd&quot;: 10000,
+  &quot;plan&quot;: {
+    &quot;orders&quot;: [
+      {
+        &quot;asset&quot;: &quot;AVAX&quot;,
+        &quot;assetId&quot;: 0,
+        &quot;isBuy&quot;: true,
+        &quot;price&quot;: &quot;100.5&quot;,
+        &quot;size&quot;: &quot;15.06482&quot;,
+        &quot;reduceOnly&quot;: false,
+        &quot;notionalUsd&quot;: 1506.482,
+        &quot;targetUsd&quot;: 1506.48258,
+        &quot;currentUsd&quot;: 0
+      },
+      {
+        &quot;asset&quot;: &quot;BTC&quot;,
+        &quot;assetId&quot;: 1,
+        &quot;isBuy&quot;: true,
+        &quot;price&quot;: &quot;100500&quot;,
+        &quot;size&quot;: &quot;0.01506&quot;,
+        &quot;reduceOnly&quot;: false,
+        &quot;notionalUsd&quot;: 1506,
+        &quot;targetUsd&quot;: 1506.47471,
+        &quot;currentUsd&quot;: 0
+      },
+      {
+        &quot;asset&quot;: &quot;ETH&quot;,
+        &quot;assetId&quot;: 2,
+        &quot;isBuy&quot;: true,
+        &quot;price&quot;: &quot;2512.5&quot;,
+        &quot;size&quot;: &quot;0.60263&quot;,
+        &quot;reduceOnly&quot;: false,
+        &quot;notionalUsd&quot;: 1506.575,
+        &quot;targetUsd&quot;: 1506.57745,
+        &quot;currentUsd&quot;: 0
+      },
+      {
+        &quot;asset&quot;: &quot;HYPE&quot;,
+        &quot;assetId&quot;: 3,
+        &quot;isBuy&quot;: true,
+        &quot;price&quot;: &quot;103.5&quot;,
+        &quot;size&quot;: &quot;14.62413&quot;,
+        &quot;reduceOnly&quot;: false,
+        &quot;notionalUsd&quot;: 1506.28539,
+        &quot;targetUsd&quot;: 1506.28568,
+        &quot;currentUsd&quot;: 0
+      },
+      {
+        &quot;asset&quot;: &quot;SOL&quot;,
+        &quot;assetId&quot;: 4,
+        &quot;isBuy&quot;: true,
+        &quot;price&quot;: &quot;104.5&quot;,
+        &quot;size&quot;: &quot;14.48634&quot;,
+        &quot;reduceOnly&quot;: false,
+        &quot;notionalUsd&quot;: 1506.57936,
+        &quot;targetUsd&quot;: 1506.5800800000002,
+        &quot;currentUsd&quot;: 0
+      }
+    ],
+    &quot;skipped&quot;: [],
+    &quot;marginScale&quot;: 1,
+    &quot;initialMarginUsd&quot;: 753.24005
+  },
+  &quot;liveOrdersSubmitted&quot;: 0,
+  &quot;publicDashboardRunCount&quot;: 12,
+  &quot;paperBookCount&quot;: 4,
+  &quot;checks&quot;: {
+    &quot;sameFrozenConfiguration&quot;: true,
+    &quot;snapshotHashRecomputed&quot;: true,
+    &quot;targetExposuresRecomputed&quot;: true,
+    &quot;nonemptyDryRunResults&quot;: true,
+    &quot;concurrentDuplicateNoOp&quot;: true,
+    &quot;restartDuplicateNoOp&quot;: true,
+    &quot;restartSnapshotUnchanged&quot;: true,
+    &quot;restartPausePersisted&quot;: true,
+    &quot;restartPaperPersisted&quot;: true,
+    &quot;journalFaultHeldAfterRestart&quot;: true,
+    &quot;orderJournalFaultHeldAfterRestart&quot;: true,
+    &quot;lastBatchFailureRecorded&quot;: true,
+    &quot;unresolvedResumeBlocked&quot;: true,
+    &quot;reconciliationStaysPaused&quot;: true,
+    &quot;nextRunRecovered&quot;: true
+  },
+  &quot;scenarios&quot;: [
+    {
+      &quot;name&quot;: &quot;success&quot;,
+      &quot;runId&quot;: &quot;mirror-1791301200&quot;,
+      &quot;status&quot;: &quot;executed&quot;,
+      &quot;dryRunActions&quot;: 6,
+      &quot;error&quot;: null
+    },
+    {
+      &quot;name&quot;: &quot;wrong-configuration&quot;,
+      &quot;runId&quot;: &quot;mirror-1791301800&quot;,
+      &quot;status&quot;: &quot;failed&quot;,
+      &quot;dryRunActions&quot;: 0,
+      &quot;error&quot;: &quot;configuration mismatch: targets from 0xcea9fc60cc1e880cd99e5c9cdef63b565bbcbf5ed2fa639b0583b52a02107911&quot;
+    },
+    {
+      &quot;name&quot;: &quot;wrong-account&quot;,
+      &quot;runId&quot;: &quot;mirror-1791302400&quot;,
+      &quot;status&quot;: &quot;failed&quot;,
+      &quot;dryRunActions&quot;: 0,
+      &quot;error&quot;: &quot;account mismatch: targets for 0xffffffffffffffffffffffffffffffffffffffff&quot;
+    },
+    {
+      &quot;name&quot;: &quot;expired-run&quot;,
+      &quot;runId&quot;: &quot;mirror-1791303000&quot;,
+      &quot;status&quot;: &quot;failed&quot;,
+      &quot;dryRunActions&quot;: 0,
+      &quot;error&quot;: &quot;run expired before execution&quot;
+    },
+    {
+      &quot;name&quot;: &quot;backend-unavailable&quot;,
+      &quot;runId&quot;: &quot;mirror-1791303600&quot;,
+      &quot;status&quot;: &quot;failed&quot;,
+      &quot;dryRunActions&quot;: 0,
+      &quot;error&quot;: &quot;backend targets for 1791303600: HTTP 503 {\&quot;error\&quot;:\&quot;INJECTED_BACKEND_UNAVAILABLE\&quot;}&quot;
+    },
+    {
+      &quot;name&quot;: &quot;paused&quot;,
+      &quot;runId&quot;: &quot;mirror-1791304200&quot;,
+      &quot;status&quot;: &quot;skipped_paused&quot;,
+      &quot;dryRunActions&quot;: 0,
+      &quot;error&quot;: null
+    },
+    {
+      &quot;name&quot;: &quot;database-before-dispatch&quot;,
+      &quot;runId&quot;: &quot;mirror-1791304800&quot;,
+      &quot;status&quot;: &quot;failed&quot;,
+      &quot;dryRunActions&quot;: 0,
+      &quot;error&quot;: &quot;INJECTED_DATABASE_BEFORE_DISPATCH&quot;
+    },
+    {
+      &quot;name&quot;: &quot;database-after-leverage-dispatch&quot;,
+      &quot;runId&quot;: &quot;mirror-1791305400&quot;,
+      &quot;status&quot;: &quot;failed&quot;,
+      &quot;dryRunActions&quot;: 1,
+      &quot;error&quot;: &quot;INJECTED_DATABASE_AFTER_DISPATCH&quot;
+    },
+    {
+      &quot;name&quot;: &quot;restart-unresolved-journal&quot;,
+      &quot;runId&quot;: &quot;mirror-1791306000&quot;,
+      &quot;status&quot;: &quot;skipped_paused&quot;,
+      &quot;dryRunActions&quot;: 0,
+      &quot;error&quot;: &quot;1 order batch(es) need reconciliation&quot;
+    },
+    {
+      &quot;name&quot;: &quot;database-after-order-dispatch&quot;,
+      &quot;runId&quot;: &quot;mirror-1791306600&quot;,
+      &quot;status&quot;: &quot;failed&quot;,
+      &quot;dryRunActions&quot;: 6,
+      &quot;error&quot;: &quot;journal write failed after dispatch (batch 0 needs reconciliation): INJECTED_DATABASE_AFTER_ORDER_DISPATCH&quot;
+    },
+    {
+      &quot;name&quot;: &quot;restart-unresolved-order-journal&quot;,
+      &quot;runId&quot;: &quot;mirror-1791307200&quot;,
+      &quot;status&quot;: &quot;skipped_paused&quot;,
+      &quot;dryRunActions&quot;: 0,
+      &quot;error&quot;: &quot;1 order batch(es) need reconciliation&quot;
+    },
+    {
+      &quot;name&quot;: &quot;recovered&quot;,
+      &quot;runId&quot;: &quot;mirror-1791307800&quot;,
+      &quot;status&quot;: &quot;executed&quot;,
+      &quot;dryRunActions&quot;: 6,
+      &quot;error&quot;: null
+    }
+  ],
+  &quot;boundaries&quot;: [
+    &quot;Synthetic source/account/market inputs and local dry-run exchange transport; no real orders or provider calls.&quot;,
+    &quot;Actual production SnapshotService, copy math, executor HTTP app, Runner, SDK dry transport, stores and SQL migrations.&quot;,
+    &quot;Backend HTTP routing is a thin test adapter; embedded PGlite replaces Bun SQL transport, not production table queries.&quot;,
+    &quot;Local database close/reopen and fault injection; no hosted deployment, multi-process advisory-lock, pooler or funded-execution claim.&quot;
+  ]
+}</pre></details><details><summary>Persisted executor plan (synthetic $10,000 account)</summary><pre>{
+  &quot;orders&quot;: [
+    {
+      &quot;asset&quot;: &quot;AVAX&quot;,
+      &quot;assetId&quot;: 0,
+      &quot;isBuy&quot;: true,
+      &quot;price&quot;: &quot;100.5&quot;,
+      &quot;size&quot;: &quot;15.06482&quot;,
+      &quot;reduceOnly&quot;: false,
+      &quot;notionalUsd&quot;: 1506.482,
+      &quot;targetUsd&quot;: 1506.48258,
+      &quot;currentUsd&quot;: 0
+    },
+    {
+      &quot;asset&quot;: &quot;BTC&quot;,
+      &quot;assetId&quot;: 1,
+      &quot;isBuy&quot;: true,
+      &quot;price&quot;: &quot;100500&quot;,
+      &quot;size&quot;: &quot;0.01506&quot;,
+      &quot;reduceOnly&quot;: false,
+      &quot;notionalUsd&quot;: 1506,
+      &quot;targetUsd&quot;: 1506.47471,
+      &quot;currentUsd&quot;: 0
+    },
+    {
+      &quot;asset&quot;: &quot;ETH&quot;,
+      &quot;assetId&quot;: 2,
+      &quot;isBuy&quot;: true,
+      &quot;price&quot;: &quot;2512.5&quot;,
+      &quot;size&quot;: &quot;0.60263&quot;,
+      &quot;reduceOnly&quot;: false,
+      &quot;notionalUsd&quot;: 1506.575,
+      &quot;targetUsd&quot;: 1506.57745,
+      &quot;currentUsd&quot;: 0
+    },
+    {
+      &quot;asset&quot;: &quot;HYPE&quot;,
+      &quot;assetId&quot;: 3,
+      &quot;isBuy&quot;: true,
+      &quot;price&quot;: &quot;103.5&quot;,
+      &quot;size&quot;: &quot;14.62413&quot;,
+      &quot;reduceOnly&quot;: false,
+      &quot;notionalUsd&quot;: 1506.28539,
+      &quot;targetUsd&quot;: 1506.28568,
+      &quot;currentUsd&quot;: 0
+    },
+    {
+      &quot;asset&quot;: &quot;SOL&quot;,
+      &quot;assetId&quot;: 4,
+      &quot;isBuy&quot;: true,
+      &quot;price&quot;: &quot;104.5&quot;,
+      &quot;size&quot;: &quot;14.48634&quot;,
+      &quot;reduceOnly&quot;: false,
+      &quot;notionalUsd&quot;: 1506.57936,
+      &quot;targetUsd&quot;: 1506.5800800000002,
+      &quot;currentUsd&quot;: 0
+    }
+  ],
+  &quot;skipped&quot;: [],
+  &quot;marginScale&quot;: 1,
+  &quot;initialMarginUsd&quot;: 753.24005
+}</pre></details></section><section class="card"><h2>drawdown-first.v1</h2><table><tr><td>Score finalists</td><td>5</td></tr><tr><td>Review</td><td>VALID</td></tr><tr><td>Persistent audit rows</td><td>3</td></tr><tr><td>After freeze / reopen</td><td>MONITOR</td></tr><tr><td>Planned legs</td><td>5</td></tr><tr><td>Freeze retained</td><td>PASS</td></tr></table><p class="hash"><small>Configuration commitment<br>0x859fc8ce76d1b76766d420d1e94626052f39e3f0e9b849284a49825e98564fd7</small></p><details><summary>HTTP, persistence and fault evidence</summary><pre>{
+  &quot;schemaVersion&quot;: &quot;night-service-proof.v1&quot;,
+  &quot;mode&quot;: &quot;controlled-fixture-http-dry-run&quot;,
+  &quot;storage&quot;: &quot;actual-production-store-queries-on-local-pglite&quot;,
+  &quot;configurationHash&quot;: &quot;0x859fc8ce76d1b76766d420d1e94626052f39e3f0e9b849284a49825e98564fd7&quot;,
+  &quot;snapshotHash&quot;: &quot;0xa30eb3edb2ed7f72a0d150fae06e6ee1f4d69d7a87a3d021b3a4dadcab19deb4&quot;,
+  &quot;runId&quot;: &quot;mirror-1791301200&quot;,
+  &quot;plannedOrders&quot;: 5,
+  &quot;equityUsd&quot;: 10000,
+  &quot;plan&quot;: {
+    &quot;orders&quot;: [
+      {
+        &quot;asset&quot;: &quot;AVAX&quot;,
+        &quot;assetId&quot;: 0,
+        &quot;isBuy&quot;: true,
+        &quot;price&quot;: &quot;100.5&quot;,
+        &quot;size&quot;: &quot;15.06482&quot;,
+        &quot;reduceOnly&quot;: false,
+        &quot;notionalUsd&quot;: 1506.482,
+        &quot;targetUsd&quot;: 1506.48258,
+        &quot;currentUsd&quot;: 0
+      },
+      {
+        &quot;asset&quot;: &quot;BTC&quot;,
+        &quot;assetId&quot;: 1,
+        &quot;isBuy&quot;: true,
+        &quot;price&quot;: &quot;100500&quot;,
+        &quot;size&quot;: &quot;0.01506&quot;,
+        &quot;reduceOnly&quot;: false,
+        &quot;notionalUsd&quot;: 1506,
+        &quot;targetUsd&quot;: 1506.47471,
+        &quot;currentUsd&quot;: 0
+      },
+      {
+        &quot;asset&quot;: &quot;ETH&quot;,
+        &quot;assetId&quot;: 2,
+        &quot;isBuy&quot;: true,
+        &quot;price&quot;: &quot;2512.5&quot;,
+        &quot;size&quot;: &quot;0.60263&quot;,
+        &quot;reduceOnly&quot;: false,
+        &quot;notionalUsd&quot;: 1506.575,
+        &quot;targetUsd&quot;: 1506.57745,
+        &quot;currentUsd&quot;: 0
+      },
+      {
+        &quot;asset&quot;: &quot;HYPE&quot;,
+        &quot;assetId&quot;: 3,
+        &quot;isBuy&quot;: true,
+        &quot;price&quot;: &quot;103.5&quot;,
+        &quot;size&quot;: &quot;14.62413&quot;,
+        &quot;reduceOnly&quot;: false,
+        &quot;notionalUsd&quot;: 1506.28539,
+        &quot;targetUsd&quot;: 1506.28568,
+        &quot;currentUsd&quot;: 0
+      },
+      {
+        &quot;asset&quot;: &quot;SOL&quot;,
+        &quot;assetId&quot;: 4,
+        &quot;isBuy&quot;: true,
+        &quot;price&quot;: &quot;104.5&quot;,
+        &quot;size&quot;: &quot;14.48634&quot;,
+        &quot;reduceOnly&quot;: false,
+        &quot;notionalUsd&quot;: 1506.57936,
+        &quot;targetUsd&quot;: 1506.5800800000002,
+        &quot;currentUsd&quot;: 0
+      }
+    ],
+    &quot;skipped&quot;: [],
+    &quot;marginScale&quot;: 1,
+    &quot;initialMarginUsd&quot;: 753.24005
+  },
+  &quot;liveOrdersSubmitted&quot;: 0,
+  &quot;publicDashboardRunCount&quot;: 12,
+  &quot;paperBookCount&quot;: 4,
+  &quot;checks&quot;: {
+    &quot;sameFrozenConfiguration&quot;: true,
+    &quot;snapshotHashRecomputed&quot;: true,
+    &quot;targetExposuresRecomputed&quot;: true,
+    &quot;nonemptyDryRunResults&quot;: true,
+    &quot;concurrentDuplicateNoOp&quot;: true,
+    &quot;restartDuplicateNoOp&quot;: true,
+    &quot;restartSnapshotUnchanged&quot;: true,
+    &quot;restartPausePersisted&quot;: true,
+    &quot;restartPaperPersisted&quot;: true,
+    &quot;journalFaultHeldAfterRestart&quot;: true,
+    &quot;orderJournalFaultHeldAfterRestart&quot;: true,
+    &quot;lastBatchFailureRecorded&quot;: true,
+    &quot;unresolvedResumeBlocked&quot;: true,
+    &quot;reconciliationStaysPaused&quot;: true,
+    &quot;nextRunRecovered&quot;: true
+  },
+  &quot;scenarios&quot;: [
+    {
+      &quot;name&quot;: &quot;success&quot;,
+      &quot;runId&quot;: &quot;mirror-1791301200&quot;,
+      &quot;status&quot;: &quot;executed&quot;,
+      &quot;dryRunActions&quot;: 6,
+      &quot;error&quot;: null
+    },
+    {
+      &quot;name&quot;: &quot;wrong-configuration&quot;,
+      &quot;runId&quot;: &quot;mirror-1791301800&quot;,
+      &quot;status&quot;: &quot;failed&quot;,
+      &quot;dryRunActions&quot;: 0,
+      &quot;error&quot;: &quot;configuration mismatch: targets from 0x859fc8ce76d1b76766d420d1e94626052f39e3f0e9b849284a49825e98564fd7&quot;
+    },
+    {
+      &quot;name&quot;: &quot;wrong-account&quot;,
+      &quot;runId&quot;: &quot;mirror-1791302400&quot;,
+      &quot;status&quot;: &quot;failed&quot;,
+      &quot;dryRunActions&quot;: 0,
+      &quot;error&quot;: &quot;account mismatch: targets for 0xffffffffffffffffffffffffffffffffffffffff&quot;
+    },
+    {
+      &quot;name&quot;: &quot;expired-run&quot;,
+      &quot;runId&quot;: &quot;mirror-1791303000&quot;,
+      &quot;status&quot;: &quot;failed&quot;,
+      &quot;dryRunActions&quot;: 0,
+      &quot;error&quot;: &quot;run expired before execution&quot;
+    },
+    {
+      &quot;name&quot;: &quot;backend-unavailable&quot;,
+      &quot;runId&quot;: &quot;mirror-1791303600&quot;,
+      &quot;status&quot;: &quot;failed&quot;,
+      &quot;dryRunActions&quot;: 0,
+      &quot;error&quot;: &quot;backend targets for 1791303600: HTTP 503 {\&quot;error\&quot;:\&quot;INJECTED_BACKEND_UNAVAILABLE\&quot;}&quot;
+    },
+    {
+      &quot;name&quot;: &quot;paused&quot;,
+      &quot;runId&quot;: &quot;mirror-1791304200&quot;,
+      &quot;status&quot;: &quot;skipped_paused&quot;,
+      &quot;dryRunActions&quot;: 0,
+      &quot;error&quot;: null
+    },
+    {
+      &quot;name&quot;: &quot;database-before-dispatch&quot;,
+      &quot;runId&quot;: &quot;mirror-1791304800&quot;,
+      &quot;status&quot;: &quot;failed&quot;,
+      &quot;dryRunActions&quot;: 0,
+      &quot;error&quot;: &quot;INJECTED_DATABASE_BEFORE_DISPATCH&quot;
+    },
+    {
+      &quot;name&quot;: &quot;database-after-leverage-dispatch&quot;,
+      &quot;runId&quot;: &quot;mirror-1791305400&quot;,
+      &quot;status&quot;: &quot;failed&quot;,
+      &quot;dryRunActions&quot;: 1,
+      &quot;error&quot;: &quot;INJECTED_DATABASE_AFTER_DISPATCH&quot;
+    },
+    {
+      &quot;name&quot;: &quot;restart-unresolved-journal&quot;,
+      &quot;runId&quot;: &quot;mirror-1791306000&quot;,
+      &quot;status&quot;: &quot;skipped_paused&quot;,
+      &quot;dryRunActions&quot;: 0,
+      &quot;error&quot;: &quot;1 order batch(es) need reconciliation&quot;
+    },
+    {
+      &quot;name&quot;: &quot;database-after-order-dispatch&quot;,
+      &quot;runId&quot;: &quot;mirror-1791306600&quot;,
+      &quot;status&quot;: &quot;failed&quot;,
+      &quot;dryRunActions&quot;: 6,
+      &quot;error&quot;: &quot;journal write failed after dispatch (batch 0 needs reconciliation): INJECTED_DATABASE_AFTER_ORDER_DISPATCH&quot;
+    },
+    {
+      &quot;name&quot;: &quot;restart-unresolved-order-journal&quot;,
+      &quot;runId&quot;: &quot;mirror-1791307200&quot;,
+      &quot;status&quot;: &quot;skipped_paused&quot;,
+      &quot;dryRunActions&quot;: 0,
+      &quot;error&quot;: &quot;1 order batch(es) need reconciliation&quot;
+    },
+    {
+      &quot;name&quot;: &quot;recovered&quot;,
+      &quot;runId&quot;: &quot;mirror-1791307800&quot;,
+      &quot;status&quot;: &quot;executed&quot;,
+      &quot;dryRunActions&quot;: 6,
+      &quot;error&quot;: null
+    }
+  ],
+  &quot;boundaries&quot;: [
+    &quot;Synthetic source/account/market inputs and local dry-run exchange transport; no real orders or provider calls.&quot;,
+    &quot;Actual production SnapshotService, copy math, executor HTTP app, Runner, SDK dry transport, stores and SQL migrations.&quot;,
+    &quot;Backend HTTP routing is a thin test adapter; embedded PGlite replaces Bun SQL transport, not production table queries.&quot;,
+    &quot;Local database close/reopen and fault injection; no hosted deployment, multi-process advisory-lock, pooler or funded-execution claim.&quot;
+  ]
+}</pre></details><details><summary>Persisted executor plan (synthetic $10,000 account)</summary><pre>{
+  &quot;orders&quot;: [
+    {
+      &quot;asset&quot;: &quot;AVAX&quot;,
+      &quot;assetId&quot;: 0,
+      &quot;isBuy&quot;: true,
+      &quot;price&quot;: &quot;100.5&quot;,
+      &quot;size&quot;: &quot;15.06482&quot;,
+      &quot;reduceOnly&quot;: false,
+      &quot;notionalUsd&quot;: 1506.482,
+      &quot;targetUsd&quot;: 1506.48258,
+      &quot;currentUsd&quot;: 0
+    },
+    {
+      &quot;asset&quot;: &quot;BTC&quot;,
+      &quot;assetId&quot;: 1,
+      &quot;isBuy&quot;: true,
+      &quot;price&quot;: &quot;100500&quot;,
+      &quot;size&quot;: &quot;0.01506&quot;,
+      &quot;reduceOnly&quot;: false,
+      &quot;notionalUsd&quot;: 1506,
+      &quot;targetUsd&quot;: 1506.47471,
+      &quot;currentUsd&quot;: 0
+    },
+    {
+      &quot;asset&quot;: &quot;ETH&quot;,
+      &quot;assetId&quot;: 2,
+      &quot;isBuy&quot;: true,
+      &quot;price&quot;: &quot;2512.5&quot;,
+      &quot;size&quot;: &quot;0.60263&quot;,
+      &quot;reduceOnly&quot;: false,
+      &quot;notionalUsd&quot;: 1506.575,
+      &quot;targetUsd&quot;: 1506.57745,
+      &quot;currentUsd&quot;: 0
+    },
+    {
+      &quot;asset&quot;: &quot;HYPE&quot;,
+      &quot;assetId&quot;: 3,
+      &quot;isBuy&quot;: true,
+      &quot;price&quot;: &quot;103.5&quot;,
+      &quot;size&quot;: &quot;14.62413&quot;,
+      &quot;reduceOnly&quot;: false,
+      &quot;notionalUsd&quot;: 1506.28539,
+      &quot;targetUsd&quot;: 1506.28568,
+      &quot;currentUsd&quot;: 0
+    },
+    {
+      &quot;asset&quot;: &quot;SOL&quot;,
+      &quot;assetId&quot;: 4,
+      &quot;isBuy&quot;: true,
+      &quot;price&quot;: &quot;104.5&quot;,
+      &quot;size&quot;: &quot;14.48634&quot;,
+      &quot;reduceOnly&quot;: false,
+      &quot;notionalUsd&quot;: 1506.57936,
+      &quot;targetUsd&quot;: 1506.5800800000002,
+      &quot;currentUsd&quot;: 0
+    }
+  ],
+  &quot;skipped&quot;: [],
+  &quot;marginScale&quot;: 1,
+  &quot;initialMarginUsd&quot;: 753.24005
+}</pre></details></section></div>
+<h2>Reproduce and verify</h2><p>Run <code>bun --no-env-file night-shift-integration/demo.ts</code> after installing pinned repository dependencies. Repeat: committed stages are reused. The adjacent <code>evidence.json</code> contains the full machine-readable result. GitHub’s handoff contains the separate real-data ingestion and historical replay results.</p>
+<p class="hash"><small>Code digest: fad9d893d42057b72efc294b54a4ef45252560dbb3294ef8374d1efbb485f974<br>Artifact chain: 6a52b45b13d2e926bfbbc5665e42fb68cc951d3bc3c45868fa850555f88484e5<br>Logical replay time: 2026-10-06T15:40:00.000Z</small></p><details><summary>Full provenance and receipt</summary><pre>{
+  &quot;scope&quot;: &quot;Offline controlled scenario; real team modules and SQL migrations; deterministic model adapters; exchange dry run; no real orders.&quot;,
+  &quot;event&quot;: {
+    &quot;schemaVersion&quot;: &quot;night-pipeline.v2&quot;,
+    &quot;trigger&quot;: &quot;REPLAY&quot;,
+    &quot;bucketMs&quot;: 1791301200000,
+    &quot;sourceAsOfMs&quot;: 1791301200000,
+    &quot;sourceHash&quot;: &quot;811a4beb571faa5968f6acaa80beae003f77aea60ba73b7b9fd2d32651e0c229&quot;,
+    &quot;codeHash&quot;: &quot;fad9d893d42057b72efc294b54a4ef45252560dbb3294ef8374d1efbb485f974&quot;,
+    &quot;sourceKind&quot;: &quot;SYNTHETIC_FIXTURE&quot;
+  },
+  &quot;receipt&quot;: {
+    &quot;schemaVersion&quot;: &quot;night-receipt.v1&quot;,
+    &quot;runId&quot;: &quot;night-pipeline.v2-1791301200000-8fbfcf0405fabe48&quot;,
+    &quot;status&quot;: &quot;SUCCEEDED&quot;,
+    &quot;economicAuthority&quot;: false,
+    &quot;steps&quot;: [
+      {
+        &quot;stage&quot;: &quot;return-first&quot;,
+        &quot;bodyHash&quot;: &quot;9bf10a2aaec437234bdf56766e4fccb129e6ded59aff2698d881a92943fe4bcb&quot;,
+        &quot;reused&quot;: true
+      },
+      {
+        &quot;stage&quot;: &quot;drawdown-first&quot;,
+        &quot;bodyHash&quot;: &quot;1c0720080afaceb40d8ec60fce6cf7be3317b5e0188e2e9accf291c390dfe2fb&quot;,
+        &quot;reused&quot;: true
+      }
+    ],
+    &quot;artifactChainHash&quot;: &quot;6a52b45b13d2e926bfbbc5665e42fb68cc951d3bc3c45868fa850555f88484e5&quot;
+  }
+}</pre></details></main></html>

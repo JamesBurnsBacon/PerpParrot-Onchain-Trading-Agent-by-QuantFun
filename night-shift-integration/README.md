@@ -1,5 +1,7 @@
 # Night handoff: ordinary services, one inspectable pipeline
 
+Downloadable evidence is also checked into [evidence/](evidence/); its verifier recomputes the full chain.
+
 Start with **[HANDOFF_CN.md](HANDOFF_CN.md)** (Chinese), **[INTERFACES.md](INTERFACES.md)** (replaceable contracts), and **[DELIVERY_REPORT.md](DELIVERY_REPORT.md)** (executed evidence).
 
 Based on James's PR #32, `af7e857`: no Chainlink dependency. Reuses Masa's current Score, the team's Review/audit/freeze modules, backend snapshots, target exposure math, executor and SQL stores. Two tiny deterministic rule adapters are deliberately unchanged: A ranks positive trailing return; B ranks lower sampled drawdown. They are not two LLMs.

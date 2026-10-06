@@ -1,0 +1,77 @@
+{
+  "recordedAt": "2026-10-06T18:47:48.005632+00:00",
+  "codeCommit": "9e80758a65700f869866330e6a6c224e806ae673",
+  "codeHash": "fad9d893d42057b72efc294b54a4ef45252560dbb3294ef8374d1efbb485f974",
+  "baseCommit": "af7e85749fb35527b41b5a5dbf308514e0d877cf",
+  "backendTests": {
+    "pass": 412,
+    "fail": 0,
+    "skip": 0
+  },
+  "executorTests": {
+    "pass": 76,
+    "fail": 0,
+    "skip": 1
+  },
+  "nightTests": {
+    "pass": 8,
+    "fail": 0,
+    "skip": 0
+  },
+  "rootTestFiles": {
+    "pass": 11,
+    "fail": 0
+  },
+  "schemaShapeChecks": 34,
+  "typechecks": [
+    "root",
+    "backend",
+    "executor",
+    "night-integration"
+  ],
+  "dashboardBuild": "PASS",
+  "controlledAlgorithms": 2,
+  "serviceScenariosPerAlgorithm": 12,
+  "serviceChecksPerAlgorithm": 15,
+  "historical": {
+    "schemaVersion": "historical-replay-proof.v1",
+    "sourceKind": "REAL_ARCHIVE",
+    "inputs": 10934,
+    "usableHistories": 10934,
+    "sourceHash": "1d0c484f7bd2b0110596ec4218079a2d2003f97f2149d06013c904ae8f9bc99f",
+    "codeHash": "fad9d893d42057b72efc294b54a4ef45252560dbb3294ef8374d1efbb485f974",
+    "logicalBuckets": [
+      1791301200000,
+      1791301800000
+    ],
+    "completeEvaluations": 8,
+    "repeatedStageReuse": [
+      5,
+      5
+    ],
+    "injectedFailureAfter": "evaluate",
+    "resumedStagesReused": 2,
+    "recoveredArtifactChainMatchesClean": true,
+    "checkedJsonFiles": 36,
+    "limitations": [
+      "Current research shortlist: survivorship and retrospective cohort bias remain.",
+      "Training uses only points before each cut; candidate membership was discovered later.",
+      "Sparse samples: no interpolation across cutoff; boundary intervals excluded; sampling can hide drawdown.",
+      "Fixed source sleeves; 20% cash; assumed 10 bps entry and 10 bps exit on invested capital; no fills/latency simulation.",
+      "Deterministic baselines, not two AI models or evidence of an investable winner."
+    ]
+  },
+  "liveServiceScenarios": [
+    "ok",
+    "paused",
+    "backend-down",
+    "wrong-configuration",
+    "duplicate"
+  ],
+  "realOrdersSubmitted": 0,
+  "limitations": [
+    "One local Postgres advisory-lock test skipped: no Postgres server. CI config exercises real Postgres.",
+    "Full-chain Review uses synthetic inputs and deterministic providers.",
+    "No cloud deployment, production migration, real-model billing, or funded trading."
+  ]
+}

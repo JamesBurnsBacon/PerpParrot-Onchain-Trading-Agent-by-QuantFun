@@ -1,0 +1,62 @@
+{
+  "generatedAt": 1791244800000,
+  "steps": [
+    {
+      "stage": "archive",
+      "label": "Archived Score inputs",
+      "count": 10934
+    },
+    {
+      "stage": "histories",
+      "label": "Usable histories",
+      "count": 10934
+    },
+    {
+      "stage": "training",
+      "label": "30-day training candidates",
+      "count": 9853
+    },
+    {
+      "stage": "selected",
+      "label": "Rule A research selection; not frozen",
+      "count": 5
+    }
+  ],
+  "finalists": [
+    {
+      "address": "0xf1dbf96c517ac7ccb3d929be25cc29b85d121d4a",
+      "kind": "research-candidate",
+      "score": 1,
+      "picked": false,
+      "rationale": "Rule A research rank only; not production Score and not a frozen source"
+    },
+    {
+      "address": "0xe383e214bd4b32a9ef9cf688ee98976b57f6c9c6",
+      "kind": "research-candidate",
+      "score": 0.8,
+      "picked": false,
+      "rationale": "Rule A research rank only; not production Score and not a frozen source"
+    },
+    {
+      "address": "0x7f75db96ccc27922b50d6e102938814a67fa9edf",
+      "kind": "research-candidate",
+      "score": 0.6,
+      "picked": false,
+      "rationale": "Rule A research rank only; not production Score and not a frozen source"
+    },
+    {
+      "address": "0xedab6e3998ffddcb354094ffe8ca2a3cff8d3370",
+      "kind": "research-candidate",
+      "score": 0.4,
+      "picked": false,
+      "rationale": "Rule A research rank only; not production Score and not a frozen source"
+    },
+    {
+      "address": "0xe46aae69cf2607b68c03ecdf6d94e776287e73b0",
+      "kind": "research-candidate",
+      "score": 0.19999999999999996,
+      "picked": false,
+      "rationale": "Rule A research rank only; not production Score and not a frozen source"
+    }
+  ]
+}

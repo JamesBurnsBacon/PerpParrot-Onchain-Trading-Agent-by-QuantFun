@@ -1,0 +1,699 @@
+{
+  "schemaVersion": "night-demo.v2",
+  "recordedAt": "2026-10-06T18:46:26.514Z",
+  "event": {
+    "schemaVersion": "night-pipeline.v2",
+    "trigger": "REPLAY",
+    "bucketMs": 1791301200000,
+    "sourceAsOfMs": 1791301200000,
+    "sourceHash": "811a4beb571faa5968f6acaa80beae003f77aea60ba73b7b9fd2d32651e0c229",
+    "codeHash": "fad9d893d42057b72efc294b54a4ef45252560dbb3294ef8374d1efbb485f974",
+    "sourceKind": "SYNTHETIC_FIXTURE"
+  },
+  "receipt": {
+    "schemaVersion": "night-receipt.v1",
+    "runId": "night-pipeline.v2-1791301200000-8fbfcf0405fabe48",
+    "status": "SUCCEEDED",
+    "economicAuthority": false,
+    "steps": [
+      {
+        "stage": "return-first",
+        "bodyHash": "9bf10a2aaec437234bdf56766e4fccb129e6ded59aff2698d881a92943fe4bcb",
+        "reused": true
+      },
+      {
+        "stage": "drawdown-first",
+        "bodyHash": "1c0720080afaceb40d8ec60fce6cf7be3317b5e0188e2e9accf291c390dfe2fb",
+        "reused": true
+      }
+    ],
+    "artifactChainHash": "6a52b45b13d2e926bfbbc5665e42fb68cc951d3bc3c45868fa850555f88484e5"
+  },
+  "proofs": [
+    {
+      "schemaVersion": "night-module-probe.v2",
+      "sourceKind": "SYNTHETIC_FIXTURE",
+      "economicAuthority": false,
+      "algorithm": "return-first.v1",
+      "score": {
+        "inputs": 5,
+        "eligible": 5,
+        "finalists": 5
+      },
+      "allocation": {
+        "schemaVersion": "night-allocation.v1",
+        "algorithm": "return-first.v1",
+        "cutoffMs": 1791301200000,
+        "eligible": 5,
+        "sources": [
+          {
+            "address": "0x3333333333333333333333333333333333333333",
+            "weight": 0.16,
+            "trainReturn": 0.021386734394293727,
+            "trainDrawdown": 0.016338159067909808,
+            "capitalUsd": 106200.79316581365
+          },
+          {
+            "address": "0x1111111111111111111111111111111111111111",
+            "weight": 0.16,
+            "trainReturn": 0.01916428437215867,
+            "trainDrawdown": 0.013214726142292132,
+            "capitalUsd": 106208.22114655688
+          },
+          {
+            "address": "0x5555555555555555555555555555555555555555",
+            "weight": 0.16,
+            "trainReturn": 0.01129560941479979,
+            "trainDrawdown": 0.01668118138884289,
+            "capitalUsd": 106221.54964920662
+          },
+          {
+            "address": "0x4444444444444444444444444444444444444444",
+            "weight": 0.16,
+            "trainReturn": 0.008173965064542932,
+            "trainDrawdown": 0.01668368099123374,
+            "capitalUsd": 106207.66639347772
+          },
+          {
+            "address": "0x2222222222222222222222222222222222222222",
+            "weight": 0.16,
+            "trainReturn": 0.0032146219433559775,
+            "trainDrawdown": 0.01567293068381448,
+            "capitalUsd": 106200.97851996537
+          }
+        ],
+        "cashWeight": 0.2
+      },
+      "reviewStatus": "VALID",
+      "reviewReceiptHash": "0xaaa2091b1d1f715802ca56ab526373e6ca24a73e318db851f7e648a924f5c411",
+      "configurationHash": "0xcea9fc60cc1e880cd99e5c9cdef63b565bbcbf5ed2fa639b0583b52a02107911",
+      "fixtureAccount": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "auditRows": 3,
+      "databaseRestartVerified": true,
+      "afterFreezePhase": "MONITOR",
+      "targetGuardsRejected": 2,
+      "targetsRoundtrip": true,
+      "serviceProof": {
+        "schemaVersion": "night-service-proof.v1",
+        "mode": "controlled-fixture-http-dry-run",
+        "storage": "actual-production-store-queries-on-local-pglite",
+        "configurationHash": "0xcea9fc60cc1e880cd99e5c9cdef63b565bbcbf5ed2fa639b0583b52a02107911",
+        "snapshotHash": "0xcb0f860fc54e80109cdfb981b60f5d7cf9a9624770fb160ff5150d1e1ce6c091",
+        "runId": "mirror-1791301200",
+        "plannedOrders": 5,
+        "equityUsd": 10000,
+        "plan": {
+          "orders": [
+            {
+              "asset": "AVAX",
+              "assetId": 0,
+              "isBuy": true,
+              "price": "100.5",
+              "size": "15.06482",
+              "reduceOnly": false,
+              "notionalUsd": 1506.482,
+              "targetUsd": 1506.48258,
+              "currentUsd": 0
+            },
+            {
+              "asset": "BTC",
+              "assetId": 1,
+              "isBuy": true,
+              "price": "100500",
+              "size": "0.01506",
+              "reduceOnly": false,
+              "notionalUsd": 1506,
+              "targetUsd": 1506.47471,
+              "currentUsd": 0
+            },
+            {
+              "asset": "ETH",
+              "assetId": 2,
+              "isBuy": true,
+              "price": "2512.5",
+              "size": "0.60263",
+              "reduceOnly": false,
+              "notionalUsd": 1506.575,
+              "targetUsd": 1506.57745,
+              "currentUsd": 0
+            },
+            {
+              "asset": "HYPE",
+              "assetId": 3,
+              "isBuy": true,
+              "price": "103.5",
+              "size": "14.62413",
+              "reduceOnly": false,
+              "notionalUsd": 1506.28539,
+              "targetUsd": 1506.28568,
+              "currentUsd": 0
+            },
+            {
+              "asset": "SOL",
+              "assetId": 4,
+              "isBuy": true,
+              "price": "104.5",
+              "size": "14.48634",
+              "reduceOnly": false,
+              "notionalUsd": 1506.57936,
+              "targetUsd": 1506.5800800000002,
+              "currentUsd": 0
+            }
+          ],
+          "skipped": [],
+          "marginScale": 1,
+          "initialMarginUsd": 753.24005
+        },
+        "liveOrdersSubmitted": 0,
+        "publicDashboardRunCount": 12,
+        "paperBookCount": 4,
+        "checks": {
+          "sameFrozenConfiguration": true,
+          "snapshotHashRecomputed": true,
+          "targetExposuresRecomputed": true,
+          "nonemptyDryRunResults": true,
+          "concurrentDuplicateNoOp": true,
+          "restartDuplicateNoOp": true,
+          "restartSnapshotUnchanged": true,
+          "restartPausePersisted": true,
+          "restartPaperPersisted": true,
+          "journalFaultHeldAfterRestart": true,
+          "orderJournalFaultHeldAfterRestart": true,
+          "lastBatchFailureRecorded": true,
+          "unresolvedResumeBlocked": true,
+          "reconciliationStaysPaused": true,
+          "nextRunRecovered": true
+        },
+        "scenarios": [
+          {
+            "name": "success",
+            "runId": "mirror-1791301200",
+            "status": "executed",
+            "dryRunActions": 6,
+            "error": null
+          },
+          {
+            "name": "wrong-configuration",
+            "runId": "mirror-1791301800",
+            "status": "failed",
+            "dryRunActions": 0,
+            "error": "configuration mismatch: targets from 0xcea9fc60cc1e880cd99e5c9cdef63b565bbcbf5ed2fa639b0583b52a02107911"
+          },
+          {
+            "name": "wrong-account",
+            "runId": "mirror-1791302400",
+            "status": "failed",
+            "dryRunActions": 0,
+            "error": "account mismatch: targets for 0xffffffffffffffffffffffffffffffffffffffff"
+          },
+          {
+            "name": "expired-run",
+            "runId": "mirror-1791303000",
+            "status": "failed",
+            "dryRunActions": 0,
+            "error": "run expired before execution"
+          },
+          {
+            "name": "backend-unavailable",
+            "runId": "mirror-1791303600",
+            "status": "failed",
+            "dryRunActions": 0,
+            "error": "backend targets for 1791303600: HTTP 503 {\"error\":\"INJECTED_BACKEND_UNAVAILABLE\"}"
+          },
+          {
+            "name": "paused",
+            "runId": "mirror-1791304200",
+            "status": "skipped_paused",
+            "dryRunActions": 0,
+            "error": null
+          },
+          {
+            "name": "database-before-dispatch",
+            "runId": "mirror-1791304800",
+            "status": "failed",
+            "dryRunActions": 0,
+            "error": "INJECTED_DATABASE_BEFORE_DISPATCH"
+          },
+          {
+            "name": "database-after-leverage-dispatch",
+            "runId": "mirror-1791305400",
+            "status": "failed",
+            "dryRunActions": 1,
+            "error": "INJECTED_DATABASE_AFTER_DISPATCH"
+          },
+          {
+            "name": "restart-unresolved-journal",
+            "runId": "mirror-1791306000",
+            "status": "skipped_paused",
+            "dryRunActions": 0,
+            "error": "1 order batch(es) need reconciliation"
+          },
+          {
+            "name": "database-after-order-dispatch",
+            "runId": "mirror-1791306600",
+            "status": "failed",
+            "dryRunActions": 6,
+            "error": "journal write failed after dispatch (batch 0 needs reconciliation): INJECTED_DATABASE_AFTER_ORDER_DISPATCH"
+          },
+          {
+            "name": "restart-unresolved-order-journal",
+            "runId": "mirror-1791307200",
+            "status": "skipped_paused",
+            "dryRunActions": 0,
+            "error": "1 order batch(es) need reconciliation"
+          },
+          {
+            "name": "recovered",
+            "runId": "mirror-1791307800",
+            "status": "executed",
+            "dryRunActions": 6,
+            "error": null
+          }
+        ],
+        "boundaries": [
+          "Synthetic source/account/market inputs and local dry-run exchange transport; no real orders or provider calls.",
+          "Actual production SnapshotService, copy math, executor HTTP app, Runner, SDK dry transport, stores and SQL migrations.",
+          "Backend HTTP routing is a thin test adapter; embedded PGlite replaces Bun SQL transport, not production table queries.",
+          "Local database close/reopen and fault injection; no hosted deployment, multi-process advisory-lock, pooler or funded-execution claim."
+        ]
+      },
+      "plan": {
+        "orders": [
+          {
+            "asset": "AVAX",
+            "assetId": 3,
+            "isBuy": true,
+            "price": "30.15",
+            "size": "5",
+            "reduceOnly": false,
+            "notionalUsd": 150,
+            "targetUsd": 150.648258,
+            "currentUsd": 0
+          },
+          {
+            "asset": "BTC",
+            "assetId": 0,
+            "isBuy": true,
+            "price": "100500",
+            "size": "0.0015",
+            "reduceOnly": false,
+            "notionalUsd": 150,
+            "targetUsd": 150.647471,
+            "currentUsd": 0
+          },
+          {
+            "asset": "ETH",
+            "assetId": 1,
+            "isBuy": true,
+            "price": "2512.5",
+            "size": "0.0602",
+            "reduceOnly": false,
+            "notionalUsd": 150.5,
+            "targetUsd": 150.657745,
+            "currentUsd": 0
+          },
+          {
+            "asset": "HYPE",
+            "assetId": 4,
+            "isBuy": true,
+            "price": "30.15",
+            "size": "5.02",
+            "reduceOnly": false,
+            "notionalUsd": 150.6,
+            "targetUsd": 150.628568,
+            "currentUsd": 0
+          },
+          {
+            "asset": "SOL",
+            "assetId": 2,
+            "isBuy": true,
+            "price": "150.75",
+            "size": "1",
+            "reduceOnly": false,
+            "notionalUsd": 150,
+            "targetUsd": 150.65800800000002,
+            "currentUsd": 0
+          }
+        ],
+        "skipped": [],
+        "marginScale": 1,
+        "initialMarginUsd": 75.324005
+      },
+      "fixtureFields": [
+        "synthetic portfolios and identities",
+        "OOS evidence",
+        "positions, markets and execution state",
+        "correlation",
+        "deterministic Role/Risk/Red-Team outputs"
+      ],
+      "reusedModules": [
+        "scoreCandidates",
+        "toFrameCandidates",
+        "buildReviewInput",
+        "runCommitteeReview",
+        "SupabasePaperStore",
+        "freezePaperSession",
+        "targetsFromSnapshot",
+        "parseTargets",
+        "Runner",
+        "SnapshotService",
+        "createApp",
+        "PgStore",
+        "planOrders"
+      ]
+    },
+    {
+      "schemaVersion": "night-module-probe.v2",
+      "sourceKind": "SYNTHETIC_FIXTURE",
+      "economicAuthority": false,
+      "algorithm": "drawdown-first.v1",
+      "score": {
+        "inputs": 5,
+        "eligible": 5,
+        "finalists": 5
+      },
+      "allocation": {
+        "schemaVersion": "night-allocation.v1",
+        "algorithm": "drawdown-first.v1",
+        "cutoffMs": 1791301200000,
+        "eligible": 5,
+        "sources": [
+          {
+            "address": "0x1111111111111111111111111111111111111111",
+            "weight": 0.16,
+            "trainReturn": 0.01916428437215867,
+            "trainDrawdown": 0.013214726142292132,
+            "capitalUsd": 106208.22114655688
+          },
+          {
+            "address": "0x2222222222222222222222222222222222222222",
+            "weight": 0.16,
+            "trainReturn": 0.0032146219433559775,
+            "trainDrawdown": 0.01567293068381448,
+            "capitalUsd": 106200.97851996537
+          },
+          {
+            "address": "0x3333333333333333333333333333333333333333",
+            "weight": 0.16,
+            "trainReturn": 0.021386734394293727,
+            "trainDrawdown": 0.016338159067909808,
+            "capitalUsd": 106200.79316581365
+          },
+          {
+            "address": "0x5555555555555555555555555555555555555555",
+            "weight": 0.16,
+            "trainReturn": 0.01129560941479979,
+            "trainDrawdown": 0.01668118138884289,
+            "capitalUsd": 106221.54964920662
+          },
+          {
+            "address": "0x4444444444444444444444444444444444444444",
+            "weight": 0.16,
+            "trainReturn": 0.008173965064542932,
+            "trainDrawdown": 0.01668368099123374,
+            "capitalUsd": 106207.66639347772
+          }
+        ],
+        "cashWeight": 0.2
+      },
+      "reviewStatus": "VALID",
+      "reviewReceiptHash": "0x080f1b4ed88940e866c6e853c04d78f2781cc83d18df09e11d05b1079646eb60",
+      "configurationHash": "0x859fc8ce76d1b76766d420d1e94626052f39e3f0e9b849284a49825e98564fd7",
+      "fixtureAccount": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "auditRows": 3,
+      "databaseRestartVerified": true,
+      "afterFreezePhase": "MONITOR",
+      "targetGuardsRejected": 2,
+      "targetsRoundtrip": true,
+      "serviceProof": {
+        "schemaVersion": "night-service-proof.v1",
+        "mode": "controlled-fixture-http-dry-run",
+        "storage": "actual-production-store-queries-on-local-pglite",
+        "configurationHash": "0x859fc8ce76d1b76766d420d1e94626052f39e3f0e9b849284a49825e98564fd7",
+        "snapshotHash": "0xa30eb3edb2ed7f72a0d150fae06e6ee1f4d69d7a87a3d021b3a4dadcab19deb4",
+        "runId": "mirror-1791301200",
+        "plannedOrders": 5,
+        "equityUsd": 10000,
+        "plan": {
+          "orders": [
+            {
+              "asset": "AVAX",
+              "assetId": 0,
+              "isBuy": true,
+              "price": "100.5",
+              "size": "15.06482",
+              "reduceOnly": false,
+              "notionalUsd": 1506.482,
+              "targetUsd": 1506.48258,
+              "currentUsd": 0
+            },
+            {
+              "asset": "BTC",
+              "assetId": 1,
+              "isBuy": true,
+              "price": "100500",
+              "size": "0.01506",
+              "reduceOnly": false,
+              "notionalUsd": 1506,
+              "targetUsd": 1506.47471,
+              "currentUsd": 0
+            },
+            {
+              "asset": "ETH",
+              "assetId": 2,
+              "isBuy": true,
+              "price": "2512.5",
+              "size": "0.60263",
+              "reduceOnly": false,
+              "notionalUsd": 1506.575,
+              "targetUsd": 1506.57745,
+              "currentUsd": 0
+            },
+            {
+              "asset": "HYPE",
+              "assetId": 3,
+              "isBuy": true,
+              "price": "103.5",
+              "size": "14.62413",
+              "reduceOnly": false,
+              "notionalUsd": 1506.28539,
+              "targetUsd": 1506.28568,
+              "currentUsd": 0
+            },
+            {
+              "asset": "SOL",
+              "assetId": 4,
+              "isBuy": true,
+              "price": "104.5",
+              "size": "14.48634",
+              "reduceOnly": false,
+              "notionalUsd": 1506.57936,
+              "targetUsd": 1506.5800800000002,
+              "currentUsd": 0
+            }
+          ],
+          "skipped": [],
+          "marginScale": 1,
+          "initialMarginUsd": 753.24005
+        },
+        "liveOrdersSubmitted": 0,
+        "publicDashboardRunCount": 12,
+        "paperBookCount": 4,
+        "checks": {
+          "sameFrozenConfiguration": true,
+          "snapshotHashRecomputed": true,
+          "targetExposuresRecomputed": true,
+          "nonemptyDryRunResults": true,
+          "concurrentDuplicateNoOp": true,
+          "restartDuplicateNoOp": true,
+          "restartSnapshotUnchanged": true,
+          "restartPausePersisted": true,
+          "restartPaperPersisted": true,
+          "journalFaultHeldAfterRestart": true,
+          "orderJournalFaultHeldAfterRestart": true,
+          "lastBatchFailureRecorded": true,
+          "unresolvedResumeBlocked": true,
+          "reconciliationStaysPaused": true,
+          "nextRunRecovered": true
+        },
+        "scenarios": [
+          {
+            "name": "success",
+            "runId": "mirror-1791301200",
+            "status": "executed",
+            "dryRunActions": 6,
+            "error": null
+          },
+          {
+            "name": "wrong-configuration",
+            "runId": "mirror-1791301800",
+            "status": "failed",
+            "dryRunActions": 0,
+            "error": "configuration mismatch: targets from 0x859fc8ce76d1b76766d420d1e94626052f39e3f0e9b849284a49825e98564fd7"
+          },
+          {
+            "name": "wrong-account",
+            "runId": "mirror-1791302400",
+            "status": "failed",
+            "dryRunActions": 0,
+            "error": "account mismatch: targets for 0xffffffffffffffffffffffffffffffffffffffff"
+          },
+          {
+            "name": "expired-run",
+            "runId": "mirror-1791303000",
+            "status": "failed",
+            "dryRunActions": 0,
+            "error": "run expired before execution"
+          },
+          {
+            "name": "backend-unavailable",
+            "runId": "mirror-1791303600",
+            "status": "failed",
+            "dryRunActions": 0,
+            "error": "backend targets for 1791303600: HTTP 503 {\"error\":\"INJECTED_BACKEND_UNAVAILABLE\"}"
+          },
+          {
+            "name": "paused",
+            "runId": "mirror-1791304200",
+            "status": "skipped_paused",
+            "dryRunActions": 0,
+            "error": null
+          },
+          {
+            "name": "database-before-dispatch",
+            "runId": "mirror-1791304800",
+            "status": "failed",
+            "dryRunActions": 0,
+            "error": "INJECTED_DATABASE_BEFORE_DISPATCH"
+          },
+          {
+            "name": "database-after-leverage-dispatch",
+            "runId": "mirror-1791305400",
+            "status": "failed",
+            "dryRunActions": 1,
+            "error": "INJECTED_DATABASE_AFTER_DISPATCH"
+          },
+          {
+            "name": "restart-unresolved-journal",
+            "runId": "mirror-1791306000",
+            "status": "skipped_paused",
+            "dryRunActions": 0,
+            "error": "1 order batch(es) need reconciliation"
+          },
+          {
+            "name": "database-after-order-dispatch",
+            "runId": "mirror-1791306600",
+            "status": "failed",
+            "dryRunActions": 6,
+            "error": "journal write failed after dispatch (batch 0 needs reconciliation): INJECTED_DATABASE_AFTER_ORDER_DISPATCH"
+          },
+          {
+            "name": "restart-unresolved-order-journal",
+            "runId": "mirror-1791307200",
+            "status": "skipped_paused",
+            "dryRunActions": 0,
+            "error": "1 order batch(es) need reconciliation"
+          },
+          {
+            "name": "recovered",
+            "runId": "mirror-1791307800",
+            "status": "executed",
+            "dryRunActions": 6,
+            "error": null
+          }
+        ],
+        "boundaries": [
+          "Synthetic source/account/market inputs and local dry-run exchange transport; no real orders or provider calls.",
+          "Actual production SnapshotService, copy math, executor HTTP app, Runner, SDK dry transport, stores and SQL migrations.",
+          "Backend HTTP routing is a thin test adapter; embedded PGlite replaces Bun SQL transport, not production table queries.",
+          "Local database close/reopen and fault injection; no hosted deployment, multi-process advisory-lock, pooler or funded-execution claim."
+        ]
+      },
+      "plan": {
+        "orders": [
+          {
+            "asset": "AVAX",
+            "assetId": 3,
+            "isBuy": true,
+            "price": "30.15",
+            "size": "5",
+            "reduceOnly": false,
+            "notionalUsd": 150,
+            "targetUsd": 150.648258,
+            "currentUsd": 0
+          },
+          {
+            "asset": "BTC",
+            "assetId": 0,
+            "isBuy": true,
+            "price": "100500",
+            "size": "0.0015",
+            "reduceOnly": false,
+            "notionalUsd": 150,
+            "targetUsd": 150.647471,
+            "currentUsd": 0
+          },
+          {
+            "asset": "ETH",
+            "assetId": 1,
+            "isBuy": true,
+            "price": "2512.5",
+            "size": "0.0602",
+            "reduceOnly": false,
+            "notionalUsd": 150.5,
+            "targetUsd": 150.657745,
+            "currentUsd": 0
+          },
+          {
+            "asset": "HYPE",
+            "assetId": 4,
+            "isBuy": true,
+            "price": "30.15",
+            "size": "5.02",
+            "reduceOnly": false,
+            "notionalUsd": 150.6,
+            "targetUsd": 150.628568,
+            "currentUsd": 0
+          },
+          {
+            "asset": "SOL",
+            "assetId": 2,
+            "isBuy": true,
+            "price": "150.75",
+            "size": "1",
+            "reduceOnly": false,
+            "notionalUsd": 150,
+            "targetUsd": 150.65800800000002,
+            "currentUsd": 0
+          }
+        ],
+        "skipped": [],
+        "marginScale": 1,
+        "initialMarginUsd": 75.324005
+      },
+      "fixtureFields": [
+        "synthetic portfolios and identities",
+        "OOS evidence",
+        "positions, markets and execution state",
+        "correlation",
+        "deterministic Role/Risk/Red-Team outputs"
+      ],
+      "reusedModules": [
+        "scoreCandidates",
+        "toFrameCandidates",
+        "buildReviewInput",
+        "runCommitteeReview",
+        "SupabasePaperStore",
+        "freezePaperSession",
+        "targetsFromSnapshot",
+        "parseTargets",
+        "Runner",
+        "SnapshotService",
+        "createApp",
+        "PgStore",
+        "planOrders"
+      ]
+    }
+  ],
+  "scope": "Offline controlled scenario; real team modules and SQL migrations; deterministic model adapters; exchange dry run; no real orders."
+}
