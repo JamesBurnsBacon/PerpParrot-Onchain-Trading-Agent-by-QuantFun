@@ -36,6 +36,22 @@ test("derives fill, fee, concentration, funding and transfer features with null-
   assert.equal(features.netTransferPctEquity, 0.0075);
 });
 
+test("a maker rebate (negative fee) lowers net fees instead of counting as a cost", () => {
+  const features = deriveSourceFeatures({
+    ...common,
+    evidence: {
+      userFillsByTime: [
+        { time: 120, tid: 1, coin: "BTC", px: "100", sz: "10", fee: "-0.2", feeToken: "USDC", crossed: false },
+        { time: 140, tid: 2, coin: "ETH", px: "50", sz: "10", fee: "0.75", feeToken: "USDC", crossed: true },
+      ],
+      userFunding: [],
+      userNonFundingLedgerUpdates: [],
+    },
+  });
+  // Net fees 0.75 - 0.2 = 0.55 on 1,500 notional (the rebate would have made it 0.95).
+  assert.ok(Math.abs(features.feeBpsOfNotional! - (0.55 / 1500 * 10_000)) < 1e-10);
+});
+
 test("preserves missing denominators and rejects events outside the frozen feature window", () => {
   const empty = { userFillsByTime: [], userFunding: [], userNonFundingLedgerUpdates: [] };
   const features = deriveSourceFeatures({ ...common, startingEquity: null, evidence: empty });

@@ -57,9 +57,10 @@ export class Runner {
         void this.deps.alert(`${runId}: still running after ${runTimeoutMs / 1000}s; cancelling before its next order batch`).catch(() => undefined);
       }, runTimeoutMs);
       try {
-        return await this.deps.store.withExecutionLock(() => fn(token));
+        // Cross-process exclusion is the run lock run() takes (it waits up to runTimeoutMs).
+        return await fn(token);
       } catch (e) {
-        await this.deps.alert(`${runId}: execution lock or durable store failed: ${(e as Error).message}`).catch(() => undefined);
+        await this.deps.alert(`${runId}: run could not be completed or recorded: ${(e as Error).message}`).catch(() => undefined);
         throw e;
       } finally {
         clearTimeout(timer);
@@ -67,6 +68,23 @@ export class Runner {
       }
     };
     const next = this.queue.then(bounded, bounded);
+    this.queue = next.catch(() => undefined);
+    return next;
+  }
+
+  // Operator actions that must not interleave with a run (resume, reconciliation): queued behind
+  // this process's runs and holding the same cross-process run lock a run takes. Throws when
+  // another process holds it for longer than runTimeoutMs.
+  exclusive<T>(fn: () => Promise<T>): Promise<T> {
+    const task = async (): Promise<T> => {
+      const release = await (this.deps.lock ?? noLock).acquire(this.deps.config.runTimeoutMs);
+      try {
+        return await fn();
+      } finally {
+        await release().catch(() => undefined);
+      }
+    };
+    const next = this.queue.then(task, task);
     this.queue = next.catch(() => undefined);
     return next;
   }
@@ -145,7 +163,9 @@ export class Runner {
       };
 
       // Journal account leverage changes before dispatch; ambiguous results block
-      // every later exchange action until an operator checks account state.
+      // every later exchange action until an operator checks account state. A definitive
+      // HL refusal skips only that asset's order, as before (README §4.8).
+      const failedLeverage = new Set<string>();
       for (const o of plan.orders) {
         await assertActive();
         if (o.reduceOnly || this.leverageSet.has(o.assetId)) continue;
@@ -157,9 +177,22 @@ export class Runner {
         });
         // Persist intent before dispatch. If the request or process fails before a
         // durable result, startup reconciliation must treat the leverage state as unknown.
-        await exchange.setLeverage(o.assetId, leverage, expiresAt);
+        const outcome = await exchange.setLeverage(o.assetId, leverage, expiresAt);
         await store.finishOrderBatch(journalId, []);
+        if (outcome.rejected !== undefined) {
+          failedLeverage.add(o.asset);
+          await alert(`${runId}: leverage update refused for ${o.asset}: ${outcome.rejected}`);
+          continue;
+        }
         this.leverageSet.add(o.assetId);
+      }
+      if (failedLeverage.size > 0) {
+        plan.skipped.push(
+          ...plan.orders
+            .filter((o) => failedLeverage.has(o.asset))
+            .map((o) => ({ asset: o.asset, reason: "LEVERAGE_FAILED" as const, targetUsd: o.targetUsd, currentUsd: o.currentUsd })),
+        );
+        plan.orders = plan.orders.filter((o) => !failedLeverage.has(o.asset));
       }
       await assertActive();
       record.results = await exchange.submit(
@@ -196,7 +229,8 @@ export class Runner {
         await store.setControls({ paused: true, updatedAt: now(), updatedBy: `unknown-outcome:${id}` });
       }
       if (record.results.some((r) => r.status === "not_sent")) record.status = "failed";
-      if (token.cancelled) record.error = `run timed out after ${config.runTimeoutMs / 1000}s; later batches not sent`;
+      // Don't overwrite a more important error (e.g. an unknown exchange outcome).
+      if (token.cancelled && !record.error) record.error = `run timed out after ${config.runTimeoutMs / 1000}s; later batches not sent`;
       if (record.status === "failed") await alert(`${runId}: stopped remaining orders: ${record.error}`);
       const errors = record.results.filter((r) => r.status === "error");
       if (errors.length > 0) {
@@ -210,7 +244,13 @@ export class Runner {
       await alert(`${runId} failed: ${record.error}`);
     } finally {
       record.finishedAt = now();
-      try { await store.saveRun(record); } finally { await release?.(); }
+      try {
+        await store.saveRun(record);
+      } finally {
+        // A failed unlock must not hide the run (or a saveRun error); Postgres releases the
+        // session lock with its connection anyway.
+        await release?.().catch((e) => alert(`${runId}: run lock release failed: ${(e as Error).message}`).catch(() => undefined));
+      }
     }
     return record;
   }

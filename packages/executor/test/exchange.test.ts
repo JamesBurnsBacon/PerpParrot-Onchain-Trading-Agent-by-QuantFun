@@ -143,6 +143,37 @@ describe("stopping between batches", () => {
   });
 });
 
+describe("journal failures keep what the exchange already did", () => {
+  const resting = () => fakeHl((orders) => ({
+    status: "ok",
+    response: { type: "order", data: { statuses: orders.map(() => ({ resting: { oid: 1 } })) } },
+  }));
+  test("a failed write before batch 2 keeps batch 1's results and sends nothing more", async () => {
+    const { transport, requests } = resting();
+    const ex = createExchange({ privateKey: KEY, dryRun: false, transport });
+    const orders = Array.from({ length: 45 }, (_, i) => planned(`A${i}`, i));
+    const results = await ex.submit(orders, cloids(45), undefined, undefined, {
+      beforeDispatch: async (batch) => { if (batch === 1) throw new Error("database query timed out"); },
+      afterResponse: async () => undefined,
+    });
+    expect(requests).toHaveLength(1);
+    expect(results.slice(0, 20).every((r) => r.status === "resting")).toBe(true);
+    expect(results.slice(20).every((r) => r.status === "not_sent" && r.error?.startsWith("journal write failed before dispatch"))).toBe(true);
+  });
+  test("a failed write after a response keeps that batch's results and stops", async () => {
+    const { transport, requests } = resting();
+    const ex = createExchange({ privateKey: KEY, dryRun: false, transport });
+    const orders = Array.from({ length: 45 }, (_, i) => planned(`A${i}`, i));
+    const results = await ex.submit(orders, cloids(45), undefined, undefined, {
+      beforeDispatch: async () => undefined,
+      afterResponse: async (batch) => { if (batch === 0) throw new Error("database query timed out"); },
+    });
+    expect(requests).toHaveLength(1);
+    expect(results.slice(0, 20).every((r) => r.status === "resting")).toBe(true);
+    expect(results.slice(20).every((r) => r.status === "not_sent" && r.error?.includes("batch 0 needs reconciliation"))).toBe(true);
+  });
+});
+
 describe("dry run", () => {
   test("signs but never uses a live transport", async () => {
     let called = false;

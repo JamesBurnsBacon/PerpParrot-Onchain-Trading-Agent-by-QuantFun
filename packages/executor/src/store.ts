@@ -45,7 +45,6 @@ export type OrderBatch = {
 };
 
 export interface ExecutorStore {
-  withExecutionLock<T>(fn: () => Promise<T>): Promise<T>;
   beginOrderBatch(batch: Omit<OrderBatch, "state" | "results" | "resolution">): Promise<void>;
   finishOrderBatch(id: string, results: OrderResult[]): Promise<void>;
   unresolvedOrderBatches(): Promise<OrderBatch[]>;
@@ -67,14 +66,6 @@ export class MemoryStore implements ExecutorStore {
   private controls: Controls = { paused: false, updatedAt: 0, updatedBy: "default" };
 
   private executionLock: Promise<void> = Promise.resolve();
-
-  async withExecutionLock<T>(fn: () => Promise<T>): Promise<T> {
-    let release!: () => void;
-    const previous = this.executionLock;
-    this.executionLock = new Promise<void>((resolve) => { release = resolve; });
-    await previous;
-    try { return await fn(); } finally { release(); }
-  }
 
   async beginOrderBatch(batch: Omit<OrderBatch, "state" | "results" | "resolution">) {
     if (this.batches.has(batch.id)) throw new Error("order batch already journaled");

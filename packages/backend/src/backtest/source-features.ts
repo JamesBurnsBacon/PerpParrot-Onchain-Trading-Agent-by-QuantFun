@@ -85,7 +85,8 @@ export function deriveSourceFeatures(input: {
       const pnl = finiteNumber(fill.closedPnl);
       if (px === null || px < 0 || pnl === null) throw new Error("malformed settlement evidence");
       settlementCount++;
-      if (typeof fill.feeToken === "string" && fill.feeToken.toUpperCase() === "USDC") settlementPnl += pnl - Math.abs(fee ?? 0);
+      // HL fees are signed: negative is a maker rebate, which adds to PnL rather than costing.
+      if (typeof fill.feeToken === "string" && fill.feeToken.toUpperCase() === "USDC") settlementPnl += pnl - (fee ?? 0);
       else settlementPnl += pnl;
       continue;
     }
@@ -94,7 +95,7 @@ export function deriveSourceFeatures(input: {
     if (!Number.isFinite(notional)) throw new Error("fill notional overflow");
     totalNotional += notional;
     if (!fill.crossed) makerNotional += notional;
-    if (typeof fill.feeToken === "string" && fill.feeToken.toUpperCase() === "USDC") totalFees += Math.abs(fee);
+    if (typeof fill.feeToken === "string" && fill.feeToken.toUpperCase() === "USDC") totalFees += fee;
     else feesUsdComplete = false;
     notionals.set(fill.coin, (notionals.get(fill.coin) ?? 0) + notional);
   }

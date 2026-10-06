@@ -24,19 +24,6 @@ const jsonValue = (value: unknown): unknown =>
 export class PostgresStore implements ExecutorStore {
   constructor(private readonly sql: SQL) {}
 
-  async withExecutionLock<T>(fn: () => Promise<T>): Promise<T> {
-    const connection = await this.sql.reserve({ signal: AbortSignal.timeout(QUERY_TIMEOUT_MS) });
-    try {
-      return await connection.begin(async (tx) => {
-        const [row] = await deadline(tx`select pg_try_advisory_xact_lock(1347442768, 1163414851) as locked`);
-        if (row?.locked !== true) throw new Error("another executor instance owns the trading lock");
-        return await fn();
-      });
-    } finally {
-      await connection.release();
-    }
-  }
-
   async beginOrderBatch(batch: Omit<OrderBatch, "state" | "results" | "resolution">): Promise<void> {
     await deadline(this.sql`
       insert into executor_order_batches (id, report_id, created_at, kind, details, orders, cloids, state)
@@ -120,11 +107,35 @@ export class PostgresStore implements ExecutorStore {
     );
   }
 
-  async recentRunSummaries(limit: number): Promise<RunSummary[]> { return (await this.recentRuns(limit)).map(summarize); }
+  // Scalar columns and the order count only: the public run strip must not pull every run's plan,
+  // results and signed report (jsonb) through the small Vercel pool.
+  async recentRunSummaries(limit: number): Promise<RunSummary[]> {
+    const rows = await deadline(this.sql`
+      select id, run_id, kind, status, dry_run, started_at, finished_at, equity_usd, error,
+             coalesce(jsonb_array_length(plan -> 'orders'), 0) as orders
+      from executor_runs order by started_at desc limit ${limit}`);
+    return rows.map(
+      (r: Record<string, unknown>): RunSummary => ({
+        id: r.id as string,
+        runId: r.run_id as string,
+        kind: r.kind as RunRecord["kind"],
+        status: r.status as RunRecord["status"],
+        dryRun: r.dry_run as boolean,
+        startedAt: (r.started_at as Date).getTime(),
+        finishedAt: (r.finished_at as Date).getTime(),
+        equityUsd: (r.equity_usd as number | null) ?? undefined,
+        error: (r.error as string | null) ?? undefined,
+        orders: Number(r.orders),
+      }),
+    );
+  }
 
   async equityCurve(): Promise<EquityPoint[]> {
     const rows = await deadline(this.sql`select run_id, started_at, equity_usd, dry_run from executor_runs where kind = 'report' and status = 'executed' and equity_usd is not null order by started_at`);
-    return rows.map((r: Record<string, unknown>) => ({ t: runAtMs({ runId: r.run_id as string, startedAt: (r.started_at as Date).getTime() }), equityUsd: Number(r.equity_usd), dryRun: r.dry_run as boolean }));
+    return rows
+      .map((r: Record<string, unknown>): EquityPoint => ({ t: runAtMs({ runId: r.run_id as string, startedAt: (r.started_at as Date).getTime() }), equityUsd: Number(r.equity_usd), dryRun: r.dry_run as boolean }))
+      // On the run clock (runAt), not started_at: a delayed run still lands in its slot.
+      .sort((a: EquityPoint, b: EquityPoint) => a.t - b.t);
   }
 
   async getControls(): Promise<Controls> {

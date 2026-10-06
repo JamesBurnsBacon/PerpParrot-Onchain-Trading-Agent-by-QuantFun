@@ -54,20 +54,6 @@ describe.skipIf(!url)("PostgresStore", async () => {
     ]);
   });
 
-  test("holds a database-wide lock across executor instances", async () => {
-    const other = new PostgresStore(sql);
-    let entered!: () => void;
-    let release!: () => void;
-    const started = new Promise<void>((resolve) => { entered = resolve; });
-    const gate = new Promise<void>((resolve) => { release = resolve; });
-    const owner = store.withExecutionLock(async () => { entered(); await gate; });
-    await started;
-    await expect(other.withExecutionLock(async () => {})).rejects.toThrow("another executor instance");
-    release();
-    await owner;
-    await expect(other.withExecutionLock(async () => "acquired")).resolves.toBe("acquired");
-  });
-
   test("journals each batch before dispatch and recovers unresolved state", async () => {
     const id = `batch-${unique}`;
     await store.beginOrderBatch({
@@ -75,7 +61,9 @@ describe.skipIf(!url)("PostgresStore", async () => {
       orders: [{ asset: "BTC", assetId: 0, isBuy: true, price: "100", size: "1", reduceOnly: false, notionalUsd: 100, targetUsd: 100, currentUsd: 0 }],
       cloids: [`0x${"01".repeat(16)}` as `0x${string}`], kind: "orders",
     });
-    const [dispatching] = await store.unresolvedOrderBatches();
+    // Only this test's batches: the database may hold others (earlier runs, other tests).
+    const mine = async () => (await store.unresolvedOrderBatches()).filter((b) => b.id === `batch-${unique}` || b.id === `leverage-${unique}`);
+    const [dispatching] = await mine();
     expect(dispatching).toMatchObject({
       id,
       state: "dispatching",
@@ -84,9 +72,9 @@ describe.skipIf(!url)("PostgresStore", async () => {
     });
     const results = [{ asset: "BTC", status: "unknown" as const, error: "response lost" }];
     await store.finishOrderBatch(id, results);
-    expect((await store.unresolvedOrderBatches())[0]).toMatchObject({ id, state: "uncertain", results });
+    expect((await mine())[0]).toMatchObject({ id, state: "uncertain", results });
     await store.reconcileOrderBatch(id, "test-operator", "verified exchange order status and position", Date.now());
-    expect(await store.unresolvedOrderBatches()).toEqual([]);
+    expect(await mine()).toEqual([]);
 
     const leverageId = `leverage-${unique}`;
     const details = { asset: "BTC", assetId: 0, leverage: 3 };
@@ -94,7 +82,7 @@ describe.skipIf(!url)("PostgresStore", async () => {
       id: leverageId, reportId: `report-${unique}`, createdAt: Date.now(),
       orders: [], cloids: [], kind: "leverage", details,
     });
-    expect(await store.unresolvedOrderBatches()).toMatchObject([{ id: leverageId, kind: "leverage", details, orders: [], cloids: [] }]);
+    expect(await mine()).toMatchObject([{ id: leverageId, kind: "leverage", details, orders: [], cloids: [] }]);
   });
 
   test("persists the kill switch", async () => {

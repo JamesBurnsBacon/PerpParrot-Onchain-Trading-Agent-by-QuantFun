@@ -48,7 +48,9 @@ export type Exchange = {
   signer: Hex;
   // Stops between batches once shouldStop() is true; unsent orders are reported as not sent.
   submit(orders: PlannedOrder[], cloids: Hex[], shouldStop?: () => boolean | Promise<boolean>, expiresAfter?: number, journal?: ExchangeJournal): Promise<OrderResult[]>;
-  setLeverage(assetId: number, leverage: number, expiresAfter?: number): Promise<void>;
+  // Resolves `{ rejected }` when HL definitively refused (its answer was an error); throws when the
+  // outcome is unknown (timeout, lost response), which the runner must treat as possibly applied.
+  setLeverage(assetId: number, leverage: number, expiresAfter?: number): Promise<{ rejected?: string }>;
   // Signed requests captured in dry-run (for logs and tests).
   recorded(): SignedRequest[];
 };
@@ -103,7 +105,15 @@ export const createExchange = (opts: { privateKey?: Hex; dryRun: boolean; transp
           break;
         }
         const batchIndex = i / ORDER_BATCH_SIZE;
-        await journal?.beforeDispatch(batchIndex, batch, cloids.slice(i, i + batch.length));
+        // A journal write that fails before dispatch means nothing was sent: keep the fills of
+        // earlier batches and report this and later orders as not sent.
+        try {
+          await journal?.beforeDispatch(batchIndex, batch, cloids.slice(i, i + batch.length));
+        } catch (e) {
+          const error = `journal write failed before dispatch: ${(e as Error).message}`;
+          results.push(...orders.slice(i).map((o) => ({ asset: o.asset, status: "not_sent" as const, error })));
+          break;
+        }
         const params = {
           orders: batch.map((o, j) => ({
             a: o.assetId,
@@ -135,8 +145,16 @@ export const createExchange = (opts: { privateKey?: Hex; dryRun: boolean; transp
           }
           return toResult(o.asset, statuses?.[j], failure);
         });
-        await journal?.afterResponse(batchIndex, batchResults);
         results.push(...batchResults);
+        // Sent and answered but not journaled: the batch row stays 'dispatching', so the next run
+        // holds for reconciliation. Keep these results and send nothing more.
+        try {
+          await journal?.afterResponse(batchIndex, batchResults);
+        } catch (e) {
+          const error = `journal write failed after dispatch (batch ${batchIndex} needs reconciliation): ${(e as Error).message}`;
+          results.push(...orders.slice(i + batch.length).map((o) => ({ asset: o.asset, status: "not_sent" as const, error })));
+          break;
+        }
         if (batchResults.some((r) => r.status === "unknown")) {
           results.push(...orders.slice(i + batch.length).map((o) => ({ asset: o.asset, status: "not_sent" as const })));
           break;
@@ -146,7 +164,14 @@ export const createExchange = (opts: { privateKey?: Hex; dryRun: boolean; transp
     },
 
     async setLeverage(assetId, leverage, expiresAfter) {
-      await updateLeverage(config, { asset: assetId, isCross: true, leverage }, { expiresAfter });
+      try {
+        await updateLeverage(config, { asset: assetId, isCross: true, leverage }, { expiresAfter });
+        return {};
+      } catch (e) {
+        // HL answered with an error: definitively not applied. Anything else is unknown.
+        if (e instanceof ApiRequestError && (e.response as { status?: unknown })?.status === "err") return { rejected: (e as Error).message };
+        throw e;
+      }
     },
   };
 };

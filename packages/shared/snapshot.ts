@@ -23,7 +23,7 @@ export type PositionsSnapshot = {
   runAt: number;
   // Unix seconds the positions were read.
   // Start of the read window; freshness is measured from this conservative bound.
-  startedAt: number;
+  startedAt?: number;
   // Completion time of all source reads.
   takenAt: number;
   // The frozen configuration: source set, weights, policy and our account (shared/frozen.ts).
