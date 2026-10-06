@@ -60,7 +60,8 @@ export type Candidate = {
   scoreNumerator: number | null;
   score: number | null;
   rank: number | null;
-  cloneOf: { address: string; correlation: number | null } | null;
+  // `via`: the member of the representative's link unit that matched, when it is not the representative.
+  cloneOf: { address: string; correlation: number | null; via?: string } | null;
   clones: string[];
   finalist: boolean;
   passthrough: {
