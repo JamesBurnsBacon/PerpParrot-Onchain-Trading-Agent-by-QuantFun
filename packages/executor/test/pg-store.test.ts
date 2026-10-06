@@ -14,6 +14,7 @@ describe.skipIf(!url)("PostgresStore", async () => {
   if (!url) return;
   const sql = new SQL(url);
   await sql.unsafe(await Bun.file(new URL("../../../supabase/migrations/20261006120000_cre_mirror.sql", import.meta.url)).text());
+  await sql.unsafe(await Bun.file(new URL("../../../supabase/migrations/20261006180000_executor_order_journal.sql", import.meta.url)).text());
   const store = new PostgresStore(sql);
   const unique = `${Date.now()}-${Math.random()}`;
 
@@ -51,6 +52,37 @@ describe.skipIf(!url)("PostgresStore", async () => {
       { t: base * 1000, equityUsd: 470.12, dryRun: true },
       { t: (base + 1000) * 1000, equityUsd: 470.12, dryRun: true },
     ]);
+  });
+
+  test("journals each batch before dispatch and recovers unresolved state", async () => {
+    const id = `batch-${unique}`;
+    await store.beginOrderBatch({
+      id, reportId: `report-${unique}`, createdAt: Date.now(),
+      orders: [{ asset: "BTC", assetId: 0, isBuy: true, price: "100", size: "1", reduceOnly: false, notionalUsd: 100, targetUsd: 100, currentUsd: 0 }],
+      cloids: [`0x${"01".repeat(16)}` as `0x${string}`], kind: "orders",
+    });
+    // Only this test's batches: the database may hold others (earlier runs, other tests).
+    const mine = async () => (await store.unresolvedOrderBatches()).filter((b) => b.id === `batch-${unique}` || b.id === `leverage-${unique}`);
+    const [dispatching] = await mine();
+    expect(dispatching).toMatchObject({
+      id,
+      state: "dispatching",
+      orders: [{ asset: "BTC", assetId: 0, isBuy: true, price: "100", size: "1" }],
+      cloids: [`0x${"01".repeat(16)}`],
+    });
+    const results = [{ asset: "BTC", status: "unknown" as const, error: "response lost" }];
+    await store.finishOrderBatch(id, results);
+    expect((await mine())[0]).toMatchObject({ id, state: "uncertain", results });
+    await store.reconcileOrderBatch(id, "test-operator", "verified exchange order status and position", Date.now());
+    expect(await mine()).toEqual([]);
+
+    const leverageId = `leverage-${unique}`;
+    const details = { asset: "BTC", assetId: 0, leverage: 3 };
+    await store.beginOrderBatch({
+      id: leverageId, reportId: `report-${unique}`, createdAt: Date.now(),
+      orders: [], cloids: [], kind: "leverage", details,
+    });
+    expect(await mine()).toMatchObject([{ id: leverageId, kind: "leverage", details, orders: [], cloids: [] }]);
   });
 
   test("persists the kill switch", async () => {

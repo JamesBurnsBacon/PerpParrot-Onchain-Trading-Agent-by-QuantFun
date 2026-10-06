@@ -4,7 +4,7 @@
   "type": "object",
   "properties": {
     "schemaVersion": {
-      "const": "1.0.0"
+      "const": "1.1.0"
     },
     "snapshotHash": {
       "type": "string",
@@ -41,12 +41,22 @@
               "ERC4626_HYPERCORE"
             ]
           },
+          "clones": {
+            "type": "array",
+            "maxItems": 100,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^0x[0-9a-f]{40}$"
+            }
+          },
           "metrics": {
             "type": "object",
             "properties": {
               "historyDays": {
-                "type": "number",
-                "minimum": 0
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 10000
               },
               "oosWindows": {
                 "type": "integer",
@@ -132,9 +142,16 @@
                 "maximum": 1
               },
               "timeInMarket": {
-                "type": "number",
-                "minimum": 0,
-                "maximum": 1
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               },
               "makerShare": {
                 "anyOf": [
@@ -149,19 +166,40 @@
                 ]
               },
               "executionCoverage": {
-                "type": "number",
-                "minimum": 0,
-                "maximum": 1
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               },
               "executionFit": {
-                "type": "integer",
-                "minimum": 0,
-                "maximum": 100
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               },
               "concentration": {
-                "type": "number",
-                "minimum": 0,
-                "maximum": 1
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               },
               "liquidationDistance": {
                 "anyOf": [
@@ -189,6 +227,55 @@
                 "type": "number",
                 "minimum": 0,
                 "maximum": 1
+              },
+              "isSharpe": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "isSortino": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "isCalmar": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "lookbackDays": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 10000
+              },
+              "scoreFlags": {
+                "type": "array",
+                "maxItems": 16,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z-]{0,31}$"
+                }
+              },
+              "cloneCount": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100
               }
             },
             "required": [
@@ -209,7 +296,13 @@
               "concentration",
               "liquidationDistance",
               "btcBeta",
-              "pnlConsistency"
+              "pnlConsistency",
+              "isSharpe",
+              "isSortino",
+              "isCalmar",
+              "lookbackDays",
+              "scoreFlags",
+              "cloneCount"
             ],
             "additionalProperties": false
           }
@@ -217,7 +310,8 @@
         "required": [
           "candidate",
           "kind",
-          "metrics"
+          "metrics",
+          "clones"
         ],
         "additionalProperties": false
       },
@@ -252,9 +346,16 @@
             ]
           },
           "currentExposureOverlap": {
-            "type": "number",
-            "minimum": 0,
-            "maximum": 1
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "linkedSource": {
             "type": "boolean"

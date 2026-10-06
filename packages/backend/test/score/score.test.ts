@@ -161,6 +161,30 @@ describe("scoreCandidates behaviour", () => {
     expectFinite(result);
   });
 
+  test("does not rank histories with no usable return intervals", () => {
+    const input: ScoreInput = {
+      ...rankingInputs[0],
+      accountValue: 20_000,
+      tradeCount: 20,
+      allTime: {
+        accountValueHistory: [[0, 20_000], [31 * 86_400_000, 20_000]],
+        pnlHistory: [[0, 0], [31 * 86_400_000, 0]],
+      },
+      month: {
+        accountValueHistory: [[0, 0], [86_400_000, 0]],
+        pnlHistory: [[0, 0], [86_400_000, 0]],
+      },
+    };
+    const result = scoreCandidates([input], { minMonthPoints: 2 });
+    // The mainline eligibility gate rejects the zero-equity month before metrics
+    // are computed, so the candidate cannot reach ranking at all.
+    expect(result.candidates[0].eligible).toBe(false);
+    expect(result.candidates[0].rank).toBeNull();
+    expect(result.candidates[0].score).toBeNull();
+    expect(result.finalists).toEqual([]);
+    expect(result.funnel.at(-2)).toEqual({ stage: "distinct", count: 0 });
+  });
+
   test("preserves supplied passthrough values, including zero and null", () => {
     const passthrough = { avgLeverage: 2, timeInMarket: 0, medianHoldHours: null, makerShare: 0.25 };
     expect(scoreCandidates([{ ...rankingInputs[0], ...passthrough }]).candidates[0].passthrough).toEqual(passthrough);

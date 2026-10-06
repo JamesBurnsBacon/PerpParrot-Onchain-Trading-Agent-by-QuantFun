@@ -220,7 +220,8 @@ Code: `packages/executor`. A Bun service. Dry run deploys as the `executor` serv
 - **Kill switch:** manual, bearer-token admin routes (any team member with `ADMIN_TOKEN`; the dashboard calls them behind auth).
   - **Pause / resume:** stop or restart trading, keep positions.
   - **Flatten:** pause, then close everything reduce-only, bypassing CRE.
-- **Run log:** `GET /runs` (plans, order results, raw signed reports) and `GET /status`; stored in Supabase (`executor_runs`) when `DATABASE_URL` is set.
+- **Durable recovery:** report claims, runs, controls, and each exchange action's write-ahead intent/results are stored in Supabase. Before dispatch the executor journals the exact order batch and deterministic client IDs; an unknown response or restart with an unresolved batch pauses all new reports. Inspect `GET /admin/order-batches` with `ADMIN_TOKEN`; reconcile only after checking Hyperliquid order and position state, submit operator identity and evidence through `POST /admin/reconcile-batch`, then explicitly resume. Never retry an ambiguous order blindly. Apply `20261006180000_executor_order_journal.sql` before enabling the journaled executor.
+- **Run log:** `GET /runs` (plans, order results, raw signed reports), `GET /runs?summary=1`, `GET /equity` and `GET /status`; retained in Supabase when `DATABASE_URL` is set. Vercel dry-run mode requires Supabase and `CRON_SECRET`; live trading remains restricted to one long-running executor.
 - **Alerts:** Telegram bot (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`) for failed runs, failed orders and missed reports.
 - **Account mode: unified** (one USDC balance margins core and `xyz` perps; `scripts/setup-account.ts`). Equity and the margin rule use HL's account value, which is only all usable margin in unified mode.
 - **Capital:** 5 HYPE, currently on HyperEVM.
@@ -279,7 +280,7 @@ Status: built (`packages/dashboard`): live account vs paper books vs BTC, target
 - **Transport:** `runtime.report()` (`evm` / `ecdsa` / `keccak256`), then `sendReport()` POSTs JSON `{report, context, signatures}` (hex, no `0x`) to the executor. **Every DON node POSTs its own copy.** `cacheSettings` only trims duplicates, because each node's signatures differ. The mirror reaches consensus on the executor's HTTP status, so it fails loudly on a rejection.
 - **Body** (ABI-encoded after the 109-byte header, `packages/shared/report.ts`): `string runId, bytes32 snapshotHash, bytes32 configurationHash, address account, uint64 asOf, uint64 expiresAt, (string asset, int256 exposureE9)[] exposures`.
   - **Exposures, not orders or USD targets.** Exposure = target notional as a fraction of our equity. The executor multiplies by our live equity and diffs against the live account when it runs, so price and equity moves between report and execution don't matter, and nodes never have to agree on prices, our equity or our positions.
-  - The review core's `rebalance-report.schema.json` (branch `ai-agent-workflow`) puts ≤ 10 **orders** in the report instead. ❓ *§8: reconcile before merging.*
+  - `packages/shared/schemas/rebalance-report.schema.json` is a review-core contract fixture, not the runtime mirror/executor transport. It is not accepted by the executor; only the exposure report described above is executable.
 - **Report ID** = `keccak256(rawReport)`, identical across nodes. The first valid copy is accepted; later copies get `200 duplicate`.
 - **Verification** in the executor (`src/verify.ts`, `src/handler.ts`):
   - ≥ f+1 signatures from the DON's signers, read from the Capability Registry `0x76c9cf548b4179F8901cda1f8623568b58215E62` on **Ethereum mainnet** (cached per DON ID; e.g. DON 1: f = 3, 10 signers). The executor needs an Ethereum mainnet RPC.

@@ -1,10 +1,13 @@
 # Agent / CRE architecture v1
 
-Status: additive design contract with an offline review core; not deployed trading code. See [integration guide](INTEGRATION.md) for implemented behavior and required adapters. The repository at base
-`0f07e229028c84d62caecf00d1e842adc774a9e8` contains only README.md. No existing
-TypeScript API, database schema, SDK version or executor implementation is available
-to validate. These files define the next integration boundary, not a claim that
-CRE simulation or live trading passed.
+Status: design contract for the offline/CRE review core; this is not deployed trading
+code. See [integration guide](INTEGRATION.md) and
+[production integration status](PRODUCTION_INTEGRATION.md) for implemented behavior
+and outstanding gates. The initial design was drafted against baseline
+`0f07e229028c84d62caecf00d1e842adc774a9e8`; the current branch also contains the
+backend score/snapshot service, shared contracts, CRE mirror workflow, and executor.
+Their presence and local tests do not establish successful CRE simulation, production
+deployment, or funded execution.
 
 ## Decisions and precedence
 
@@ -69,6 +72,49 @@ period is insufficient evidence, not a zero penalty. Calibrate penalty values an
 capacity after netting eligible assets, drift and minimum order checks using replay.
 A profitable source with 20-minute holds must still be excluded. No count of sources
 alone proves executable capacity.
+
+## Source-selection methodology crosswalk
+
+[LockOn's tracking-address selection description](https://docs.lockon.finance/en/product/index/selection-of-tracking-addresses-for-index)
+is a useful design comparison, not a validated PerpParrot parameter set. It separates
+eligibility filters from a weighted, factor-based ranking, considers more than one
+performance horizon, and turns each selected address's weight into its underlying
+asset composition. Apply those ideas at the boundaries below:
+
+- Keep hard eligibility and comparative ranking distinct. PerpParrot's $10k account
+  value, 30-day history, 10-trade and 25-point requirements are eligibility gates;
+  its month-window Sortino, Calmar, drawdown and PnL-consistency percentiles order the
+  surviving cohort. Review risk limits remain binding even when a source ranks well.
+- Treat the current score as cohort-relative. Adding or removing eligible candidates
+  can change percentiles without changing a source's own record. Preserve raw metrics,
+  score version, input window and cohort/snapshot hash with each result; never present
+  the percentile score as an absolute probability of future profit or safety.
+- Consider multi-horizon evidence only after the ingest contract can produce aligned,
+  point-in-time windows. A shorter recent window can detect decay while a longer one
+  adds context, but arbitrary 1-year/3-month weights cannot be imported from another
+  product. Evaluate each proposed factor and weight in walk-forward replay, including
+  regime slices and survivorship controls, before changing the score contract.
+- Do not reward raw transaction count or account size as skill. Count is presently an
+  eligibility/data-coverage gate; account value is a minimum evidence/capacity gate.
+  High churn can be wash-like or impossible to copy after the 10-minute delay, and
+  larger TVL alone does not establish edge. Use trade-pattern flags, holding-time and
+  execution-fit evidence as risk/copyability checks, with missing evidence failing
+  closed where policy requires it.
+- Keep address selection separate from portfolio construction. LockOn's address
+  breakdown idea has a direct analogue in `computeExposures`: source weights are
+  multiplied by each source's signed per-asset notional/equity, then netted and capped.
+  This is already the correct downstream shape for index replication. Correlation,
+  vault/leader links, overlap, active-source renormalization and per-source ceilings
+  must still constrain the portfolio; normalized score shares alone are not a safe
+  weight policy.
+
+Before adopting additional factors or changing weights, add point-in-time replay cases
+for a deteriorating recent window, shallow-history/high-return sources, equal metrics
+under different candidate cohorts, churn-heavy sources, capital-size changes, and
+correlated sources with overlapping assets. Compare selected sets and post-cap asset
+exposures against the current baseline. Keep the current score unchanged until that
+evaluation is reproducible; this crosswalk does not authorize a live-set or policy
+change.
 
 ## Module adapters (preserve README §4.12)
 

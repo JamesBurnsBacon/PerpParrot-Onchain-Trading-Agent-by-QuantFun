@@ -22,6 +22,9 @@ export type PositionsSnapshot = {
   // Unix seconds of the mirror run this snapshot is for.
   runAt: number;
   // Unix seconds the positions were read.
+  // Start of the read window; freshness is measured from this conservative bound.
+  startedAt?: number;
+  // Completion time of all source reads.
   takenAt: number;
   // The frozen configuration: source set, weights, policy and our account (shared/frozen.ts).
   configuration: FrozenConfiguration;

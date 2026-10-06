@@ -4,7 +4,7 @@
   "type": "object",
   "properties": {
     "schemaVersion": {
-      "const": "1.0.0"
+      "const": "1.1.0"
     },
     "snapshotHash": {
       "type": "string",

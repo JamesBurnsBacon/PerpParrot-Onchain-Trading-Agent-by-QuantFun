@@ -18,7 +18,7 @@ test('canonical encoder rejects values JSON.stringify would drop/coerce',()=>{
 });
 test('policy, evidence and candidate-to-address mapping are committed together',()=>{
   const policy={bucket:'BALANCED',capitalUsd:150} as Policy;
-  const frame={schemaVersion:'1.0.0',snapshotHash:'',policyHash:policyCommitment(policy),candidates:[],pairs:[],asOfMs:1,expiresAtMs:2} as Frame;
+  const frame={schemaVersion:'1.1.0',snapshotHash:'',policyHash:policyCommitment(policy),candidates:[],pairs:[],asOfMs:1,expiresAtMs:2} as Frame;
   const addresses=new Map([[0,'0x'+'a'.repeat(40)],[1,'0x'+'b'.repeat(40)]]);
   frame.snapshotHash=snapshotCommitment(frame,addresses);
   assert.ok(verifyInputCommitments(frame,policy,addresses));
