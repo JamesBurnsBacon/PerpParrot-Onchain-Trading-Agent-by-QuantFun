@@ -270,12 +270,11 @@ Code: `packages/executor`. One long-running Bun service (Railway, `Dockerfile` +
   - The workflow owner is the **organization address**, so it stays the same across redeploys and teammates. The executor pins it (§4.13).
   - Trade-off: the list of deployed workflows lives in Chainlink's hosted registry, not the Ethereum `WorkflowRegistry`. Execution and DON signatures are unchanged.
   - Switching to the onchain registry is one line per target (`onchain:ethereum-mainnet`), but then needs a linked wallet (`cre account link-key`, permanent) and mainnet ETH.
-- **Deploys: GitHub Actions** (`.github/workflows/cre-deploy.yml`, run manually), so any teammate with write access to the repo can deploy. It runs the tests, simulates, then `cre workflow deploy <workflow> --target production-settings --yes --non-interactive`.
+- **Deploys: GitHub Actions** (`.github/workflows/cre-deploy.yml`, run manually), so any teammate with write access to the repo can deploy. It runs the tests, rejects a config with placeholders (`scripts/check-config.ts`), builds the WASM, then `cre workflow deploy <workflow> --target production-settings --yes --non-interactive`. Every push also runs `.github/workflows/cre-checks.yml` (tests, typechecks, WASM builds; no secrets).
   - Secret: `CRE_API_KEY` (CRE platform → Organization → APIs → **+ Organization API**), in the GitHub `production` environment.
   - Updates keep the workflow name; the workflow ID changes.
 - **CRE secrets** (`openaiApiKey` in `secrets.yaml`, from env var `OPENAI_API_KEY`):
   - **Local simulation:** `packages/cre-workflows/.env` (gitignored). A 1Password reference (`op://vault/item/field`) works in place of the raw key.
-  - **CI simulation:** GitHub Actions secret `OPENAI_API_KEY`.
   - **Deployed:** Vault DON, org-owned: `CRE_CLI_SECRETS_ORG_OWNED=true cre secrets create secrets.yaml --target production-settings --secrets-auth=browser`, so any member can rotate them. The workflow's `secretsOwner` config is `""` in simulation and the org ID in production. ❓ *Confirm with the sponsor.*
 - **Project:** `packages/cre-workflows/` holds `project.yaml`, `secrets.yaml`, and the `mirror/` and `review/` workflows, each with a `workflow.yaml` and `config.{staging,production}.json`.
   - Targets: `staging-settings` (simulate) and `production-settings` (deploy).
@@ -289,6 +288,7 @@ Code: `packages/executor`. One long-running Bun service (Railway, `Dockerfile` +
   bun install --cwd ./mirror && bun install --cwd ./review
   cre workflow simulate mirror --target staging-settings
   ```
+  The mirror needs the snapshot service and executor running; `./scripts/e2e-mirror.sh` starts both, simulates and checks the result (`all` runs the failure scenarios too). Operations: `docs/cre/RUNBOOK.md`; merging with the review core: `docs/cre/INTEGRATION.md`.
 
 ## 5. Stack
 | Layer | Choice |
