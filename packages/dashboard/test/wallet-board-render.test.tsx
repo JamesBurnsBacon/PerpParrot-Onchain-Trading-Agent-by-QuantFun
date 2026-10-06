@@ -6,17 +6,17 @@ import { walletNickname } from "../lib/wallet-board";
 import { PARROT_PRESETS } from "../lib/parrot-presets";
 
 test("tile face has one bird and one meter; exact evidence lives in closed details", () => {
-  const html = renderToStaticMarkup(<WalletTile address="0x448bbd0cfd9c8aa81c4db28a36edca446d5e3609" evidence={{ address: "0x448bbd0cfd9c8aa81c4db28a36edca446d5e3609", rank: 7, maxDrawdown: .1234, realizedVol: .4321, tags: ["clone-checked"] }} reason="low drawdown" quiet />);
+  const html = renderToStaticMarkup(<WalletTile address="0x448bbd0cfd9c8aa81c4db28a36edca446d5e3609" evidence={{ address: "0x448bbd0cfd9c8aa81c4db28a36edca446d5e3609", rank: 7, maxDrawdown: .0123, realizedVol: .0043, tags: ["clone-checked"] }} reason="low drawdown" quiet />);
   const face = html.split("</summary>")[0];
   expect(face).toContain(walletNickname("0x448bbd0cfd9c8aa81c4db28a36edca446d5e3609"));
   expect(face).toContain("calm vibe");
   expect(face.match(/<svg/g)).toHaveLength(1);
   expect(face.match(/class="wallet-risk"/g)).toHaveLength(1);
-  for (const old of ["SELECTED", "selected", "Score rank", "Drawdown", "Volatility", "clone-checked", "low drawdown", "12.34%"])
+  for (const old of ["SELECTED", "selected", "Score rank", "Drawdown", "Volatility", "clone-checked", "low drawdown", "1.23%"])
     expect(face).not.toContain(old);
   expect(html).toContain("<details");
   expect(html).not.toContain(" open=");
-  for (const detail of ["Score rank: 7", "Drawdown: 12.34%", "Realized volatility: 43.21%", "clone-checked", "low drawdown"]) expect(html).toContain(detail);
+  for (const detail of ["Score rank: 7", "Drawdown: 1.23%", "Realized volatility: 0.43%", "clone-checked", "low drawdown"]) expect(html).toContain(detail);
 });
 
 test("static changes keep stickers, kept tiles do not roll, and cached evidence stays neutral", () => {

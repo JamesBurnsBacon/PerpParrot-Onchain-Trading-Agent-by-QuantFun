@@ -39,13 +39,14 @@ export const walletNickname = (id: string): string => sampleNames.get(id) ?? cac
 
 export type WalletVibe = "calm" | "steady" | "wild";
 type VibeEvidence = { maxDrawdown?: number | null; realizedVol?: number | null };
+// Fractions, not percentages. realizedVol is Score's non-annualised volatility, so its scale is small.
+// Calibrated to the sample finalists (drawdown 1-19%, realizedVol 0.3-3.7%); recalibrate against real Score output.
+// Cosmetic buckets describe supplied evidence, never future returns or safety. One definition shared by vibes and tags.
+export const VIBE_THRESHOLDS = { calmDrawdown: .03, calmVol: .015, wildDrawdown: .08, wildVol: .03 } as const;
 export function walletVibe(evidence?: VibeEvidence | null): WalletVibe {
   const dd = evidence?.maxDrawdown, vol = evidence?.realizedVol;
-  // Fractions, not percentages. Unknown/invalid either metric => neutral Steady.
-  // Calm: BOTH drawdown < 15% and realized volatility < 45%.
-  // Wild: EITHER drawdown >= 30% or volatility >= 80%. Otherwise Steady.
-  // Cosmetic buckets describe supplied evidence, never future returns or safety.
+  // Unknown/invalid either metric => neutral Steady. Wild: EITHER metric at/above its wild bound. Calm: BOTH below their calm bounds.
   if (dd == null || vol == null || !Number.isFinite(dd) || !Number.isFinite(vol) || dd < 0 || dd > 1 || vol < 0) return "steady";
-  if (dd >= .3 || vol >= .8) return "wild";
-  return dd < .15 && vol < .45 ? "calm" : "steady";
+  if (dd >= VIBE_THRESHOLDS.wildDrawdown || vol >= VIBE_THRESHOLDS.wildVol) return "wild";
+  return dd < VIBE_THRESHOLDS.calmDrawdown && vol < VIBE_THRESHOLDS.calmVol ? "calm" : "steady";
 }

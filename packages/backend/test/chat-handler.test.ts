@@ -353,9 +353,14 @@ test.each(["Which style?", ""])("clarify %j returns without loading finalists or
   expect(isChatClarification({ ...body, policy: {} })).toBe(false);
 });
 
-test("requested five sources are rejected rather than expanded when conservative needs six", async () => {
+test("requested five sources are raised to six when conservative needs six, in chat and in the preview", async () => {
   const d = deps(), infeasibleIntent = { ...intent, riskStyle: "conservative" as const, maxSources: 5 };
   d.callModel = async () => ({ intent: infeasibleIntent, promptTokens: 0, completionTokens: 0 });
-  await check(await handleChat(request(), d), 422, "infeasible");
-  await check(await handlePreview(request({ intent: infeasibleIntent }), d), 422, "infeasible");
+  const chat = await handleChat(request(), d);
+  expect(chat.status).toBe(200);
+  const body = await chat.json() as { policy: { maxSources: number; raisedFrom?: number }; shortlist: { addresses: string[] } };
+  expect(body.policy.raisedFrom).toBe(5);
+  expect(body.policy.maxSources).toBe(6);
+  expect(body.shortlist.addresses.length).toBeLessThanOrEqual(6);
+  expect((await handlePreview(request({ intent: infeasibleIntent }), d)).status).toBe(200);
 });

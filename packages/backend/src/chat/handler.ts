@@ -148,10 +148,10 @@ export const handleChat = async (req: Request, deps: ChatDeps): Promise<Response
       audit("clarify", { intent: { riskStyle, maxSources, diversification, leverageComfort, requestedLeverage, avoidClones, horizon }, promptTokens, completionTokens });
       return json({ ok: true, reply: intent.reply, clarify: intent.clarify, intent, model: deps.env.model, latencyMs: deps.now() - started });
     }
-    const { policyResult: _policyResult, ...selection } = selectStrategy(intent, deps.basePolicy, await deps.finalists());
+    const { policyResult: _policyResult, intent: effective, ...selection } = selectStrategy(intent, deps.basePolicy, await deps.finalists());
     const latencyMs = deps.now() - started;
     audit("ok", { intent: { riskStyle, maxSources, diversification, leverageComfort, requestedLeverage, avoidClones, horizon }, promptTokens, completionTokens });
-    return json({ ok: true, reply: intent.reply, clarify: intent.clarify, intent, ...selection, model: deps.env.model, latencyMs });
+    return json({ ok: true, reply: intent.reply, clarify: intent.clarify, intent: effective, ...selection, model: deps.env.model, latencyMs });
   } catch (error) {
     const code = infeasible(error) ? "infeasible" : "unavailable";
     audit(code);
@@ -180,10 +180,10 @@ export const handlePreview = async (req: Request, deps: ChatDeps): Promise<Respo
   try {
     const reservation = await reserve(req, deps, "preview");
     if (!reservation.ok) { audit(reservation.reason); return denied(reservation); }
-    const { policyResult, shortlist: { addresses } } = selectStrategy(intent, deps.basePolicy, await deps.finalists());
-    const preview = buildPreview({ intent, policyResult, addresses });
+    const { policyResult, intent: effective, shortlist: { addresses } } = selectStrategy(intent, deps.basePolicy, await deps.finalists());
+    const preview = buildPreview({ intent: effective, policyResult, addresses });
     const requestId = deps.newId();
-    await deps.requests.save({ id: requestId, createdAtMs: deps.now(), previewHash: preview.previewHash, intent, preview });
+    await deps.requests.save({ id: requestId, createdAtMs: deps.now(), previewHash: preview.previewHash, intent: effective, preview });
     audit("ok");
     return json({ ok: true, requestId, preview });
   } catch (error) {

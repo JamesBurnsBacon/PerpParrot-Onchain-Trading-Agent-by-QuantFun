@@ -1,3 +1,4 @@
+import { isLiveStrategy } from "../../dashboard/lib/parrot-live";
 import { expect, test } from "bun:test";
 import { MemoryChatLimiter } from "../src/chat/limits";
 import { buildLiveConfig, liveReservationMicroUsd, readLiveEnv } from "../src/live/config";
@@ -188,6 +189,20 @@ test("live strategy rejects outer keys and maps feasibility, loader and preview 
   await check(await handleLiveStrategy(request({ intent: args }), failed), 503, "unavailable");
 });
 
-test("live tool maps a source maximum below requiredSources to 422", async () => {
-  await check(await handleLiveStrategy(request({ intent: { ...args, riskStyle: "conservative", maxSources: 5 } }), deps()), 422, "infeasible");
+test("live tool raises a source maximum below requiredSources to the smallest feasible number and says so", async () => {
+  const response = await handleLiveStrategy(request({ intent: { ...args, riskStyle: "conservative", maxSources: 5 } }), deps());
+  expect(response.status).toBe(200);
+  const body = await response.json() as { policy: { maxSources: number; requiredSources: number; raisedFrom?: number }; shortlist: { addresses: string[] }; facts: string };
+  expect(body.policy.raisedFrom).toBe(5);
+  expect(body.policy.maxSources).toBe(body.policy.requiredSources);
+  expect(body.shortlist.addresses.length).toBeLessThanOrEqual(body.policy.maxSources);
+  expect(body.facts).toContain(`raised from 5 to ${body.policy.maxSources}`);
+  expect((body as unknown as { intent: { maxSources: number } }).intent.maxSources).toBe(body.policy.maxSources);
+});
+
+test("the real /live/strategy response always passes the dashboard guard (contract), including a raised limit", async () => {
+  for (const intent of [args, { ...args, riskStyle: "conservative", maxSources: 5 }, { ...args, requestedLeverage: 100 }]) {
+    const body: unknown = await (await handleLiveStrategy(request({ intent }), deps())).json();
+    expect(isLiveStrategy(body)).toBe(true);
+  }
 });

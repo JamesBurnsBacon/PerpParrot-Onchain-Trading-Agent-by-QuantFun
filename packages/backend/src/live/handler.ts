@@ -81,11 +81,12 @@ export const handleLiveSession = async (req: Request, deps: LiveDeps): Promise<R
   } catch { return failure(503, "unavailable"); }
 };
 
-export const strategyFacts = (intent: StrategyIntent, selection: Omit<ReturnType<typeof selectStrategy>, "policyResult"> & Partial<ReturnType<typeof explainSelection>>): string => {
+export const strategyFacts = (intent: StrategyIntent, selection: Omit<ReturnType<typeof selectStrategy>, "policyResult" | "intent"> & Partial<ReturnType<typeof explainSelection>>): string => {
   const { policy, shortlist } = selection;
   const safety = "No orders are placed; an operator must review and freeze any strategy.";
   const core = [
     `Style: ${intent.riskStyle}. Sources: ${shortlist.addresses.length}; source limit: ${policy.maxSources}; needs at least ${policy.requiredSources}.`,
+    ...(policy.raisedFrom === undefined ? [] : [`The source limit was raised from ${policy.raisedFrom} to ${policy.maxSources} because the risk limits need at least ${policy.requiredSources} sources.`]),
     `Diversification: ${intent.diversification}. Leverage comfort: ${intent.leverageComfort}.`,
     `Requested leverage: ${intent.requestedLeverage === null ? "not specified" : `${intent.requestedLeverage}x`}.`,
     `Avoid clones: ${intent.avoidClones}. Horizon: ${intent.horizon}.`,
@@ -126,10 +127,10 @@ export const handleLiveStrategy = async (req: Request, deps: LiveDeps): Promise<
     const data = await deps.finalists();
     const previous = (body as { previous?: string[] }).previous;
     if (previous?.some(id => !data.finalists.some(f => f.address === id))) return failure(400, "invalid_model_output");
-    const { policyResult, ...selected } = selectStrategy(intent, deps.basePolicy, data);
+    const { policyResult, intent: effective, ...selected } = selectStrategy(intent, deps.basePolicy, data);
     const selection = { ...selected, ...explainSelection(intent, deps.basePolicy, data, previous) };
-    buildPreview({ intent, policyResult, addresses: selection.shortlist.addresses });
-    return json({ ok: true, intent, ...selection, facts: strategyFacts(intent, selection) });
+    buildPreview({ intent: effective, policyResult, addresses: selection.shortlist.addresses });
+    return json({ ok: true, intent: effective, ...selection, facts: strategyFacts(effective, selection) });
   } catch (error) {
     const code = error instanceof PreviewError ? error.code : error instanceof RangeError ? "infeasible" : "unavailable";
     return failure(code === "unavailable" ? 503 : 422, code);

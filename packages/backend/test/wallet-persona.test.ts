@@ -4,8 +4,8 @@ import { BIRD_NAMES, walletNickname, walletVibe } from "../../shared/wallet-pers
 
 test("vibe boundaries use both fractional evidence metrics", () => {
   for (const [maxDrawdown, realizedVol, expected] of [
-    [0, 0, "calm"], [.1499, .4499, "calm"], [.15, .1, "steady"], [.1, .45, "steady"],
-    [.2999, .7999, "steady"], [.3, .1, "wild"], [.1, .8, "wild"], [1, 2, "wild"],
+    [0, 0, "calm"], [.0299, .0149, "calm"], [.03, .005, "steady"], [.01, .015, "steady"],
+    [.0799, .0299, "steady"], [.08, .005, "wild"], [.01, .03, "wild"], [1, 2, "wild"],
   ] as const) expect(walletVibe({ maxDrawdown, realizedVol })).toBe(expected);
 });
 
