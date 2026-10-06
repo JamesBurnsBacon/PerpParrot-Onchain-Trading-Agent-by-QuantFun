@@ -25,20 +25,20 @@ const validateConfig = (config: ScoreConfig): void => {
   }
 };
 
-const compareAddresses = (a: Candidate, b: Candidate): number => {
+const compareAddresses = (a: { address: string }, b: { address: string }): number => {
   const left = a.address.toLowerCase();
   const right = b.address.toLowerCase();
   return left < right ? -1 : left > right ? 1 : 0;
 };
 
-// Equal values share their midrank percentile; null is strictly worst (README §4.2).
-const percentileMap = (values: (number | null)[]): Map<number | null, number> => {
+// Equal values share the integer midrank numerator; null is strictly worst (README §4.2).
+const rankNumeratorMap = (values: (number | null)[]): Map<number | null, number> => {
   const sorted = [...values].sort((a, b) => a === b ? 0 : a === null ? -1 : b === null ? 1 : a - b);
   const result = new Map<number | null, number>();
   for (let start = 0; start < sorted.length;) {
     let end = start + 1;
     while (end < sorted.length && sorted[end] === sorted[start]) end++;
-    result.set(sorted[start], sorted.length === 1 ? 0.5 : (start + (end - start - 1) / 2) / (sorted.length - 1));
+    result.set(sorted[start], 2 * start + (end - start) - 1);
     start = end;
   }
   return result;
@@ -46,6 +46,38 @@ const percentileMap = (values: (number | null)[]): Map<number | null, number> =>
 
 const negMaxDrawdown = (metrics: Metrics): number | null =>
   metrics.maxDrawdown === null ? null : -metrics.maxDrawdown;
+
+// Sum integer rank numerators so exact ties reach the address tie-break (README §4.2).
+export const rankByMetrics = (entries: { address: string; metrics: Metrics }[], finalists: number) => {
+  const sortino = rankNumeratorMap(entries.map(({ metrics }) => metrics.sortino));
+  const calmar = rankNumeratorMap(entries.map(({ metrics }) => metrics.calmar));
+  const drawdown = rankNumeratorMap(entries.map(({ metrics }) => negMaxDrawdown(metrics)));
+  const consistency = rankNumeratorMap(entries.map(({ metrics }) => metrics.pnlConsistency));
+  const count = entries.length;
+  return entries.map(({ address, metrics }) => {
+    const numerators = {
+      sortino: sortino.get(metrics.sortino)!,
+      calmar: calmar.get(metrics.calmar)!,
+      negMaxDrawdown: drawdown.get(negMaxDrawdown(metrics))!,
+      pnlConsistency: consistency.get(metrics.pnlConsistency)!,
+    };
+    const scoreNumerator = numerators.sortino + numerators.calmar + numerators.negMaxDrawdown + numerators.pnlConsistency;
+    return { address, metrics, numerators, scoreNumerator };
+  }).sort((a, b) => b.scoreNumerator - a.scoreNumerator || compareAddresses(a, b))
+    .map(({ address, metrics, numerators, scoreNumerator }, index) => ({
+      address,
+      metrics,
+      percentiles: {
+        sortino: count === 1 ? 0.5 : numerators.sortino / (2 * (count - 1)),
+        calmar: count === 1 ? 0.5 : numerators.calmar / (2 * (count - 1)),
+        negMaxDrawdown: count === 1 ? 0.5 : numerators.negMaxDrawdown / (2 * (count - 1)),
+        pnlConsistency: count === 1 ? 0.5 : numerators.pnlConsistency / (2 * (count - 1)),
+      },
+      score: count === 1 ? 0.5 : scoreNumerator / (8 * (count - 1)),
+      rank: index + 1,
+      finalist: index < finalists,
+    }));
+};
 
 // Rank eligible histories, then report the cumulative screening funnel (README §4.2).
 export const scoreCandidates = (
@@ -85,28 +117,11 @@ export const scoreCandidates = (
   const rankable = candidates.filter((candidate): candidate is Candidate & { metrics: Metrics } =>
     candidate.eligible && candidate.metrics !== null,
   );
-  const sortino = percentileMap(rankable.map(({ metrics }) => metrics.sortino));
-  const calmar = percentileMap(rankable.map(({ metrics }) => metrics.calmar));
-  const drawdown = percentileMap(rankable.map(({ metrics }) => negMaxDrawdown(metrics)));
-  const consistency = percentileMap(rankable.map(({ metrics }) => metrics.pnlConsistency));
-  const ranked = rankable.map((candidate) => {
-    const { metrics } = candidate;
-    const percentiles = {
-      sortino: sortino.get(metrics.sortino)!,
-      calmar: calmar.get(metrics.calmar)!,
-      negMaxDrawdown: drawdown.get(negMaxDrawdown(metrics))!,
-      pnlConsistency: consistency.get(metrics.pnlConsistency)!,
-    };
-    return {
-      ...candidate,
-      percentiles,
-      score: (percentiles.sortino + percentiles.calmar + percentiles.negMaxDrawdown + percentiles.pnlConsistency) / 4,
-    };
-  }).sort((a, b) => b.score - a.score || compareAddresses(a, b));
-  ranked.forEach((candidate, index) => {
-    candidate.rank = index + 1;
-    candidate.finalist = index < config.finalists;
-  });
+  const candidatesByAddress = new Map(rankable.map((candidate) => [candidate.address, candidate]));
+  const ranked = rankByMetrics(rankable, config.finalists).map((entry) => ({
+    ...candidatesByAddress.get(entry.address)!,
+    ...entry,
+  }));
   const unranked = candidates.filter((candidate) => !candidate.eligible || candidate.metrics === null)
     .sort(compareAddresses);
   const finalists = ranked.filter((candidate) => candidate.finalist).map((candidate) => candidate.address);
