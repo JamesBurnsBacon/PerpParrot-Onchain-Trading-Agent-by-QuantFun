@@ -188,14 +188,22 @@ export function TargetsVsHeld({ run }: { run: Run }) {
       action: `${o.isBuy ? "▲ buy" : "▼ sell"} ${Math.abs(o.notionalUsd).toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })}`,
       traded: true,
     })),
-    ...(run.plan?.skipped ?? []).map((s) => ({ asset: s.asset, target: s.targetUsd, held: s.currentUsd, action: `· ${SKIP_LABEL[s.reason] ?? s.reason}`, traded: false })),
+    // A non-tradable leg can be both skipped (its full target) and ordered (capped to a
+    // reduction): one row per asset, the order's, marked as capped.
+    ...(run.plan?.skipped ?? [])
+      .filter((s) => !run.plan?.orders.some((o) => o.asset === s.asset))
+      .map((s) => ({ asset: s.asset, target: s.targetUsd, held: s.currentUsd, action: `· ${SKIP_LABEL[s.reason] ?? s.reason}`, traded: false })),
   ];
+  for (const leg of legs) {
+    const capped = run.plan?.skipped.find((s) => s.asset === leg.asset && leg.traded);
+    if (capped) leg.action += " · capped"; // e.g. not tradable: reduce only
+  }
   if (!legs.length || !(equity > 0)) return <Waiting what="Nothing to trade in the last run" source="executor /runs · plan" />;
   const rows = legs.sort((a, b) => Math.max(Math.abs(b.target), Math.abs(b.held)) - Math.max(Math.abs(a.target), Math.abs(a.held))).slice(0, 14);
   const hidden = legs.length - rows.length;
   const max = Math.max(...rows.map((r) => Math.max(Math.abs(r.target), Math.abs(r.held)) / equity), 0.01);
   const labelW = 92;
-  const actionW = 96;
+  const actionW = 128;
   const half = (width - labelW - actionW - 16) / 2;
   const mid = labelW + half;
   const x = (usd: number) => mid + (usd / equity / max) * half;

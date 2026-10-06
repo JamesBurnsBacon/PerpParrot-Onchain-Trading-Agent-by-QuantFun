@@ -90,4 +90,40 @@ describe("PaperService", () => {
       [1200, expect.closeTo(487.625, 6)],
     ]);
   });
+
+  test("a view built while a step lands is not cached stale", async () => {
+    const inner = new MemoryPaperStore();
+    let slow: Promise<void> | undefined;
+    const store = {
+      load: async () => {
+        const gate = slow; // whether this call is the slow one is decided when it starts
+        const state = await inner.load();
+        if (gate) await gate;
+        return state;
+      },
+      save: inner.save.bind(inner),
+      points: inner.points.bind(inner),
+    };
+    const service = new PaperService({ store, specs: defaultBooks(0.5), cfg, markets: marketsAt(100_000) });
+    await service.step(600, snapshot(600));
+    let release!: () => void;
+    slow = new Promise((r) => (release = r));
+    const viewing = service.view(); // reads the 600 state, then waits
+    slow = undefined;
+    await service.step(1200, snapshot(1200));
+    release();
+    expect((await viewing).lastRunAt).toBe(1200);
+    expect((await service.view()).lastRunAt).toBe(1200);
+  });
+
+  test("an instance whose step finds the run already saved refreshes its view", async () => {
+    const store = new MemoryPaperStore();
+    const a = new PaperService({ store, specs: defaultBooks(0.5), cfg, markets: marketsAt(100_000) });
+    const b = new PaperService({ store, specs: defaultBooks(0.5), cfg, markets: marketsAt(100_000) });
+    await a.step(600, snapshot(600));
+    expect((await b.view()).lastRunAt).toBe(600);
+    await a.step(1200, snapshot(1200));
+    expect(await b.step(1200, snapshot(1200))).toEqual([]);
+    expect((await b.view()).lastRunAt).toBe(1200);
+  });
 });

@@ -102,8 +102,10 @@ const CURVE_POINTS = 1500;
 type PaperView = Awaited<ReturnType<PaperService["build"]>>;
 
 export class PaperService {
-  // The dashboard's view, rebuilt once per step instead of per request.
-  private cached?: PaperView;
+  // The dashboard's view, rebuilt after each step and at most a minute old (another instance
+  // sharing the store may have stepped). `generation` drops a build that raced a step.
+  private cached?: { view: PaperView; at: number };
+  private generation = 0;
 
   constructor(
     private readonly deps: {
@@ -117,7 +119,10 @@ export class PaperService {
   // Steps every book once per mirror run; repeated or older runs are ignored.
   async step(runAt: number, snapshotJson: string): Promise<PaperPoint[]> {
     const state = (await this.deps.store.load()) ?? { books: [], lastRunAt: 0 };
-    if (runAt <= state.lastRunAt) return [];
+    if (runAt <= state.lastRunAt) {
+      this.invalidate(); // another instance stepped it: our view may predate that
+      return [];
+    }
     for (const spec of this.deps.specs) {
       if (!state.books.some((b) => b.id === spec.id)) {
         state.books.push(newBook(spec.id, spec.label, spec.kind, spec.startingEquityUsd, runAt, spec.multiplier ?? 1));
@@ -135,14 +140,24 @@ export class PaperService {
     }
     const points = state.books.map((b) => ({ bookId: b.id, t: runAt, equityUsd: equityOf(b, markets) }));
     const saved = await this.deps.store.save({ ...state, lastRunAt: runAt }, points);
-    this.cached = undefined;
+    this.invalidate();
     return saved === false ? [] : points;
   }
 
+  private invalidate() {
+    this.generation++;
+    this.cached = undefined;
+  }
+
   // For the dashboard: each book with its equity curve (at most CURVE_POINTS points).
-  async view(sinceT = 0) {
-    this.cached ??= await this.build();
-    const view = this.cached;
+  async view(sinceT = 0): Promise<PaperView> {
+    if (!this.cached || Date.now() - this.cached.at > 60_000) {
+      const generation = this.generation;
+      const built = { view: await this.build(), at: Date.now() };
+      if (generation !== this.generation) return this.view(sinceT); // a step landed meanwhile
+      this.cached = built;
+    }
+    const view = this.cached.view;
     return sinceT ? { ...view, books: view.books.map((b) => ({ ...b, curve: b.curve.filter(([t]) => t >= sinceT) })) } : view;
   }
 

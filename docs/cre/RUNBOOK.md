@@ -157,9 +157,10 @@ bun run scripts/freeze.ts path/to/frozen-configuration.json --account 0xOUR_ACCO
 `--write` saves it as `packages/backend/frozen/live.json` and pins its hash in
 `mirror/config.production.json`; the script prints the Railway variables to set
 (`CONFIGURATION_PATH=frozen/live.json` and `FROZEN_CONFIGURATION_HASH` on the snapshot service,
-`FROZEN_CONFIGURATION_HASH` and `HL_ACCOUNT` on the executor). Commit, then redeploy `mirror`
-(CRE deploy Action) and both services. Until all three agree, runs fail closed: the backend
-won't serve, the mirror rejects the snapshot, or the executor rejects the report.
+`FROZEN_CONFIGURATION_HASH` and `HL_ACCOUNT` on the executor). Commit, redeploy **both services
+first**, then `mirror` (CRE deploy Action): the Action checks that the services already pin the
+new hash and stops otherwise. Until all three agree, runs fail closed: the backend won't serve,
+the mirror rejects the snapshot, or the executor rejects the report.
 
 ## Stop
 
