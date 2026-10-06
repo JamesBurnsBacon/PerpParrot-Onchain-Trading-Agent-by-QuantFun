@@ -60,6 +60,11 @@ jobs:
         run: npm install --global pnpm@11.25.0 && pnpm --dir ../.. install --frozen-lockfile
         if: matrix.package == 'executor'
       - run: bun install --frozen-lockfile
+      - name: Install integration dependency packages
+        if: matrix.package == 'executor'
+        run: |
+          bun install --frozen-lockfile --cwd ../backend
+          bun install --frozen-lockfile --cwd ../cre-workflows/mirror
       - run: bun test
       - run: bunx tsc --noEmit
 
