@@ -52,6 +52,9 @@ jobs:
         working-directory: packages/cre-workflows/${{ inputs.workflow }}
         run: bun test
 
+      - name: Check config
+        run: bun run scripts/check-config.ts ${{ inputs.workflow }} ${{ inputs.target }}
+
       # Not a simulation: with production config, mirror would post a locally signed report
       # to the live executor, which rejects it. scripts/e2e-mirror.sh covers simulation.
       - name: Build WASM
