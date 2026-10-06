@@ -1,6 +1,7 @@
 import { keccak256, stringToBytes } from "viem";
 import { parseAccount } from "../../shared/copy";
-import type { KeccakUtf8, Manifest } from "../../shared/manifest";
+import type { KeccakUtf8 } from "../../shared/commitments";
+import type { FrozenConfiguration } from "../../shared/frozen";
 import { ELIGIBLE_DEXES, type PositionsSnapshot } from "../../shared/snapshot";
 import { clearinghouseState } from "./hyperliquid";
 
@@ -8,17 +9,17 @@ export const keccakUtf8: KeccakUtf8 = (text) => keccak256(stringToBytes(text));
 
 export type ReadAccount = typeof clearinghouseState;
 
-// Reads every manifest source on each eligible dex. Sources are sorted by address
+// Reads every frozen source on each eligible dex. Sources are sorted by address
 // so the JSON is canonical for a given set of readings.
 export const buildSnapshot = async (
-  manifest: Manifest,
+  configuration: FrozenConfiguration,
   eligibleAssets: string[],
   runAt: number,
   takenAt: number,
   readAccount: ReadAccount = clearinghouseState,
 ): Promise<PositionsSnapshot> => {
   const eligible = new Set(eligibleAssets);
-  const addresses = manifest.sources.map((s) => s.sourceAddress.toLowerCase()).sort();
+  const addresses = configuration.sources.map((s) => s.sourceAddress.toLowerCase()).sort();
   const sources = await Promise.all(
     addresses.map(async (address) => {
       const states = await Promise.all(ELIGIBLE_DEXES.map((dex) => readAccount(address, dex)));
@@ -32,7 +33,7 @@ export const buildSnapshot = async (
       };
     }),
   );
-  return { snapshotId: `snap-${runAt}`, runAt, takenAt, manifest, eligibleAssets, sources };
+  return { snapshotId: `snap-${runAt}`, runAt, takenAt, configuration, eligibleAssets, sources };
 };
 
 // Snapshots are written once per runAt and never changed, so every DON node

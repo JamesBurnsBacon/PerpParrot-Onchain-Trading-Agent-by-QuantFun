@@ -34,9 +34,9 @@ export const reportId = (rawReport: Uint8Array): Hex => keccak256(rawReport);
 const bodyParams = parseAbiParameters(REPORT_BODY_ABI);
 
 export const decodeBody = (body: Uint8Array): MirrorReport => {
-  const [runId, snapshotHash, manifestHash, account, asOf, expiresAt, equityE6, targets] = decodeAbiParameters(
+  const [runId, snapshotHash, configurationHash, account, asOf, expiresAt, equityE6, targets] = decodeAbiParameters(
     bodyParams,
     toHex(body),
   );
-  return { runId, snapshotHash, manifestHash, account, asOf, expiresAt, equityE6, targets: [...targets] };
+  return { runId, snapshotHash, configurationHash, account, asOf, expiresAt, equityE6, targets: [...targets] };
 };

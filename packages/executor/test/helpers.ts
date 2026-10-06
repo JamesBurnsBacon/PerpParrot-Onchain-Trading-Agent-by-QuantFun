@@ -6,7 +6,7 @@ import type { DonSigners } from "../src/signers";
 import type { VerifyMode } from "../src/verify";
 
 export const OWNER = "0x1111111111111111111111111111111111111111" as Hex;
-export const MANIFEST = `0x${"ab".repeat(32)}` as Hex;
+export const CONFIGURATION = `0x${"ab".repeat(32)}` as Hex;
 export const ACCOUNT = "0x2222222222222222222222222222222222222222" as Hex;
 export const DON_ID = 7;
 export const AS_OF = 1_791_264_000;
@@ -14,7 +14,7 @@ export const AS_OF = 1_791_264_000;
 export const body = (overrides: Partial<MirrorReport> = {}): MirrorReport => ({
   runId: `mirror-${AS_OF}`,
   snapshotHash: `0x${"cd".repeat(32)}`,
-  manifestHash: MANIFEST,
+  configurationHash: CONFIGURATION,
   account: ACCOUNT,
   asOf: BigInt(AS_OF),
   expiresAt: BigInt(AS_OF + 300),
@@ -35,7 +35,7 @@ export const buildRawReport = (b: MirrorReport, owner: Hex = OWNER): Uint8Array 
   const encoded = encodeAbiParameters(parseAbiParameters(REPORT_BODY_ABI), [
     b.runId,
     b.snapshotHash,
-    b.manifestHash,
+    b.configurationHash,
     b.account,
     b.asOf,
     b.expiresAt,

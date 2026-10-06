@@ -1,5 +1,5 @@
 import type { EligibilityTracker } from "./eligibility";
-import type { ManifestSource } from "./manifest-source";
+import type { ConfigurationSource } from "./configuration-source";
 import { buildSnapshot, type ReadAccount, type SnapshotStore } from "./snapshot";
 
 export const RUN_INTERVAL_SECONDS = 600;
@@ -8,7 +8,7 @@ export const RUN_INTERVAL_SECONDS = 600;
 export const nextRunAt = (nowSeconds: number) => Math.ceil((nowSeconds + 1) / RUN_INTERVAL_SECONDS) * RUN_INTERVAL_SECONDS;
 
 export type SnapshotServiceDeps = {
-  manifests: ManifestSource;
+  configurations: ConfigurationSource;
   eligibility: EligibilityTracker;
   store: SnapshotStore;
   nowMs: () => number;
@@ -46,9 +46,9 @@ export class SnapshotService {
 
   private async build(runAt: number): Promise<string> {
     const nowMs = this.deps.nowMs();
-    const manifest = await this.deps.manifests.load(nowMs);
+    const configuration = await this.deps.configurations.load(nowMs);
     const eligible = await this.deps.eligibility.current(nowMs);
-    const snapshot = await buildSnapshot(manifest, eligible, runAt, Math.floor(nowMs / 1000), this.deps.readAccount);
+    const snapshot = await buildSnapshot(configuration, eligible, runAt, Math.floor(nowMs / 1000), this.deps.readAccount);
     return this.deps.store.putIfAbsent(runAt, JSON.stringify(snapshot));
   }
 

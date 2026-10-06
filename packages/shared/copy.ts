@@ -44,7 +44,24 @@ export const parseAccount = (states: ClearinghouseState[], eligible: ReadonlySet
   return { equityE6, positions };
 };
 
-export type WeightedSource = SnapshotSource & { weightE6: number };
+export type WeightedSource = SnapshotSource & { weightE6: number; ceilingE6: number };
+
+// Sources holding any eligible position, with positive equity.
+const activeSources = (sources: WeightedSource[]) =>
+  sources.filter((s) => s.positions.some((p) => BigInt(p.notionalE6) !== 0n) && BigInt(s.equityE6) > 0n);
+
+// Renormalizing over active sources must not push one past its frozen ceiling
+// (review core mirror/core.ts: "active-source concentration exceeds ceiling").
+export const checkActiveCeilings = (sources: WeightedSource[]): void => {
+  const allWeight = BigInt(sources.reduce((sum, s) => sum + s.weightE6, 0));
+  const active = activeSources(sources);
+  const activeWeight = BigInt(active.reduce((sum, s) => sum + s.weightE6, 0));
+  for (const s of active) {
+    if (BigInt(s.weightE6) * allWeight > BigInt(s.ceilingE6) * activeWeight) {
+      throw new Error(`active-source concentration exceeds ceiling: ${s.address}`);
+    }
+  }
+};
 
 // exposure_c = Σ_i w'_i × n_i,c / E_i (README §4.4). Weights come from the
 // manifest and sum to 1 − cash. "Flat is not a signal": flat sources' weight is
@@ -52,7 +69,7 @@ export type WeightedSource = SnapshotSource & { weightE6: number };
 // share fixed (w'_i = w_i × W_all / W_active). Sorted by asset.
 export const computeExposures = (sources: WeightedSource[]): { asset: string; exposureE9: bigint }[] => {
   const allWeight = BigInt(sources.reduce((sum, s) => sum + s.weightE6, 0));
-  const active = sources.filter((s) => s.positions.some((p) => BigInt(p.notionalE6) !== 0n) && BigInt(s.equityE6) > 0n);
+  const active = activeSources(sources);
   const activeWeight = BigInt(active.reduce((sum, s) => sum + s.weightE6, 0));
   const totals = new Map<string, bigint>();
   for (const s of active) {
@@ -82,12 +99,15 @@ export const capGrossExposure = (
 // Target notional for our account: exposure × our equity.
 export const toTargetE6 = (exposureE9: bigint, equityE6: bigint): bigint => (exposureE9 * equityE6) / EXPOSURE_SCALE;
 
-// Σ_c |snapshot − live| / live equity, in basis points (README §4.7: reject > 5%).
+// Spot-check deviation in basis points of live equity (README §4.7: reject > 5%):
+// the larger of Σ_c |snapshot − live notional| (long/short errors can't cancel)
+// and |snapshot − live equity|.
 export const deviationBps = (snapshot: SnapshotSource, live: AccountState): number => {
   if (live.equityE6 <= 0n) return 10_000;
   const assets = new Set([...snapshot.positions.map((p) => p.asset), ...live.positions.keys()]);
   const snap = new Map(snapshot.positions.map((p) => [p.asset, BigInt(p.notionalE6)]));
   let diff = 0n;
   for (const a of assets) diff += abs((snap.get(a) ?? 0n) - (live.positions.get(a) ?? 0n));
-  return Number((diff * 10_000n) / live.equityE6);
+  const equityDiff = abs(BigInt(snapshot.equityE6) - live.equityE6);
+  return Number(((diff > equityDiff ? diff : equityDiff) * 10_000n) / live.equityE6);
 };

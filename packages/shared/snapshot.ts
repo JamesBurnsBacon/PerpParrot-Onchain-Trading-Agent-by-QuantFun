@@ -1,7 +1,7 @@
 // Positions snapshot served by the backend to the mirror workflow (README §4.7).
 // GET {backendUrl}/snapshots/{runAt}: immutable once built, so every DON node
 // gets byte-identical JSON. Amounts are decimal strings scaled by 1e6.
-import type { Manifest } from "./manifest";
+import type { FrozenConfiguration } from "./frozen";
 
 export type SnapshotPosition = {
   asset: string;
@@ -23,10 +23,10 @@ export type PositionsSnapshot = {
   runAt: number;
   // Unix seconds the positions were read.
   takenAt: number;
-  // The frozen live manifest: the source set, weights and policy (shared/manifest.ts).
-  manifest: Manifest;
+  // The frozen configuration: source set, weights, policy and our account (shared/frozen.ts).
+  configuration: FrozenConfiguration;
   eligibleAssets: string[];
-  // One entry per manifest source, sorted by address.
+  // One entry per frozen source, sorted by address.
   sources: SnapshotSource[];
 };
 

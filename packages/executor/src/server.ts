@@ -47,7 +47,7 @@ const runner = new Runner({
 const app = createApp({
   handler: {
     mode,
-    frozenManifestHash: config.frozenManifestHash,
+    frozenConfigurationHash: config.frozenConfigurationHash,
     account: config.account,
     now: () => Math.floor(Date.now() / 1000),
     maxLeadSeconds: config.maxReportLeadSeconds,
@@ -61,7 +61,7 @@ const app = createApp({
     verifyReports: config.verifyReports,
     account: config.account,
     apiWallet: exchange.signer,
-    frozenManifestHash: config.frozenManifestHash,
+    frozenConfigurationHash: config.frozenConfigurationHash,
     lastReportAt: runner.lastReportAt || null,
   }),
 });

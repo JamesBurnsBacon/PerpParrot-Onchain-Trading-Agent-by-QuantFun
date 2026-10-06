@@ -3,7 +3,7 @@ import type { Hex } from "viem";
 import { generatePrivateKey } from "viem/accounts";
 import { handleReport, type HandlerDeps } from "../src/handler";
 import { verifyEnvelope } from "../src/verify";
-import { ACCOUNT, AS_OF, body, DON_ID, envelope, keys, MANIFEST, registry } from "./helpers";
+import { ACCOUNT, AS_OF, body, DON_ID, envelope, keys, CONFIGURATION, registry } from "./helpers";
 
 describe("verifyEnvelope (registry)", () => {
   test("accepts f+1 registry signatures and decodes the body", async () => {
@@ -70,7 +70,7 @@ describe("handleReport", () => {
     const accepted: string[] = [];
     const d: HandlerDeps = {
       mode: registry,
-      frozenManifestHash: MANIFEST,
+      frozenConfigurationHash: CONFIGURATION,
       account: ACCOUNT,
       now: () => AS_OF + 10,
       maxLeadSeconds: 60,
@@ -105,9 +105,9 @@ describe("handleReport", () => {
     expect(r).toMatchObject({ status: 422, body: { error: "report from the future" } });
   });
 
-  test("rejects a different manifest", async () => {
-    const r = await handleReport(await envelope(keys.slice(0, 2)), deps({ frozenManifestHash: `0x${"00".repeat(32)}` }).d);
-    expect(r).toMatchObject({ status: 422, body: { error: "manifest mismatch" } });
+  test("rejects a different frozen configuration", async () => {
+    const r = await handleReport(await envelope(keys.slice(0, 2)), deps({ frozenConfigurationHash: `0x${"00".repeat(32)}` }).d);
+    expect(r).toMatchObject({ status: 422, body: { error: "configuration mismatch" } });
   });
 
   test("rejects reports for another account", async () => {

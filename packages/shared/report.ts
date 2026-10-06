@@ -2,7 +2,7 @@
 // CRE report header. No imports, so both the CRE workflow and the executor can
 // use it with their own copy of viem.
 export const REPORT_BODY_ABI =
-  "string runId, bytes32 snapshotHash, bytes32 manifestHash, address account, uint64 asOf, uint64 expiresAt, int256 equityE6, (string asset, int256 notionalE6)[] targets";
+  "string runId, bytes32 snapshotHash, bytes32 configurationHash, address account, uint64 asOf, uint64 expiresAt, int256 equityE6, (string asset, int256 notionalE6)[] targets";
 
 export type Target = {
   asset: string;
@@ -14,8 +14,8 @@ export type MirrorReport = {
   runId: string;
   // keccak256 of the snapshot JSON the DON agreed on.
   snapshotHash: `0x${string}`;
-  // The frozen live manifest that authorizes these targets.
-  manifestHash: `0x${string}`;
+  // The frozen configuration that authorizes these targets.
+  configurationHash: `0x${string}`;
   // Our HL account the targets are for.
   account: `0x${string}`;
   // Unix seconds of the scheduled mirror run, and when the report stops being valid.

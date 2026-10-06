@@ -6,7 +6,7 @@ export type ExecutorConfig = {
   verifyReports: boolean;
   workflowOwner: Hex;
   ethRpcUrl: string;
-  frozenManifestHash: string;
+  frozenConfigurationHash: string;
   account: Hex;
   apiWalletKey?: Hex;
   dryRun: boolean;
@@ -54,7 +54,7 @@ export const loadConfig = (env: Record<string, string | undefined>): ExecutorCon
     verifyReports,
     workflowOwner: hex("WORKFLOW_OWNER", env.WORKFLOW_OWNER, 20),
     ethRpcUrl: env.ETH_MAINNET_RPC_URL || "https://ethereum-rpc.publicnode.com",
-    frozenManifestHash: hex("FROZEN_MANIFEST_HASH", env.FROZEN_MANIFEST_HASH, 32),
+    frozenConfigurationHash: hex("FROZEN_CONFIGURATION_HASH", env.FROZEN_CONFIGURATION_HASH, 32),
     account: hex("HL_ACCOUNT", env.HL_ACCOUNT, 20),
     apiWalletKey,
     dryRun,

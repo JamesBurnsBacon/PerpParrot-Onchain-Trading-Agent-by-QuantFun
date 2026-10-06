@@ -1,7 +1,7 @@
 // Positions snapshot API for the mirror workflow (README §4.7). Runs on Railway;
-// locally: bun run dev (uses fixtures/manifest.json).
+// locally: bun run dev (set CONFIGURATION_PATH and FROZEN_CONFIGURATION_HASH).
 import { EligibilityTracker } from "./eligibility";
-import { FileManifestSource } from "./manifest-source";
+import { FileConfigurationSource } from "./configuration-source";
 import { SnapshotError, SnapshotService } from "./service";
 import { MemorySnapshotStore } from "./snapshot";
 
@@ -13,7 +13,7 @@ const required = (name: string) => {
 };
 
 const service = new SnapshotService({
-  manifests: new FileManifestSource(required("MANIFEST_PATH"), required("FROZEN_MANIFEST_HASH")),
+  configurations: new FileConfigurationSource(required("CONFIGURATION_PATH"), required("FROZEN_CONFIGURATION_HASH")),
   eligibility: new EligibilityTracker(),
   store: new MemorySnapshotStore(),
   nowMs: Date.now,

@@ -2,7 +2,7 @@
 // and signed exactly as the SDK would send them. In dry-run the transport records
 // the signed request instead of POSTing it.
 import { HttpTransport } from "@nktkas/hyperliquid";
-import { order, updateLeverage } from "@nktkas/hyperliquid/api/exchange";
+import { ApiRequestError, order, updateLeverage } from "@nktkas/hyperliquid/api/exchange";
 import type { IRequestTransport } from "@nktkas/hyperliquid";
 import type { Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
@@ -47,14 +47,31 @@ export type Exchange = {
   recorded(): SignedRequest[];
 };
 
-type Statuses = ({ filled: { totalSz: string; avgPx: string } } | { resting: unknown } | { error: string })[];
+type Status = { filled: { totalSz: string; avgPx: string } } | { resting: unknown } | { error: string };
 
-export const createExchange = (opts: { privateKey?: Hex; dryRun: boolean }): Exchange => {
+// Orders per HL action. Keeps each signed request small; reductions go first (planner order).
+export const ORDER_BATCH_SIZE = 20;
+
+// Per-order statuses from a response, including one the SDK rejected because some
+// orders in the batch errored (ApiRequestError keeps the raw response).
+const statusesOf = (response: unknown): Status[] | undefined => {
+  const statuses = (response as { response?: { data?: { statuses?: unknown } } })?.response?.data?.statuses;
+  return Array.isArray(statuses) ? (statuses as Status[]) : undefined;
+};
+
+const toResult = (asset: string, s: Status | undefined, fallbackError: string): OrderResult => {
+  if (!s) return { asset, status: "error", error: fallbackError };
+  if ("filled" in s) return { asset, status: "filled", filledSize: s.filled.totalSz, avgPx: s.filled.avgPx };
+  if ("error" in s) return { asset, status: "error", error: s.error };
+  return { asset, status: "resting" };
+};
+
+export const createExchange = (opts: { privateKey?: Hex; dryRun: boolean; transport?: IRequestTransport }): Exchange => {
   if (!opts.dryRun && !opts.privateKey) throw new Error("HL_API_WALLET_KEY is required when DRY_RUN=false");
   // In dry-run without a key, sign with a throwaway key so signing is still exercised.
   const wallet = privateKeyToAccount(opts.privateKey ?? (`0x${"11".repeat(32)}` as Hex));
   const dryTransport = new DryRunTransport();
-  const transport: IRequestTransport = opts.dryRun ? dryTransport : new HttpTransport();
+  const transport: IRequestTransport = opts.dryRun ? dryTransport : (opts.transport ?? new HttpTransport());
   const config = { transport, wallet };
 
   return {
@@ -63,33 +80,34 @@ export const createExchange = (opts: { privateKey?: Hex; dryRun: boolean }): Exc
     recorded: () => dryTransport.requests,
 
     async submit(orders, cloids) {
-      if (orders.length === 0) return [];
-      try {
-        const res = await order(config, {
-          orders: orders.map((o, i) => ({
+      const results: OrderResult[] = [];
+      for (let i = 0; i < orders.length; i += ORDER_BATCH_SIZE) {
+        const batch = orders.slice(i, i + ORDER_BATCH_SIZE);
+        const params = {
+          orders: batch.map((o, j) => ({
             a: o.assetId,
             b: o.isBuy,
             p: o.price,
             s: o.size,
             r: o.reduceOnly,
             t: { limit: { tif: "Ioc" as const } },
-            c: cloids[i],
+            c: cloids[i + j],
           })),
-          grouping: "na",
-        });
-        const statuses = res.response.data.statuses as Statuses;
-        return orders.map((o, i): OrderResult => {
-          if (opts.dryRun) return { asset: o.asset, status: "dry_run" };
-          const s = statuses[i];
-          if ("filled" in s) return { asset: o.asset, status: "filled", filledSize: s.filled.totalSz, avgPx: s.filled.avgPx };
-          if ("error" in s) return { asset: o.asset, status: "error", error: s.error };
-          return { asset: o.asset, status: "resting" };
-        });
-      } catch (e) {
-        // The SDK throws if any order in the batch errors; report it per order.
-        const message = (e as Error).message;
-        return orders.map((o) => ({ asset: o.asset, status: "error", error: message }));
+          grouping: "na" as const,
+        };
+        let statuses: Status[] | undefined;
+        let failure = "no status returned";
+        try {
+          statuses = statusesOf(await order(config, params));
+        } catch (e) {
+          failure = (e as Error).message;
+          statuses = e instanceof ApiRequestError ? statusesOf(e.response) : undefined;
+        }
+        results.push(
+          ...batch.map((o, j) => (opts.dryRun ? { asset: o.asset, status: "dry_run" as const } : toResult(o.asset, statuses?.[j], failure))),
+        );
       }
+      return results;
     },
 
     async setLeverage(assetId, leverage) {

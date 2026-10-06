@@ -7,7 +7,7 @@ export const encodeReportBody = (r: MirrorReport): Hex =>
   encodeAbiParameters(bodyParams, [
     r.runId,
     r.snapshotHash,
-    r.manifestHash,
+    r.configurationHash,
     r.account,
     r.asOf,
     r.expiresAt,

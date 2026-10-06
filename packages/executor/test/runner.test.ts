@@ -7,7 +7,7 @@ import type { InfoFn } from "../src/hyperliquid";
 import { cloidFor, Runner } from "../src/runner";
 import { MemoryStore } from "../src/store";
 import { verifyEnvelope } from "../src/verify";
-import { ACCOUNT, AS_OF, body, envelope, keys, MANIFEST, registry } from "./helpers";
+import { ACCOUNT, AS_OF, body, envelope, keys, CONFIGURATION, registry } from "./helpers";
 
 // Fake HL info: BTC/ETH on core, MSFT on xyz (dex index 1), and our account.
 const fakeInfo = (account: { equity: string; core?: [string, string][]; xyz?: [string, string][] }): InfoFn =>
@@ -171,7 +171,7 @@ describe("app routes", () => {
     const s = setup(fakeInfo({ equity: "470", core: [["BTC", "0.002"]] }));
     const logs: string[] = [];
     const app = createApp({
-      handler: { mode: registry, frozenManifestHash: MANIFEST, account: ACCOUNT, now: () => AS_OF + 10, maxLeadSeconds: 60 },
+      handler: { mode: registry, frozenConfigurationHash: CONFIGURATION, account: ACCOUNT, now: () => AS_OF + 10, maxLeadSeconds: 60 },
       runner: s.runner,
       store: s.store,
       adminToken,
@@ -230,7 +230,7 @@ describe("app routes", () => {
 describe("loadConfig", () => {
   const base = {
     WORKFLOW_OWNER: "0xc5feb3cf878c9ba42a776e9edf62a4558ab08b85",
-    FROZEN_MANIFEST_HASH: MANIFEST,
+    FROZEN_CONFIGURATION_HASH: CONFIGURATION,
     HL_ACCOUNT: ACCOUNT,
   };
 

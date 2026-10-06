@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { decodeAbiParameters, hexToBytes, parseAbiParameters } from "viem";
-import manifestFixture from "../../backend/fixtures/manifest.json";
-import type { Manifest } from "../../shared/manifest";
+import configurationFixture from "../../backend/fixtures/frozen-configuration.json";
+import type { FrozenConfiguration } from "../../shared/frozen";
 import { REPORT_BODY_ABI } from "../../shared/report";
 import type { PositionsSnapshot } from "../../shared/snapshot";
 import staging from "./config.staging.json";
@@ -10,36 +10,38 @@ import { encodeReportBody, toEnvelope } from "./report";
 import { checkSnapshot, pickSample } from "./snapshot";
 
 const config = staging as Config;
-const manifest = manifestFixture as Manifest;
+const configuration = configurationFixture as FrozenConfiguration;
 const RUN_AT = 1_791_281_400;
+const LEAD = "0x1e37a337ed460039d1b15bd3bc489de789768d5e"; // weight 0.2
 
 const snapshot = (overrides: Partial<PositionsSnapshot> = {}): PositionsSnapshot => ({
   snapshotId: `snap-${RUN_AT}`,
   runAt: RUN_AT,
   takenAt: RUN_AT - 60,
-  manifest,
+  configuration,
   eligibleAssets: ["BTC", "ETH"],
-  sources: manifest.sources
+  sources: configuration.sources
     .map((s) => s.sourceAddress)
     .sort()
     .map((address) => ({ address, equityE6: "1000000000", positions: [{ asset: "BTC", notionalE6: "500000000" }] })),
   ...overrides,
 });
 
-const limits = { frozenManifestHash: config.frozenManifestHash, runAt: RUN_AT, maxSnapshotAgeSeconds: 120 };
+const limits = { frozenConfigurationHash: config.frozenConfigurationHash, runAt: RUN_AT, maxSnapshotAgeSeconds: 120 };
 
 describe("config", () => {
-  test("pins the fixture manifest", () => {
-    expect(config.frozenManifestHash).toBe(manifest.manifestHash);
+  test("pins the fixture configuration", () => {
+    expect(config.frozenConfigurationHash).toBe(configuration.configurationHash);
   });
 });
 
 describe("checkSnapshot", () => {
-  test("accepts a snapshot for this run and attaches manifest weights", () => {
+  test("accepts a snapshot for this run and attaches frozen weights and ceilings", () => {
     const sources = checkSnapshot(snapshot(), limits);
     const byAddress = new Map(sources.map((s) => [s.address, s.weightE6]));
-    expect(byAddress.get("0x1e37a337ed460039d1b15bd3bc489de789768d5e")).toBe(200_000);
+    expect(byAddress.get(LEAD)).toBe(200_000);
     expect([...byAddress.values()].reduce((a, b) => a + b, 0)).toBe(800_000); // 20% cash
+    expect(sources.every((s) => s.ceilingE6 === 250_000)).toBe(true);
   });
 
   test("rejects another run's snapshot", () => {
@@ -50,29 +52,36 @@ describe("checkSnapshot", () => {
     expect(() => checkSnapshot(snapshot({ takenAt: RUN_AT - 200 }), limits)).toThrow("200s before the run");
   });
 
-  test("rejects a manifest that isn't the frozen one", () => {
-    expect(() => checkSnapshot(snapshot(), { ...limits, frozenManifestHash: `0x${"00".repeat(32)}` })).toThrow(
-      "not the frozen live authority",
+  test("rejects a configuration that isn't the pinned one", () => {
+    expect(() => checkSnapshot(snapshot(), { ...limits, frozenConfigurationHash: `0x${"00".repeat(32)}` })).toThrow(
+      "not the pinned frozen authority",
     );
   });
 
-  test("rejects a tampered manifest", () => {
-    const tampered = { ...manifest, sources: manifest.sources.map((s, i) => (i === 0 ? { ...s, weight: 0.25 } : s)) };
-    expect(() => checkSnapshot(snapshot({ manifest: tampered }), limits)).toThrow("manifest commitment mismatch");
-  });
-
-  test("checks the manifest's expiry against the run time", () => {
-    const late = Math.floor(manifest.expiresAtMs / 1000) + 600;
-    expect(() => checkSnapshot(snapshot({ runAt: late, takenAt: late }), { ...limits, runAt: late })).toThrow(
-      "expired/future manifest",
+  test("rejects a tampered configuration", () => {
+    // Moves weight between sources: totals still add up, the commitment doesn't.
+    const sources = configuration.sources.map((s, i) =>
+      i === 0 ? { ...s, weightUnits: 210_000 } : i === 1 ? { ...s, weightUnits: 140_000 } : s,
+    );
+    expect(() => checkSnapshot(snapshot({ configuration: { ...configuration, sources } }), limits)).toThrow(
+      "frozen commitment mismatch",
     );
   });
 
-  test("rejects sources that differ from the manifest", () => {
+  test("rejects renormalization past a source's ceiling", () => {
+    // Only the 0.2-weight source is active: it would carry 0.8 against a 0.25 ceiling.
+    const s = snapshot();
+    s.sources = s.sources.map((src) => (src.address === LEAD ? src : { ...src, positions: [] }));
+    expect(() => checkSnapshot(s, limits)).toThrow("active-source concentration exceeds ceiling");
+  });
+
+  test("rejects sources that differ from the frozen configuration", () => {
     const s = snapshot();
     s.sources[0] = { ...s.sources[0], address: "0x0000000000000000000000000000000000000001" };
-    expect(() => checkSnapshot(s, limits)).toThrow("don't match the manifest");
-    expect(() => checkSnapshot(snapshot({ sources: snapshot().sources.slice(1) }), limits)).toThrow("don't match the manifest");
+    expect(() => checkSnapshot(s, limits)).toThrow("don't match the frozen configuration");
+    expect(() => checkSnapshot(snapshot({ sources: snapshot().sources.slice(1) }), limits)).toThrow(
+      "don't match the frozen configuration",
+    );
   });
 
   test("rejects ineligible assets", () => {
@@ -97,6 +106,7 @@ describe("buildMirrorReport", () => {
   test("sizes targets by our equity and round-trips through the shared ABI", () => {
     const report = buildMirrorReport(config, RUN_AT, {
       snapshotId: `snap-${RUN_AT}`,
+      account: configuration.account,
       snapshotHash: `0x${"5e".repeat(32)}`,
       exposures: JSON.stringify([
         { asset: "BTC", exposureE9: "1250000000" },
@@ -105,14 +115,14 @@ describe("buildMirrorReport", () => {
       maxDeviationBps: 3,
       equityE6: 470_000_000n,
     });
-    const [runId, snapshotHash, manifestHash, account, asOf, expiresAt, equityE6, targets] = decodeAbiParameters(
+    const [runId, snapshotHash, configurationHash, account, asOf, expiresAt, equityE6, targets] = decodeAbiParameters(
       parseAbiParameters(REPORT_BODY_ABI),
       encodeReportBody(report),
     );
     expect(runId).toBe(`mirror-${RUN_AT}`);
     expect(snapshotHash).toBe(`0x${"5e".repeat(32)}`);
-    expect(manifestHash).toBe(config.frozenManifestHash as `0x${string}`);
-    expect(account.toLowerCase()).toBe(config.account);
+    expect(configurationHash).toBe(config.frozenConfigurationHash as `0x${string}`);
+    expect(account.toLowerCase()).toBe(configuration.account);
     expect(asOf).toBe(BigInt(RUN_AT));
     expect(expiresAt).toBe(BigInt(RUN_AT + config.reportTtlSeconds));
     expect(equityE6).toBe(470_000_000n);

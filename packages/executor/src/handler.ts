@@ -3,7 +3,7 @@ import { verifyEnvelope, type VerifiedReport, type VerifyMode } from "./verify";
 
 export type HandlerDeps = {
   mode: VerifyMode;
-  frozenManifestHash: string;
+  frozenConfigurationHash: string;
   account: string;
   // Unix seconds.
   now: () => number;
@@ -28,7 +28,7 @@ export const handleReport = async (payload: unknown, deps: HandlerDeps): Promise
 
   const { body, id } = report;
   const reject = (error: string) => ({ status: 422, body: { error, id } });
-  if (body.manifestHash.toLowerCase() !== deps.frozenManifestHash.toLowerCase()) return reject("manifest mismatch");
+  if (body.configurationHash.toLowerCase() !== deps.frozenConfigurationHash.toLowerCase()) return reject("configuration mismatch");
   if (body.account.toLowerCase() !== deps.account.toLowerCase()) return reject("account mismatch");
   const now = deps.now();
   if (now > Number(body.expiresAt)) return reject(`expired report (${now - Number(body.expiresAt)}s past expiry)`);

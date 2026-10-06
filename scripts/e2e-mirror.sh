@@ -7,18 +7,18 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CRE="${CRE:-$(command -v cre || echo "$HOME/.cre/bin/cre")}"
 LOGS="$(mktemp -d)"
-MANIFEST="$ROOT/packages/backend/fixtures/manifest.json"
-MANIFEST_HASH="$(bun -e "console.log((await Bun.file('$MANIFEST').json()).manifestHash)")"
-ACCOUNT="$(bun -e "console.log((await Bun.file('$ROOT/packages/cre-workflows/mirror/config.staging.json').json()).account)")"
+CONFIGURATION="$ROOT/packages/backend/fixtures/frozen-configuration.json"
+CONFIGURATION_HASH="$(bun -e "console.log((await Bun.file('$CONFIGURATION').json()).configurationHash)")"
+ACCOUNT="$(bun -e "console.log((await Bun.file('$CONFIGURATION').json()).account)")"
 
 cleanup() { kill "${BACKEND_PID:-}" "${EXECUTOR_PID:-}" 2>/dev/null || true; }
 trap cleanup EXIT
 
-(cd "$ROOT/packages/backend" && PORT=8788 MANIFEST_PATH="$MANIFEST" FROZEN_MANIFEST_HASH="$MANIFEST_HASH" \
+(cd "$ROOT/packages/backend" && PORT=8788 CONFIGURATION_PATH="$CONFIGURATION" FROZEN_CONFIGURATION_HASH="$CONFIGURATION_HASH" \
   exec bun run src/server.ts >"$LOGS/backend.log" 2>&1) &
 BACKEND_PID=$!
 (cd "$ROOT/packages/executor" && PORT=8787 VERIFY_REPORTS=false DRY_RUN=true HL_ACCOUNT="$ACCOUNT" \
-  MAX_REPORT_LEAD_SECONDS=600 FROZEN_MANIFEST_HASH="$MANIFEST_HASH" WORKFLOW_OWNER=0xc5feb3cf878c9ba42a776e9edf62a4558ab08b85 \
+  MAX_REPORT_LEAD_SECONDS=600 FROZEN_CONFIGURATION_HASH="$CONFIGURATION_HASH" WORKFLOW_OWNER=0xc5feb3cf878c9ba42a776e9edf62a4558ab08b85 \
   exec bun run src/server.ts >"$LOGS/executor.log" 2>&1) &
 EXECUTOR_PID=$!
 

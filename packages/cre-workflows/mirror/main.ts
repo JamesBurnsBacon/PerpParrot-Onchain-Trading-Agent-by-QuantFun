@@ -30,10 +30,9 @@ const configSchema = z.object({
   // z.string().url() needs URL, which the WASM runtime lacks.
   backendUrl: z.string().startsWith("http"),
   executorUrl: z.string().startsWith("http"),
-  // Our HL account; its equity sizes the targets.
-  account: z.string().regex(/^0x[0-9a-f]{40}$/),
-  // manifestHash of the frozen live manifest (README §4.7 freeze commitment).
-  frozenManifestHash: z.string().regex(/^0x[0-9a-f]{64}$/),
+  // configurationHash of the frozen configuration (README §4.7 freeze commitment).
+  // It also fixes our HL account, whose equity sizes the targets.
+  frozenConfigurationHash: z.string().regex(/^0x[0-9a-f]{64}$/),
   // 2 HTTP calls per source (core + xyz). Budget: 1 snapshot + 2 own account
   // + 2 × spotCheckCount + 1 executor ≤ 15.
   spotCheckCount: z.number().int().min(1).max(5),
@@ -49,6 +48,8 @@ export type Config = z.infer<typeof configSchema>;
 // identical across nodes; live HL reads differ slightly, so they take the median.
 type Observation = {
   snapshotId: string;
+  // From the frozen configuration.
+  account: string;
   // keccak256 of the snapshot JSON bytes.
   snapshotHash: string;
   // JSON [{asset, exposureE9}] — kept small for the 25 KB consensus limit.
@@ -66,7 +67,7 @@ const observe = (nodeRuntime: NodeRuntime<Config>, runAt: number): Observation =
   const raw = text(snapRes);
   const snapshot = snapshotSchema.parse(JSON.parse(raw));
   const sources = checkSnapshot(snapshot, {
-    frozenManifestHash: config.frozenManifestHash,
+    frozenConfigurationHash: config.frozenConfigurationHash,
     runAt,
     maxSnapshotAgeSeconds: config.maxSnapshotAgeSeconds,
   });
@@ -93,15 +94,16 @@ const observe = (nodeRuntime: NodeRuntime<Config>, runAt: number): Observation =
   const sample = pickSample(sources, snapshot.snapshotId, config.spotCheckCount);
   const maxDev = Math.max(...sample.map((s) => deviationBps(s, account(s.address))));
 
-  const maxGrossE9 = BigInt(Math.round(snapshot.manifest.policy.maxGrossLeverage * Number(EXPOSURE_SCALE)));
+  const maxGrossE9 = BigInt(Math.round(snapshot.configuration.policy.maxGrossLeverage * Number(EXPOSURE_SCALE)));
   const exposures = capGrossExposure(computeExposures(sources), maxGrossE9);
 
   return {
     snapshotId: snapshot.snapshotId,
+    account: snapshot.configuration.account,
     snapshotHash: keccakUtf8(raw),
     exposures: JSON.stringify(exposures.map((e) => ({ asset: e.asset, exposureE9: e.exposureE9.toString() }))),
     maxDeviationBps: maxDev,
-    equityE6: account(config.account).equityE6,
+    equityE6: account(snapshot.configuration.account).equityE6,
   };
 };
 
@@ -110,8 +112,8 @@ export const buildMirrorReport = (config: Config, runAt: number, obs: Observatio
   return {
     runId: `mirror-${runAt}`,
     snapshotHash: obs.snapshotHash as `0x${string}`,
-    manifestHash: config.frozenManifestHash as `0x${string}`,
-    account: config.account as `0x${string}`,
+    configurationHash: config.frozenConfigurationHash as `0x${string}`,
+    account: obs.account as `0x${string}`,
     asOf: BigInt(runAt),
     expiresAt: BigInt(runAt + config.reportTtlSeconds),
     equityE6: obs.equityE6,
@@ -130,6 +132,7 @@ export const onCronTrigger = (runtime: Runtime<Config>, payload: CronPayload): s
       observe,
       ConsensusAggregationByFields<Observation>({
         snapshotId: identical,
+        account: identical,
         snapshotHash: identical,
         exposures: identical,
         maxDeviationBps: median,
