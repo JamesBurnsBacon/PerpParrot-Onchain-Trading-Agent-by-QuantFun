@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "role-consensus",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0.0"
+    },
+    "snapshotHash": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{64}$"
+    },
+    "policyHash": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{64}$"
+    },
+    "promptHash": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{64}$"
+    },
+    "modelConfigHash": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{64}$"
+    },
+    "quorum": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "candidate": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 24
+          },
+          "preserver": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "compounder": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "diversifier": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "directional": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "opportunistic": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "convexity": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "reject": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "conservativeFit": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "balancedFit": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "aggressiveFit": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "confidence": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          }
+        },
+        "required": [
+          "candidate",
+          "preserver",
+          "compounder",
+          "diversifier",
+          "directional",
+          "opportunistic",
+          "convexity",
+          "reject",
+          "conservativeFit",
+          "balancedFit",
+          "aggressiveFit",
+          "confidence"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1,
+      "maxItems": 25
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "snapshotHash",
+    "policyHash",
+    "promptHash",
+    "modelConfigHash",
+    "quorum",
+    "results"
+  ],
+  "additionalProperties": false
+}

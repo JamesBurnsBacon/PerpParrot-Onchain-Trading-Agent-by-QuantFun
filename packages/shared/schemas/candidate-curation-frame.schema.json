@@ -1,0 +1,282 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "candidate-curation-frame",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0.0"
+    },
+    "snapshotHash": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{64}$"
+    },
+    "policyHash": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{64}$"
+    },
+    "asOfMs": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "expiresAtMs": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "candidate": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 24
+          },
+          "kind": {
+            "enum": [
+              "TRADER",
+              "HYPERCORE_VAULT",
+              "ERC4626_HYPERCORE"
+            ]
+          },
+          "metrics": {
+            "type": "object",
+            "properties": {
+              "historyDays": {
+                "type": "number"
+              },
+              "oosWindows": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "oosSharpe": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "oosSortino": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "oosMaxDrawdown": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "crossWindowStability": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "survivorshipQuality": {
+                "enum": [
+                  "CURRENT_SNAPSHOT",
+                  "POINT_IN_TIME",
+                  "UNKNOWN"
+                ]
+              },
+              "medianHoldMinutes": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "averageLeverage": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "maxDrawdown": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "timeInMarket": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "makerShare": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "executionCoverage": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "executionFit": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100
+              },
+              "concentration": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "liquidationDistance": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "btcBeta": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "pnlConsistency": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            },
+            "required": [
+              "historyDays",
+              "oosWindows",
+              "oosSharpe",
+              "oosSortino",
+              "oosMaxDrawdown",
+              "crossWindowStability",
+              "survivorshipQuality",
+              "medianHoldMinutes",
+              "averageLeverage",
+              "maxDrawdown",
+              "timeInMarket",
+              "makerShare",
+              "executionCoverage",
+              "executionFit",
+              "concentration",
+              "liquidationDistance",
+              "btcBeta",
+              "pnlConsistency"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "candidate",
+          "kind",
+          "metrics"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1,
+      "maxItems": 25
+    },
+    "pairs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "a": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 24
+          },
+          "b": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 24
+          },
+          "correlation": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": -1,
+                "maximum": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "currentExposureOverlap": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "linkedSource": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "a",
+          "b",
+          "correlation",
+          "currentExposureOverlap",
+          "linkedSource"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0,
+      "maxItems": 300
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "snapshotHash",
+    "policyHash",
+    "asOfMs",
+    "expiresAtMs",
+    "candidates",
+    "pairs"
+  ],
+  "additionalProperties": false
+}

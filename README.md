@@ -11,6 +11,8 @@
 - An executor holds the **weighted, netted** copy of those positions in our own Hyperliquid account (5 HYPE ≈ $470).
 - **The backtest is the proof:** out-of-sample results over 2 weeks, 1 month, 6 weeks and 3 months vs. holding BTC. The ~5 h live run proves the machinery.
 
+> **Agent/CRE contribution:** [architecture and integration boundaries](docs/agents/ARCHITECTURE.md), [versioned system prompts](docs/agents/SYSTEM_PROMPTS.md), [acceptance cases](docs/agents/EVALUATION.md), and [strict v1 JSON contracts](packages/shared/schemas). This additive proposal resolves AI weighting to deterministic allocation and proposes Balanced live; the original design below is retained for context. No trading implementation is changed.
+
 ---
 
 # Part 1: Design

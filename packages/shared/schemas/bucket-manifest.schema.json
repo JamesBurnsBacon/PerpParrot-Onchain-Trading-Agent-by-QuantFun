@@ -1,0 +1,235 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "bucket-manifest",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0.0"
+    },
+    "snapshotHash": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{64}$"
+    },
+    "policyHash": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{64}$"
+    },
+    "manifestHash": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{64}$"
+    },
+    "createdAtMs": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "expiresAtMs": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "bucket": {
+      "enum": [
+        "CONSERVATIVE",
+        "BALANCED",
+        "AGGRESSIVE"
+      ]
+    },
+    "mode": {
+      "enum": [
+        "LIVE",
+        "SIMULATION"
+      ]
+    },
+    "status": {
+      "enum": [
+        "VALID",
+        "INVALID_BUCKET"
+      ]
+    },
+    "rebuildCount": {
+      "enum": [
+        0,
+        1
+      ]
+    },
+    "policy": {
+      "type": "object",
+      "properties": {
+        "bucket": {
+          "enum": [
+            "CONSERVATIVE",
+            "BALANCED",
+            "AGGRESSIVE"
+          ]
+        },
+        "mode": {
+          "enum": [
+            "LIVE",
+            "SIMULATION"
+          ]
+        },
+        "capitalUsd": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "minOrderUsd": {
+          "const": 10
+        },
+        "minExecutableTargets": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxSourceWeight": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "maxGrossLeverage": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "cashBuffer": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "maxPairCorrelation": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "maxExposureOverlap": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "minHistoryDays": {
+          "type": "number",
+          "minimum": 30
+        },
+        "maxFrameAgeMs": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "minExecutionFit": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "riskRejectThreshold": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "riskWatchThreshold": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "minConfidence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "redTeamRebuildThreshold": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "redTeamExcludeThreshold": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        }
+      },
+      "required": [
+        "bucket",
+        "mode",
+        "capitalUsd",
+        "minOrderUsd",
+        "minExecutableTargets",
+        "maxSourceWeight",
+        "maxGrossLeverage",
+        "cashBuffer",
+        "maxPairCorrelation",
+        "maxExposureOverlap",
+        "minHistoryDays",
+        "maxFrameAgeMs",
+        "minExecutionFit",
+        "riskRejectThreshold",
+        "riskWatchThreshold",
+        "minConfidence",
+        "redTeamRebuildThreshold",
+        "redTeamExcludeThreshold"
+      ],
+      "additionalProperties": false
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "candidate": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 24
+          },
+          "sourceAddress": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{40}$"
+          },
+          "weight": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "maxAllocation": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        },
+        "required": [
+          "candidate",
+          "sourceAddress",
+          "weight",
+          "maxAllocation"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0,
+      "maxItems": 25
+    },
+    "cashWeight": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "reason": {
+      "enum": [
+        "OK",
+        "AGENT_FAILURE",
+        "STALE_INPUT",
+        "INSUFFICIENT_EVIDENCE",
+        "CAPACITY",
+        "POLICY_VIOLATION"
+      ]
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "snapshotHash",
+    "policyHash",
+    "manifestHash",
+    "createdAtMs",
+    "expiresAtMs",
+    "bucket",
+    "mode",
+    "status",
+    "rebuildCount",
+    "policy",
+    "sources",
+    "cashWeight",
+    "reason"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "rebalance-report",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0.0"
+    },
+    "snapshotHash": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{64}$"
+    },
+    "policyHash": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{64}$"
+    },
+    "reportHash": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{64}$"
+    },
+    "manifestHash": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{64}$"
+    },
+    "account": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{40}$"
+    },
+    "createdAtMs": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "expiresAtMs": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "status": {
+      "enum": [
+        "TRADE",
+        "NO_TRADE"
+      ]
+    },
+    "orders": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "asset": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "isBuy": {
+            "type": "boolean"
+          },
+          "limitPx": {
+            "type": "string",
+            "pattern": "^[0-9]+(\\.[0-9]+)?$"
+          },
+          "size": {
+            "type": "string",
+            "pattern": "^[0-9]+(\\.[0-9]+)?$"
+          },
+          "reduceOnly": {
+            "type": "boolean"
+          },
+          "cloid": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{32}$"
+          }
+        },
+        "required": [
+          "asset",
+          "isBuy",
+          "limitPx",
+          "size",
+          "reduceOnly",
+          "cloid"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0,
+      "maxItems": 10
+    },
+    "maxSlippageBps": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "reason": {
+      "enum": [
+        "OK",
+        "STALE_INPUT",
+        "INTEGRITY_FAILURE",
+        "BELOW_DRIFT",
+        "BELOW_MIN_ORDER",
+        "PAUSED",
+        "INVALID_MANIFEST",
+        "RISK_LIMIT"
+      ]
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "snapshotHash",
+    "policyHash",
+    "reportHash",
+    "manifestHash",
+    "account",
+    "createdAtMs",
+    "expiresAtMs",
+    "status",
+    "orders",
+    "maxSlippageBps",
+    "reason"
+  ],
+  "additionalProperties": false
+}
