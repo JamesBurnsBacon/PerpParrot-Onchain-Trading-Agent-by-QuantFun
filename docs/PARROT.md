@@ -35,7 +35,7 @@ Run migrations in order: `20261006140000_chat.sql`, then `20261007000000_live_us
 ## Environment
 
 Reused: `OPENAI_API_KEY`, `CHAT_IP_SALT`, `CHAT_DAILY_BUDGET_USD` (default 5, shared by chat and Live), `CHAT_PREVIEW_IP_HOURLY_LIMIT`.
-Chat: `CHAT_MODEL` (gpt-5.4-mini), `CHAT_IP_HOURLY_LIMIT` (10), `CHAT_GLOBAL_DAILY_LIMIT` (100), `CHAT_PRICE_IN_PER_M_USD` (1), `CHAT_PRICE_OUT_PER_M_USD` (4).
+Chat: `CHAT_MODEL` (gpt-5.4-mini), `CHAT_IP_HOURLY_LIMIT` (10), `CHAT_GLOBAL_DAILY_LIMIT` (100), `CHAT_PREVIEW_GLOBAL_DAILY_LIMIT` (500; invalid values use default), `CHAT_PRICE_IN_PER_M_USD` (1), `CHAT_PRICE_OUT_PER_M_USD` (4).
 
 | Live variable | Default |
 | --- | --- |

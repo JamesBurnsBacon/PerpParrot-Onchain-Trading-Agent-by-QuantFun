@@ -6,6 +6,7 @@ import { callIntentModel, ModelError } from "./openai";
 import { selectStrategy } from "./strategy";
 import { buildPreview, PreviewError } from "./preview";
 import { buildMessages, type HistoryTurn } from "./prompt";
+import { MAX_MESSAGE_CHARS, MAX_HISTORY_TURNS, MAX_HISTORY_CHARS, MAX_INPUT_TOKENS, MAX_COMPLETION_TOKENS } from "./budget";
 
 export type ChatEnv = {
   enabled: boolean; apiKey: string | undefined; model: string; limits: LimitConfig;
@@ -65,20 +66,36 @@ const keys = (value: Record<string, unknown>, allowed: string[]): boolean => Obj
 const text = (value: unknown, min: number, max: number): value is string =>
   typeof value === "string" && value.length >= min && value.length <= max && !/[\x00-\x09\x0b-\x1f\x7f]/.test(value);
 const chatBody = (body: unknown): body is { message: string; history?: HistoryTurn[] } =>
-  object(body) && keys(body, ["message", "history"]) && text(body.message, 1, 500) &&
-  (!Object.hasOwn(body, "history") || (Array.isArray(body.history) && body.history.length <= 6 && body.history.every((turn: unknown) =>
-    object(turn) && keys(turn, ["role", "text"]) && (turn.role === "user" || turn.role === "parrot") && text(turn.text, 0, 400))));
+  object(body) && keys(body, ["message", "history"]) && text(body.message, 1, MAX_MESSAGE_CHARS) &&
+  (!Object.hasOwn(body, "history") || (Array.isArray(body.history) && body.history.length <= MAX_HISTORY_TURNS && body.history.every((turn: unknown) =>
+    object(turn) && keys(turn, ["role", "text"]) && (turn.role === "user" || turn.role === "parrot") && text(turn.text, 0, MAX_HISTORY_CHARS))));
 
 const readBody = async (req: Request): Promise<{ body: unknown; requestHash: string } | Response> => {
+  const reader = req.body?.getReader();
+  if (!reader) return failure(400, "bad_request");
   try {
-    const raw = await req.text();
-    if (raw.length > 4096) return failure(413, "too_large");
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > 4096) {
+        // Cancellation failures must not change the size-limit response.
+        await reader.cancel().catch(() => {});
+        return failure(413, "too_large");
+      }
+      chunks.push(value);
+    }
+    const raw = Buffer.concat(chunks).toString("utf8");
     return { body: JSON.parse(raw) as unknown, requestHash: new Bun.CryptoHasher("sha256").update(raw).digest("hex") };
   } catch {
     return failure(400, "bad_request");
+  } finally {
+    reader.releaseLock();
   }
 };
-const worstCaseMicroUsd = (deps: ChatDeps): number => Math.ceil(2000 * deps.env.priceInPerM + 400 * deps.env.priceOutPerM);
+const worstCaseMicroUsd = (deps: ChatDeps): number => Math.ceil(MAX_INPUT_TOKENS * deps.env.priceInPerM + MAX_COMPLETION_TOKENS * deps.env.priceOutPerM);
 const reserve = (req: Request, deps: ChatDeps, kind: Kind): Promise<Reservation> => {
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("x-real-ip")?.trim() || "unknown";
   return deps.limiter.reserve({ ipHash: hashIp(ip, deps.env.ipSalt), kind, nowMs: deps.now(), reserveMicroUsd: kind === "chat" ? worstCaseMicroUsd(deps) : 0, cfg: deps.env.limits });
@@ -107,27 +124,29 @@ export const handleChat = async (req: Request, deps: ChatDeps): Promise<Response
       try {
         result = { ...result, intent: parseStrategyIntent(result.intent) };
         if (JSON.stringify(result.intent).includes(deps.env.apiKey)) throw new Error();
-        if (![result.promptTokens, result.completionTokens].every((count) => Number.isSafeInteger(count) && count >= 0)) throw new Error();
+        if (![result.promptTokens, result.completionTokens].every((count) => count === null || (Number.isSafeInteger(count) && count >= 0))) throw new Error();
       } catch {
         throw new ModelError("invalid_output");
       }
     } catch (error) {
-      // Only a provider rejection (nothing processed) is released; a timeout or unusable output may still have
+      // Only a definite HTTP 4xx rejection is released; transport errors, 5xx, timeouts or unusable output may still have
       // been charged, so the reserved worst case stays on the daily budget.
       await deps.limiter.settle({ id: reservation.id, tokens: 0, costMicroUsd: error instanceof ModelError && error.code === "http" ? 0 : worstCaseMicroUsd(deps) });
       const code: FailureCode = error instanceof ModelError
-        ? (error.code === "timeout" || error.code === "http") ? "model_unavailable" : "invalid_model_output"
+        ? (error.code === "timeout" || error.code === "http" || error.code === "ambiguous") ? "model_unavailable" : "invalid_model_output"
         : "model_unavailable";
       audit(code);
       return failure(502, code);
     }
     const { intent, promptTokens, completionTokens } = result;
     // USD per million tokens becomes micro-USD per token, cancelling both million factors.
-    const costMicroUsd = Math.ceil(promptTokens * deps.env.priceInPerM + completionTokens * deps.env.priceOutPerM);
-    await deps.limiter.settle({ id: reservation.id, tokens: promptTokens + completionTokens, costMicroUsd });
+    const costMicroUsd = promptTokens === null || completionTokens === null ? worstCaseMicroUsd(deps)
+      : Math.ceil(promptTokens * deps.env.priceInPerM + completionTokens * deps.env.priceOutPerM);
+    await deps.limiter.settle({ id: reservation.id, tokens: (promptTokens ?? 0) + (completionTokens ?? 0), costMicroUsd });
     const { policyResult: _policyResult, ...selection } = selectStrategy(intent, deps.basePolicy, await deps.finalists());
     const latencyMs = deps.now() - started;
-    audit("ok", { intent, promptTokens, completionTokens });
+    const { riskStyle, maxSources, diversification, leverageComfort, requestedLeverage, avoidClones, horizon } = intent;
+    audit("ok", { intent: { riskStyle, maxSources, diversification, leverageComfort, requestedLeverage, avoidClones, horizon }, promptTokens, completionTokens });
     return json({ ok: true, reply: intent.reply, clarify: intent.clarify, intent, ...selection, model: deps.env.model, latencyMs });
   } catch (error) {
     const code = infeasible(error) ? "infeasible" : "unavailable";

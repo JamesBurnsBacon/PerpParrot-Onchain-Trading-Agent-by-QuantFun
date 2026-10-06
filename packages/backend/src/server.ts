@@ -1,3 +1,4 @@
+import { MAX_INPUT_TOKENS, MAX_COMPLETION_TOKENS } from "./chat/budget";
 // Positions snapshot API for the mirror workflow (README §4.7). Runs on Vercel as the
 // `backend` service under /api/backend (vercel.json); locally: bun run dev (set
 // CONFIGURATION_PATH and FROZEN_CONFIGURATION_HASH).
@@ -106,12 +107,13 @@ const chatEnv: ChatEnv = {
     ipHourly: chatNumber("CHAT_IP_HOURLY_LIMIT", 10, Number.MAX_SAFE_INTEGER, true),
     previewIpHourly: chatNumber("CHAT_PREVIEW_IP_HOURLY_LIMIT", 30, Number.MAX_SAFE_INTEGER, true),
     globalDaily: chatNumber("CHAT_GLOBAL_DAILY_LIMIT", 100, Number.MAX_SAFE_INTEGER, true),
+    previewGlobalDaily: chatNumber("CHAT_PREVIEW_GLOBAL_DAILY_LIMIT", 500, Number.MAX_SAFE_INTEGER, true),
     dailyBudgetMicroUsd: Math.round(chatNumber("CHAT_DAILY_BUDGET_USD", 5, 100) * 1_000_000),
   },
   // Conservative ESTIMATES, USD per million tokens. Keep worst-case arithmetic
   // within safe integer micro-USD even with misconfigured optional prices.
-  priceInPerM: chatNumber("CHAT_PRICE_IN_PER_M_USD", 1, Number.MAX_SAFE_INTEGER / 2400),
-  priceOutPerM: chatNumber("CHAT_PRICE_OUT_PER_M_USD", 4, Number.MAX_SAFE_INTEGER / 2400),
+  priceInPerM: chatNumber("CHAT_PRICE_IN_PER_M_USD", 1, Number.MAX_SAFE_INTEGER / (MAX_INPUT_TOKENS + MAX_COMPLETION_TOKENS)),
+  priceOutPerM: chatNumber("CHAT_PRICE_OUT_PER_M_USD", 4, Number.MAX_SAFE_INTEGER / (MAX_INPUT_TOKENS + MAX_COMPLETION_TOKENS)),
   ipSalt: env.CHAT_IP_SALT ?? "perpparrot-chat-v1",
 };
 const chatStores = {

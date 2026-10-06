@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { holdProgress } from "../../lib/parrot";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { holdProgress, isPointerOutside, canContinueHold, type ChatResponse } from "../../lib/parrot";
 
-export function HoldButton({ disabled, onConfirm }: { disabled: boolean; onConfirm: () => void }) {
+export function HoldButton({ disabled, onConfirm, chat }: { disabled: boolean; onConfirm: () => void; chat: ChatResponse }) {
   const [progress, setProgress] = useState(0);
   const frame = useRef<number | null>(null);
   const holding = useRef(false);
   const completed = useRef(false);
+  const latest = useRef({ onConfirm, chat, disabled });
+  useLayoutEffect(() => { latest.current = { onConfirm, chat, disabled }; }, [onConfirm, chat, disabled]);
   const cancel = useCallback(() => {
     holding.current = false;
     if (frame.current !== null) cancelAnimationFrame(frame.current);
@@ -18,21 +20,25 @@ export function HoldButton({ disabled, onConfirm }: { disabled: boolean; onConfi
     document.addEventListener("visibilitychange", hide);
     return () => { cancel(); window.removeEventListener("blur", cancel); document.removeEventListener("visibilitychange", hide); };
   }, [cancel]);
-  useEffect(() => { if (disabled) cancel(); }, [disabled, cancel]);
+  useLayoutEffect(() => { if (disabled) cancel(); }, [disabled, cancel]);
+  // A changed strategy needs a new press, even if a hold was already in progress.
+  useLayoutEffect(() => { cancel(); completed.current = false; }, [chat, cancel]);
 
   function begin() {
     if (disabled || holding.current || completed.current) return;
     holding.current = true;
+    const startedFor = chat;
     const start = performance.now();
     const tick = (now: number) => {
       if (!holding.current) return;
+      if (!canContinueHold(startedFor, latest.current.chat, latest.current.disabled)) { cancel(); return; }
       const value = holdProgress(start, now, 1200);
       setProgress(value);
       if (value === 1) {
         holding.current = false;
         completed.current = true;
         frame.current = null;
-        onConfirm();
+        latest.current.onConfirm();
       } else frame.current = requestAnimationFrame(tick);
     };
     frame.current = requestAnimationFrame(tick);
@@ -42,6 +48,7 @@ export function HoldButton({ disabled, onConfirm }: { disabled: boolean; onConfi
     <button type="button" className="parrot-button parrot-button--primary parrot-hold w-full" disabled={disabled}
       aria-describedby="parrot-hold-help"
       onPointerDown={event => { if (event.button === 0) { event.currentTarget.setPointerCapture(event.pointerId); begin(); } }}
+      onPointerMove={event => { if (isPointerOutside(event.clientX, event.clientY, event.currentTarget.getBoundingClientRect())) release(); }}
       onPointerUp={release} onPointerLeave={release} onPointerCancel={release} onLostPointerCapture={release} onBlur={release}
       onKeyDown={event => { if (event.key === " " || event.key === "Enter") { event.preventDefault(); if (!event.repeat) begin(); } else if (event.key === "Escape") release(); }}
       onKeyUp={event => { if (event.key === " " || event.key === "Enter") { event.preventDefault(); release(); } }}

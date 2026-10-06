@@ -1,6 +1,6 @@
 import type { SQL } from "bun";
 
-export type LimitConfig = { ipHourly: number; previewIpHourly: number; globalDaily: number; dailyBudgetMicroUsd: number };
+export type LimitConfig = { ipHourly: number; previewIpHourly: number; previewGlobalDaily: number; globalDaily: number; dailyBudgetMicroUsd: number };
 export type Kind = "chat" | "preview" | "live";
 export type Reservation = { ok: true; id: string } | { ok: false; reason: "ip_hourly" | "global_daily" | "daily_budget"; retryAfterSec: number };
 export interface ChatLimiter {
@@ -32,7 +32,7 @@ export class MemoryChatLimiter implements ChatLimiter {
     }
     const chats = rows.filter((row) => row.kind === kind);
     const paid = rows.filter((row) => row.kind !== "preview");
-    if (kind !== "preview" && chats.length >= cfg.globalDaily) {
+    if (chats.length >= (kind === "preview" ? cfg.previewGlobalDaily : cfg.globalDaily)) {
       return { ok: false, reason: "global_daily", retryAfterSec: retryAfter(oldest(chats), nowMs, DAY_MS) };
     }
     if (kind !== "preview" && paid.reduce((sum, row) => sum + row.costMicroUsd, 0) + reserveMicroUsd > cfg.dailyBudgetMicroUsd) {
@@ -77,7 +77,7 @@ export class PostgresChatLimiter implements ChatLimiter {
       if (Number(counts.hourly_count) >= (kind === "preview" ? cfg.previewIpHourly : cfg.ipHourly)) {
         return { ok: false, reason: "ip_hourly", retryAfterSec: retryAfter(oldest(counts.hourly_oldest), nowMs, HOUR_MS) };
       }
-      if (kind !== "preview" && Number(counts.daily_count) >= cfg.globalDaily) {
+      if (Number(counts.daily_count) >= (kind === "preview" ? cfg.previewGlobalDaily : cfg.globalDaily)) {
         return { ok: false, reason: "global_daily", retryAfterSec: retryAfter(oldest(counts.daily_oldest), nowMs, DAY_MS) };
       }
       if (kind !== "preview" && Number(counts.daily_cost) + reserveMicroUsd > cfg.dailyBudgetMicroUsd) {

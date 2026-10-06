@@ -15,7 +15,7 @@ export const buildPreview = ({ intent, policyResult, addresses }: {
   const n = addresses.length;
   if (n < 5 || n > 25) throw new PreviewError("too_few_sources");
   const { policy, liveEligible, notes } = policyResult;
-  const cashUnits = Math.round(policy.cashBuffer * 1_000_000);
+  const cashUnits = Math.ceil(policy.cashBuffer * 1_000_000);
   const rest = 1_000_000 - cashUnits;
   const ceilingUnits = Math.floor(policy.maxSourceWeight * 1_000_000);
   const sources = addresses.map((address, i) => ({

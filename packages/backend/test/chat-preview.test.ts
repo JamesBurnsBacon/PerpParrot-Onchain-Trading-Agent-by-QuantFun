@@ -48,3 +48,25 @@ test("stable hash binds intent, policy, sources, order and weights; distinct dom
   expect(preview.previewHash).toBe(commitment(hash, "perpparrot:parrot-preview:v1", payload));
   expect(preview.previewHash).not.toBe(commitment(hash, "perpparrot:frozen:v1", payload));
 });
+
+
+test("review-6: random cash minima round up with exact totals ceilings and stable hashes", () => {
+  let seed = 2397;
+  const random = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 2 ** 32; };
+  for (let i = 0; i < 1000; i++) {
+    const cashBuffer = i === 0 ? 0.1000004 : 0.1 + random() * 0.25;
+    const n = 5 + Math.floor(random() * 21);
+    const minCeiling = Math.ceil((1_000_000 - Math.ceil(cashBuffer * 1_000_000)) / n);
+    const maxSourceWeight = (minCeiling + 1 + Math.floor(random() * 1000)) / 1_000_000;
+    const policyResult = { ...intentToPolicy(intent, base), policy: { ...base, cashBuffer, maxSourceWeight } };
+    const args = { intent, policyResult, addresses: addresses(n) };
+    const preview = buildPreview(args);
+    expect(preview.cashUnits / 1_000_000).toBeGreaterThanOrEqual(cashBuffer);
+    expect(preview.cashUnits + preview.sources.reduce((sum, s) => sum + s.weightUnits, 0)).toBe(1_000_000);
+    for (const source of preview.sources) {
+      expect(source.weightUnits).toBeLessThanOrEqual(source.ceilingUnits);
+      expect(source.weightUnits / 1_000_000).toBeLessThanOrEqual(maxSourceWeight);
+    }
+    expect(buildPreview(args).previewHash).toBe(preview.previewHash);
+  }
+});

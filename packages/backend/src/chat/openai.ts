@@ -1,7 +1,8 @@
 import { parseStrategyIntent, STRATEGY_INTENT_JSON_SCHEMA, type StrategyIntent } from "../../../shared/strategy-intent";
 import type { Message } from "./prompt";
+import { MAX_COMPLETION_TOKENS } from "./budget";
 
-export type ModelErrorCode = "timeout" | "http" | "refusal" | "truncated" | "invalid_output";
+export type ModelErrorCode = "timeout" | "http" | "ambiguous" | "refusal" | "truncated" | "invalid_output";
 export class ModelError extends Error {
   constructor(readonly code: ModelErrorCode) {
     // Only our fixed code crosses the provider error boundary.
@@ -12,7 +13,7 @@ export class ModelError extends Error {
 
 const record = (value: unknown): Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-const tokenCount = (value: unknown): number => typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : 0;
+const tokenCount = (value: unknown): number | null => typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null;
 
 export const callIntentModel = async ({ apiKey, model, messages, fetchImpl = fetch, timeoutMs = 6000 }: {
   apiKey: string;
@@ -20,7 +21,7 @@ export const callIntentModel = async ({ apiKey, model, messages, fetchImpl = fet
   messages: Message[];
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
-}): Promise<{ intent: StrategyIntent; promptTokens: number; completionTokens: number }> => {
+}): Promise<{ intent: StrategyIntent; promptTokens: number | null; completionTokens: number | null }> => {
   const signal = AbortSignal.timeout(timeoutMs);
   let onAbort = () => {};
   const timeout = new Promise<never>((_, reject) => {
@@ -35,13 +36,13 @@ export const callIntentModel = async ({ apiKey, model, messages, fetchImpl = fet
         response = await fetchImpl("https://api.openai.com/v1/chat/completions", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-          body: JSON.stringify({ model, messages, response_format: { type: "json_schema", json_schema: STRATEGY_INTENT_JSON_SCHEMA }, max_completion_tokens: 400, store: false }),
+          body: JSON.stringify({ model, messages, response_format: { type: "json_schema", json_schema: STRATEGY_INTENT_JSON_SCHEMA }, max_completion_tokens: MAX_COMPLETION_TOKENS, store: false }),
           signal,
         });
       } catch {
-        throw new ModelError(signal.aborted ? "timeout" : "http");
+        throw new ModelError(signal.aborted ? "timeout" : "ambiguous");
       }
-      if (response.status !== 200) throw new ModelError("http");
+      if (response.status !== 200) throw new ModelError(response.status >= 400 && response.status < 500 ? "http" : "ambiguous");
       let body: Record<string, unknown>;
       try {
         body = record(await response.json());

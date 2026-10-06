@@ -1,8 +1,11 @@
+import { MAX_INPUT_TOKENS, MAX_COMPLETION_TOKENS, MAX_MESSAGE_CHARS, MAX_HISTORY_TURNS, MAX_HISTORY_CHARS } from "../src/chat/budget";
+import { buildMessages } from "../src/chat/prompt";
+import { STRATEGY_INTENT_JSON_SCHEMA } from "../../shared/strategy-intent";
 import { expect, test } from "bun:test";
 import { handleChat, handlePreview, MemoryRequestStore, type ChatDeps } from "../src/chat/handler";
 import type { buildPreview } from "../src/chat/preview";
 import { hashIp, MemoryChatLimiter } from "../src/chat/limits";
-import { ModelError } from "../src/chat/openai";
+import { callIntentModel, ModelError } from "../src/chat/openai";
 import { intentToPolicy, type StrategyIntent } from "../../shared/strategy-intent";
 import type { Policy } from "../../shared/src/contracts";
 import fixture from "../fixtures/frozen-configuration.json";
@@ -10,7 +13,7 @@ import fixture from "../fixtures/frozen-configuration.json";
 const intent: StrategyIntent = { riskStyle: "aggressive", maxSources: 10, diversification: "low", leverageComfort: "high", requestedLeverage: null, avoidClones: false, horizon: "medium", clarify: null, reply: "Squawk, here is your selection." };
 const apiKey = "secret-key-not-for-output";
 const deps = (): ChatDeps => ({
-  env: { enabled: true, apiKey, model: "test-model", limits: { ipHourly: 10, previewIpHourly: 30, globalDaily: 100, dailyBudgetMicroUsd: 5_000_000 }, priceInPerM: 1.1, priceOutPerM: 4.2, ipSalt: "test-salt" },
+  env: { enabled: true, apiKey, model: "test-model", limits: { ipHourly: 10, previewIpHourly: 30, previewGlobalDaily: 500, globalDaily: 100, dailyBudgetMicroUsd: 5_000_000 }, priceInPerM: 1.1, priceOutPerM: 4.2, ipSalt: "test-salt" },
   limiter: new MemoryChatLimiter(), requests: new MemoryRequestStore(),
   callModel: async () => ({ intent, promptTokens: 7, completionTokens: 2 }),
   finalists: async () => ({ dataSource: "sample", finalists: Array.from({ length: 12 }, (_, i) => ({ address: `source-${i}`, kind: "trader", score: 100 - i, flags: [], maxDrawdown: 0.1, annualisedVol: 0.5, cloneOf: false })) }),
@@ -99,13 +102,13 @@ test("reservation budget denial uses budget code", async () => {
   await check(await handleChat(request(), d), 429, "budget");
 });
 
-test.each(["timeout", "http", "invalid_output", "refusal", "truncated"] as const)("model %s is sanitized; only a provider rejection is refunded", async (code) => {
+test.each(["timeout", "http", "ambiguous", "invalid_output", "refusal", "truncated"] as const)("model %s is sanitized; only a provider rejection is refunded", async (code) => {
   const d = deps(); let settled: unknown; let reserved: { reserveMicroUsd: number } | undefined;
   d.callModel = async () => { throw new ModelError(code); };
   const reserve = d.limiter.reserve.bind(d.limiter);
   d.limiter.reserve = async (args) => { reserved = args; return reserve(args); };
   d.limiter.settle = async (args) => { settled = args; };
-  const body = await check(await handleChat(request(), d), 502, (code === "timeout" || code === "http") ? "model_unavailable" : "invalid_model_output");
+  const body = await check(await handleChat(request(), d), 502, (code === "timeout" || code === "http" || code === "ambiguous") ? "model_unavailable" : "invalid_model_output");
   expect(body.reply).not.toBe(intent.reply);
   // The provider may have charged for a call that timed out or produced unusable output, so the reserved
   // worst case stays on the budget; only an HTTP rejection (nothing processed) is released.
@@ -206,15 +209,15 @@ test("preview disabled, invalid intent, insufficient sources and hourly bound", 
 });
 
 
-test.each([[1, 4, 3600, 15], [1.1, 4.2, 3880, 17], [0.1234, 0.5678, 474, 2]])(
-  "reserves worst-case and settles actual tokens at prices %s/%s", async (priceInPerM, priceOutPerM, reservedCost, actualCost) => {
+test.each([[1, 4, 15], [1.1, 4.2, 17], [0.1234, 0.5678, 2]])(
+  "reserves worst-case and settles actual tokens at prices %s/%s", async (priceInPerM, priceOutPerM, actualCost) => {
     const d = deps();
     Object.assign(d.env, { priceInPerM, priceOutPerM });
     let reserved: unknown; let settled: unknown;
     d.limiter.reserve = async (args) => { reserved = args; return { ok: true, id: "r" }; };
     d.limiter.settle = async (args) => { settled = args; };
     await check(await handleChat(request(), d), 200);
-    expect(reserved).toMatchObject({ kind: "chat", reserveMicroUsd: reservedCost });
+    expect(reserved).toMatchObject({ kind: "chat", reserveMicroUsd: Math.ceil(MAX_INPUT_TOKENS * priceInPerM + MAX_COMPLETION_TOKENS * priceOutPerM) });
     expect(settled).toEqual({ id: "r", tokens: 9, costMicroUsd: actualCost });
   },
 );
@@ -225,4 +228,111 @@ test("preview reserves zero and maps infeasible policy to 422", async () => {
   d.basePolicy = { ...d.basePolicy, maxSourceWeight: 0.001 };
   await check(await handlePreview(request({ intent }), d), 422, "infeasible");
   expect(reserved).toMatchObject({ kind: "preview", reserveMicroUsd: 0 });
+});
+
+
+test("review-1: multibyte body is cancelled at the byte limit before buffering the tail", async () => {
+  for (const handler of [handleChat, handlePreview]) {
+    let emitted = 0;
+    let cancelled = false;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (++emitted <= 100) controller.enqueue(new TextEncoder().encode("界".repeat(500)));
+        else controller.close();
+      },
+      cancel() { cancelled = true; },
+    }, { highWaterMark: 0 });
+    await check(await handler(new Request("http://localhost/chat", { method: "POST", body }), deps()), 413, "too_large");
+    expect(cancelled).toBe(true);
+    expect(emitted).toBe(3); // 4,500 bytes, only 1,500 UTF-16 units; tail was never pulled.
+  }
+});
+
+
+test("review-2: reservation covers maximum input bytes including prompt schema and framing", async () => {
+  const d = deps();
+  Object.assign(d.env, { priceInPerM: 1, priceOutPerM: 0 });
+  let reservedTokens = 0;
+  d.limiter.reserve = async (args) => { reservedTokens = args.reserveMicroUsd; return { ok: true, id: "r" }; };
+  // Maximum accepted characters; CJK at every position would exceed the HTTP byte
+  // limit, so exercise that larger superset as well as the accepted ASCII case.
+  for (const char of ["a", "界", "🦜"[0], "\\", '"', "\n"]) {
+    const message = char.repeat(MAX_MESSAGE_CHARS);
+    const history = Array.from({ length: MAX_HISTORY_TURNS }, () => ({ role: "parrot" as const, text: char.repeat(MAX_HISTORY_CHARS) }));
+    const serialized = JSON.stringify({ messages: buildMessages(history, message),
+      response_format: { type: "json_schema", json_schema: STRATEGY_INTENT_JSON_SCHEMA } });
+    if (char === "a") await check(await handleChat(request({ message, history }), d), 200);
+    // No compression assumption: even one token per serialized byte plus an
+    // equally sized framing allowance fits the input reservation.
+    expect(reservedTokens).toBeGreaterThanOrEqual(2 * new TextEncoder().encode(serialized).byteLength);
+  }
+});
+
+
+test.each(["transport", "abort", "timeout", "http400", "http429", "http500", "http503", "truncated", "invalid_output", "refusal", "valid"])(
+  "review-3: settlement for provider outcome %s", async (outcome) => {
+    const d = deps();
+    let reserved = 0;
+    let cost = -1;
+    d.limiter.reserve = async (args) => { reserved = args.reserveMicroUsd; return { ok: true, id: "r" }; };
+    d.limiter.settle = async (args) => { cost = args.costMicroUsd; };
+    const fetchImpl = Object.assign(async () => {
+      if (outcome === "transport") throw new TypeError("connection reset");
+      if (outcome === "abort") throw new DOMException("external abort", "AbortError");
+      if (outcome === "timeout") return await new Promise<Response>(() => {});
+      if (outcome.startsWith("http")) return new Response("", { status: Number(outcome.slice(4)) });
+      return Response.json({ choices: [{ finish_reason: outcome === "truncated" ? "length" : "stop",
+        message: { content: outcome === "invalid_output" ? "{" : JSON.stringify(intent), refusal: outcome === "refusal" ? "no" : null } }],
+        usage: { prompt_tokens: 7, completion_tokens: 2 } });
+    }, { preconnect: () => {} }) as typeof fetch;
+    d.callModel = args => callIntentModel({ ...args, fetchImpl, timeoutMs: 5 });
+    await check(await handleChat(request(), d), outcome === "valid" ? 200 : 502);
+    expect(cost).toBe(outcome === "valid" ? 17 : outcome === "http400" || outcome === "http429" ? 0 : reserved);
+  },
+);
+
+
+test.each([undefined, null, {}, [], { prompt_tokens: 7 }, { prompt_tokens: "7", completion_tokens: 2 },
+  { prompt_tokens: -1, completion_tokens: 2 }, { prompt_tokens: 1.5, completion_tokens: 2 },
+  { prompt_tokens: 7, completion_tokens: -2 }, { prompt_tokens: 1e30, completion_tokens: 2 }])(
+  "review-4: valid completion with unknown usage keeps reservation %j", async (usage) => {
+    const d = deps();
+    let reserved = 0;
+    let cost = -1;
+    d.limiter.reserve = async args => { reserved = args.reserveMicroUsd; return { ok: true, id: "r" }; };
+    d.limiter.settle = async args => { cost = args.costMicroUsd; };
+    const fetchImpl = Object.assign(async () => Response.json({
+      choices: [{ finish_reason: "stop", message: { content: JSON.stringify(intent) } }], usage,
+    }), { preconnect: () => {} }) as typeof fetch;
+    d.callModel = args => callIntentModel({ ...args, fetchImpl });
+    await check(await handleChat(request(), d), 200);
+    expect(cost).toBe(reserved);
+    expect(cost).toBeGreaterThan(0);
+  },
+);
+
+
+test("review-5: logs exclude model free text even when it echoes visitor words", async () => {
+  const d = deps();
+  const marker = "visitor-private-marker-2397";
+  const logs: string[] = [];
+  d.log = (msg, extra) => logs.push(JSON.stringify({ msg, extra }));
+  d.callModel = async () => ({ intent: { ...intent, reply: marker, clarify: marker + "?" }, promptTokens: 7, completionTokens: 2 });
+  await check(await handleChat(request({ message: marker }), d), 200);
+  expect(logs).toHaveLength(1);
+  expect(logs.join("\n")).not.toContain(marker);
+  const extra = JSON.parse(logs[0]).extra;
+  expect(extra).toMatchObject({ outcomeCode: "ok", latencyMs: 0, promptTokens: 7, completionTokens: 2, requestHash: expect.stringMatching(/^[a-f0-9]{64}$/) });
+  expect(Object.keys(extra.intent).sort()).toEqual(["riskStyle", "maxSources", "diversification", "leverageComfort", "requestedLeverage", "avoidClones", "horizon"].sort());
+});
+
+
+test("review-7: distributed preview denial returns 429 retryAfterSec without saving", async () => {
+  const d = deps();
+  d.env.limits.previewGlobalDaily = 1;
+  await check(await handlePreview(request({ intent }, { "x-real-ip": "one" }), d), 200);
+  const response = await handlePreview(request({ intent }, { "x-real-ip": "two" }), d);
+  expect(response.headers.get("retry-after")).toBe("86400");
+  expect(await check(response, 429, "rate_limited")).toMatchObject({ retryAfterSec: 86400 });
+  expect((d.requests as MemoryRequestStore).requests.size).toBe(1);
 });

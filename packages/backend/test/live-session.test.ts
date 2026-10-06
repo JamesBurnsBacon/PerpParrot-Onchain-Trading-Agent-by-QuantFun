@@ -13,7 +13,7 @@ const request = (body: unknown = offer, ip = "a") => new Request("http://localho
 });
 const deps = (): LiveDeps => ({
   env: readLiveEnv({ LIVE_ENABLED: "true", OPENAI_API_KEY: key }),
-  chatEnv: { ipSalt: "salt", limits: { ipHourly: 10, previewIpHourly: 30, globalDaily: 100, dailyBudgetMicroUsd: 5_000_000 } },
+  chatEnv: { ipSalt: "salt", limits: { ipHourly: 10, previewIpHourly: 30, previewGlobalDaily: 500, globalDaily: 100, dailyBudgetMicroUsd: 5_000_000 } },
   limiter: new MemoryChatLimiter(), now: () => 2_000_000_000_000, log: () => {}, basePolicy: fixture.policy as Policy,
   finalists: async () => ({ dataSource: "sample", finalists: Array.from({ length: 25 }, (_, i) => ({ address: `untrusted-wallet-${i}`, kind: "trader", score: 100 - i, flags: [], maxDrawdown: 0.1, annualisedVol: 0.5, cloneOf: false })) }),
   fetchImpl: (async (_url: string | URL | Request, _init?: RequestInit) => Response.json({ session: { id: "live_123", secret: key }, transport: { sdp: "v=0\r\no=answer", type: "webrtc" }, secret: key }, { status: 201 })) as typeof fetch,

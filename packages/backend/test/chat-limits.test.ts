@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:tes
 import { SQL } from "bun";
 import { CHAT_LIMITER_LOCK_KEY, hashIp, MemoryChatLimiter, PostgresChatLimiter, type ChatLimiter, type LimitConfig, type Kind } from "../src/chat/limits";
 
-const cfg: LimitConfig = { ipHourly: 10, previewIpHourly: 30, globalDaily: 100, dailyBudgetMicroUsd: 1000 };
+const cfg: LimitConfig = { ipHourly: 10, previewIpHourly: 30, previewGlobalDaily: 500, globalDaily: 100, dailyBudgetMicroUsd: 1000 };
 const nowMs = 2_000_000_000_000;
 const cases = (get: () => ChatLimiter) => {
   const reserve = (ipHash = "ip-a", t = nowMs, kind: Kind = "chat", reserveMicroUsd = 1, config = cfg) =>
@@ -32,6 +32,16 @@ const cases = (get: () => ChatLimiter) => {
     expect((await reserve("ip-a", nowMs + 3_600_000)).ok).toBe(true);
     expect(await reserve("ip-a", nowMs + 3_600_000)).toMatchObject({ ok: false, retryAfterSec: 1 });
   });
+  test("review-7: global preview quota spans IPs atomically and expires at day boundary", async () => {
+    const config = { ...cfg, previewGlobalDaily: 2, globalDaily: 1, dailyBudgetMicroUsd: 1 };
+    const outcomes = await Promise.all(Array.from({ length: 10 }, (_, i) => reserve(`ip-${i}`, nowMs, "preview", 0, config)));
+    expect(outcomes.filter(r => r.ok)).toHaveLength(2);
+    expect(outcomes.filter(r => !r.ok)).toEqual(Array(8).fill({ ok: false, reason: "global_daily", retryAfterSec: 86400 }));
+    expect(await reserve("other", nowMs + 86_399_999, "preview", 0, config)).toEqual({ ok: false, reason: "global_daily", retryAfterSec: 1 });
+    expect((await reserve("other", nowMs + 86_400_000, "preview", 0, config)).ok).toBe(true);
+    expect((await reserve("other", nowMs + 86_400_000, "chat", 1, config)).ok).toBe(true);
+    expect(await reserve("zero", nowMs, "preview", 0, { ...config, previewGlobalDaily: 0 })).toMatchObject({ ok: false, reason: "global_daily" });
+  });
   test("global daily across IPs", async () => {
     const config = { ...cfg, globalDaily: 2 };
     await reserve("a", nowMs, "chat", 1, config);
@@ -52,7 +62,7 @@ const cases = (get: () => ChatLimiter) => {
     for (let i = 0; i < 30; i++) expect((await reserve("ip-a", nowMs, "preview", 0)).ok).toBe(true);
     expect(await reserve("ip-a", nowMs, "preview", 0)).toMatchObject({ ok: false, reason: "ip_hourly" });
   });
-  test("previews ignore global limit and never consume chat count or budget", async () => {
+  test("previews ignore chat global limit and never consume chat count or budget", async () => {
     const config = { ...cfg, globalDaily: 1, dailyBudgetMicroUsd: 1 };
     const preview = await reserve("ip-a", nowMs, "preview", 999, config);
     expect(preview.ok).toBe(true);
@@ -97,7 +107,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("PostgresChatLimiter", () => {
 
   // Deterministic proof that reserve takes the advisory lock: a burst can pass by luck, this cannot.
   test("reserve waits while another transaction holds the advisory lock", async () => {
-    const cfg: LimitConfig = { ipHourly: 10, previewIpHourly: 30, globalDaily: 100, dailyBudgetMicroUsd: 5_000_000 };
+    const cfg: LimitConfig = { ipHourly: 10, previewIpHourly: 30, previewGlobalDaily: 500, globalDaily: 100, dailyBudgetMicroUsd: 5_000_000 };
     let release!: () => void;
     const held = new Promise<void>((resolve) => { release = resolve; });
     let locked!: () => void;
@@ -187,4 +197,16 @@ test("Postgres preview bypasses exhausted chat limits and inserts zero cost", as
   const limiter = new PostgresChatLimiter(sql);
   expect((await limiter.reserve({ ipHash: "a", kind: "preview", nowMs, reserveMicroUsd: 999, cfg })).ok).toBe(true);
   expect(statements[3].values).toEqual(["preview", nowMs, "a", 0]);
+});
+
+
+test("review-7: Postgres preview quota is checked after advisory lock and denies without insert", async () => {
+  const { sql, statements } = fakeSql({ daily_count: "2", daily_oldest: nowMs - 1000 });
+  const limiter = new PostgresChatLimiter(sql);
+  expect(await limiter.reserve({ ipHash: "fresh-ip", kind: "preview", nowMs, reserveMicroUsd: 0,
+    cfg: { ...cfg, previewGlobalDaily: 2 } })).toEqual({ ok: false, reason: "global_daily", retryAfterSec: 86399 });
+  expect(statements[1].text).toMatch(/^select pg_advisory_xact_lock/);
+  expect(statements[2].text).toContain("count(*) filter (where kind = ?)");
+  expect(statements[2].values).toContain("preview");
+  expect(statements.some(s => s.text.startsWith("insert"))).toBe(false);
 });

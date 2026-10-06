@@ -29,8 +29,8 @@ test("exact OpenAI request and validated response", async () => {
 });
 
 test.each([
-  ["http", () => new Response(apiKey, { status: 500 })],
-  ["http", () => new Response(apiKey, { status: 201 })],
+  ["ambiguous", () => new Response(apiKey, { status: 500 })],
+  ["ambiguous", () => new Response(apiKey, { status: 201 })],
   ["http", () => Response.json({ error: { message: apiKey, code: "insufficient_quota" } }, { status: 429 })],
   ["http", () => Response.json({ error: { message: apiKey, code: "billing_hard_limit_reached" } }, { status: 402 })],
   ["refusal", () => Response.json(result(apiKey, "stop", apiKey))],
@@ -57,9 +57,9 @@ test("timeout even when the injected fetch never resolves", async () => {
   })).rejects.toMatchObject({ code: "timeout" });
 });
 
-test("missing usage defaults to zero", async () => {
+test("missing usage is explicitly unknown", async () => {
   const { usage, ...body } = result();
   const response = await callIntentModel({ apiKey, model: "test", messages, fetchImpl: mockFetch(async () => Response.json(body)) });
-  expect(response.promptTokens).toBe(0);
-  expect(response.completionTokens).toBe(0);
+  expect(response.promptTokens).toBeNull();
+  expect(response.completionTokens).toBeNull();
 });

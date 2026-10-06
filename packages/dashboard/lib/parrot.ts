@@ -124,3 +124,13 @@ export function holdProgress(startMs: number, nowMs: number, holdMs: number): nu
   if (![startMs, nowMs, holdMs].every(Number.isFinite) || holdMs <= 0) return 0;
   return Math.max(0, Math.min(1, (nowMs - startMs) / holdMs));
 }
+
+
+export function isPointerOutside(x: number, y: number, bounds: { left: number; right: number; top: number; bottom: number }): boolean {
+  return !Number.isFinite(x) || !Number.isFinite(y) || x < bounds.left || x > bounds.right || y < bounds.top || y > bounds.bottom;
+}
+
+
+export function canContinueHold(startedFor: unknown, currentTarget: unknown, disabled: boolean): boolean {
+  return !disabled && Object.is(startedFor, currentTarget);
+}
