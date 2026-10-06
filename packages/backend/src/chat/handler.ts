@@ -38,6 +38,7 @@ export class PostgresRequestStore implements RequestStore {
   }
 }
 
+const PREVIEW_REPLY = "Preview of a visitor-supplied intent.";
 const REPLIES = {
   disabled: "Squawk, chat is resting right now.",
   method_not_allowed: "Squawk, please send a message with POST.",
@@ -76,9 +77,10 @@ const readBody = async (req: Request): Promise<{ body: unknown; requestHash: str
     return failure(400, "bad_request");
   }
 };
+const worstCaseMicroUsd = (deps: ChatDeps): number => Math.ceil(2000 * deps.env.priceInPerM + 400 * deps.env.priceOutPerM);
 const reserve = (req: Request, deps: ChatDeps, kind: Kind): Promise<Reservation> => {
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("x-real-ip")?.trim() || "unknown";
-  return deps.limiter.reserve({ ipHash: hashIp(ip, deps.env.ipSalt), kind, nowMs: deps.now(), reserveMicroUsd: kind === "chat" ? Math.ceil(2000 * deps.env.priceInPerM + 400 * deps.env.priceOutPerM) : 0, cfg: deps.env.limits });
+  return deps.limiter.reserve({ ipHash: hashIp(ip, deps.env.ipSalt), kind, nowMs: deps.now(), reserveMicroUsd: kind === "chat" ? worstCaseMicroUsd(deps) : 0, cfg: deps.env.limits });
 };
 const denied = (reservation: Extract<Reservation, { ok: false }>): Response =>
   failure(429, reservation.reason === "daily_budget" ? "budget" : "rate_limited", reservation.retryAfterSec);
@@ -109,7 +111,9 @@ export const handleChat = async (req: Request, deps: ChatDeps): Promise<Response
         throw new ModelError("invalid_output");
       }
     } catch (error) {
-      await deps.limiter.settle({ id: reservation.id, tokens: 0, costMicroUsd: 0 });
+      // Only a provider rejection (nothing processed) is released; a timeout or unusable output may still have
+      // been charged, so the reserved worst case stays on the daily budget.
+      await deps.limiter.settle({ id: reservation.id, tokens: 0, costMicroUsd: error instanceof ModelError && error.code === "http" ? 0 : worstCaseMicroUsd(deps) });
       const code: FailureCode = error instanceof ModelError
         ? (error.code === "timeout" || error.code === "http") ? "model_unavailable" : "invalid_model_output"
         : "model_unavailable";
@@ -141,8 +145,11 @@ export const handlePreview = async (req: Request, deps: ChatDeps): Promise<Respo
   let intent: StrategyIntent;
   try {
     if (!object(input.body) || Object.keys(input.body).length !== 1 || !Object.hasOwn(input.body, "intent")) throw new Error();
-    intent = parseStrategyIntent(input.body.intent);
-    if (deps.env.apiKey && JSON.stringify(intent).includes(deps.env.apiKey)) throw new Error();
+    const parsed = parseStrategyIntent(input.body.intent);
+    if (deps.env.apiKey && JSON.stringify(parsed).includes(deps.env.apiKey)) throw new Error();
+    // Only the structured fields matter for a preview. The visitor's free text (reply, clarify) is not stored
+    // and does not enter the hash: nothing a visitor typed ends up in the database or in an operator's view.
+    intent = Object.freeze({ ...parsed, reply: PREVIEW_REPLY, clarify: null });
   } catch {
     return failure(400, "bad_request");
   }
