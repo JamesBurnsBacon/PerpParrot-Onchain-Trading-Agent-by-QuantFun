@@ -1,0 +1,8 @@
+local-simulation:
+  user-workflow:
+    workflow-name: ingest-cycle-local-simulation
+    deployment-registry: "private"
+  workflow-artifacts:
+    workflow-path: "./main.ts"
+    config-path: "./config.local-simulation.json"
+    secrets-path: ""

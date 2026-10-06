@@ -51,3 +51,10 @@ rehearsal-settings:
   rpcs:
     - chain-name: hyperliquid-mainnet
       url: https://rpc.hyperliquid.xyz/evm
+
+# Receiver-free ingest receipt verification; no chain writes or deployment.
+local-simulation:
+  # CLI 1.37 requires one RPC even when the workflow has no EVM capability.
+  rpcs:
+    - chain-name: hyperliquid-mainnet
+      url: https://rpc.hyperliquid.xyz/evm

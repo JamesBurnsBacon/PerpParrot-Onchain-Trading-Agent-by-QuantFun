@@ -10,7 +10,9 @@
     "typecheck": "tsc --noEmit",
     "ingest": "bun run src/ingest/cli.ts",
     "ingest:sync": "bun run src/ingest/sync-cli.ts",
-    "score:stored": "bun run src/ingest/score-cli.ts"
+    "score:stored": "bun run src/ingest/score-cli.ts",
+    "ingest:loop": "bun --no-env-file src/ingest/loop/cli.ts",
+    "ingest:loop:serve": "bun --no-env-file src/ingest/loop/server.ts"
   },
   "license": "UNLICENSED",
   "dependencies": {

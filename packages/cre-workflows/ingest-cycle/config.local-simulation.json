@@ -1,0 +1,6 @@
+{
+  "mode": "local-simulation",
+  "schedule": "0 */10 * * * *",
+  "backendUrl": "http://127.0.0.1:8790",
+  "maxAgeSeconds": 900
+}
