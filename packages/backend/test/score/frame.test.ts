@@ -73,7 +73,7 @@ describe("toFrameCandidates (SPEC Frame adapter)", () => {
     expect(actual.skipped).toEqual(result.finalists.map((address) => ({ address, reason: "unknown-history" })));
   });
 
-  for (const [activeDays, historyDays] of [[726.32, 726], [30, 30]]) {
+  for (const [activeDays, historyDays] of [[726.32, 726], [726.9, 726], [30, 30]]) {
     test(`historyDays floors ${activeDays} to ${historyDays}`, () => {
       const actual = toFrameCandidates({
         ...result,
