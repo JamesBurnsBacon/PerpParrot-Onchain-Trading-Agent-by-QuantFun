@@ -33,8 +33,20 @@ DATABASE_URL=postgres://… ./scripts/e2e-mirror.sh   # same, with both services
 The soak keeps the snapshot service and executor running and simulates the mirror repeatedly
 against live HL data, to catch flakiness, leaks and snapshot-age drift a single run can't
 (`ROUNDS`, `INTERVAL`, `DATABASE_URL` configurable). It stops early if the code changes under it.
-Reference results (2026-10-06): every round on a consistent setup passed; spot-check deviation
-0–30 bps for snapshots under 2 minutes old, ~50 bps at 8 minutes (limit 500).
+`TIMING=production ROUNDS=12 ./scripts/soak-mirror.sh` runs one round per 10-minute run at
+:x9:50 with the production lead limits, against the snapshot the service's scheduler prebuilt at
+~:x8:30: the spot-check deviation the DON will actually see. A failed round's full output is kept
+as `round-N.log` in the soak directory.
+
+Reference results (2026-10-06, live HL data, Postgres):
+
+| Timing | Rounds | Spot-check deviation | Failures |
+|---|---|---|---|
+| production (snapshot ~75 s old) | 8 | 5–52 bps, median ~22 | 1, in the CRE CLI's login check before the workflow ran (seen once in e2e too; transient) |
+| repeat (one snapshot re-checked up to 10 min) | 19 | 0–151 bps under 2 min, up to 635 bps at 8 min | 2: a source traded ~8 min after the snapshot, 611/635 bps > 500; the next run passed (fail-closed as designed) |
+
+A cold snapshot build (no prebuild: every DON node's request lands on it) took 0.1–0.9 s for
+7–25 sources (3 HL calls each, all in parallel), well inside CRE's 10 s HTTP timeout.
 
 Unit tests per package: `bun test` in `packages/backend`, `packages/executor`,
 `packages/cre-workflows/mirror`, `packages/cre-workflows/review`. Postgres integration tests run when
