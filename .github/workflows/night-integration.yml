@@ -1,0 +1,43 @@
+name: Night integration proof
+on:
+  pull_request:
+  push:
+    branches: [main]
+    paths: ['night-shift-integration/**', 'packages/**', 'supabase/migrations/**', 'tests/support/**', '.github/workflows/night-integration.yml']
+permissions:
+  contents: read
+jobs:
+  offline-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - name: Install pinned dependencies
+        run: |
+          npm install --global pnpm@11.25.0
+          pnpm install --frozen-lockfile
+          bun --no-env-file install --frozen-lockfile --cwd packages/backend
+          bun --no-env-file install --frozen-lockfile --cwd packages/executor
+      - name: Contracts and recovery
+        run: |
+          ./node_modules/.bin/tsc -p night-shift-integration/tsconfig.json
+          bun --no-env-file test night-shift-integration/
+      - name: Complete controlled demo and repeat
+        run: |
+          bun --no-env-file night-shift-integration/demo.ts
+          bun --no-env-file night-shift-integration/demo.ts
+          bun --no-env-file -e 'const e=await Bun.file("night-shift-integration/out/demo/evidence.json").json(); if(e.receipt.status!=="SUCCEEDED" || !e.receipt.steps.every(s=>s.reused)) process.exit(1);'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: controlled-integration-evidence
+          path: |
+            night-shift-integration/out/demo/evidence.json
+            night-shift-integration/out/demo/demo.html
+            night-shift-integration/out/demo/return-first.json
+            night-shift-integration/out/demo/drawdown-first.json

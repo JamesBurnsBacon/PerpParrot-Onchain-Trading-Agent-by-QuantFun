@@ -234,7 +234,23 @@ export class Runner {
             cloids: [...cloids],
             kind: "orders",
           }),
-          afterResponse: (batchIndex, results) => store.finishOrderBatch(`${id}:${batchIndex}`, results),
+          afterResponse: async (batchIndex, results) => {
+            try {
+              await store.finishOrderBatch(`${id}:${batchIndex}`, results);
+            } catch (error) {
+              // Even the final/only batch must fail the run if its result is not durable.
+              // Preserve the observed fills; exchange.submit stops subsequent batches.
+              // The dispatching intent remains the recovery authority after a restart.
+              record.status = "failed";
+              record.error = `journal write failed after dispatch (batch ${batchIndex} needs reconciliation): ${(error as Error).message}`;
+              try {
+                await store.setControls({ paused: true, updatedAt: now(), updatedBy: `journal-result-failed:${id}:${batchIndex}` });
+              } catch {
+                record.error += "; pause could not be persisted; unresolved journal blocks the next run";
+              }
+              throw error;
+            }
+          },
         },
       );
       if (record.results.some((r) => r.status === "unknown")) {

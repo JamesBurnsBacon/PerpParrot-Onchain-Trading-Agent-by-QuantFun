@@ -1,0 +1,15 @@
+{
+  "name": "perpparrot-night-integration",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "bun": ">=1.4.2"
+  },
+  "scripts": {
+    "check": "bun --no-env-file test . && ../node_modules/.bin/tsc -p ./tsconfig.json",
+    "simulate": "bun --no-env-file ./run.ts",
+    "benchmark": "bun --no-env-file ./fetch-benchmark.ts",
+    "demo": "bun --no-env-file ./demo.ts"
+  }
+}

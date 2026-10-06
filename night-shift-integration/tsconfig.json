@@ -1,0 +1,10 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "erasableSyntaxOnly": false,
+    "types": ["bun", "node"],
+    "typeRoots": ["../packages/backend/node_modules/@types", "../node_modules/@types"]
+  },
+  "include": ["./*.ts"],
+  "exclude": ["out"]
+}

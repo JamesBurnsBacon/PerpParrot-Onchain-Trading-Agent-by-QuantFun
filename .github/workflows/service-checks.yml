@@ -53,7 +53,6 @@ jobs:
           node-version: '24'
       - name: Install review core dependencies for integration checks
         run: npm install --global pnpm@11.25.0 && pnpm --dir ../.. install --frozen-lockfile
-        if: matrix.package == 'executor'
       - run: bun install --frozen-lockfile
       - name: Install integration dependency packages
         if: matrix.package == 'executor'

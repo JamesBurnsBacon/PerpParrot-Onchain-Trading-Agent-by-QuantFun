@@ -228,6 +228,29 @@ describe("Runner.executeRun (dry run)", () => {
     expect(await store.unresolvedOrderBatches()).toEqual([]);
   });
 
+  test.each([false, true])("final IOC result write failure preserves outcomes but fails and holds (pause write fails=%s)", async (pauseWriteFails) => {
+    const { runnerDeps, exchange, store } = setup(fakeInfo({ equity: "400" }));
+    const finish = store.finishOrderBatch.bind(store);
+    const controls = store.setControls.bind(store);
+    store.finishOrderBatch = async (id, results) => {
+      if (!id.includes(":leverage:")) throw new Error("IOC result database failure");
+      await finish(id, results);
+    };
+    if (pauseWriteFails) store.setControls = async () => { throw new Error("controls database failure"); };
+    const run = await new Runner(runnerDeps).executeRun(AS_OF);
+    expect(run.status).toBe("failed");
+    expect(run.error).toContain("batch 0 needs reconciliation");
+    expect(run.results?.map(r => r.status)).toEqual(["dry_run", "dry_run"]);
+    expect((await store.recentRuns(1))[0].status).toBe("failed");
+    expect((await store.unresolvedOrderBatches()).map(b => b.state)).toEqual(["dispatching"]);
+    if (!pauseWriteFails) expect((await store.getControls()).paused).toBe(true);
+    const actions = exchange.recorded().length;
+    store.setControls = controls;
+    const next = await new Runner(runnerDeps).executeRun(AS_OF + 600);
+    expect(next.status).toBe("skipped_paused");
+    expect(exchange.recorded()).toHaveLength(actions);
+  });
+
   test("a batch left dispatching after a crash blocks the next run", async () => {
     const { runner, store, exchange } = setup(fakeInfo({ equity: "400" }));
     await store.beginOrderBatch({ id: "orphaned:0", runId: "orphaned", createdAt: AS_OF * 1000, orders: [], cloids: [], kind: "orders" });
