@@ -11,6 +11,7 @@ import { createExchange } from "./exchange";
 import { httpInfo } from "./hyperliquid";
 import { Runner } from "./runner";
 import { registrySigners } from "./signers";
+import { noLock, postgresRunLock } from "./lock";
 import { PostgresStore } from "./pg-store";
 import { MemoryStore } from "./store";
 import type { VerifyMode } from "./verify";
@@ -32,7 +33,8 @@ const mode: VerifyMode = config.verifyReports
 
 // Supabase Postgres when DATABASE_URL is set: report dedupe, runs and the kill
 // switch then survive restarts. In memory otherwise (report expiry still bounds replays).
-const store = process.env.DATABASE_URL ? new PostgresStore(new SQL(process.env.DATABASE_URL)) : new MemoryStore();
+const sql = process.env.DATABASE_URL ? new SQL(process.env.DATABASE_URL) : undefined;
+const store = sql ? new PostgresStore(sql) : new MemoryStore();
 if (config.production && !process.env.DATABASE_URL) {
   console.warn("DATABASE_URL not set: report dedupe, runs and the kill switch won't survive a restart");
 }
@@ -44,6 +46,7 @@ const runner = new Runner({
   info: httpInfo(),
   alert,
   now: Date.now,
+  lock: sql ? postgresRunLock(sql) : noLock,
   config: {
     account: config.account,
     maxGrossLeverage: config.maxGrossLeverage,

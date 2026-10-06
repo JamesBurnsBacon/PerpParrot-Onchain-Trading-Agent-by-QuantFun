@@ -5,7 +5,7 @@ import { loadConfig } from "../src/config";
 import { createExchange } from "../src/exchange";
 import type { InfoFn } from "../src/hyperliquid";
 import { cloidFor, Runner } from "../src/runner";
-import { MemoryStore } from "../src/store";
+import { MemoryStore, type RunRecord } from "../src/store";
 import { verifyEnvelope } from "../src/verify";
 import { cronWatchdog } from "../src/watchdog";
 import { ACCOUNT, AS_OF, body, envelope, keys, CONFIGURATION, registry } from "./helpers";
@@ -60,6 +60,35 @@ const setup = (info: InfoFn) => {
 };
 
 const verified = async (b = body()) => verifyEnvelope(await envelope(keys.slice(0, 2), { body: b }), registry);
+
+describe("Runner: cross-process run lock", () => {
+  test("a run that can't get the lock is recorded as failed and alerted", async () => {
+    const { runnerDeps, store, alerts } = setup(fakeInfo({ equity: "400", core: [] }));
+    const lock = { acquire: async () => Promise.reject(new Error("another executor process held the run lock for 1s")) };
+    const record = await new Runner({ ...runnerDeps, lock }).executeReport(await verified(), {});
+    expect(record).toMatchObject({ status: "failed", error: "another executor process held the run lock for 1s" });
+    expect((await store.recentRuns(1))[0].status).toBe("failed");
+    expect(alerts.join()).toContain("held the run lock");
+  });
+
+  test("holds the lock for the whole run, saving included, then releases it", async () => {
+    const { runnerDeps } = setup(fakeInfo({ equity: "400", core: [["ETH", "-0.05"]] }));
+    const events: string[] = [];
+    const store = runnerDeps.store;
+    const tracked = Object.assign(Object.create(Object.getPrototypeOf(store)), store, {
+      saveRun: async (r: RunRecord) => (events.push("save"), store.saveRun(r)),
+    });
+    const lock = {
+      acquire: async (timeoutMs: number) => {
+        events.push(`acquire ${timeoutMs}`);
+        return async () => void events.push("release");
+      },
+    };
+    const record = await new Runner({ ...runnerDeps, store: tracked, lock }).executeReport(await verified(), {});
+    expect(record.status).toBe("executed");
+    expect(events).toEqual(["acquire 1000", "save", "release"]);
+  });
+});
 
 describe("Runner.executeReport (dry run)", () => {
   test("plans against the live account and signs one IOC batch", async () => {

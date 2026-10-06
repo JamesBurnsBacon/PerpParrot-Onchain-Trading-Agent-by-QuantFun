@@ -125,7 +125,10 @@ To deploy everything before CRE deploy access and the freeze, follow
    above for both services in the project (they share one set; `DATABASE_URL` and `CRON_SECRET`
    serve both), with `DRY_RUN` unset. Use the Supabase **Session pooler** connection string: Bun's
    driver prepares statements, which the transaction pooler (port 6543) doesn't support. Deploy to
-   production (crons only run on production deployments).
+   production (crons only run on production deployments). Vercel may run several executor
+   instances; with `DATABASE_URL` set, each run takes a Postgres advisory lock, so two never run
+   at once (one that can't get it within `RUN_TIMEOUT_SECONDS` records the run as failed and
+   alerts). The same lock covers old and new processes during a Railway deploy for live trading.
 3. **Executor:** check `GET https://<domain>/api/executor/status` (dry run, `store: postgres`).
 4. **`mirror`:** create the `mirrorSamplingKey` secret (above), put `https://<domain>/api/backend`,
    `https://<domain>/api/executor/reports` and the configuration hash in
