@@ -30,8 +30,6 @@ jobs:
         working-directory: packages/cre-workflows
     env:
       CRE_API_KEY: ${{ secrets.CRE_API_KEY }}
-      # Read by `cre workflow simulate` via secrets.yaml; deployed workflows use the Vault DON.
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
     steps:
       - uses: actions/checkout@v4
 
@@ -54,8 +52,10 @@ jobs:
         working-directory: packages/cre-workflows/${{ inputs.workflow }}
         run: bun test
 
-      - name: Simulate
-        run: cre workflow simulate ${{ inputs.workflow }} --target ${{ inputs.target }} --trigger-index 0 --non-interactive
+      # Not a simulation: with production config, mirror would post a locally signed report
+      # to the live executor, which rejects it. scripts/e2e-mirror.sh covers simulation.
+      - name: Build WASM
+        run: cre workflow build ${{ inputs.workflow }} -o "$RUNNER_TEMP/workflow.wasm" --non-interactive
 
       - name: Deploy
         run: cre workflow deploy ${{ inputs.workflow }} --target ${{ inputs.target }} --yes --non-interactive

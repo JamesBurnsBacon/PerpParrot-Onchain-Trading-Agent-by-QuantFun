@@ -15,11 +15,14 @@ export type AppDeps = {
 };
 
 // BigInts (report targets) don't serialize natively.
-const json = (body: unknown, status = 200) =>
+const json = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(body, (_, v) => (typeof v === "bigint" ? v.toString() : v)), {
     status,
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...headers },
   });
+
+// The public dashboard reads /status and /runs from the browser.
+const PUBLIC = { "Access-Control-Allow-Origin": "*" };
 
 const authorized = (req: Request, token?: string): boolean => {
   const given = req.headers.get("authorization")?.replace(/^Bearer /, "") ?? "";
@@ -32,12 +35,12 @@ export const createApp = (deps: AppDeps) => async (req: Request): Promise<Respon
 
   if (req.method === "GET" && pathname === "/health") return json({ ok: true });
   if (req.method === "GET" && pathname === "/status") {
-    return json({ ...deps.status(), controls: await deps.store.getControls() });
+    return json({ ...deps.status(), controls: await deps.store.getControls() }, 200, PUBLIC);
   }
   // Public run log: plans, order results and raw signed reports (README §4.11).
   if (req.method === "GET" && pathname === "/runs") {
     const limit = Math.min(Math.max(Number(searchParams.get("limit") ?? 20) || 20, 1), 200);
-    return json(await deps.store.recentRuns(limit));
+    return json(await deps.store.recentRuns(limit), 200, PUBLIC);
   }
 
   if (req.method === "POST" && pathname === "/reports") {

@@ -218,11 +218,13 @@ describe("app routes", () => {
     expect((await store.getControls()).paused).toBe(true);
   });
 
-  test("GET /runs serializes bigint report fields", async () => {
+  test("GET /runs serializes bigint report fields and allows browser reads", async () => {
     const { app } = make();
     await app(post("/reports", { body: JSON.stringify(await envelope(keys.slice(0, 2))) }));
     await Bun.sleep(20);
-    const runs = (await (await app(new Request("http://x/runs?limit=5"))).json()) as { runId: string }[];
+    const res = await app(new Request("http://x/runs?limit=5"));
+    expect(res.headers.get("access-control-allow-origin")).toBe("*");
+    const runs = (await res.json()) as { runId: string }[];
     expect(runs[0].runId).toBe(`mirror-${AS_OF}`);
   });
 });
