@@ -373,7 +373,7 @@ tracked address.
 The review workflow consumes `packages/shared/schemas/candidate-curation-frame.schema.json`. Its `oos*` and
 `crossWindowStability` fields mean **out-of-sample** (from the backtest). Score's metrics are in-sample and must not be
 put there. The adapter (`src/score/frame.ts`, `toFrameCandidates`) fills only the fields Score owns; other modules fill
-the rest. This needs schema version `1.1.0` with six new fields (the `pairs` fields already exist in schema `1.0.0`):
+the rest. Schema `1.1.0` (2026-10-06) adds the six Score fields below; the `pairs` fields already existed in `1.0.0`.
 
 | Frame field | From Score |
 |---|---|
@@ -387,12 +387,16 @@ the rest. This needs schema version `1.1.0` with six new fields (the `pairs` fie
 | **new** `isSharpe`, `isSortino`, `isCalmar` | the ratio; `"+inf"` -> `null` (the reason is in `scoreFlags`) |
 | **new** `lookbackDays` | `metrics.lookbackDays` |
 | **new** `scoreFlags` | `metrics.flags` |
-| **new** `clones` | `clones` (addresses grouped under this finalist), so the agent sees what was merged |
+| **new** `clones` (candidate level) | `clones` (addresses grouped under this finalist): the audit trail. Models never see addresses; they get `metrics.cloneCount` = `clones.length` |
 | `pairs[].correlation`, `pairs[].linkedSource` | `correlations[].rho` and `.linked`, with `a`/`b` as kept-finalist positions |
 | `oosWindows`, `oosSharpe`, `oosSortino`, `oosMaxDrawdown`, `crossWindowStability` | not from Score: `0` / `null` until the backtest supplies them |
 
 `toFrameCandidates(result)` returns
-`{ candidates: FrameCandidate[], pairs: FramePair[], skipped: { address: string; reason: "unknown-history" }[] }`.
+`{ candidates: FrameCandidate[], addresses: string[], pairs: FramePair[], skipped: { address: string; reason: "unknown-history" }[] }`,
+where `addresses[i]` is candidate `i`'s address (the frame's source mapping, never model input).
+`packages/backend/review/input.ts` (`buildReviewInput`) completes the frame: it marks the fields no module supplies yet
+as unknown (`null`, `survivorshipQuality: "UNKNOWN"`), adds each finalist's month PnL curve and live positions as
+model evidence, and validates the frame, the evidence and the input commitments; `scripts/review-input.ts` runs it.
 `skipped` lists finalists with `activeDays === null` in finalist order; the pure adapter returns this list instead of
 logging, and the caller logs it. Candidate positions count only kept finalists. Pairs touching a skipped finalist are
 dropped; remaining pairs are remapped to the kept positions. A finalist with missing metrics or

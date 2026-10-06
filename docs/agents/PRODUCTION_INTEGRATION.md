@@ -11,6 +11,8 @@ why. Nothing here authorizes real trades.
 | Anonymous rich review evidence | `shared/src/committee-evidence.ts` binds the summary frame, full curve/positions/patterns and matrix, rejects contradictions, and bounds the combined finalist at 4 KB. It does not turn the spike's scores into specialist judgments. |
 | Audit persistence | `backend/review/audit.ts` persists bound prompt/evidence and strictly validated committee output through a service-only idempotent RPC (`persist_review_audit`, `supabase/migrations/20261006130000_review_audit.sql`). Real provider output has not been persisted yet. |
 | CRE review spike | `cre-workflows/review-spike`: real SDK HTTP calls, per-node structured output, per-field median consensus (see `CRE_SPIKE.md`). |
+| Review input from Score | `backend/review/input.ts` (`buildReviewInput`, run by `backend/scripts/review-input.ts`): Score finalists -> a candidate-curation-frame **1.1.0** (adds `isSharpe`, `isSortino`, `isCalmar`, `lookbackDays`, `scoreFlags`, `cloneCount`; clone addresses stay at candidate level for audit) and the anonymous evidence (month PnL curve, up to 12 live positions, fill patterns `null` until fills are ingested). Fields no module supplies yet are `null` = unknown, and `compile` rejects candidates without OOS and execution evidence, so no candidate can pass yet. |
+| Role/Risk model adapters | `shared/src/specialists.ts`: one OpenAI-compatible Chat Completions call per node with the versioned prompt (`shared/src/prompts.ts`, byte-identical to `SYSTEM_PROMPTS.md` v1.1.0), the bound committee evidence as the user payload and a strict integer row schema read from the consensus schemas. `backend/scripts/review-run.ts` runs them through `runReview` off-chain. Not yet: the red-team adapter, CRE wiring and secrets, and a real-provider run. |
 | Frozen configuration | `shared/src/frozen.ts` (`proposeFreeze`): the review's output that becomes the mirror's only execution authority. LIVE is **Aggressive** only (README §4.3). |
 
 ## Mirror path (moved)
@@ -29,8 +31,8 @@ HyperEVM freeze consumer and preview tables that were here were replaced by the 
 
 ## Remaining gates for the review core
 
-1. Complete actual Role/Risk/Red-Team model capability adapters and bind full rich evidence;
-   post-freeze reviews must remain monitoring-only.
+1. Role/Risk adapters and rich evidence binding are built (above); the Red-Team adapter remains.
+   Post-freeze reviews must remain monitoring-only.
 2. Run the two-model point-in-time evaluation, select the winner and persist the full
    sanitized prompt/output audit with verified hashes and paper shadow state.
 3. Configure CRE/model secrets; run authenticated LLM simulations and verify deployed

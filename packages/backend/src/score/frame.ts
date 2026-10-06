@@ -7,7 +7,8 @@ const FRAME_KIND: Record<Kind, "TRADER" | "HYPERCORE_VAULT" | "ERC4626_HYPERCORE
   "erc4626-vault": "ERC4626_HYPERCORE",
 };
 
-// Score-owned fields of a candidate-curation-frame 1.1.0 candidate. Fill-derived fields stay null when ingest has
+// Score-owned fields of a candidate-curation-frame 1.1.0 candidate. `clones` (addresses) is the audit trail;
+// models only see `metrics.cloneCount`. Fill-derived fields stay null when ingest has
 // not supplied them; other modules fill the rest of the frame (SPEC "Frame adapter").
 export type FrameCandidate = {
   candidate: number;
@@ -26,6 +27,7 @@ export type FrameCandidate = {
     isCalmar: number | null;
     lookbackDays: number;
     scoreFlags: string[];
+    cloneCount: number;
     // In-sample Score metrics never fill the out-of-sample fields; the backtest does.
     oosWindows: 0;
     oosSharpe: null;
@@ -40,8 +42,10 @@ export type FramePair = { a: number; b: number; correlation: number | null; link
 const finiteRatio = (value: Ratio): number | null => value === "+inf" ? null : value;
 
 // Map finalists with known history to kept positions and report omissions (SPEC "Frame adapter").
+// `addresses[i]` is candidate i's address: the frame's source mapping, never model input.
 export const toFrameCandidates = (result: ScoreResult): {
   candidates: FrameCandidate[];
+  addresses: string[];
   pairs: FramePair[];
   skipped: { address: string; reason: "unknown-history" }[];
 } => {
@@ -76,6 +80,7 @@ export const toFrameCandidates = (result: ScoreResult): {
         isCalmar: finiteRatio(metrics.calmar),
         lookbackDays: metrics.lookbackDays,
         scoreFlags: metrics.flags,
+        cloneCount: candidate.clones.length,
         oosWindows: 0,
         oosSharpe: null,
         oosSortino: null,
@@ -91,5 +96,5 @@ export const toFrameCandidates = (result: ScoreResult): {
       correlation: rho,
       linkedSource: linked,
     }));
-  return { candidates, pairs, skipped };
+  return { candidates, addresses: [...position.keys()], pairs, skipped };
 };
