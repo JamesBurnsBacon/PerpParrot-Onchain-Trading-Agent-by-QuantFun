@@ -3,9 +3,12 @@ import { LoopStore, type Account, type Run, type Selection, bucketAt, INTERVAL_M
 import { rankAsync } from "./ranking";
 import { SCORE_LABEL } from "./rank";
 import type { Collected } from "./collect";
+import { digest } from "../store";
+import { scoreSourceHash } from "./export-data";
 
 export type Collector = { collect(account: Account, signal: AbortSignal): Promise<Collected>;
-  client?: { requests: number; retries: number; rateLimited: number } };
+  client?: { requests: number; retries: number; rateLimited: number;
+    setContext?: (context: { runId: string; slot: number; address: string } | null) => void } };
 export class LoopService {
   private active: Promise<unknown> | null = null;
   private stopping = false;
@@ -61,8 +64,9 @@ export class LoopService {
       run = { ...run, status: "running", startedAt: run.startedAt ?? this.now(), attempts: run.attempts + 1, error: null };
       this.store.saveRun(run);
       const saved = this.store.records<Collected>(run.id), collected: Collected[] = [];
-      for (const selection of run.selected) {
+      for (const [slot, selection] of run.selected.entries()) {
         controller.signal.throwIfAborted(); this.store.assertOwner(owner, this.now());
+        this.collector.client?.setContext?.({ runId: run.id, slot, address: selection.address });
         let result = saved.get(selection.address);
         if (result && (this.now() - Date.parse(result.account.fetchedAt) > 300_000
           || Date.parse(result.account.fetchedAt) > this.now())) result = undefined;
@@ -79,25 +83,31 @@ export class LoopService {
       controller.signal.throwIfAborted();
       if (next.length !== TARGET_COUNT) throw new Error("Fewer than 100 strict Score accounts remain; retaining last complete publication");
       const accounts = collected.map(r => r.account), strict = scoreCandidates(accounts.map(a => a.input));
+      const codeHash = await scoreSourceHash(), completedAt = this.now();
       const oldest = Math.min(...accounts.map(a => Date.parse(a.fetchedAt)));
       if (this.now() - oldest > 540_000) throw new Error("Collection too old to publish");
       const artifact = {
-        schema: "ingest-cycle.v1", runId: run.id, bucket: run.bucket, completedAt: this.now(),
+        schema: "ingest-cycle.v1", runId: run.id, bucket: run.bucket, completedAt,
         count: TARGET_COUNT, status: "complete", scoreLabel: SCORE_LABEL, scoreConfig: strict.config,
         selected: run.selected, nextSelection: next,
         // The strict batch score is explicitly scoped to these 100 inputs;
         // nextSelection uses the full registry and the same unchanged Score.
         scoreScope: "current-100-account-batch", registryCount: registry.length,
+        provenance: { cohort: this.store.state("seed"), targetListSha256: digest(JSON.stringify(run.selected.map(s => s.address))),
+          scoreSourceSha256: codeHash, scoreConfigSha256: digest(JSON.stringify(strict.config)), evaluationCutoff: completedAt,
+          success: TARGET_COUNT, failure: 0, notFetched: 0 },
         inputAsOfRange: { oldest: new Date(oldest).toISOString(), newest: accounts.map(a => a.fetchedAt).sort().at(-1) },
         inputs: accounts.map(a => a.input), strict,
         evidence: accounts.map(a => ({ address: a.input.address, fetchedAt: a.fetchedAt, portfolioSha256: a.rawHash,
-          classification: a.classification, classificationAt: a.classificationAt, fillsSha256: a.fillsHash, fillsCheckedAt: a.fillsCheckedAt })),
+          classification: a.classification, classificationAt: a.classificationAt, fillsSha256: a.fillsHash, fillsCheckedAt: a.fillsCheckedAt,
+          investigation: this.store.state(`investigation:${a.input.address}`) })),
+        requestAttempts: this.store.requestAttempts(run.id),
         historyWarnings: collected.flatMap(r => r.historyWarnings.map(warning => ({ address: r.account.input.address, warning }))),
         durationSeconds: (this.now() - started) / 1000,
         upstream: counters && this.collector.client ? { requests: this.collector.client.requests - counters.requests,
           retries: this.collector.client.retries - counters.retries, rateLimited: this.collector.client.rateLimited - counters.rateLimited } : null,
       };
-      const hash = this.store.publish(run, accounts, artifact, next, owner, this.now());
+      const hash = this.store.publish(run, accounts, artifact, next, owner, completedAt);
       return { runId: run.id, status: "complete", count: TARGET_COUNT, artifactHash: hash,
         durationSeconds: artifact.durationSeconds, upstream: artifact.upstream, strictEligible: strict.candidates.filter(c => c.eligible).length };
     } catch (error) {
@@ -107,6 +117,7 @@ export class LoopService {
         this.store.saveRun({ ...run, status: "failed", finishedAt: this.now(), error: String(error) });
       } catch { /* another worker owns recovery */ }
       throw error;
-    } finally { clearInterval(heartbeat); clearTimeout(timeout); this.store.release(owner); if (this.controller === controller) this.controller = null; }
+    } finally { clearInterval(heartbeat); clearTimeout(timeout); this.store.release(owner);
+      this.collector.client?.setContext?.(null); if (this.controller === controller) this.controller = null; }
   }
 }

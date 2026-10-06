@@ -24,6 +24,8 @@ The loader verifies file checksums, raw portfolio/order evidence and the Score s
 | `portfolios.jsonl.gz` | Original portfolio evidence for all 20,869 scanned addresses |
 | `discovery.jsonl.gz`, `research-screen.jsonl.gz` | Discovery metadata and first-pass screening decisions |
 | `manifest.json`, `SHA256SUMS` | Counts, times, configuration, version and integrity checks |
+| `anomaly-audit.json`, `anomaly-trace.jsonl.gz` | Masa follow-up: the 43-address XMR1 exposure group and live request-to-raw traces |
+| `research-replay.json` | Recomputed v1 decisions/metrics and changed-arrival-order check |
 
 For direct use in existing Bun code, without the helper:
 
@@ -38,3 +40,5 @@ const result = scoreCandidates(inputs);
 The regular research cohort has 10,987 addresses; it is not already a strict-Score shortlist. Known filter failures are recorded before further fetching. Fewer than ten observed distinct filled orders leave `tradeCount` unknown and fail strict Score. Classification uses the existing vault-list/contract-probe rules; its evidence and limitations remain visible. Returns and drawdowns retain the team's existing sampled-history methodology.
 
 This is a dated research dataset. Portfolio and fill observations have individual timestamps, not one simultaneous market timestamp. The Top 100 acquisition queue is separate from Score's 25 clone-grouped trading finalists. For the recurring worker and CRE connection, see [Top 100 loop](TOP100_LOOP.md).
+
+[Masa follow-up](MASA_SNAPSHOT_AUDIT.md) explains the matching-return investigation and the two synthetic controls. These are investigation flags, not an extra grouping or eligibility rule.

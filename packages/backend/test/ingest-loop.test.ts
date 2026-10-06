@@ -166,8 +166,14 @@ describe("persistent upstream budget and recovery", () => {
   test("429 honors a 75-second Retry-After; retry is counted against the budget", async () => {
     const { store } = setup(); let now = start, calls = 0;
     const client = new BudgetClient(store, async () => ++calls === 1 ? new Response("", { status: 429, headers: { "Retry-After": "75" } }) : Response.json([]), () => now, async ms => { now += ms; });
+    client.setContext({ runId: "budget-test", slot: 0, address: "0x1" });
     await client.request(SOURCES.info, { type: "portfolio" }, new AbortController().signal);
     expect(now - start).toBe(75_000); expect(calls).toBe(2); expect(client.rateLimited).toBe(1);
+    const attempts = store.requestAttempts("budget-test") as { id: string; operationId: string; status: string; httpStatus: number; rawHash: string }[];
+    expect(attempts).toHaveLength(2); expect(attempts[0].id).not.toBe(attempts[1].id);
+    expect(attempts[0].operationId).toBe(attempts[1].operationId);
+    expect(attempts[0].status).toBe("failed"); expect(attempts[0].httpStatus).toBe(429);
+    expect(attempts[1].status).toBe("success"); expect(store.raw(attempts[1].rawHash)).toBe("[]");
   });
   test("4xx fails immediately, 5xx retries are bounded, and malformed success is rejected", async () => {
     const { store } = setup(); let now = start, calls = 0;

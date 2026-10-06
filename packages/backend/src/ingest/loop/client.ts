@@ -1,16 +1,21 @@
 import { RpcError, SOURCES, type Fetcher } from "../client";
 import { LoopStore } from "./store";
+import { randomUUID } from "node:crypto";
 
 export class BudgetClient {
   requests = 0;
   retries = 0;
   rateLimited = 0;
+  private context: { runId: string; slot: number; address: string } | null = null;
+  setContext(value: { runId: string; slot: number; address: string } | null) { this.context = value; }
   constructor(private store: LoopStore, private fetcher: Fetcher = fetch,
     private now: () => number = Date.now, private sleep: (ms: number) => Promise<void> = Bun.sleep) {}
 
   async request(url: string, body: object | undefined, signal: AbortSignal, weight = 20,
     actualWeight?: (json: unknown) => number): Promise<string> {
+    if (url !== SOURCES.info && url !== SOURCES.hyperevm && url !== SOURCES.vaults) throw new Error("Only official acquisition endpoints are allowed");
     const rpc = url === SOURCES.hyperevm, scope = rpc ? "rpc" : "info", capacity = rpc ? 80 : 800;
+    const operationId = randomUUID();
     for (let attempt = 0; attempt < 3; attempt++) {
       signal.throwIfAborted();
       let reservation;
@@ -20,6 +25,11 @@ export class BudgetClient {
         await this.wait(reservation.wait, signal);
       }
       this.requests++;
+      const id = randomUUID(), startedAt = this.now(), context = this.context;
+      const record = (result: Record<string, unknown>) => this.store.requestAttempt(id, context?.runId ?? null,
+        { id, operationId, ...context, endpoint: url, method: body ? "POST" : "GET", request: body ?? null,
+          attempt: attempt + 1, startedAt, finishedAt: this.now(), reservedWeight: weight, ...result });
+      record({ status: "started" });
       let response: Response;
       try {
         response = await this.fetcher(url, { method: body ? "POST" : "GET",
@@ -27,12 +37,14 @@ export class BudgetClient {
           body: body ? JSON.stringify(body) : undefined,
           signal: AbortSignal.any([signal, AbortSignal.timeout(25_000)]) });
       } catch {
+        record({ status: "failed", error: signal.aborted ? "cancelled" : "network-or-timeout" });
         signal.throwIfAborted();
         if (attempt === 2) throw new Error(`Network/timeout failure: ${new URL(url).hostname}`);
         this.retries++; await this.wait(1000 * 2 ** attempt, signal); continue;
       }
       if (!response.ok) {
         await response.body?.cancel();
+        record({ status: "failed", httpStatus: response.status, error: "http-error", retryAfter: response.headers.get("retry-after") });
         if (response.status === 429) this.rateLimited++;
         if ((response.status === 429 || response.status >= 500) && attempt < 2) {
           const value = response.headers.get("retry-after");
@@ -45,7 +57,7 @@ export class BudgetClient {
         throw new Error(`HTTP ${response.status}: ${new URL(url).hostname}`);
       }
       const reader = response.body?.getReader();
-      if (!reader) throw new Error("Missing response body");
+      if (!reader) { record({ status: "failed", httpStatus: response.status, error: "missing-body" }); throw new Error("Missing response body"); }
       const chunks: Uint8Array[] = []; let size = 0;
       try {
         for (;;) {
@@ -56,15 +68,23 @@ export class BudgetClient {
           if (size > 64 * 1024 * 1024) throw new Error("Oversized response");
           chunks.push(value);
         }
-      } catch (error) { await reader.cancel().catch(() => {}); throw error; }
+      } catch (error) { record({ status: "failed", httpStatus: response.status, error: "incomplete-or-oversized-body" }); await reader.cancel().catch(() => {}); throw error; }
       const bytes = new Uint8Array(size); let offset = 0;
       for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
-      const raw = new TextDecoder().decode(bytes), json = JSON.parse(raw);
+      const raw = new TextDecoder().decode(bytes), rawHash = this.store.blob(raw);
+      let json: unknown;
+      try { json = JSON.parse(raw); }
+      catch (error) { record({ status: "failed", httpStatus: response.status, rawHash, error: "invalid-json" }); throw error; }
+      let actual = weight;
       if (actualWeight) {
-        const actual = actualWeight(json);
-        if (!Number.isSafeInteger(actual) || actual < 1 || actual > weight) throw new Error("Response exceeds reserved rate-limit weight");
+        actual = actualWeight(json);
+        if (!Number.isSafeInteger(actual) || actual < 1 || actual > weight) {
+          record({ status: "failed", httpStatus: response.status, rawHash, error: "weight-exceeds-reservation" });
+          throw new Error("Response exceeds reserved rate-limit weight");
+        }
         this.store.refund(reservation.id, actual);
       }
+      record({ status: "success", httpStatus: response.status, rawHash, bytes: size, actualWeight: actual });
       return raw;
     }
     throw new Error("Retries exhausted");

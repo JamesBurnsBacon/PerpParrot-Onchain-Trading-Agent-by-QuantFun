@@ -84,6 +84,7 @@ export async function exportVerified(store: LoopStore, out: string) {
     audit.push({ address: a.input.address, status: check.status, includedInScoreInputs: a.basis === "verified-input" && a.classification !== null,
       fetchedAt: a.fetchedAt, portfolioSha256: a.rawHash, classification: a.classification, classificationAt: a.classificationAt,
       filledOrdersObserved: proof.observed, tradeCount: a.input.tradeCount, fillsSha256: a.fillsHash, fillsCheckedAt: a.fillsCheckedAt,
+      investigation: store.state(`investigation:${a.input.address}`),
       filters: computeFilters(a.input, computeMetrics(a.input), DEFAULT_CONFIG) });
   }
   async function* proofs() {

@@ -36,6 +36,8 @@ export class LoopStore {
       CREATE TABLE IF NOT EXISTS state(key TEXT PRIMARY KEY, body TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS runs(id TEXT PRIMARY KEY, bucket INTEGER UNIQUE NOT NULL, body TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS records(run_id TEXT NOT NULL, address TEXT NOT NULL, body TEXT NOT NULL, PRIMARY KEY(run_id,address));
+      CREATE TABLE IF NOT EXISTS request_attempts(id TEXT PRIMARY KEY, run_id TEXT, body TEXT NOT NULL);
+      CREATE INDEX IF NOT EXISTS request_attempt_run ON request_attempts(run_id);
       CREATE TABLE IF NOT EXISTS lease(id INTEGER PRIMARY KEY CHECK(id=1), owner TEXT NOT NULL, expires INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS budget(id INTEGER PRIMARY KEY, scope TEXT NOT NULL, at INTEGER NOT NULL, weight INTEGER NOT NULL);
       CREATE INDEX IF NOT EXISTS budget_scope_time ON budget(scope,at);`);
@@ -58,6 +60,12 @@ export class LoopStore {
   }
   setState(key: string, value: unknown) {
     this.db.query("INSERT OR REPLACE INTO state VALUES(?,?)").run(key, JSON.stringify(value));
+  }
+  requestAttempt(id: string, runId: string | null, value: unknown) {
+    this.db.query("INSERT OR REPLACE INTO request_attempts VALUES(?,?,?)").run(id, runId, JSON.stringify(value));
+  }
+  requestAttempts(runId: string): unknown[] {
+    return this.db.query<{ body: string }, [string]>("SELECT body FROM request_attempts WHERE run_id=? ORDER BY rowid").all(runId).map(r => JSON.parse(r.body));
   }
   accounts(): Account[] {
     return this.db.query<{ body: string }, []>("SELECT body FROM accounts ORDER BY address").all().map(r => JSON.parse(r.body));
