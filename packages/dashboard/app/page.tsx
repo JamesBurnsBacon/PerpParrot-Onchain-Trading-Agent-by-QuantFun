@@ -77,7 +77,7 @@ export default function Page() {
       </header>
 
       <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatTile label="Live account" value={live === undefined ? "—" : pct(live)} tone={tone(live)} note={executed ? `${executed} CRE run${executed === 1 ? "" : "s"} executed` : undefined} />
+        <StatTile label="Live account" value={live === undefined ? "—" : pct(live)} tone={tone(live)} note={executed ? `${executed} CRE run${executed === 1 ? "" : "s"} executed${live === undefined ? " · no live trades yet" : ""}` : undefined} />
         <StatTile label="Paper · $470" value={paper470 === undefined ? "—" : pct(paper470)} tone={tone(paper470)} note={book470 ? `${book470.openPositions} positions · ${usd(book470.equityUsd)}` : undefined} />
         <StatTile label="Paper · $10k twin" value={twin === undefined ? "—" : pct(twin)} tone={tone(twin)} note={book10k ? `${book10k.openPositions} positions · ${usd(book10k.equityUsd)}` : undefined} />
         <StatTile label="BTC buy & hold" value={btc === undefined ? "—" : pct(btc)} tone={tone(btc)} note="benchmark" />

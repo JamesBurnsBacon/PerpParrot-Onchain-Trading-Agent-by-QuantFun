@@ -108,9 +108,9 @@ export type Series = {
   points: [tMs: number, value: number][];
 };
 
-// % return against `base` (default: the first point).
+// % return against `base` (default: the first point); nothing without a positive base.
 const toReturns = (points: [number, number][], base = points[0]?.[1]): [number, number][] =>
-  base ? points.map(([t, v]) => [t, (v / base - 1) * 100]) : [];
+  base !== undefined && base > 0 ? points.map(([t, v]) => [t, (v / base - 1) * 100]) : [];
 
 // A run's scheduled time (runId "mirror-<runAt>"), the same clock as the paper books.
 export const runTime = (r: Run) => {

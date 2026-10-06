@@ -1,5 +1,5 @@
 import { SQL } from "bun";
-import { runAtMs, type Controls, type ExecutorStore, type RunRecord, type RunSummary } from "./store";
+import { runAtMs, type Controls, type EquityPoint, type ExecutorStore, type RunRecord, type RunSummary } from "./store";
 
 // Every query gets a deadline so a dead database fails a run instead of hanging it
 // (and with it the run queue and the kill switch).
@@ -83,17 +83,18 @@ export class PostgresStore implements ExecutorStore {
     );
   }
 
-  async equityCurve(): Promise<[number, number][]> {
+  async equityCurve(): Promise<EquityPoint[]> {
     const rows = await deadline(this.sql`
-      select run_id, started_at, equity_usd from executor_runs
+      select run_id, started_at, equity_usd, dry_run from executor_runs
       where kind = 'report' and status = 'executed' and equity_usd is not null
       order by started_at`);
     return rows
-      .map((r: Record<string, unknown>): [number, number] => [
-        runAtMs({ runId: r.run_id as string, startedAt: (r.started_at as Date).getTime() }),
-        Number(r.equity_usd),
-      ])
-      .sort((a: [number, number], b: [number, number]) => a[0] - b[0]);
+      .map((r: Record<string, unknown>): EquityPoint => ({
+        t: runAtMs({ runId: r.run_id as string, startedAt: (r.started_at as Date).getTime() }),
+        equityUsd: Number(r.equity_usd),
+        dryRun: r.dry_run as boolean,
+      }))
+      .sort((a: EquityPoint, b: EquityPoint) => a.t - b.t);
   }
 
   async getControls(): Promise<Controls> {

@@ -122,12 +122,14 @@ if (executor) {
   const s = status?.body;
   if (status && s) {
     check(status.status === 200, "/status ok", `/status HTTP ${status.status}`);
-    check(s.dryRun === true, "dry run (DRY_RUN unset)", "DRY_RUN is false: this rehearsal is dry-run only");
+    if (s.dryRun === true) pass("dry run (DRY_RUN unset)");
+    else warn("executor is LIVE (DRY_RUN=false): orders are sent");
     check(s.verifyReports === true, "verifies DON signatures", "VERIFY_REPORTS=false: simulation only");
     check(s.frozenConfigurationHash === expectedHash, "pins the configuration hash", `pins ${s.frozenConfigurationHash}, expected ${expectedHash}`);
     if (account) check(String(s.account).toLowerCase() === account, "HL_ACCOUNT matches the frozen configuration", `HL_ACCOUNT ${s.account} ≠ ${account}`);
     check(s.store === "postgres", "store: postgres", `store: ${s.store ?? "unknown"} (set DATABASE_URL)`);
-    check(s.controls?.paused === false, "not paused", "kill switch is on (paused)");
+    if (s.controls?.paused === false) pass("not paused");
+    else warn("kill switch is on (paused): runs are recorded but not traded");
     if (!s.pinned?.workflowName || s.pinned?.donId === null || s.pinned?.donId === undefined)
       warn("WORKFLOW_NAME / DON_ID not pinned yet: fine for dry run; set them from verify-run after the first real run");
   }

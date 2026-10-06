@@ -302,15 +302,15 @@ describe("app routes", () => {
     expect(run).not.toHaveProperty("plan");
   });
 
-  test("GET /equity gives the run-time equity curve", async () => {
-    const { app } = make();
-    await app(post("/reports", { body: JSON.stringify(await envelope(keys.slice(0, 2))) }));
+  test("GET /equity: live runs only, on the run clock; every executed run counted", async () => {
+    const { app, store } = make();
+    await app(post("/reports", { body: JSON.stringify(await envelope(keys.slice(0, 2))) })); // a dry run
     await Bun.sleep(20);
+    const live = AS_OF + 600;
+    await store.saveRun({ id: "live", runId: `mirror-${live}`, kind: "report", status: "executed", dryRun: false, startedAt: live * 1000 + 3000, finishedAt: live * 1000 + 4000, equityUsd: 470 });
     const res = await app(new Request("http://x/equity"));
     expect(res.headers.get("access-control-allow-origin")).toBe("*");
-    const body = (await res.json()) as { runs: number; points: [number, number][] };
-    expect(body.runs).toBe(1);
-    expect(body.points[0][0]).toBe(AS_OF * 1000);
+    expect(await res.json()).toEqual({ runs: 2, points: [[live * 1000, 470]] });
   });
 });
 
