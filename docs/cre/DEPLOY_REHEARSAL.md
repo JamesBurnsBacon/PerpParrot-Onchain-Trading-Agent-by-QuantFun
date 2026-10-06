@@ -15,8 +15,12 @@ Phase A runs on the **fixture** configuration (`packages/backend/fixtures/frozen
 7 real sources, AGGRESSIVE, hash `0x088fe80a…e1dd`). Its account `0x010461c1…703a` is a large public
 vault standing in for ours; the services only *read* it.
 
-1. **Supabase** (project `clheeepphmomkymawsfq`): run both files in `supabase/migrations/` in
-   order. Copy the service-role connection string (Session pooler) for step 2–3.
+1. **Supabase** (project `clheeepphmomkymawsfq`): in the SQL editor, run
+   `20261006120000_cre_mirror.sql`, then `20261006130000_review_audit.sql` (both idempotent
+   apart from `review_audit`'s first create). Other migrations, such as the ingest tables, may
+   already be applied by hand outside CLI history: don't `supabase db reset` or blindly
+   `db push` this project (RUNBOOK § Deploy). Copy the service-role connection string
+   (Session pooler) for steps 2–3.
 2. **Railway snapshot service**: new service from this repo, root directory = repository root,
    config file `packages/backend/railway.json`. Variables:
    ```
