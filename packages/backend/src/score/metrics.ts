@@ -164,6 +164,7 @@ export const analyse = (input: ScoreInput, config: ScoreConfig): Analysis | null
   drawdownPoints.push(curveAt(curve, fineStart));
   for (const point of curve) if (point.ts > fineStart) drawdownPoints.push(point.value);
   const maxDrawdown = finiteOrNull(maxDrawdownOf(drawdownPoints));
+  if (maxDrawdown === null) flags.push("overflow");
   if (maxDrawdown === 0 && periodReturn > 0) flags.push("no-drawdown");
 
   return {
