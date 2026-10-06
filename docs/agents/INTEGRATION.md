@@ -13,25 +13,28 @@ candidates and insufficient quorum. It does not coerce provider responses.
 ## Required adapters
 
 `runReview(frame, policy, addressMap, nowMs, dependencies)` requires every dependency;
-there is no permissive default implementation.
+there is no permissive adapter implementation. Strict shape validation and commitment verification are built into the core.
 
 | Dependency | Integration responsibility |
 |---|---|
-| validate | Strict validation using shared schemas; validated scalar score vectors only |
-| hash / verifyInput | Canonical domain-separated Keccak commitments; bind address mapping and recompute policy/data hashes |
-| quorum | Actual DON configuration, never a provider-reported count |
+| clock / agentTimeoutMs | Monotonic epoch-millisecond clock and a bounded per-stage deadline (1–60,000ms) |
+| quorum / nodeIds | Actual DON quorum and authenticated node allowlist, never model-provided IDs |
 | prompt/model hashes | Exact versioned prompt and model configuration commitment |
 | role / risk | Separate isolated model contexts, approved system prompts, deadlines and response size limits; return per-node observations |
 | redTeam | Fresh context, numeric draft projection without source addresses; match draftHash |
 | assess | Deterministic eligible-position replay/netting/drift/minimum-order capacity and worst-case active-source exposure validation |
 
 The three model adapters must return observations from distinct authenticated DON
-nodes. The array length check alone cannot authenticate nodes: the CRE adapter must
-prevent one node from contributing duplicate observations. Shared model parameters
+nodes. The core rejects duplicate/unknown node IDs and checks quorum against the configured
+roster. IDs are transport metadata, not model output; the CRE adapter must authenticate
+that each ID actually belongs to the node supplying the observation. IDs alone are
+not a cryptographic proof. Shared model parameters
 must be identical in a consensus group. `role` and `risk` are invoked independently
 in parallel, not sequentially with each other's answers. Return only rows from the
-model and attach binding metadata in trusted orchestration code. Catch deadlines at
-the adapter so a hung provider cannot hang the workflow indefinitely.
+model and attach binding metadata in trusted orchestration code. The core bounds asynchronous stages and passes AbortSignal to adapters. Adapters must
+honor cancellation and bound capability request sizes; the offline deadline cannot
+interrupt synchronous CPU loops. Inputs are copied before awaiting models, and
+freshness is rechecked through manifest issuance.
 
 The core compiles a conservative deterministic allocation from bucket-fit scores,
 execution latency and risk ceilings. Weights are capped and residual capital stays
@@ -52,8 +55,10 @@ It must validate active-source weight renormalization, gross exposure and all ma
 bucket constraints. A synthetic pass callback is used only in unit tests and must
 never be used in a live adapter. Throws, invalid measurements or failed limits close
 the result to INVALID_BUCKET with no sources and cash=1. Valid results include a
-schema-checked manifest commitment. The hash adapter's result is trusted only after
-its canonicalization and hashing implementation is independently tested.
+schema-checked manifest commitment. Commitments are computed internally by shared/commitments.ts using Keccak-256 over
+UTF-8 canonical JSON `{domain,payload}`. Policy and snapshot commitments are recomputed
+before inference; address mapping is part of the snapshot commitment. Use these exact
+helpers in producers, not a different JSON/string/hash convention.
 
 ## CRE rollout boundary
 
@@ -62,8 +67,9 @@ installed CRE SDK, workflow config, runtime credentials, snapshots or executor c
 Before connecting this core, pin the SDK, compile the validator for the target
 runtime (Ajv's compilation may require build-time standalone generation in WASM),
 implement capability adapters with the installed APIs, and test production quotas.
-The core contains no Node builtins; tests use Node and schemas are loaded through
-JSON imports in the offline validator. This is not proof of CRE/WASM compatibility.
+The offline core relies on structuredClone, AbortController, setTimeout/clearTimeout,
+JSON imports and Ajv compilation. CRE compatibility requires explicit build/runtime
+adaptation and simulation; tests run under Node 24. This is not proof of CRE/WASM compatibility.
 
 Persist valid review results to the existing `reviews`/`buckets` boundary only after
 successful verification. A separate freeze adapter commits the live manifest/hash.
@@ -75,3 +81,8 @@ no report signing, orders, capital movement or transport changes are implemented
 
 Use SYSTEM_PROMPTS.md in adapters; model outputs never provide execution authority.
 Narrative is optional dashboard content and is deliberately absent from this core.
+
+Persisted manifests should pass `validateManifest`; mirror must call
+`requireFrozenLiveManifest(manifest, nowMs, trustedFrozenHash)` before accepting it.
+This helper rejects simulation, invalid status, mismatched freeze hashes, expired
+manifests and semantic inconsistencies; it is not a DON signature verifier.

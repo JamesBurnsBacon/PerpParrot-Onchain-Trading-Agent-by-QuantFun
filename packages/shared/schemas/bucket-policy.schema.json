@@ -25,7 +25,8 @@
     },
     "minExecutableTargets": {
       "type": "integer",
-      "minimum": 1
+      "minimum": 1,
+      "maximum": 10
     },
     "maxSourceWeight": {
       "type": "number",
@@ -57,7 +58,8 @@
     },
     "maxFrameAgeMs": {
       "type": "integer",
-      "minimum": 1
+      "minimum": 1,
+      "maximum": 9007199254740991
     },
     "minExecutionFit": {
       "type": "integer",

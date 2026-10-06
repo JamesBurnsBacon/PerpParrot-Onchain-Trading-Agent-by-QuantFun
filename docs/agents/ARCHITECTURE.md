@@ -95,7 +95,7 @@ unknown/duplicate/missing candidate IDs, mismatched snapshot/policy/prompt/model
 hashes, nonfinite values and incomplete vectors. Do not median candidate IDs or
 hashes. Agree identity exactly, sort by candidate, aggregate numeric fields using
 median, then revalidate. For even observation counts use the mean of the middle
-values and round score integers upward; multipliers stay numeric. Quorum must be
+values and round risk/rejection scores upward and suitability/confidence scores downward; multipliers stay numeric. Quorum must be
 configured for the actual DON, never inferred from an LLM-provided count. The
 orchestrator attaches consensus provenance; models return only result rows.
 
@@ -139,8 +139,9 @@ account and report delivery calls; README's ~10-source sampling is not guarantee
 Use a deterministic snapshot-derived sample, not per-node unseeded randomness.
 
 Report verification must bind manifest, snapshot, account, policy, intent hash,
-expiry and approved workflow/environment. Hash JSON with RFC 8785 canonicalization
-and Keccak-256 over a versioned domain plus payload, excluding its own hash field.
+expiry and approved workflow/environment. Hash JSON with RFC 8785 canonicalization and Keccak-256 over UTF-8 canonical
+`{domain,payload}`, excluding its own hash field. Shared commitment helpers implement
+this exact format.
 Do not claim JSON.stringify is canonical. Bind snapshotHash to sanitized frame
 content (excluding snapshotHash) **and** trusted index/address mapping; use the
 same domain convention for policy/manifest/report and log prompt/model hashes.

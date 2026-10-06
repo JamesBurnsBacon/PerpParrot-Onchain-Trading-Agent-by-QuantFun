@@ -28,9 +28,11 @@ export interface Policy {
 }
 export type Row = {candidate: number} & Record<string, number>;
 export interface Observation extends Binding {
+  nodeId: string;
   promptHash: string; modelConfigHash: string; results: Row[];
 }
 export interface Critique extends Binding {
+  nodeId: string;
   promptHash: string; modelConfigHash: string; draftHash: string;
   rebuildScore: number; portfolioRisk: number;
   penalties: {candidate: number; multiplier: number; excludeScore: number}[];
