@@ -3,9 +3,9 @@ import type { Alert } from "./alerts";
 import type { Exchange } from "./exchange";
 import { loadAccount, loadMarkets, type InfoFn } from "./hyperliquid";
 import { planFlatten, planOrders, type Market, type Plan, type PlanConfig } from "./planner";
-import { noLock, type RunLock } from "./lock";
 import type { ExecutorStore, RunRecord } from "./store";
 import type { VerifiedReport } from "./verify";
+import { noLock, type RunLock } from "./lock";
 
 export type RunnerConfig = {
   account: Hex;
@@ -23,11 +23,11 @@ export type RunnerDeps = {
   alert: Alert;
   now: () => number;
   config: RunnerConfig;
-  // Serializes runs across processes (Postgres advisory lock); none needed for one process.
   lock?: RunLock;
 };
 
-// Deterministic per report and asset, so a retried submission can't double-fill.
+// Stable per-report order identifiers for reconciliation. Do not assume that
+// repeating an exchange submission with the same cloid guarantees idempotency.
 export const cloidFor = (reportId: string, asset: string): Hex => keccak256(toHex(`${reportId}:${asset}`)).slice(0, 34) as Hex;
 
 type CancelToken = { cancelled: boolean };
@@ -57,13 +57,34 @@ export class Runner {
         void this.deps.alert(`${runId}: still running after ${runTimeoutMs / 1000}s; cancelling before its next order batch`).catch(() => undefined);
       }, runTimeoutMs);
       try {
+        // Cross-process exclusion is the run lock run() takes (it waits up to runTimeoutMs).
         return await fn(token);
+      } catch (e) {
+        await this.deps.alert(`${runId}: run could not be completed or recorded: ${(e as Error).message}`).catch(() => undefined);
+        throw e;
       } finally {
         clearTimeout(timer);
         this.lastFinishedAt = this.deps.now();
       }
     };
     const next = this.queue.then(bounded, bounded);
+    this.queue = next.catch(() => undefined);
+    return next;
+  }
+
+  // Operator actions that must not interleave with a run (resume, reconciliation): queued behind
+  // this process's runs and holding the same cross-process run lock a run takes. Throws when
+  // another process holds it for longer than runTimeoutMs.
+  exclusive<T>(fn: () => Promise<T>): Promise<T> {
+    const task = async (): Promise<T> => {
+      const release = await (this.deps.lock ?? noLock).acquire(this.deps.config.runTimeoutMs);
+      try {
+        return await fn();
+      } finally {
+        await release().catch(() => undefined);
+      }
+    };
+    const next = this.queue.then(task, task);
     this.queue = next.catch(() => undefined);
     return next;
   }
@@ -82,7 +103,7 @@ export class Runner {
       const equity = Math.max(account.equityUsd, 0);
       const targets = new Map(exposures.map((e) => [e.asset, e.fraction * equity]));
       return planOrders(targets, account, markets, this.deps.config.plan);
-    }));
+    }, Number(body.expiresAt) * 1000));
   }
 
   // Kill switch: close everything, bypassing CRE (README §4.8).
@@ -100,13 +121,21 @@ export class Runner {
     envelope: unknown,
     token: CancelToken,
     makePlan: (markets: Map<string, Market>, account: Awaited<ReturnType<typeof loadAccount>>) => Promise<Plan>,
+    expiresAt?: number,
   ): Promise<RunRecord> {
     const { store, exchange, info, alert, now, config } = this.deps;
     const record: RunRecord = { id, runId, kind, status: "executed", dryRun: exchange.dryRun, startedAt: now(), finishedAt: 0, envelope };
     let release: (() => Promise<void>) | undefined;
     try {
-      // Another process may be mid-run (e.g. during a deploy): wait for it, up to the run timeout.
       release = await (this.deps.lock ?? noLock).acquire(config.runTimeoutMs);
+      const unresolved = await store.unresolvedOrderBatches();
+      if (kind === "report" && unresolved.length > 0) {
+        await store.setControls({ paused: true, updatedAt: now(), updatedBy: `unresolved-order-batch:${unresolved[0].id}` });
+        record.status = "skipped_paused";
+        record.error = `${unresolved.length} order batch(es) need reconciliation`;
+        await alert(`${runId}: execution held; reconcile order batch ${unresolved[0].id}`);
+        return record;
+      }
       const controls = await store.getControls();
       if (kind === "report" && controls.paused) {
         record.status = "skipped_paused";
@@ -117,19 +146,45 @@ export class Runner {
       const plan = await makePlan(markets, account);
       record.plan = plan;
 
-      // Cross margin at each asset's max leverage, set once per asset (README §4.8). If HL
-      // refuses for one asset, skip only that asset's order; reductions still go out.
+      // Re-read durable controls after asynchronous work and before each exchange
+      // action. A pause or expiry while loading accounts/updating leverage must
+      // prevent subsequent orders, including later batches.
+      const stopReason = async (): Promise<string | undefined> => {
+        if (token.cancelled) return `run timed out after ${config.runTimeoutMs / 1000}s`;
+        if (kind === "report" && (await store.getControls()).paused) return "execution paused";
+        // Check time after the database read as it can itself be slow.
+        if (token.cancelled) return `run timed out after ${config.runTimeoutMs / 1000}s`;
+        if (expiresAt !== undefined && now() > expiresAt) return "report expired before exchange action";
+        return undefined;
+      };
+      const assertActive = async (): Promise<void> => {
+        const reason = await stopReason();
+        if (reason) throw new Error(reason);
+      };
+
+      // Journal account leverage changes before dispatch; ambiguous results block
+      // every later exchange action until an operator checks account state. A definitive
+      // HL refusal skips only that asset's order, as before (README §4.8).
       const failedLeverage = new Set<string>();
       for (const o of plan.orders) {
-        if (token.cancelled) throw new Error(`run timed out after ${config.runTimeoutMs / 1000}s`);
+        await assertActive();
         if (o.reduceOnly || this.leverageSet.has(o.assetId)) continue;
-        try {
-          await exchange.setLeverage(o.assetId, markets.get(o.asset)!.maxLeverage);
-          this.leverageSet.add(o.assetId);
-        } catch (e) {
+        const leverage = markets.get(o.asset)!.maxLeverage;
+        const journalId = `${id}:leverage:${o.assetId}`;
+        await store.beginOrderBatch({
+          id: journalId, reportId: id, createdAt: now(), orders: [], cloids: [], kind: "leverage",
+          details: { asset: o.asset, assetId: o.assetId, leverage },
+        });
+        // Persist intent before dispatch. If the request or process fails before a
+        // durable result, startup reconciliation must treat the leverage state as unknown.
+        const outcome = await exchange.setLeverage(o.assetId, leverage, expiresAt);
+        await store.finishOrderBatch(journalId, []);
+        if (outcome.rejected !== undefined) {
           failedLeverage.add(o.asset);
-          await alert(`${runId}: leverage update failed for ${o.asset}: ${(e as Error).message}`);
+          await alert(`${runId}: leverage update refused for ${o.asset}: ${outcome.rejected}`);
+          continue;
         }
+        this.leverageSet.add(o.assetId);
       }
       if (failedLeverage.size > 0) {
         plan.skipped.push(
@@ -139,15 +194,50 @@ export class Runner {
         );
         plan.orders = plan.orders.filter((o) => !failedLeverage.has(o.asset));
       }
-      if (token.cancelled) throw new Error(`run timed out after ${config.runTimeoutMs / 1000}s`);
+      await assertActive();
       record.results = await exchange.submit(
         plan.orders,
         plan.orders.map((o) => cloidFor(id, o.asset)),
-        () => token.cancelled,
+        async () => {
+          try {
+            const reason = await stopReason();
+            if (reason) record.error = reason;
+            return reason !== undefined;
+          } catch (e) {
+            // Preserve already returned fills if the control store fails between
+            // batches; remaining orders are explicitly recorded as not sent.
+            record.error = `execution guard failed: ${(e as Error).message}`;
+            return true;
+          }
+        },
+        expiresAt,
+        {
+          beforeDispatch: (batchIndex, orders, cloids) => store.beginOrderBatch({
+            id: `${id}:${batchIndex}`,
+            reportId: id,
+            createdAt: now(),
+            orders: structuredClone(orders),
+            cloids: [...cloids],
+            kind: "orders",
+          }),
+          afterResponse: (batchIndex, results) => store.finishOrderBatch(`${id}:${batchIndex}`, results),
+        },
       );
-      if (token.cancelled) record.error = `run timed out after ${config.runTimeoutMs / 1000}s; later batches not sent`;
+      if (record.results.some((r) => r.status === "unknown")) {
+        record.status = "failed";
+        record.error = "exchange outcome unknown; reconcile order IDs and account before resuming";
+        await store.setControls({ paused: true, updatedAt: now(), updatedBy: `unknown-outcome:${id}` });
+      }
+      if (record.results.some((r) => r.status === "not_sent")) record.status = "failed";
+      // Don't overwrite a more important error (e.g. an unknown exchange outcome).
+      if (token.cancelled && !record.error) record.error = `run timed out after ${config.runTimeoutMs / 1000}s; later batches not sent`;
+      if (record.status === "failed") await alert(`${runId}: stopped remaining orders: ${record.error}`);
       const errors = record.results.filter((r) => r.status === "error");
-      if (errors.length > 0) await alert(`${runId}: ${errors.length} order(s) failed: ${errors[0].error}`);
+      if (errors.length > 0) {
+        record.status = "failed";
+        record.error ??= `${errors.length} order(s) failed: ${errors[0].error}`;
+        await alert(`${runId}: ${errors.length} order(s) failed: ${errors[0].error}`);
+      }
     } catch (e) {
       record.status = "failed";
       record.error = (e as Error).message;
@@ -157,7 +247,9 @@ export class Runner {
       try {
         await store.saveRun(record);
       } finally {
-        await release?.().catch(() => undefined);
+        // A failed unlock must not hide the run (or a saveRun error); Postgres releases the
+        // session lock with its connection anyway.
+        await release?.().catch((e) => alert(`${runId}: run lock release failed: ${(e as Error).message}`).catch(() => undefined));
       }
     }
     return record;

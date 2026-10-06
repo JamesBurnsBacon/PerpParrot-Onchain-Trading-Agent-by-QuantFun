@@ -1,5 +1,5 @@
 import type { Policy } from "../../../shared/src/contracts";
-import { intentToPolicy, shortlist, type FinalistLike, type StrategyIntent } from "../../../shared/strategy-intent";
+import { intentToPolicy, shortlist, type FinalistLike, type StrategyIntent } from "../../../shared/parrot-intent";
 import type { WalletEvidence, WalletChanges } from "../../../shared/wallet-evidence";
 type Data = { finalists: FinalistLike[]; dataSource: "live" | "sample" };
 const excluded = ["overflow", "ruin", "low-coverage", "no-intervals"];

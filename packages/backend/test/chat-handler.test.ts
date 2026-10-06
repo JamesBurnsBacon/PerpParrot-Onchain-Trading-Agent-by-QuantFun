@@ -1,12 +1,12 @@
 import { MAX_INPUT_TOKENS, MAX_COMPLETION_TOKENS, MAX_MESSAGE_CHARS, MAX_HISTORY_TURNS, MAX_HISTORY_CHARS } from "../src/chat/budget";
 import { buildMessages } from "../src/chat/prompt";
-import { STRATEGY_INTENT_JSON_SCHEMA } from "../../shared/strategy-intent";
+import { STRATEGY_INTENT_JSON_SCHEMA } from "../../shared/parrot-intent";
 import { expect, test } from "bun:test";
 import { handleChat, handlePreview, MemoryRequestStore, type ChatDeps } from "../src/chat/handler";
 import type { buildPreview } from "../src/chat/preview";
 import { hashIp, MemoryChatLimiter } from "../src/chat/limits";
 import { callIntentModel, ModelError } from "../src/chat/openai";
-import { intentToPolicy, type StrategyIntent } from "../../shared/strategy-intent";
+import { intentToPolicy, type StrategyIntent } from "../../shared/parrot-intent";
 import type { Policy } from "../../shared/src/contracts";
 import fixture from "../fixtures/frozen-configuration.json";
 

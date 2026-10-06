@@ -49,13 +49,30 @@ reproduces these files byte for byte.
 - `links.json`: `{ note, cases: [{ name, note, links, expected }] }`. Inputs are the 24 sample accounts built exactly
   as for `portfolio-sample.expected.json`, with `input.links` from the `address -> address[]` map, using default config.
   The compared projection is `{ finalists, funnel, candidates: [{ address, rank, scoreNumerator, cloneOf, clones, finalist }] }`,
-  with only ranked candidates, in output order. Expected values come from the independent Python reference for the
-  link-component rule. Cases cover no links, transitive chains in both directions, an unranked bridge, a whole unit
-  joining an earlier correlation representative, and a link to an unknown address.
+  with only ranked candidates, in output order. Ranks, scores and the filter funnel come from the original reference.
+  The grouping fields (`cloneOf`, `clones`, `finalist`, `finalists`, and the `distinct` and `finalists` counts) come
+  from `reference/grouping_ref.py`, an independent reference for SPEC "Clone grouping" kept in this repository. Under
+  the earlier representatives-only rule it reproduces the original values exactly (correlations within 4e-16). Cases
+  cover no links, transitive chains in both directions, an unranked bridge, a whole unit joining an earlier
+  correlation representative, a link to an unknown address, and a head that correlates with a link member ranked
+  below it (`cloneOf.via`).
+
+  To regenerate after a SPEC change, from `packages/backend`:
+  ```sh
+  bun test/fixtures/score/reference/dump-grouping-inputs.ts > test/fixtures/score/reference/grouping-inputs.json
+  python3 -I test/fixtures/score/reference/grouping_ref.py
+  ```
+  The dump takes the ranked order and daily returns from the TypeScript code (both are checked against the original
+  reference by `portfolio-sample.expected.json` and `clones.json`); the reference recomputes every correlation itself.
 
 The funnel stage formerly named `eligible` is now `ranked` in `clones.json`, `ranking-set.json`, and
 `portfolio-sample.expected.json`, and is also `ranked` in `links.json`. It counts ranked candidates, which can be fewer
 than the candidates remaining after `noRuin`; the candidate's `eligible` boolean still describes filter eligibility.
+
+The pure-taker penalty (SPEC "Ranking", 2026-10-06) added `makerPenalty` to every candidate and `rankPool` entry
+(`0` when ranked, `null` otherwise) and `pureTakerMakerShare: 0.05`, `pureTakerPenalty: 0.02` to every full config.
+These were added mechanically. No fixture input has a `makerShare` below 0.05, so no reference value changed. The
+penalty itself is checked by hand-computed cases in `test/score/rank.test.ts` and `test/score/score.test.ts`.
 
 ## Comparison rule
 - Numbers match within `1e-9 * max(1, |expected|)`.

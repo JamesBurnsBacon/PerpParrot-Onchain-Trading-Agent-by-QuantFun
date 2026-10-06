@@ -152,6 +152,11 @@ To deploy everything before CRE deploy access and the freeze, follow
    with `status: "executed"`, `dryRun: true` and a plan you agree with. Then run
    `bun run scripts/verify-run.ts --executor … --backend …` in `packages/executor` and set
    `WORKFLOW_NAME` and `DON_ID` on the executor from what it prints.
+   Vercel Preview also needs its Supabase Preview Branch and `CRON_SECRET`; confirm the preview
+   database applied all migrations, including `20261006180000_executor_order_journal.sql`.
+   An environment variable alone is not proof: verify `/status` reports `store: "postgres"`.
+   If Preview skips because no Supabase branch is associated, fix the Supabase GitHub integration
+   before treating deployment status as green.
 7. **Go live** (not part of the dry-run rehearsal):
    1. Move the executor to one long-running process. It refuses `DRY_RUN=false` on Vercel:
       Vercel may run several instances at once and stops them between requests, while live
@@ -171,6 +176,11 @@ To deploy everything before CRE deploy access and the freeze, follow
       perps) and approves the API wallet (trade, no withdraw). It never moves funds.
    5. Set `HL_API_WALLET_KEY` and `DRY_RUN=false` on the executor and redeploy. Watch the next
       run's `results` in `/runs`.
+   6. **Crash recovery:** an unresolved entry in `GET /admin/order-batches` means an exchange
+      action may have reached Hyperliquid without a durable response. Keep the executor paused,
+      compare the recorded client order IDs and assets against live account/order state, then use
+      `POST /admin/reconcile-batch` with operator identity and a written evidence record. Resume
+      only after every unresolved action is settled or reconciled; never resubmit by assumption.
 
 ## Freeze (go-live set)
 

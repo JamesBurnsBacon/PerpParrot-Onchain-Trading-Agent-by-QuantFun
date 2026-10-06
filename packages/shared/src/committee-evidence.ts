@@ -1,10 +1,10 @@
 import {validate} from './validate.ts';
 import {validateEvidence,byteLength} from './review-wire.ts';
 import {commitment,verifyInputCommitments} from './commitments.ts';
-import type {Frame,Policy} from './contracts.ts';
+import type {Binding,Frame,Policy} from './contracts.ts';
 import type {Evidence} from './review-wire.ts';
 export interface CommitteeEvidence {
-  schemaVersion:'1.0.0';snapshotHash:string;policyHash:string;asOfMs:number;
+  schemaVersion:Binding['schemaVersion'];snapshotHash:string;policyHash:string;asOfMs:number;
   finalists:({candidate:number;kind:Frame['candidates'][number]['kind'];metrics:Frame['candidates'][number]['metrics']} & Pick<Evidence['finalists'][number],'equityCurve'|'positions'|'patterns'>)[];
   pairs:Frame['pairs'];evidenceHash:string;
 }
@@ -27,7 +27,7 @@ export function bindCommitteeEvidence(frame:Frame,policy:Policy,addresses:Readon
   });
   if(frame.pairs.length!==evidence.pairs.length||new Set(frame.pairs.map(p=>`${Math.min(p.a,p.b)}:${Math.max(p.a,p.b)}`)).size!==frame.pairs.length)throw new Error('incomplete committee matrix');
   for(const pair of evidence.pairs){const original=frame.pairs.find(p=>p.a===pair.a&&p.b===pair.b||p.a===pair.b&&p.b===pair.a);if(!original||original.correlation!==pair.correlation||original.linkedSource!==pair.linkedSource)throw new Error('contradictory committee matrix');}
-  const payload={schemaVersion:'1.0.0' as const,snapshotHash:frame.snapshotHash,policyHash:frame.policyHash,asOfMs:frame.asOfMs,finalists,pairs:structuredClone(frame.pairs).sort((a,b)=>a.a-b.a||a.b-b.b)};
+  const payload={schemaVersion:frame.schemaVersion,snapshotHash:frame.snapshotHash,policyHash:frame.policyHash,asOfMs:frame.asOfMs,finalists,pairs:structuredClone(frame.pairs).sort((a,b)=>a.a-b.a||a.b-b.b)};
   if(byteLength(payload)>105000)throw new Error('committee payload exceeds reserved request budget');
   return {...payload,evidenceHash:commitment('perpparrot:committee-evidence:v1',payload)};
 }

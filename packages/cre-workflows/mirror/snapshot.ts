@@ -14,6 +14,8 @@ const decimal = z.string().regex(/^-?\d+$/);
 export const snapshotSchema = z.object({
   snapshotId: z.string(),
   runAt: z.number().int(),
+  // Optional: snapshots built before the backend recorded it fall back to takenAt (the old check).
+  startedAt: z.number().int().optional(),
   takenAt: z.number().int(),
   configuration: z.record(z.unknown()),
   eligibleAssets: z.array(z.string()),
@@ -35,8 +37,13 @@ export type SnapshotLimits = { frozenConfigurationHash: string; runAt: number; m
 // Returns the sources with their frozen weights and ceilings.
 export const checkSnapshot = (s: PositionsSnapshot, limits: SnapshotLimits): WeightedSource[] => {
   if (s.runAt !== limits.runAt) throw new Error(`snapshot is for run ${s.runAt}, expected ${limits.runAt}`);
-  if (Math.abs(limits.runAt - s.takenAt) > limits.maxSnapshotAgeSeconds) {
-    throw new Error(`snapshot taken ${limits.runAt - s.takenAt}s before the run`);
+  const startedAt = s.startedAt ?? s.takenAt;
+  if (startedAt > s.takenAt) throw new Error("snapshot read window is invalid");
+  if (s.takenAt - startedAt > limits.maxSnapshotAgeSeconds) {
+    throw new Error(`snapshot read window took ${s.takenAt - startedAt}s`);
+  }
+  if (Math.abs(limits.runAt - startedAt) > limits.maxSnapshotAgeSeconds) {
+    throw new Error(`snapshot started ${limits.runAt - startedAt}s before the run`);
   }
   // The run time, not the node clock, so every node reaches the same verdict.
   const configuration = s.configuration as FrozenConfiguration;

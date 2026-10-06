@@ -17,6 +17,7 @@ const LEAD = "0x1e37a337ed460039d1b15bd3bc489de789768d5e"; // weight 0.15
 const snapshot = (overrides: Partial<PositionsSnapshot> = {}): PositionsSnapshot => ({
   snapshotId: `snap-${RUN_AT}`,
   runAt: RUN_AT,
+  startedAt: RUN_AT - 60,
   takenAt: RUN_AT - 60,
   configuration,
   eligibleAssets: ["BTC", "ETH"],
@@ -49,7 +50,23 @@ describe("checkSnapshot", () => {
   });
 
   test("rejects a stale snapshot", () => {
-    expect(() => checkSnapshot(snapshot({ takenAt: RUN_AT - 200 }), limits)).toThrow("200s before the run");
+    expect(() => checkSnapshot(snapshot({ startedAt: RUN_AT - 200, takenAt: RUN_AT - 190 }), limits)).toThrow("started 200s before the run");
+  });
+
+  test("rejects a slow collection window even when the completion timestamp is fresh", () => {
+    expect(() => checkSnapshot(snapshot({ startedAt: RUN_AT - 200 }), limits)).toThrow("read window took 140s");
+    expect(() => checkSnapshot(snapshot({ startedAt: RUN_AT - 130, takenAt: RUN_AT - 1 }), limits)).toThrow("read window took 129s");
+  });
+
+  test("a snapshot without startedAt (built before the backend recorded it) falls back to takenAt", () => {
+    const { startedAt: _, ...old } = snapshot({ takenAt: RUN_AT - 60 });
+    expect(() => checkSnapshot(old as ReturnType<typeof snapshot>, limits)).not.toThrow();
+    const { startedAt: __, ...stale } = snapshot({ takenAt: RUN_AT - 200 });
+    expect(() => checkSnapshot(stale as ReturnType<typeof snapshot>, limits)).toThrow("started 200s before the run");
+  });
+
+  test("rejects an invalid read window", () => {
+    expect(() => checkSnapshot(snapshot({ startedAt: RUN_AT - 1, takenAt: RUN_AT - 2 }), limits)).toThrow("read window is invalid");
   });
 
   test("rejects a configuration that isn't the pinned one", () => {

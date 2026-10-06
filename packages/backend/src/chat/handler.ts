@@ -1,6 +1,6 @@
 import type { SQL } from "bun";
 import type { Policy } from "../../../shared/src/contracts";
-import { parseStrategyIntent, type FinalistLike, type StrategyIntent } from "../../../shared/strategy-intent";
+import { parseStrategyIntent, type FinalistLike, type StrategyIntent } from "../../../shared/parrot-intent";
 import { hashIp, type ChatLimiter, type Kind, type LimitConfig, type Reservation } from "./limits";
 import { callIntentModel, ModelError } from "./openai";
 import { selectStrategy } from "./strategy";

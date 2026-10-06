@@ -1,7 +1,6 @@
 import { expect, test } from "bun:test";
 
-// Runtime import keeps the backend typecheck independent of dashboard JSX settings.
-const { LiveTalk } = await import(new URL("../../dashboard/components/parrot/LiveTalk.tsx", import.meta.url).href);
+import { LiveTalk } from "../components/parrot/LiveTalk";
 
 test("live connecting offers an enabled Cancel button that invokes end", () => {
   let ended = 0;

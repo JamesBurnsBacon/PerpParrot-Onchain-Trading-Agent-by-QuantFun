@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { keccak256, stringToBytes } from "viem";
 import { buildPreview, PreviewError } from "../src/chat/preview";
-import { intentToPolicy, type StrategyIntent } from "../../shared/strategy-intent";
+import { intentToPolicy, type StrategyIntent } from "../../shared/parrot-intent";
 import type { Policy } from "../../shared/src/contracts";
 import { commitment } from "../../shared/commitments";
 import fixture from "../fixtures/frozen-configuration.json";

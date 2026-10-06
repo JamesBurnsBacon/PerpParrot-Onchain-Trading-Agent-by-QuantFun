@@ -2,7 +2,7 @@ import { selectStrategy } from "../src/chat/strategy";
 import { loadFinalists } from "../src/chat/finalists";
 import fixture from "../fixtures/frozen-configuration.json";
 import type { Policy } from "../../shared/src/contracts";
-import type { StrategyIntent } from "../../shared/strategy-intent";
+import type { StrategyIntent } from "../../shared/parrot-intent";
 export const intents: Record<string, StrategyIntent> = Object.fromEntries([
   ["safe/few", { riskStyle: "conservative", maxSources: 6, leverageComfort: "low", diversification: "high" }],
   ["balanced", {}], ["aggressive/many", { riskStyle: "aggressive", maxSources: 14, leverageComfort: "high" }],

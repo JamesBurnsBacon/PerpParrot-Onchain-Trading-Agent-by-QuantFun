@@ -16,6 +16,8 @@ export const DEFAULT_CONFIG: ScoreConfig = {
   finalists: 25,
   finalistSplit: "proportional",
   allowUnknown: [],
+  pureTakerMakerShare: 0.05,
+  pureTakerPenalty: 0.02,
 };
 
 export const FILTER_ORDER: FilterName[] = [
@@ -47,6 +49,14 @@ export const validateConfig = (config: ScoreConfig): void => {
   if (split !== "proportional" && (typeof split !== "object" || split === null ||
     !isWholeNumber(split.trader, 0) || !isWholeNumber(split.vault, 0) || split.trader + split.vault !== config.finalists)) {
     fail("finalistSplit");
+  }
+  if (!Number.isFinite(config.pureTakerMakerShare) || config.pureTakerMakerShare < 0 || config.pureTakerMakerShare > 1) {
+    fail("pureTakerMakerShare");
+  }
+  // The penalty is applied in whole numerator units from a 0.001 grid (SPEC "Ranking").
+  const penalty = config.pureTakerPenalty;
+  if (!Number.isFinite(penalty) || penalty < 0 || penalty > 1 || Math.abs(penalty * 1000 - Math.round(penalty * 1000)) > 1e-9) {
+    fail("pureTakerPenalty");
   }
   if (!Array.isArray(config.allowUnknown) || config.allowUnknown.some((name) => !FILTER_ORDER.includes(name))) {
     fail("allowUnknown");

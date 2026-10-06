@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { BACKEND_INSTRUCTIONS, buildLiveConfig, LIVE_INSTRUCTIONS, liveReservationMicroUsd, readLiveEnv } from "../src/live/config";
 import { STRATEGY_FIELD_GUIDE, CHAT_SYSTEM_PROMPT } from "../src/chat/prompt";
-import { STRATEGY_INTENT_JSON_SCHEMA } from "../../shared/strategy-intent";
+import { STRATEGY_INTENT_JSON_SCHEMA } from "../../shared/parrot-intent";
 
 test("live config snapshot has only one strict bounded function and server-owned settings", () => {
   const config = buildLiveConfig(readLiveEnv({}));

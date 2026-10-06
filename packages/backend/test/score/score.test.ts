@@ -105,6 +105,8 @@ describe("scoreCandidates behaviour", () => {
     ["finalistSplit", { finalistSplit: { trader: 20, vault: 4 } }],
     ["finalistSplit", { finalistSplit: { trader: -1, vault: 26 } }],
     ["allowUnknown", { allowUnknown: ["minTrade" as "minTrades"] }],
+    ...[-0.1, 1.1, NaN].map((value): [string, Partial<ScoreConfig>] => ["pureTakerMakerShare", { pureTakerMakerShare: value }]),
+    ...[-0.01, 1.5, 0.0205, NaN].map((value): [string, Partial<ScoreConfig>] => ["pureTakerPenalty", { pureTakerPenalty: value }]),
   ];
   for (const [field, config] of invalidConfigs) {
     test(`rejects invalid config ${JSON.stringify(config)} naming ${field}`, () => {
@@ -161,9 +163,50 @@ describe("scoreCandidates behaviour", () => {
     expectFinite(result);
   });
 
+  test("does not rank histories with no usable return intervals", () => {
+    const input: ScoreInput = {
+      ...rankingInputs[0],
+      accountValue: 20_000,
+      tradeCount: 20,
+      allTime: {
+        accountValueHistory: [[0, 20_000], [31 * 86_400_000, 20_000]],
+        pnlHistory: [[0, 0], [31 * 86_400_000, 0]],
+      },
+      month: {
+        accountValueHistory: [[0, 0], [86_400_000, 0]],
+        pnlHistory: [[0, 0], [86_400_000, 0]],
+      },
+    };
+    const result = scoreCandidates([input], { minMonthPoints: 2 });
+    // The mainline eligibility gate rejects the zero-equity month before metrics
+    // are computed, so the candidate cannot reach ranking at all.
+    expect(result.candidates[0].eligible).toBe(false);
+    expect(result.candidates[0].rank).toBeNull();
+    expect(result.candidates[0].score).toBeNull();
+    expect(result.finalists).toEqual([]);
+    expect(result.funnel.at(-2)).toEqual({ stage: "distinct", count: 0 });
+  });
+
   test("preserves supplied passthrough values, including zero and null", () => {
     const passthrough = { avgLeverage: 2, timeInMarket: 0, medianHoldHours: null, makerShare: 0.25 };
     expect(scoreCandidates([{ ...rankingInputs[0], ...passthrough }]).candidates[0].passthrough).toEqual(passthrough);
+  });
+
+  test("a pure taker loses only score: same percentiles, numerator minus whole penalty units (README §4.2)", () => {
+    const config = { finalists: 3, pureTakerPenalty: 0.1 };
+    const base = scoreCandidates(rankingInputs, config);
+    const target = base.candidates.find(({ pool, rank }) => pool === "trader" && rank === 1)!;
+    const poolSize = base.candidates.filter(({ pool, rank }) => pool === "trader" && rank !== null).length;
+    const units = Math.round(0.1 * 12 * (poolSize - 1));
+    const inputs = rankingInputs.map((input) => input.address === target.address ? { ...input, makerShare: 0 } : input);
+    const penalised = scoreCandidates(inputs, config).candidates.find(({ address }) => address === target.address)!;
+    expect(units).toBeGreaterThan(0);
+    expect(penalised.makerPenalty).toBe(Math.min(units, target.scoreNumerator!));
+    expect(penalised.scoreNumerator).toBe(target.scoreNumerator! - penalised.makerPenalty!);
+    expect(penalised.score).toBe(penalised.scoreNumerator! / (12 * (poolSize - 1)));
+    expect(penalised.percentiles).toEqual(target.percentiles);
+    expect(penalised.passthrough.makerShare).toBe(0);
+    expect(base.candidates.every(({ makerPenalty, rank }) => makerPenalty === (rank === null ? null : 0))).toBe(true);
   });
 
   test("unranked addresses sort case-insensitively and keep their spelling", () => {

@@ -58,7 +58,7 @@ function compile(frame: Frame, policy: Policy, role: Row[], risk: Row[], address
   const ranked = frame.candidates.flatMap(c => {
     const r = role.find(r=>r.candidate===c.candidate)!, k = risk.find(r=>r.candidate===c.candidate)!;
     const m = c.metrics, decision = riskDecision(k, policy);
-    if (m.historyDays < policy.minHistoryDays || m.oosWindows < 1 || m.oosSharpe === null || m.oosSortino === null || m.oosMaxDrawdown === null || m.crossWindowStability === null || m.averageLeverage === null || m.medianHoldMinutes === null || m.medianHoldMinutes < 60 || m.executionFit < policy.minExecutionFit || m.executionCoverage <= 0 || r.confidence < policy.minConfidence || k.confidence < policy.minConfidence || r.reject >= policy.riskRejectThreshold || decision.status === 'REJECT') return [];
+    if (m.historyDays < policy.minHistoryDays || m.oosWindows < 1 || m.oosSharpe === null || m.oosSortino === null || m.oosMaxDrawdown === null || m.crossWindowStability === null || m.averageLeverage === null || m.medianHoldMinutes === null || m.medianHoldMinutes < 60 || m.executionFit === null || m.executionFit < policy.minExecutionFit || m.executionCoverage === null || m.executionCoverage <= 0 || r.confidence < policy.minConfidence || k.confidence < policy.minConfidence || r.reject >= policy.riskRejectThreshold || decision.status === 'REJECT') return [];
     // Stronger latency penalty for 1–3h and softer for 3–6h; replay-calibrate.
     const latency = m.medianHoldMinutes < 180 ? 0.5 : m.medianHoldMinutes < 360 ? 0.75 : 1;
     const score = r[fitKey] * latency;
@@ -69,7 +69,8 @@ function compile(frame: Frame, policy: Policy, role: Row[], risk: Row[], address
   for (const c of ranked) {
     const compatible = selected.every(other => {
       const pair = frame.pairs.find(p=>(p.a===c.candidate && p.b===other.candidate)||(p.b===c.candidate && p.a===other.candidate));
-      return pair && pair.correlation!==null && Math.abs(pair.correlation)<=policy.maxPairCorrelation && pair.currentExposureOverlap<=policy.maxExposureOverlap && !pair.linkedSource;
+      // Unknown (null) correlation or overlap is never compatible: missing evidence is not safety.
+      return pair && pair.correlation!==null && Math.abs(pair.correlation)<=policy.maxPairCorrelation && pair.currentExposureOverlap!==null && pair.currentExposureOverlap<=policy.maxExposureOverlap && !pair.linkedSource;
     });
     if (compatible) selected.push(c);
   }

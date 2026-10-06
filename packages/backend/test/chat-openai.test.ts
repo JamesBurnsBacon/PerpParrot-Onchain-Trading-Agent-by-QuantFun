@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { callIntentModel, ModelError } from "../src/chat/openai";
-import { STRATEGY_INTENT_JSON_SCHEMA, type StrategyIntent } from "../../shared/strategy-intent";
+import { STRATEGY_INTENT_JSON_SCHEMA, type StrategyIntent } from "../../shared/parrot-intent";
 
 const intent: StrategyIntent = {
   riskStyle: "aggressive", maxSources: 10, diversification: "low", leverageComfort: "high",

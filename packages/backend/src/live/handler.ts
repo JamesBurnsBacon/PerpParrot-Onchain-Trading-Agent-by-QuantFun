@@ -1,4 +1,4 @@
-import { parseStrategyIntent, type StrategyIntent } from "../../../shared/strategy-intent";
+import { parseStrategyIntent, type StrategyIntent } from "../../../shared/parrot-intent";
 import { failure, type ChatDeps } from "../chat/handler";
 import { hashIp } from "../chat/limits";
 import { buildPreview, PreviewError } from "../chat/preview";

@@ -1,5 +1,5 @@
 import { scoreCandidates, type ScoreInput, type TimePoint } from "../src/score";
-import type { FinalistLike } from "../../shared/strategy-intent";
+import type { FinalistLike } from "../../shared/parrot-intent";
 
 export type SampleFinalist = FinalistLike & { dataSource: "sample"; rank: number | null; cloneAddress: string | null; profile: string };
 // Fixed synthetic paths, never accounts fetched from a venue. Score is used unchanged.

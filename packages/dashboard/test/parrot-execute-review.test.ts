@@ -1,9 +1,8 @@
 import { expect, test } from "bun:test";
-import { PARROT_PRESETS } from "../../dashboard/lib/parrot-presets";
+import { renderToStaticMarkup } from "react-dom/server";
+import { ExecutePanel } from "../components/parrot/ExecutePanel";
+import { PARROT_PRESETS } from "../lib/parrot-presets";
 
-// Dynamic JSX import keeps the backend typecheck independent of dashboard JSX.
-const { ExecutePanel } = await import(new URL("../../dashboard/components/parrot/ExecutePanel.tsx", import.meta.url).href);
-const { renderToStaticMarkup } = await import(new URL("../../dashboard/node_modules/react-dom/server.bun.js", import.meta.url).href);
 
 test("review-10: cached demo consistently describes simulation and live still describes saved request", () => {
   const { chat, preview } = PARROT_PRESETS[0];

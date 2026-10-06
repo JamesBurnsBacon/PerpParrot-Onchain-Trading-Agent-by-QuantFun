@@ -17,6 +17,8 @@ export type ScoreInput = {
   avgLeverage?: number | null;
   timeInMarket?: number | null;
   medianHoldHours?: number | null;
+  // Maker notional / total perp notional over the 30 days before scoring. Passed through, and a share below
+  // `pureTakerMakerShare` costs `pureTakerPenalty` of score (SPEC "Ranking"); null = unknown, no penalty.
   makerShare?: number | null;
 };
 
@@ -58,9 +60,11 @@ export type Candidate = {
   metrics: Metrics | null;
   percentiles: Percentiles | null;
   scoreNumerator: number | null;
+  makerPenalty: number | null; // numerator units taken off for a pure taker; 0 if none; null unless ranked
   score: number | null;
   rank: number | null;
-  cloneOf: { address: string; correlation: number | null } | null;
+  // `via`: the member of the representative's link unit that matched, when it is not the representative.
+  cloneOf: { address: string; correlation: number | null; via?: string } | null;
   clones: string[];
   finalist: boolean;
   passthrough: {
@@ -91,6 +95,8 @@ export type ScoreConfig = {
   finalists: number;
   finalistSplit: "proportional" | { trader: number; vault: number };
   allowUnknown: FilterName[];
+  pureTakerMakerShare: number;
+  pureTakerPenalty: number;
 };
 
 export type ScoreResult = {

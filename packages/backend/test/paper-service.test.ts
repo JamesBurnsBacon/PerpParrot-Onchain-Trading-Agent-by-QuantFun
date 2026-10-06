@@ -11,6 +11,7 @@ const snapshot = (runAt: number): string =>
   JSON.stringify({
     snapshotId: `snap-${runAt}`,
     runAt,
+    startedAt: runAt - 120,
     takenAt: runAt - 60,
     configuration,
     eligibleAssets: ["BTC"],
