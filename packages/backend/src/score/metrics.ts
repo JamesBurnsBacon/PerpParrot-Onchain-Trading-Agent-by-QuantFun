@@ -37,10 +37,11 @@ export const gridSamples = (curve: CurvePoint[], firstTs: number, fineStart: num
       samples.push(curve[j].value); // a grid denser than the timestamps can resolve: every segment holds a tick
       continue;
     }
+    const tickAt = (k: number): number => k === 0 ? firstTs : firstTs + k * step;
     let k = from > firstTs ? Math.max(1, Math.ceil(ticks)) : 0; // a step that overflows to Infinity leaves only k = 0
-    if (k > 1 && firstTs + (k - 1) * step >= from) k -= 1; // `ticks` rounded up past an exact tick
-    const tick = k === 0 ? firstTs : firstTs + k * step;
-    if (Math.max(tick, from) < to) samples.push(curve[j].value);
+    if (k > 1 && tickAt(k - 1) >= from) k -= 1; // `ticks` rounded up past an exact tick
+    else if (tickAt(k) < from) k += 1; // or rounded down to a tick just before this segment
+    if (Math.max(tickAt(k), from) < to) samples.push(curve[j].value);
   }
   return samples;
 };

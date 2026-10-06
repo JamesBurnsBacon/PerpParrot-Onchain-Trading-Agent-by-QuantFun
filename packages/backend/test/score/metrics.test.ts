@@ -152,6 +152,14 @@ describe("computeMetrics edge cases", () => {
     expect(gridSamples(curve, BASE, BASE + 2 * DAY, step)).toEqual([1, 2, 3]);
   });
 
+  test("a tick that rounds just below a curve point belongs to the segment before it", () => {
+    // 0.9 / 0.3 is exactly 3, but 3 * 0.3 is 0.8999999999999999, so the third tick still reads the first curve point.
+    const curve: CurvePoint[] = [{ ts: 0, value: 1 }, { ts: 0.9, value: 0.5 }, { ts: 1, value: 1 }];
+    expect(0.9 / 0.3).toBe(3);
+    expect(3 * 0.3).toBeLessThan(0.9);
+    expect(gridSamples(curve, 0, 1.1, 0.3)).toEqual([1]);
+  });
+
   test("gridSamples visits the same curve values as walking every grid time (SPEC Metrics)", () => {
     // Reference: the curve value at each firstTs + k * step before fineStart, consecutive repeats removed.
     const reference = (curve: CurvePoint[], firstTs: number, fineStart: number, step: number): number[] => {
