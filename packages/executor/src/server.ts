@@ -30,9 +30,6 @@ const mode: VerifyMode = config.verifyReports
 // Supabase Postgres when DATABASE_URL is set: report dedupe, runs and the kill
 // switch then survive restarts. In memory otherwise (report expiry still bounds replays).
 const store = process.env.DATABASE_URL ? new PostgresStore(new SQL(process.env.DATABASE_URL)) : new MemoryStore();
-if (config.production && !process.env.DATABASE_URL) {
-  console.warn("DATABASE_URL not set: report dedupe, runs and the kill switch won't survive a restart");
-}
 const exchange = createExchange({ privateKey: config.apiWalletKey, dryRun: config.dryRun });
 const alert = createAlert({ botToken: config.telegramBotToken, chatId: config.telegramChatId, log: (m) => log(m) });
 const runner = new Runner({

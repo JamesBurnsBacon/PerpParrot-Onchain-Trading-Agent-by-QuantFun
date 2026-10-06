@@ -54,6 +54,7 @@ const readConfig = (env: Record<string, string | undefined>): ExecutorConfig => 
   const apiWalletKey = env.HL_API_WALLET_KEY ? hex("HL_API_WALLET_KEY", env.HL_API_WALLET_KEY, 32) : undefined;
   if (!dryRun && !apiWalletKey) throw new Error("HL_API_WALLET_KEY is required when DRY_RUN=false");
   if (production && !env.ADMIN_TOKEN) throw new Error("ADMIN_TOKEN is required in production");
+  if (production && !env.DATABASE_URL) throw new Error("DATABASE_URL is required in production for durable report dedupe and kill switch");
 
   return {
     port: num(env, "PORT", 8787),

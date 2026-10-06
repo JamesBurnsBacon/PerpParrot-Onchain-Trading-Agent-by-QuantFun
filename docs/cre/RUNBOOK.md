@@ -51,11 +51,11 @@ Unit tests per package: `bun test` in `packages/backend`, `packages/executor`,
 | `HL_ACCOUNT` | yes | — | Our HL master account (must equal the configuration's `account`) |
 | `FROZEN_CONFIGURATION_HASH` | yes | — | Same as the mirror's `frozenConfigurationHash` |
 | `WORKFLOW_OWNER` | yes | — | `0xc5feb3cf878c9ba42a776e9edf62a4558ab08b85` (org address, private registry) |
-| `NODE_ENV` | prod | — | `production` refuses `VERIFY_REPORTS=false` and requires `ADMIN_TOKEN` |
+| `NODE_ENV` | prod | — | `production` refuses `VERIFY_REPORTS=false` and requires `ADMIN_TOKEN` plus durable `DATABASE_URL` |
 | `ADMIN_TOKEN` | prod | — | Bearer token for `/admin/*` |
 | `DRY_RUN` | no | `true` | Only the literal `false` sends orders |
 | `HL_API_WALLET_KEY` | live | — | API wallet (agent) key: trades, can't withdraw. Required when `DRY_RUN=false` |
-| `DATABASE_URL` | prod | — | Supabase Postgres. Without it dedupe, runs and the kill switch are in memory |
+| `DATABASE_URL` | prod | — | Required in production. Supabase Postgres for report dedupe, runs and persistent kill switch |
 | `ETH_MAINNET_RPC_URL` | no | publicnode | Reads DON signers from the Capability Registry |
 | `VERIFY_REPORTS` | no | `true` | `false` only for `cre workflow simulate` reports |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | no | — | Alerts; without them alerts are logged only |

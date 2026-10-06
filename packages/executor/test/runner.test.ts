@@ -399,12 +399,16 @@ describe("loadConfig", () => {
     expect(() => loadConfig({ ...base, NODE_ENV: "production" })).toThrow("ADMIN_TOKEN is required");
   });
 
+  test("requires durable storage in production, including dry run", () => {
+    expect(() => loadConfig({ ...base, NODE_ENV: "production", ADMIN_TOKEN: "x" })).toThrow("DATABASE_URL is required");
+  });
+
   test("live trading in production needs the workflow and DON pins", () => {
-    const live = { ...base, NODE_ENV: "production", ADMIN_TOKEN: "x", DRY_RUN: "false", HL_API_WALLET_KEY: `0x${"22".repeat(32)}` };
+    const live = { ...base, NODE_ENV: "production", ADMIN_TOKEN: "x", DATABASE_URL: "postgres://db", DRY_RUN: "false", HL_API_WALLET_KEY: `0x${"22".repeat(32)}` };
     expect(() => loadConfig(live)).toThrow("WORKFLOW_NAME and DON_ID are required");
     expect(loadConfig({ ...live, WORKFLOW_NAME: `0x${"ab".repeat(10)}`, DON_ID: "1" })).toMatchObject({ dryRun: false, donId: 1 });
     // Dry run in production is fine without them (that's how you learn their values).
-    expect(loadConfig({ ...base, NODE_ENV: "production", ADMIN_TOKEN: "x" }).dryRun).toBe(true);
+    expect(loadConfig({ ...base, NODE_ENV: "production", ADMIN_TOKEN: "x", DATABASE_URL: "postgres://db" }).dryRun).toBe(true);
   });
 
   test("refuses to trade live on unverified reports", () => {
