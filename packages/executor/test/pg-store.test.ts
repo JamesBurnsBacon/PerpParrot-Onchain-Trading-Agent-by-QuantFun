@@ -8,8 +8,10 @@ import type { RunRecord } from "../src/store";
 
 const url = process.env.TEST_DATABASE_URL;
 
+// describe.skipIf still runs the describe body, so connect lazily.
 describe.skipIf(!url)("PostgresStore", async () => {
-  const sql = new SQL(url!);
+  if (!url) return;
+  const sql = new SQL(url);
   await sql.unsafe(await Bun.file(new URL("../../../supabase/migrations/20261006120000_cre_mirror.sql", import.meta.url)).text());
   const store = new PostgresStore(sql);
   const unique = `${Date.now()}-${Math.random()}`;
