@@ -192,6 +192,15 @@ CRE UI or with `cre workflow pause`.
 
 The backtest and the score/ingest jobs publish one JSON document each to `dashboard_artifacts`
 (service role); the dashboard picks it up within a minute. Shapes: `packages/shared/dashboard.ts`.
+Publish with the checker, which refuses anything that would render wrong (seconds instead of
+milliseconds, a series not indexed to 1.0, no BTC benchmark, a funnel stage growing):
+
+```sh
+bun scripts/publish-artifact.ts backtest backtest.json                       # check only
+DATABASE_URL=<service role> bun scripts/publish-artifact.ts backtest backtest.json --write
+```
+
+The SQL it runs, for jobs that write directly:
 
 ```sql
 insert into dashboard_artifacts (name, body) values ('backtest', '{
