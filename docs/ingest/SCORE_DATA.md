@@ -2,12 +2,26 @@
 
 The Oct 6 handoff contains the completed first-pass scan and the additional evidence needed to run the repository's strict Score. Large files are GitHub Release assets, so cloning the repository stays small.
 
+Use the code in [PR #31](https://github.com/JamesBurnsBacon/PerpParrot-Onchain-Trading-Agent-by-QuantFun/pull/31), branch `codex/ingest-top100-loop`. `manifest.json` pins the release's exact code commit; older branches may not contain the loader.
+
+| Stage | Accounts |
+| --- | ---: |
+| Completed first-pass scan | 20,869 |
+| Regular research candidates checked | 10,987 |
+| Already fail an observable Score filter; excluded before extra fetching | 53 |
+| Exported inputs with fetched classification/order evidence | 10,934 |
+| Eligible under unchanged strict Score | 7,296 |
+| Initial acquisition selection | 100 |
+
+Of the exported inputs, 3,636 did not establish ten distinct filled orders and retain `tradeCount: null`; two ERC-4626 candidates have unverified closure status. Strict Score excludes both cases. Fetching evidence does not guarantee eligibility. The exported Top 100 reproduced the database's initial selection in exactly the same order.
+
 Download from [the data release](https://github.com/JamesBurnsBacon/PerpParrot-Onchain-Trading-Agent-by-QuantFun/releases/tag/score-data-2026-10-06), or run from `packages/backend`:
 
 ```bash
 gh release download score-data-2026-10-06 \
   --repo JamesBurnsBacon/PerpParrot-Onchain-Trading-Agent-by-QuantFun \
   --dir data/score-handoff-2026-10-06
+(cd data/score-handoff-2026-10-06 && sha256sum -c SHA256SUMS)
 bun install
 bun --no-env-file src/ingest/loop/load-data.ts data/score-handoff-2026-10-06
 ```
@@ -26,6 +40,8 @@ The loader verifies file checksums, raw portfolio/order evidence and the Score s
 | `manifest.json`, `SHA256SUMS` | Counts, times, configuration, version and integrity checks |
 | `anomaly-audit.json`, `anomaly-trace.jsonl.gz` | Masa follow-up: the 43-address XMR1 exposure group and live request-to-raw traces |
 | `research-replay.json` | Recomputed v1 decisions/metrics and changed-arrival-order check |
+| `pipeline-validation.json` | Actual full-cohort cycles, native CRE simulation and separate crash/recovery probe results |
+| `live-cycles.jsonl.gz`, `live-cycle-evidence.jsonl.gz` | Two consecutive complete 100-account batches and their original official portfolio responses |
 
 For direct use in existing Bun code, without the helper:
 

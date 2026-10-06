@@ -18,6 +18,8 @@ All shared historical equity and normalized PnL points matched within one cent. 
 
 This supports shared exposure to the same spot asset as the explanation for this group, rather than a cross-address response mix-up. It does not establish that every other cluster has the same explanation or that the addresses share an owner. It also shows why a high account return alone is not evidence of independent trading skill.
 
+After the full evidence bootstrap, all 43 are present in the exported Score inputs, but all 43 fail strict eligibility because `minTrades` remains `unknown`: the fetched records do not establish ten distinct filled orders. They are therefore absent from the strict Top 100 without adding a special XMR1 exclusion or a four-metric deduplication rule. This does not prove they have never traded.
+
 The data release includes `anomaly-audit.json` and `anomaly-trace.jsonl.gz`: all 43 original portfolio records and current spot-state responses, plus the three full live traces. Original request fields are explicitly marked as reconstructed from the source code and saved address; the old scanner did not capture a wire-level request log. New live trace requests were recorded at fetch time. Personal provider hostnames are removed.
 
 ## Replay and controls
@@ -42,4 +44,4 @@ The worker already publishes only complete batches and preserves the previous co
 
 The user's current requirement is strict Score Top 100 acquisition every ten minutes. That cadence is an explicit experiment choice; it is not inferred from Mirror's separate ten-minute cadence. Masa's proposed fixed Warm 500 / Hot 100 v1 experiment and offline hysteresis comparison remain a separate proposal. No new 500-account schedule or two-observation gate has been silently enabled.
 
-A live 100-account official-API probe completed in **123.913 seconds**, with 100 requests, zero retries and zero 429s. A second scheduled cycle also completed. The native CRE local simulation verified the first real batch receipt. These are integration/budget measurements, not a week of detection-quality evaluation. The full-cohort initial Score selection is measured separately after evidence bootstrap finishes.
+The completed full-cohort Top 100 ran through two consecutive official-API cycles and native CRE simulation. The next-cycle selection and all 200 request-to-response associations were checked. [Measured results](LIVE_PIPELINE_VALIDATION.md) distinguish these runs from the separate crash/recovery probe. This validates the collection pipeline, not a week of detection-quality evaluation.
