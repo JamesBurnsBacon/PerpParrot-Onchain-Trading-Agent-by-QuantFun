@@ -8,7 +8,7 @@ Session settings are built by `config.ts`; the browser submits only SDP. The one
 | --- | --- |
 | LIVE_ENABLED | false (only literal `true` enables it) |
 | LIVE_MODEL | gpt-live-1 |
-| LIVE_VOICE | shimmer (a bright, high feminine voice; try quartz, delta or gleam) |
+| LIVE_VOICE | gleam (North American, feminine; others: see the voice audition) |
 | LIVE_BACKEND_MODEL | gpt-5.6-terra |
 | LIVE_BACKEND_REASONING | medium |
 | LIVE_MAX_SESSION_SECONDS | 180 (integer 1–900) |

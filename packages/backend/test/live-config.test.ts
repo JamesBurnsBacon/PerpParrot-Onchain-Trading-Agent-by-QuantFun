@@ -6,7 +6,7 @@ import { STRATEGY_INTENT_JSON_SCHEMA } from "../../shared/strategy-intent";
 test("live config snapshot has only one strict bounded function and server-owned settings", () => {
   const config = buildLiveConfig(readLiveEnv({}));
   const { reply, clarify, ...properties } = STRATEGY_INTENT_JSON_SCHEMA.schema.properties;
-  expect(config).toEqual({ model: "gpt-live-1", instructions: LIVE_INSTRUCTIONS, audio: { output: { voice: "shimmer" } }, client: { data_channel: { allowed_client_events: ["response.item.create", "response.create", "session.close"] } }, delegation: { type: "responses", responses: {
+  expect(config).toEqual({ model: "gpt-live-1", instructions: LIVE_INSTRUCTIONS, audio: { output: { voice: "gleam" } }, client: { data_channel: { allowed_client_events: ["response.item.create", "response.create", "session.close"] } }, delegation: { type: "responses", responses: {
     model: "gpt-5.6-terra", instructions: BACKEND_INSTRUCTIONS, tools: [{ type: "function", name: "set_strategy", description: "Check bounded strategy preferences with code. Never trades or freezes.", strict: true,
       parameters: { type: "object", additionalProperties: false, properties, required: Object.keys(properties) } }], tool_choice: "auto", parallel_tool_calls: false, reasoning: { effort: "medium" }, max_output_tokens: 800,
   } } });
@@ -19,7 +19,7 @@ test("live config snapshot has only one strict bounded function and server-owned
 
 test("live env defaults and invalid optional numbers never block startup", () => {
   const defaults = readLiveEnv({});
-  expect(defaults).toEqual({ enabled: false, apiKey: undefined, model: "gpt-live-1", voice: "shimmer", backendModel: "gpt-5.6-terra", backendReasoning: "medium", maxSessionSeconds: 180, ipHourly: 3, globalDaily: 30, voicePricePerMinUsd: 0.05, backendAllowanceUsd: 0.15 });
+  expect(defaults).toEqual({ enabled: false, apiKey: undefined, model: "gpt-live-1", voice: "gleam", backendModel: "gpt-5.6-terra", backendReasoning: "medium", maxSessionSeconds: 180, ipHourly: 3, globalDaily: 30, voicePricePerMinUsd: 0.05, backendAllowanceUsd: 0.15 });
   for (const raw of ["NaN", "Infinity", "-1", ""]) {
     expect(readLiveEnv({ LIVE_MAX_SESSION_SECONDS: raw, LIVE_IP_HOURLY_LIMIT: raw, LIVE_GLOBAL_DAILY_LIMIT: raw, LIVE_VOICE_PRICE_PER_MIN_USD: raw, LIVE_BACKEND_ALLOWANCE_USD: raw })).toEqual(defaults);
   }

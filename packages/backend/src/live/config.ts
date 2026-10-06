@@ -16,7 +16,7 @@ export const readLiveEnv = (env: Record<string, string | undefined>): LiveEnv =>
   };
   return {
     enabled: env.LIVE_ENABLED === "true", apiKey: env.OPENAI_API_KEY || undefined,
-    model: env.LIVE_MODEL || "gpt-live-1", voice: env.LIVE_VOICE || "shimmer",
+    model: env.LIVE_MODEL || "gpt-live-1", voice: env.LIVE_VOICE || "gleam",
     backendModel: env.LIVE_BACKEND_MODEL || "gpt-5.6-terra", backendReasoning: env.LIVE_BACKEND_REASONING || "medium",
     maxSessionSeconds: number("LIVE_MAX_SESSION_SECONDS", 180, 1, 900, true),
     ipHourly: number("LIVE_IP_HOURLY_LIMIT", 3, 0, Number.MAX_SAFE_INTEGER, true),
