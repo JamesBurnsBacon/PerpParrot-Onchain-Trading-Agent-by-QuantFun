@@ -1,0 +1,370 @@
+[
+  {
+    "name": "mixed",
+    "note": "constant equity 1000, daily points, two down days",
+    "month": {
+      "accountValueHistory": [
+        [
+          1790035200000,
+          1000.0
+        ],
+        [
+          1790121600000,
+          1000.0
+        ],
+        [
+          1790208000000,
+          1000.0
+        ],
+        [
+          1790294400000,
+          1000.0
+        ],
+        [
+          1790380800000,
+          1000.0
+        ]
+      ],
+      "pnlHistory": [
+        [
+          1790035200000,
+          0.0
+        ],
+        [
+          1790121600000,
+          10.0
+        ],
+        [
+          1790208000000,
+          5.0
+        ],
+        [
+          1790294400000,
+          25.0
+        ],
+        [
+          1790380800000,
+          20.0
+        ]
+      ]
+    },
+    "expected": {
+      "sortino": 1.4142135623730951,
+      "calmar": 3.984750999999911,
+      "maxDrawdown": 0.0050000000000001085,
+      "pnlConsistency": 0.5,
+      "realizedVol": 0.011726039399558574,
+      "flags": []
+    }
+  },
+  {
+    "name": "monotonic-up",
+    "note": "never loses: no downside, no drawdown",
+    "month": {
+      "accountValueHistory": [
+        [
+          1790035200000,
+          1000.0
+        ],
+        [
+          1790121600000,
+          1000.0
+        ],
+        [
+          1790208000000,
+          1000.0
+        ],
+        [
+          1790294400000,
+          1000.0
+        ]
+      ],
+      "pnlHistory": [
+        [
+          1790035200000,
+          0.0
+        ],
+        [
+          1790121600000,
+          10.0
+        ],
+        [
+          1790208000000,
+          20.0
+        ],
+        [
+          1790294400000,
+          30.0
+        ]
+      ]
+    },
+    "expected": {
+      "sortino": null,
+      "calmar": null,
+      "maxDrawdown": 0.0,
+      "pnlConsistency": 1.0,
+      "realizedVol": 0.01,
+      "flags": [
+        "no-downside",
+        "no-drawdown"
+      ]
+    }
+  },
+  {
+    "name": "deposit-step",
+    "note": "equity doubles at point 3 with no PnL change: that interval has return 0",
+    "month": {
+      "accountValueHistory": [
+        [
+          1790035200000,
+          1000.0
+        ],
+        [
+          1790121600000,
+          1000.0
+        ],
+        [
+          1790208000000,
+          1000.0
+        ],
+        [
+          1790294400000,
+          2000.0
+        ],
+        [
+          1790380800000,
+          2000.0
+        ]
+      ],
+      "pnlHistory": [
+        [
+          1790035200000,
+          0.0
+        ],
+        [
+          1790121600000,
+          10.0
+        ],
+        [
+          1790208000000,
+          -10.0
+        ],
+        [
+          1790294400000,
+          -10.0
+        ],
+        [
+          1790380800000,
+          10.0
+        ]
+      ]
+    },
+    "expected": {
+      "sortino": 0.0,
+      "calmar": -0.015100000000001225,
+      "maxDrawdown": 0.019999999999999997,
+      "pnlConsistency": 0.5,
+      "realizedVol": 0.012247448713915891,
+      "flags": []
+    }
+  },
+  {
+    "name": "irregular-spacing",
+    "note": "intervals of 6h, 18h, 24h, 12h; spans UTC days",
+    "month": {
+      "accountValueHistory": [
+        [
+          1790035200000,
+          1000.0
+        ],
+        [
+          1790056800000,
+          1000.0
+        ],
+        [
+          1790121600000,
+          1000.0
+        ],
+        [
+          1790208000000,
+          1000.0
+        ],
+        [
+          1790251200000,
+          1000.0
+        ]
+      ],
+      "pnlHistory": [
+        [
+          1790035200000,
+          0.0
+        ],
+        [
+          1790056800000,
+          8.0
+        ],
+        [
+          1790121600000,
+          -4.0
+        ],
+        [
+          1790208000000,
+          12.0
+        ],
+        [
+          1790251200000,
+          6.0
+        ]
+      ]
+    },
+    "expected": {
+      "sortino": 0.28284271247461906,
+      "calmar": 0.4806194346666702,
+      "maxDrawdown": 0.011999999999999995,
+      "pnlConsistency": 0.6666666666666666,
+      "realizedVol": 0.01414213562373095,
+      "flags": []
+    }
+  },
+  {
+    "name": "zero-equity-interval",
+    "note": "equity 0 at index 1, so the interval starting there is skipped",
+    "month": {
+      "accountValueHistory": [
+        [
+          1790035200000,
+          1000.0
+        ],
+        [
+          1790121600000,
+          0.0
+        ],
+        [
+          1790208000000,
+          1000.0
+        ],
+        [
+          1790294400000,
+          1000.0
+        ],
+        [
+          1790380800000,
+          1000.0
+        ]
+      ],
+      "pnlHistory": [
+        [
+          1790035200000,
+          0.0
+        ],
+        [
+          1790121600000,
+          5.0
+        ],
+        [
+          1790208000000,
+          5.0
+        ],
+        [
+          1790294400000,
+          15.0
+        ],
+        [
+          1790380800000,
+          10.0
+        ]
+      ]
+    },
+    "expected": {
+      "sortino": 1.1547005383792515,
+      "calmar": 1.994950000000016,
+      "maxDrawdown": 0.004999999999999976,
+      "pnlConsistency": 0.6666666666666666,
+      "realizedVol": 0.007071067811865475,
+      "flags": [
+        "zero-equity-interval"
+      ]
+    }
+  },
+  {
+    "name": "ruin",
+    "note": "loss larger than equity: 1 + r <= 0",
+    "month": {
+      "accountValueHistory": [
+        [
+          1790035200000,
+          100.0
+        ],
+        [
+          1790121600000,
+          100.0
+        ],
+        [
+          1790208000000,
+          100.0
+        ]
+      ],
+      "pnlHistory": [
+        [
+          1790035200000,
+          0.0
+        ],
+        [
+          1790121600000,
+          -150.0
+        ],
+        [
+          1790208000000,
+          -140.0
+        ]
+      ]
+    },
+    "expected": {
+      "sortino": -0.6599663291074443,
+      "calmar": -1.0,
+      "maxDrawdown": 1.0,
+      "pnlConsistency": 0.5,
+      "realizedVol": 1.0630145812734648,
+      "flags": [
+        "ruin"
+      ]
+    }
+  },
+  {
+    "name": "no-intervals",
+    "note": "equity is 0 everywhere",
+    "month": {
+      "accountValueHistory": [
+        [
+          1790035200000,
+          0.0
+        ],
+        [
+          1790121600000,
+          0.0
+        ]
+      ],
+      "pnlHistory": [
+        [
+          1790035200000,
+          0.0
+        ],
+        [
+          1790121600000,
+          0.0
+        ]
+      ]
+    },
+    "expected": {
+      "sortino": null,
+      "calmar": null,
+      "maxDrawdown": null,
+      "pnlConsistency": null,
+      "realizedVol": null,
+      "flags": [
+        "zero-equity-interval",
+        "no-intervals"
+      ]
+    }
+  }
+]

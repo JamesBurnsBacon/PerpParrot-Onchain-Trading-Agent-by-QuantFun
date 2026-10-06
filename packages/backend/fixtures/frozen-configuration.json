@@ -1,0 +1,74 @@
+{
+  "schemaVersion": "1.0.0",
+  "account": "0x010461c14e146ac35fe42271bdc1134ee31c703a",
+  "chainId": 999,
+  "frozenAtMs": 1791244800000,
+  "reviewHash": "0x5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+  "policy": {
+    "bucket": "AGGRESSIVE",
+    "mode": "LIVE",
+    "capitalUsd": 470,
+    "minOrderUsd": 10,
+    "minExecutableTargets": 3,
+    "maxSourceWeight": 0.3,
+    "maxGrossLeverage": 3,
+    "cashBuffer": 0.1,
+    "maxPairCorrelation": 0.8,
+    "maxExposureOverlap": 0.5,
+    "minHistoryDays": 30,
+    "maxFrameAgeMs": 3600000,
+    "minExecutionFit": 50,
+    "riskRejectThreshold": 80,
+    "riskWatchThreshold": 60,
+    "minConfidence": 60,
+    "redTeamRebuildThreshold": 70,
+    "redTeamExcludeThreshold": 85
+  },
+  "policyHash": "0xaf8d29121bb2f14e087a7d44db24ee4b6dc33479123be2c4fea9fabfff21aad2",
+  "sources": [
+    {
+      "candidate": 0,
+      "sourceAddress": "0x1e37a337ed460039d1b15bd3bc489de789768d5e",
+      "weightUnits": 150000,
+      "ceilingUnits": 300000
+    },
+    {
+      "candidate": 1,
+      "sourceAddress": "0xc179e03922afe8fa9533d3f896338b9fb87ce0c8",
+      "weightUnits": 100000,
+      "ceilingUnits": 300000
+    },
+    {
+      "candidate": 2,
+      "sourceAddress": "0x07fd993f0fa3a185f7207adccd29f7a87404689d",
+      "weightUnits": 100000,
+      "ceilingUnits": 300000
+    },
+    {
+      "candidate": 3,
+      "sourceAddress": "0x53f8f390fd4f70941c5d160a964f6893c8dbceff",
+      "weightUnits": 100000,
+      "ceilingUnits": 300000
+    },
+    {
+      "candidate": 4,
+      "sourceAddress": "0xfd4d5751b60a7a7a67bd6fd0aa72dc7d704abce1",
+      "weightUnits": 100000,
+      "ceilingUnits": 300000
+    },
+    {
+      "candidate": 5,
+      "sourceAddress": "0x1b9a49c3797b12f3b913a963cca7460d751b1073",
+      "weightUnits": 100000,
+      "ceilingUnits": 300000
+    },
+    {
+      "candidate": 6,
+      "sourceAddress": "0xa2ce35322f09280e98f104f955b1bce3cfa11fa9",
+      "weightUnits": 100000,
+      "ceilingUnits": 300000
+    }
+  ],
+  "cashUnits": 250000,
+  "configurationHash": "0x088fe80aef2b0d1d58a2e483073105c141fcf4d13ef80f934dfe811c81e6e1dd"
+}

@@ -1,0 +1,100 @@
+{
+  "note": "Mathematically tied totals whose floating-point sums differ in the last bit. The expected order is the exact integer order (ties by address).",
+  "entries": [
+    {
+      "address": "0x00",
+      "metrics": {
+        "sortino": 0.2,
+        "calmar": 2.0,
+        "maxDrawdown": 0.03,
+        "pnlConsistency": 0.4,
+        "realizedVol": 0.01,
+        "flags": []
+      }
+    },
+    {
+      "address": "0x03",
+      "metrics": {
+        "sortino": 0.4,
+        "calmar": 1.0,
+        "maxDrawdown": 0.01,
+        "pnlConsistency": 0.3,
+        "realizedVol": 0.01,
+        "flags": []
+      }
+    },
+    {
+      "address": "0x02",
+      "metrics": {
+        "sortino": 0.4,
+        "calmar": null,
+        "maxDrawdown": 0.04,
+        "pnlConsistency": 0.6,
+        "realizedVol": 0.01,
+        "flags": []
+      }
+    },
+    {
+      "address": "0x01",
+      "metrics": {
+        "sortino": null,
+        "calmar": null,
+        "maxDrawdown": 0.02,
+        "pnlConsistency": 0.5,
+        "realizedVol": 0.01,
+        "flags": []
+      }
+    }
+  ],
+  "finalists": 3,
+  "expected": [
+    {
+      "address": "0x03",
+      "percentiles": {
+        "sortino": 0.8333333333333334,
+        "calmar": 0.6666666666666666,
+        "negMaxDrawdown": 1.0,
+        "pnlConsistency": 0.0
+      },
+      "score": 0.625,
+      "rank": 1,
+      "finalist": true
+    },
+    {
+      "address": "0x00",
+      "percentiles": {
+        "sortino": 0.3333333333333333,
+        "calmar": 1.0,
+        "negMaxDrawdown": 0.3333333333333333,
+        "pnlConsistency": 0.3333333333333333
+      },
+      "score": 0.5,
+      "rank": 2,
+      "finalist": true
+    },
+    {
+      "address": "0x02",
+      "percentiles": {
+        "sortino": 0.8333333333333334,
+        "calmar": 0.16666666666666666,
+        "negMaxDrawdown": 0.0,
+        "pnlConsistency": 1.0
+      },
+      "score": 0.5,
+      "rank": 3,
+      "finalist": true
+    },
+    {
+      "address": "0x01",
+      "percentiles": {
+        "sortino": 0.0,
+        "calmar": 0.16666666666666666,
+        "negMaxDrawdown": 0.6666666666666666,
+        "pnlConsistency": 0.6666666666666666
+      },
+      "score": 0.375,
+      "rank": 4,
+      "finalist": false
+    }
+  ]
+}

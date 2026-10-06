@@ -1,0 +1,46 @@
+import type { ReportEnvelope } from "../../shared/report";
+import { SignerLookupError } from "./signers";
+import { verifyEnvelope, type VerifiedReport, type VerifyMode } from "./verify";
+
+export type HandlerDeps = {
+  mode: VerifyMode;
+  frozenConfigurationHash: string;
+  account: string;
+  // Unix seconds.
+  now: () => number;
+  // How far asOf may be ahead of our clock (DON clock skew; the simulator stamps the next :x0).
+  maxLeadSeconds: number;
+  // Longest report lifetime we accept (expiresAt − asOf), whatever the mirror config says.
+  maxTtlSeconds: number;
+  claim: (id: string) => Promise<boolean>;
+  // Starts execution without waiting for it: DON nodes time out after 10 s.
+  accept: (report: VerifiedReport, envelope: ReportEnvelope) => void;
+};
+
+export type HandlerResult = { status: number; body: Record<string, unknown> };
+
+// Every DON node POSTs its own copy: the first valid one is accepted, the rest get
+// 200 duplicate so the workflow's identical consensus on the status code holds.
+export const handleReport = async (payload: unknown, deps: HandlerDeps): Promise<HandlerResult> => {
+  let report: VerifiedReport;
+  try {
+    report = await verifyEnvelope(payload as ReportEnvelope, deps.mode);
+  } catch (e) {
+    // 503: we couldn't check the signatures (registry unreadable); the next run retries.
+    const status = e instanceof SignerLookupError ? 503 : 401;
+    return { status, body: { error: (e as Error).message } };
+  }
+
+  const { body, id } = report;
+  const reject = (error: string) => ({ status: 422, body: { error, id } });
+  if (body.configurationHash.toLowerCase() !== deps.frozenConfigurationHash.toLowerCase()) return reject("configuration mismatch");
+  if (body.account.toLowerCase() !== deps.account.toLowerCase()) return reject("account mismatch");
+  const now = deps.now();
+  if (now > Number(body.expiresAt)) return reject(`expired report (${now - Number(body.expiresAt)}s past expiry)`);
+  if (Number(body.asOf) > now + deps.maxLeadSeconds) return reject("report from the future");
+  if (Number(body.expiresAt - body.asOf) > deps.maxTtlSeconds) return reject("report lifetime too long");
+
+  if (!(await deps.claim(id))) return { status: 200, body: { status: "duplicate", id } };
+  deps.accept(report, payload as ReportEnvelope);
+  return { status: 200, body: { status: "accepted", id, runId: body.runId } };
+};

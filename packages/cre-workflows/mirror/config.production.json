@@ -1,0 +1,10 @@
+{
+  "schedule": "0 */10 * * * *",
+  "backendUrl": "https://REPLACE-backend.up.railway.app",
+  "executorUrl": "https://REPLACE-executor.up.railway.app/reports",
+  "frozenConfigurationHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+  "spotCheckCount": 4,
+  "maxDeviationBps": 500,
+  "maxSnapshotAgeSeconds": 120,
+  "reportTtlSeconds": 300
+}

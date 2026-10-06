@@ -1,0 +1,275 @@
+{
+  "schedule": "0 0 * * * *",
+  "mode": "SIMULATION",
+  "model": "gpt-4.1-mini-2025-04-14",
+  "secretId": "OPENAI_API_KEY",
+  "evidence": {
+    "asOfMs": 30000,
+    "finalists": [
+      {
+        "candidate": 0,
+        "kind": "TRADER",
+        "historyDays": 90,
+        "timeInMarket": 0.8,
+        "medianHoldMinutes": 400,
+        "makerShare": 0.5,
+        "maxDrawdown": 0.1,
+        "equityCurve": [
+          {
+            "atMs": 1000,
+            "pnlUsd": 0
+          },
+          {
+            "atMs": 2000,
+            "pnlUsd": 2
+          },
+          {
+            "atMs": 3000,
+            "pnlUsd": 4
+          },
+          {
+            "atMs": 4000,
+            "pnlUsd": 6
+          },
+          {
+            "atMs": 5000,
+            "pnlUsd": 8
+          },
+          {
+            "atMs": 6000,
+            "pnlUsd": 10
+          },
+          {
+            "atMs": 7000,
+            "pnlUsd": 12
+          },
+          {
+            "atMs": 8000,
+            "pnlUsd": 14
+          },
+          {
+            "atMs": 9000,
+            "pnlUsd": 16
+          },
+          {
+            "atMs": 10000,
+            "pnlUsd": 18
+          },
+          {
+            "atMs": 11000,
+            "pnlUsd": 20
+          },
+          {
+            "atMs": 12000,
+            "pnlUsd": 22
+          },
+          {
+            "atMs": 13000,
+            "pnlUsd": 24
+          },
+          {
+            "atMs": 14000,
+            "pnlUsd": 26
+          },
+          {
+            "atMs": 15000,
+            "pnlUsd": 28
+          },
+          {
+            "atMs": 16000,
+            "pnlUsd": 30
+          },
+          {
+            "atMs": 17000,
+            "pnlUsd": 32
+          },
+          {
+            "atMs": 18000,
+            "pnlUsd": 34
+          },
+          {
+            "atMs": 19000,
+            "pnlUsd": 36
+          },
+          {
+            "atMs": 20000,
+            "pnlUsd": 38
+          },
+          {
+            "atMs": 21000,
+            "pnlUsd": 40
+          },
+          {
+            "atMs": 22000,
+            "pnlUsd": 42
+          },
+          {
+            "atMs": 23000,
+            "pnlUsd": 44
+          },
+          {
+            "atMs": 24000,
+            "pnlUsd": 46
+          },
+          {
+            "atMs": 25000,
+            "pnlUsd": 48
+          },
+          {
+            "atMs": 26000,
+            "pnlUsd": 50
+          }
+        ],
+        "positions": [
+          {
+            "market": "BTC",
+            "signedNotionalUsd": 1000,
+            "leverage": 1,
+            "liquidationDistance": 0.5
+          }
+        ],
+        "patterns": {
+          "increasesAfterLoss": 0.1,
+          "repeatedRoundTrips": 0.1,
+          "observedFills": 100
+        }
+      },
+      {
+        "candidate": 1,
+        "kind": "TRADER",
+        "historyDays": 90,
+        "timeInMarket": 0.8,
+        "medianHoldMinutes": 20,
+        "makerShare": 0.5,
+        "maxDrawdown": 0.1,
+        "equityCurve": [
+          {
+            "atMs": 1000,
+            "pnlUsd": 0
+          },
+          {
+            "atMs": 2000,
+            "pnlUsd": 1
+          },
+          {
+            "atMs": 3000,
+            "pnlUsd": 2
+          },
+          {
+            "atMs": 4000,
+            "pnlUsd": 3
+          },
+          {
+            "atMs": 5000,
+            "pnlUsd": 4
+          },
+          {
+            "atMs": 6000,
+            "pnlUsd": 5
+          },
+          {
+            "atMs": 7000,
+            "pnlUsd": 6
+          },
+          {
+            "atMs": 8000,
+            "pnlUsd": 7
+          },
+          {
+            "atMs": 9000,
+            "pnlUsd": 8
+          },
+          {
+            "atMs": 10000,
+            "pnlUsd": 9
+          },
+          {
+            "atMs": 11000,
+            "pnlUsd": 10
+          },
+          {
+            "atMs": 12000,
+            "pnlUsd": 11
+          },
+          {
+            "atMs": 13000,
+            "pnlUsd": 12
+          },
+          {
+            "atMs": 14000,
+            "pnlUsd": 13
+          },
+          {
+            "atMs": 15000,
+            "pnlUsd": 14
+          },
+          {
+            "atMs": 16000,
+            "pnlUsd": 15
+          },
+          {
+            "atMs": 17000,
+            "pnlUsd": 16
+          },
+          {
+            "atMs": 18000,
+            "pnlUsd": 17
+          },
+          {
+            "atMs": 19000,
+            "pnlUsd": 18
+          },
+          {
+            "atMs": 20000,
+            "pnlUsd": 19
+          },
+          {
+            "atMs": 21000,
+            "pnlUsd": 20
+          },
+          {
+            "atMs": 22000,
+            "pnlUsd": 21
+          },
+          {
+            "atMs": 23000,
+            "pnlUsd": 22
+          },
+          {
+            "atMs": 24000,
+            "pnlUsd": 23
+          },
+          {
+            "atMs": 25000,
+            "pnlUsd": 24
+          },
+          {
+            "atMs": 26000,
+            "pnlUsd": 25
+          }
+        ],
+        "positions": [
+          {
+            "market": "BTC",
+            "signedNotionalUsd": 1000,
+            "leverage": 1,
+            "liquidationDistance": 0.5
+          }
+        ],
+        "patterns": {
+          "increasesAfterLoss": 0.1,
+          "repeatedRoundTrips": 0.1,
+          "observedFills": 100
+        }
+      }
+    ],
+    "pairs": [
+      {
+        "a": 0,
+        "b": 1,
+        "correlation": 0.2,
+        "linkedSource": false
+      }
+    ]
+  }
+}

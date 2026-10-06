@@ -1,0 +1,73 @@
+# Tests, typechecks and WASM builds for the CRE mirror path (README §4.7–4.14).
+# The review core and review-spike are checked by agent-review-checks.yaml.
+# No secrets: simulation needs a CRE login and is run locally with scripts/e2e-mirror.sh.
+name: CRE checks
+
+on:
+  push:
+    branches: [main, cre-scaffold]
+    paths:
+      - "packages/backend/**"
+      - "packages/executor/**"
+      - "packages/shared/*.ts"
+      - "packages/cre-workflows/mirror/**"
+      - "packages/cre-workflows/project.yaml"
+      - "supabase/migrations/**"
+      - ".github/workflows/cre-checks.yml"
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [backend, executor, cre-workflows/mirror]
+    defaults:
+      run:
+        working-directory: packages/${{ matrix.package }}
+    # The Postgres store tests (backend, executor) run only when TEST_DATABASE_URL is set.
+    env:
+      TEST_DATABASE_URL: postgres://postgres:pp@localhost:5432/postgres
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: pp
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      - run: bun test
+      - run: bunx tsc --noEmit
+
+  wasm:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/cre-workflows
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - name: Install CRE CLI
+        run: |
+          curl -sSL https://app.chain.link/cre/install.sh | bash
+          echo "$HOME/.cre/bin" >> "$GITHUB_PATH"
+      - run: bun install --frozen-lockfile --cwd ./mirror
+      - name: Build WASM
+        run: |
+          cre workflow build mirror -o "$RUNNER_TEMP/mirror.wasm" --non-interactive

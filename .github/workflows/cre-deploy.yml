@@ -1,0 +1,64 @@
+# Deploys a CRE workflow to the private (Chainlink-hosted) registry.
+# Any teammate with repo write access can run it from the Actions tab.
+# Needs the CRE_API_KEY secret (CRE platform → Organization → APIs), which
+# requires deploy access to be approved first. See README §4.14.
+name: CRE deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      workflow:
+        description: Workflow to deploy
+        type: choice
+        options: [mirror]
+      target:
+        description: CRE target
+        type: choice
+        default: production-settings
+        options: [production-settings, staging-settings]
+
+concurrency:
+  group: cre-deploy-${{ inputs.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    defaults:
+      run:
+        working-directory: packages/cre-workflows
+    env:
+      CRE_API_KEY: ${{ secrets.CRE_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+
+      - name: Install CRE CLI
+        run: |
+          curl -sSL https://app.chain.link/cre/install.sh | bash
+          echo "$HOME/.cre/bin" >> "$GITHUB_PATH"
+
+      - name: Install workflow dependencies
+        run: bun install --frozen-lockfile --cwd ./${{ inputs.workflow }}
+
+      - name: Check account
+        run: cre whoami
+
+      - name: Test
+        working-directory: packages/cre-workflows/${{ inputs.workflow }}
+        run: bun test
+
+      - name: Check config
+        run: bun run scripts/check-config.ts ${{ inputs.workflow }} ${{ inputs.target }}
+
+      # Not a simulation: with production config, mirror would post a locally signed report
+      # to the live executor, which rejects it. scripts/e2e-mirror.sh covers simulation.
+      - name: Build WASM
+        run: cre workflow build ${{ inputs.workflow }} -o "$RUNNER_TEMP/workflow.wasm" --non-interactive
+
+      - name: Deploy
+        run: cre workflow deploy ${{ inputs.workflow }} --target ${{ inputs.target }} --yes --non-interactive
