@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
-import type { Run } from "../lib/data";
-import { ordersOf, pct, runTime, time } from "../lib/data";
+import type { PaperView, Run, Series } from "../lib/data";
+import { ordersOf, pct, runTime, time, usd } from "../lib/data";
 import { useWidth } from "./useWidth";
 
 export function Panel({ title, meta, children }: { title: string; meta?: React.ReactNode; children: React.ReactNode }) {
@@ -230,6 +230,54 @@ export function TargetsVsHeld({ run }: { run: Run }) {
               })()
             : `% of equity${hidden > 0 ? ` · ${hidden} more legs` : ""}${run.plan?.marginScale !== undefined && run.plan.marginScale < 1 ? ` · margin rule scaled targets ×${run.plan.marginScale.toFixed(2)}` : ""}`}
         </span>
+      </div>
+    </div>
+  );
+}
+
+// The books behind the performance chart: same line key, with costs and activity.
+export function PaperTable({ books, series }: { books: PaperView["books"]; series: Series[] }) {
+  const cost = (v: number, start: number) => `${usd(v)} (${((v / start) * 100).toFixed(2)}%)`;
+  return (
+    <div className="overflow-x-auto">
+      <table className="tabular w-full whitespace-nowrap text-xs">
+        <thead style={{ color: "var(--muted)" }}>
+          <tr>
+            <th className="py-1 text-left font-normal">Book</th>
+            <th className="py-1 pl-3 text-right font-normal">Equity</th>
+            <th className="py-1 pl-3 text-right font-normal">Return</th>
+            <th className="py-1 pl-3 text-right font-normal">Fees</th>
+            <th className="py-1 pl-3 text-right font-normal">Funding</th>
+            <th className="py-1 pl-3 text-right font-normal">Trades</th>
+            <th className="py-1 pl-3 text-right font-normal">Positions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {books.map((b) => {
+            const s = series.find((x) => x.id === b.id);
+            return (
+              <tr key={b.id} className="border-t" style={{ borderColor: "var(--grid)" }}>
+                <td className="py-1.5" style={{ color: "var(--ink)" }}>
+                  <span className="inline-flex items-center gap-1.5">
+                    <svg width="16" height="8" aria-hidden>
+                      <line x1="0" x2="16" y1="4" y2="4" stroke={s?.color ?? "var(--muted)"} strokeWidth="2" strokeDasharray={s?.reference ? "4 3" : undefined} />
+                    </svg>
+                    {b.label.replace(" · ", " ")}
+                  </span>
+                </td>
+                <td className="py-1.5 pl-3 text-right" style={{ color: "var(--ink)" }}>{usd(b.equityUsd)}</td>
+                <td className="py-1.5 pl-3 text-right font-semibold" style={{ color: "var(--ink)" }}>{pct(b.returnPct)}</td>
+                <td className="py-1.5 pl-3 text-right" style={{ color: "var(--ink-2)" }}>{cost(b.feesUsd, b.startingEquityUsd)}</td>
+                <td className="py-1.5 pl-3 text-right" style={{ color: "var(--ink-2)" }}>{cost(b.fundingUsd ?? 0, b.startingEquityUsd)}</td>
+                <td className="py-1.5 pl-3 text-right" style={{ color: "var(--ink-2)" }}>{b.trades}</td>
+                <td className="py-1.5 pl-3 text-right" style={{ color: "var(--ink-2)" }}>{b.openPositions}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <div className="mt-2 text-xs" style={{ color: "var(--muted)" }}>
+        Paper fills at mark ± slippage with taker fees, the $10 minimum and the 10% drift rule; funding at HL&apos;s hourly rate. Costs in % of starting capital.
       </div>
     </div>
   );
