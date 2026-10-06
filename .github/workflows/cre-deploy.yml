@@ -55,6 +55,13 @@ jobs:
       - name: Check config
         run: bun run scripts/check-config.ts ${{ inputs.workflow }} ${{ inputs.target }}
 
+      # The services named in the config must be up, dry run, and pin the same frozen
+      # configuration; otherwise every run would fail closed after the deploy.
+      - name: Check the services agree
+        if: inputs.workflow == 'mirror' && inputs.target == 'production-settings'
+        working-directory: .
+        run: bun scripts/predeploy-check.ts --from-config
+
       # Not a simulation: with production config, mirror would post a locally signed report
       # to the live executor, which rejects it. scripts/e2e-mirror.sh covers simulation.
       - name: Build WASM

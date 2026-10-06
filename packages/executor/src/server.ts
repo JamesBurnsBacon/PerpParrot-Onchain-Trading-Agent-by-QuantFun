@@ -74,6 +74,9 @@ const app = createApp({
     apiWallet: exchange.signer,
     frozenConfigurationHash: config.frozenConfigurationHash,
     lastReportAt: runner.lastReportAt || null,
+    // For the pre-deploy check (scripts/predeploy-check.ts).
+    store: process.env.DATABASE_URL ? "postgres" : "memory",
+    pinned: { workflowName: config.workflowName ?? null, donId: config.donId ?? null },
   }),
 });
 

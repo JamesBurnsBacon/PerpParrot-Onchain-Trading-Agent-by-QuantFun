@@ -1,0 +1,84 @@
+@import "tailwindcss";
+
+/* Chart and page tokens: the dataviz reference palette, validated (light and dark). */
+:root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #898781;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --ring: rgba(11, 11, 11, 0.1);
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --long: #2a78d6;
+  --short: #e34948;
+  --good: #0ca30c;
+  --warning: #fab219;
+  --critical: #d03b3b;
+  --up: #006300;
+  --funnel-1: #86b6ef;
+  --funnel-2: #5598e7;
+  --funnel-3: #2a78d6;
+  --funnel-4: #1c5cab;
+  --funnel-5: #104281;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --ink: #ffffff;
+    --ink-2: #c3c2b7;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --ring: rgba(255, 255, 255, 0.1);
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --long: #3987e5;
+    --short: #e66767;
+    --up: #0ca30c;
+    --funnel-1: #184f95;
+    --funnel-2: #1c5cab;
+    --funnel-3: #256abf;
+    --funnel-4: #3987e5;
+    --funnel-5: #6da7ec;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d;
+  --surface: #1a1a19;
+  --ink: #ffffff;
+  --ink-2: #c3c2b7;
+  --grid: #2c2c2a;
+  --axis: #383835;
+  --ring: rgba(255, 255, 255, 0.1);
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --long: #3987e5;
+  --short: #e66767;
+  --up: #0ca30c;
+  --funnel-1: #184f95;
+  --funnel-2: #1c5cab;
+  --funnel-3: #256abf;
+  --funnel-4: #3987e5;
+  --funnel-5: #6da7ec;
+}
+
+body {
+  background: var(--page);
+  color: var(--ink);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+.tabular {
+  font-variant-numeric: tabular-nums;
+}

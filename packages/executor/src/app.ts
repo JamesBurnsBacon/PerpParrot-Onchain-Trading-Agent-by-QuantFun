@@ -30,6 +30,16 @@ const authorized = (req: Request, token?: string): boolean => {
   return timingSafeEqual(Buffer.from(given), Buffer.from(token));
 };
 
+// At most `max` points: every point if it fits, else evenly spaced ones including both ends.
+const thin = <T,>(points: T[], max: number): T[] => {
+  if (points.length <= max) return points;
+  const step = (points.length - 1) / (max - 1);
+  return Array.from({ length: max }, (_, i) => points[Math.round(i * step)]);
+};
+
+// /equity responses per app (one per process; tests make several).
+const equityCaches = new WeakMap<AppDeps, { at: number; body: { runs: number; points: [number, number][] } }>();
+
 export const createApp = (deps: AppDeps) => async (req: Request): Promise<Response> => {
   const { pathname, searchParams } = new URL(req.url);
 
@@ -38,9 +48,25 @@ export const createApp = (deps: AppDeps) => async (req: Request): Promise<Respon
     return json({ ...deps.status(), controls: await deps.store.getControls() }, 200, PUBLIC);
   }
   // Public run log: plans, order results and raw signed reports (README §4.11).
+  // ?summary=1 drops plan, results and report (up to 500 runs: ~3.5 days).
   if (req.method === "GET" && pathname === "/runs") {
-    const limit = Math.min(Math.max(Number(searchParams.get("limit") ?? 20) || 20, 1), 200);
-    return json(await deps.store.recentRuns(limit), 200, PUBLIC);
+    const summary = searchParams.get("summary") === "1";
+    const max = summary ? 500 : 200;
+    const limit = Math.min(Math.max(Number(searchParams.get("limit") ?? 20) || 20, 1), max);
+    return json(await (summary ? deps.store.recentRunSummaries(limit) : deps.store.recentRuns(limit)), 200, PUBLIC);
+  }
+
+  // The live account's equity at every executed run since the start, at most 1,500 points
+  // (evenly thinned, first and last kept). Cached for a minute: it changes once per run.
+  if (req.method === "GET" && pathname === "/equity") {
+    const now = Date.now();
+    let cached = equityCaches.get(deps);
+    if (!cached || now - cached.at > 60_000) {
+      const all = await deps.store.equityCurve();
+      cached = { at: now, body: { runs: all.length, points: thin(all, 1500) } };
+      equityCaches.set(deps, cached);
+    }
+    return json(cached.body, 200, PUBLIC);
   }
 
   if (req.method === "POST" && pathname === "/reports") {

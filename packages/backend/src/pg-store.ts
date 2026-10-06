@@ -1,5 +1,6 @@
 import { SQL } from "bun";
 import type { EligibilityState, EligibilityStore } from "./eligibility";
+import type { PaperPoint, PaperState, PaperStore } from "./paper/service";
 import { keccakUtf8, type SnapshotStore } from "./snapshot";
 
 // cre_snapshots (supabase/migrations/20261006120000_cre_mirror.sql). The body is
@@ -45,3 +46,42 @@ export class PostgresEligibilityStore implements EligibilityStore {
         assets = excluded.assets, checked_at = excluded.checked_at, refusing_since = excluded.refusing_since`;
   }
 }
+
+// paper_books / paper_points (README §4.10): book state and equity curves.
+export class PostgresPaperStore implements PaperStore {
+  constructor(private readonly sql: SQL) {}
+
+  async load(): Promise<PaperState | undefined> {
+    const [row] = await this.sql`select state from paper_state where id = 1`;
+    return row ? (row.state as PaperState) : undefined;
+  }
+
+  async save(state: PaperState, points: PaperPoint[]): Promise<boolean> {
+    return this.sql.begin(async (tx) => {
+      // Only forward: a second instance stepping the same run from the same state writes nothing.
+      const written = await tx`
+        insert into paper_state (id, state, last_run_at) values (1, ${JSON.parse(JSON.stringify(state))}::jsonb, ${state.lastRunAt})
+        on conflict (id) do update set state = excluded.state, last_run_at = excluded.last_run_at, updated_at = now()
+        where paper_state.last_run_at < excluded.last_run_at
+        returning id`;
+      if (!written.length) return false;
+      for (const p of points) {
+        await tx`
+          insert into paper_points (book_id, t, equity_usd) values (${p.bookId}, ${p.t}, ${p.equityUsd})
+          on conflict (book_id, t) do nothing`;
+      }
+      return true;
+    });
+  }
+
+  async points(sinceT: number): Promise<PaperPoint[]> {
+    const rows = await this.sql`select book_id, t, equity_usd from paper_points where t >= ${sinceT} order by t`;
+    return rows.map((r: Record<string, unknown>) => ({ bookId: r.book_id as string, t: Number(r.t), equityUsd: Number(r.equity_usd) }));
+  }
+}
+
+// dashboard_artifacts: results other modules publish for the dashboard (shared/dashboard.ts).
+export const readPostgresArtifact = (sql: SQL) => async (name: string): Promise<unknown | undefined> => {
+  const [row] = await sql`select body from dashboard_artifacts where name = ${name}`;
+  return row?.body;
+};

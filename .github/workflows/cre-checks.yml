@@ -1,4 +1,5 @@
-# Tests, typechecks and WASM builds for the CRE mirror path (README §4.7–4.14).
+# Tests, typechecks and WASM builds for the CRE mirror path (README §4.7–4.14),
+# plus the dashboard build.
 # The review core and review-spike are checked by agent-review-checks.yaml.
 # No secrets: simulation needs a CRE login and is run locally with scripts/e2e-mirror.sh.
 name: CRE checks
@@ -12,6 +13,7 @@ on:
       - "packages/shared/*.ts"
       - "packages/cre-workflows/mirror/**"
       - "packages/cre-workflows/project.yaml"
+      - "packages/dashboard/**"
       - "supabase/migrations/**"
       - ".github/workflows/cre-checks.yml"
   pull_request:
@@ -71,3 +73,17 @@ jobs:
       - name: Build WASM
         run: |
           cre workflow build mirror -o "$RUNNER_TEMP/mirror.wasm" --non-interactive
+
+  dashboard:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/dashboard
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      - run: bunx tsc --noEmit
+      - run: bun run build

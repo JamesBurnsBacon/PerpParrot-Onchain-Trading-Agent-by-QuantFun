@@ -1,7 +1,8 @@
 // Runs against a real Postgres when TEST_DATABASE_URL is set; see executor/test/pg-store.test.ts.
 import { describe, expect, test } from "bun:test";
 import { SQL } from "bun";
-import { PostgresEligibilityStore, PostgresSnapshotStore } from "../src/pg-store";
+import { newBook } from "../src/paper/book";
+import { PostgresEligibilityStore, PostgresPaperStore, PostgresSnapshotStore } from "../src/pg-store";
 
 const url = process.env.TEST_DATABASE_URL;
 
@@ -33,5 +34,20 @@ describe.skipIf(!url)("PostgresSnapshotStore", async () => {
     const state = { assets: ["BTC", "ETH", "xyz:MSFT"], checkedAt: Date.parse("2026-10-07T00:01:00Z") };
     await eligibility.save(state);
     expect(await eligibility.load()).toEqual(state);
+  });
+
+  test("saves paper books and their equity points, only forward", async () => {
+    const paper = new PostgresPaperStore(sql);
+    const t = Date.now(); // past any lastRunAt a reused database holds
+    const bookId = `test-${t}`;
+    const book = { ...newBook(bookId, "test", "copy", 470, t), cashUsd: 461.25, feesUsd: 0.31, fundingUsd: -0.02, trades: 3 };
+    book.positions = { BTC: { szi: 0.0012, entryPx: 121_234.5, markPx: 121_300 }, "xyz:NVDA": { szi: -0.75, entryPx: 187.31 } };
+    const state = { books: [book], lastRunAt: t };
+    expect(await paper.save(state, [{ bookId, t, equityUsd: 471.5 }])).toBe(true);
+    expect(await paper.load()).toEqual(state); // exact round trip, doubles included
+    // A second instance stepping the same run writes neither state nor points.
+    expect(await paper.save({ books: [], lastRunAt: t }, [{ bookId, t: t + 1, equityUsd: 999 }])).toBe(false);
+    expect(await paper.load()).toEqual(state);
+    expect((await paper.points(t)).filter((p) => p.bookId === bookId)).toEqual([{ bookId, t, equityUsd: 471.5 }]);
   });
 });
