@@ -129,6 +129,63 @@ describe("Runner.executeReport (dry run)", () => {
     expect(exchange.recorded()).toHaveLength(1);
   });
 
+  test("binds signed leverage and order actions to report expiry", async () => {
+    const { runner, exchange } = setup(fakeInfo({ equity: "400" }));
+    const report = await verified();
+    await runner.executeReport(report, {});
+    expect(exchange.recorded()).toHaveLength(3);
+    for (const request of exchange.recorded()) {
+      expect((request.payload as { expiresAfter: number }).expiresAfter).toBe(Number(report.body.expiresAt) * 1000);
+    }
+  });
+
+  test("order errors fail the run and preserve per-order outcomes", async () => {
+    const { runnerDeps, exchange } = setup(fakeInfo({ equity: "400" }));
+    exchange.submit = async () => [
+      { asset: "BTC", status: "filled", filledSize: "0.012", avgPx: "100000" },
+      { asset: "ETH", status: "error", error: "insufficient margin" },
+    ];
+    const run = await new Runner(runnerDeps).executeReport(await verified(), {});
+    expect(run.status).toBe("failed");
+    expect(run.error).toContain("insufficient margin");
+    expect(run.results?.map((r) => r.status)).toEqual(["filled", "error"]);
+  });
+
+  test("control-store outage between batches preserves earlier fills and stops", async () => {
+    const { runnerDeps, exchange, store } = setup(fakeInfo({ equity: "400" }));
+    exchange.submit = async (_orders, _cloids, shouldStop) => {
+      expect(await shouldStop?.()).toBe(false);
+      store.getControls = async () => { throw new Error("database offline"); };
+      expect(await shouldStop?.()).toBe(true);
+      return [
+        { asset: "BTC", status: "filled", filledSize: "0.012", avgPx: "100000" },
+        { asset: "ETH", status: "not_sent" },
+      ];
+    };
+    const run = await new Runner(runnerDeps).executeReport(await verified(), {});
+    expect(run.status).toBe("failed");
+    expect(run.error).toBe("execution guard failed: database offline");
+    expect(run.results?.map((r) => r.status)).toEqual(["filled", "not_sent"]);
+    expect((await store.recentRuns(1))[0]).toEqual(run);
+  });
+
+  test("unknown exchange outcome pauses subsequent reports for reconciliation", async () => {
+    const { runnerDeps, exchange, store } = setup(fakeInfo({ equity: "400" }));
+    let submissions = 0;
+    exchange.submit = async () => {
+      submissions++;
+      return [{ asset: "BTC", status: "unknown", error: "response lost" }];
+    };
+    const runner = new Runner(runnerDeps);
+    const run = await runner.executeReport(await verified(), {});
+    expect(run.status).toBe("failed");
+    expect(run.error).toContain("reconcile order IDs");
+    expect((await store.getControls()).paused).toBe(true);
+    const next = await runner.executeReport(await verified(body({ runId: "next" })), {});
+    expect(next.status).toBe("skipped_paused");
+    expect(submissions).toBe(1);
+  });
+
   test("sets leverage once per asset across runs", async () => {
     const { runner, exchange } = setup(fakeInfo({ equity: "400" }));
     await runner.executeReport(await verified(), {});

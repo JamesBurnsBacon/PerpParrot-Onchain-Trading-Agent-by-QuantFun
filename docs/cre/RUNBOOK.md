@@ -183,3 +183,37 @@ the run ID is `keccak256(report)`, and that the stored snapshot hashes to the re
 | `HTTP 422` | Executor logs (`error` field) | Configuration hash, account or expiry mismatch |
 | Run `failed` in `/runs` | `error` on the run | HL unreachable, or the gross-leverage bound |
 | Orders with `status: "error"` | `results` on the run | HL rejection (min size, margin); the next run retries |
+
+### Unknown exchange outcomes and delayed actions
+
+The executor passes each report's expiry (Unix milliseconds) into the SDK's
+signed `expiresAfter` field for leverage updates and IOC order actions. It also
+rechecks durable pause controls, cancellation and expiry before each exchange
+action and between order batches. An already dispatched action cannot be recalled
+by a later local pause.
+
+A lost response is recorded as `unknown`, not as a confirmed exchange rejection.
+No later batch is sent, the run is marked `failed`, and the executor writes a
+persistent pause. Earlier returned fills remain in the run record. Explicit
+per-order rejections also mark the run failed, while preserving successful fills.
+
+Before clearing an unknown-outcome pause:
+
+1. Read the failed run's planned orders and derive each client order ID using
+   `cloidFor(run.id, asset)` in `packages/executor/src/runner.ts`.
+2. Query Hyperliquid order status by client order ID and compare the current
+   account positions and fills. An absent order response alone does not establish
+   that the action was never accepted.
+3. Record reconciliation evidence, then resume using the authenticated admin
+   controls. Do not replay the old signed report or assume repeated client order
+   IDs provide exchange idempotency; the next fresh report plans against live equity.
+
+This branch still needs a durable pre-dispatch execution journal and tested crash
+recovery: a process can die after sending an action but before saving its result
+or persistent pause. Automatic reconciliation is not implemented. Database failure
+while saving the pause is also an operational blocker. These remain funded-launch
+gates alongside configured CRE/model secrets and deployment-level simulation/soak
+checks. Local mocked transport tests do not prove real exchange execution.
+
+References: [Hyperliquid exchange endpoint](https://hyperliquid.gitbook.io/Hyperliquid-docs/for-developers/api/exchange-endpoint)
+and [order-status queries](https://hyperliquid.gitbook.io/Hyperliquid-docs/for-developers/api/info-endpoint).

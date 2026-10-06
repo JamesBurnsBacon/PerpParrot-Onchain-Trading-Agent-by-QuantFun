@@ -32,7 +32,7 @@ export class DryRunTransport implements IRequestTransport {
 
 export type OrderResult = {
   asset: string;
-  status: "filled" | "resting" | "error" | "dry_run" | "not_sent";
+  status: "filled" | "resting" | "error" | "dry_run" | "not_sent" | "unknown";
   filledSize?: string;
   avgPx?: string;
   error?: string;
@@ -42,8 +42,8 @@ export type Exchange = {
   dryRun: boolean;
   signer: Hex;
   // Stops between batches once shouldStop() is true; unsent orders are reported as not sent.
-  submit(orders: PlannedOrder[], cloids: Hex[], shouldStop?: () => boolean | Promise<boolean>): Promise<OrderResult[]>;
-  setLeverage(assetId: number, leverage: number): Promise<void>;
+  submit(orders: PlannedOrder[], cloids: Hex[], shouldStop?: () => boolean | Promise<boolean>, expiresAfter?: number): Promise<OrderResult[]>;
+  setLeverage(assetId: number, leverage: number, expiresAfter?: number): Promise<void>;
   // Signed requests captured in dry-run (for logs and tests).
   recorded(): SignedRequest[];
 };
@@ -80,7 +80,7 @@ export const createExchange = (opts: { privateKey?: Hex; dryRun: boolean; transp
     signer: wallet.address,
     recorded: () => dryTransport.requests,
 
-    async submit(orders, cloids, shouldStop) {
+    async submit(orders, cloids, shouldStop, expiresAfter) {
       const results: OrderResult[] = [];
       for (let i = 0; i < orders.length; i += ORDER_BATCH_SIZE) {
         const batch = orders.slice(i, i + ORDER_BATCH_SIZE);
@@ -102,21 +102,34 @@ export const createExchange = (opts: { privateKey?: Hex; dryRun: boolean; transp
         };
         let statuses: Status[] | undefined;
         let failure = "no status returned";
+        let definitiveRejection = false;
         try {
-          statuses = statusesOf(await order(config, params));
+          statuses = statusesOf(await order(config, params, { expiresAfter }));
         } catch (e) {
           failure = (e as Error).message;
           statuses = e instanceof ApiRequestError ? statusesOf(e.response) : undefined;
+          definitiveRejection = e instanceof ApiRequestError &&
+            (e.response as { status?: unknown })?.status === "err";
         }
-        results.push(
-          ...batch.map((o, j) => (opts.dryRun ? { asset: o.asset, status: "dry_run" as const } : toResult(o.asset, statuses?.[j], failure))),
-        );
+        const batchResults: OrderResult[] = batch.map((o, j) => {
+          if (opts.dryRun) return { asset: o.asset, status: "dry_run" };
+          if (!statuses?.[j] && !definitiveRejection) {
+            // A lost response does not prove rejection: the action may have filled.
+            return { asset: o.asset, status: "unknown", error: failure };
+          }
+          return toResult(o.asset, statuses?.[j], failure);
+        });
+        results.push(...batchResults);
+        if (batchResults.some((r) => r.status === "unknown")) {
+          results.push(...orders.slice(i + batch.length).map((o) => ({ asset: o.asset, status: "not_sent" as const })));
+          break;
+        }
       }
       return results;
     },
 
-    async setLeverage(assetId, leverage) {
-      await updateLeverage(config, { asset: assetId, isCross: true, leverage });
+    async setLeverage(assetId, leverage, expiresAfter) {
+      await updateLeverage(config, { asset: assetId, isCross: true, leverage }, { expiresAfter });
     },
   };
 };

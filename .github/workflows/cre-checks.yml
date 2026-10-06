@@ -5,7 +5,7 @@ name: CRE checks
 
 on:
   push:
-    branches: [main, cre-scaffold, ai-agent-workflow]
+    branches: [main, cre-scaffold, ai-agent-workflow, ai-agent-mainnet-hardening]
     paths:
       - "packages/backend/**"
       - "packages/executor/**"

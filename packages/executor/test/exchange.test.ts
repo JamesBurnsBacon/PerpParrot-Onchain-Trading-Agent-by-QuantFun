@@ -73,6 +73,23 @@ describe("live submission", () => {
     expect(results).toEqual([{ asset: "BTC", status: "error", error: "User or API Wallet does not exist." }]);
   });
 
+  test("lost response records uncertainty and prevents later batches", async () => {
+    const requests: unknown[] = [];
+    const transport: IRequestTransport = {
+      isTestnet: false,
+      async request<T>(_endpoint: string, payload: unknown): Promise<T> {
+        requests.push(payload);
+        throw new Error("response lost after dispatch");
+      },
+    };
+    const ex = createExchange({ privateKey: KEY, dryRun: false, transport });
+    const orders = Array.from({ length: 45 }, (_, i) => planned(`A${i}`, i));
+    const results = await ex.submit(orders, cloids(45));
+    expect(requests).toHaveLength(1);
+    expect(results.filter((r) => r.status === "unknown")).toHaveLength(20);
+    expect(results.filter((r) => r.status === "not_sent")).toHaveLength(25);
+  });
+
   test(`splits into batches of ${ORDER_BATCH_SIZE}`, async () => {
     const { transport, requests } = fakeHl((orders) => ({
       status: "ok",

@@ -24,7 +24,8 @@ export type RunnerDeps = {
   config: RunnerConfig;
 };
 
-// Deterministic per report and asset, so a retried submission can't double-fill.
+// Stable per-report order identifiers for reconciliation. Do not assume that
+// repeating an exchange submission with the same cloid guarantees idempotency.
 export const cloidFor = (reportId: string, asset: string): Hex => keccak256(toHex(`${reportId}:${asset}`)).slice(0, 34) as Hex;
 
 type CancelToken = { cancelled: boolean };
@@ -135,7 +136,7 @@ export class Runner {
         await assertActive();
         if (o.reduceOnly || this.leverageSet.has(o.assetId)) continue;
         try {
-          await exchange.setLeverage(o.assetId, markets.get(o.asset)!.maxLeverage);
+          await exchange.setLeverage(o.assetId, markets.get(o.asset)!.maxLeverage, expiresAt);
           this.leverageSet.add(o.assetId);
         } catch (e) {
           failedLeverage.add(o.asset);
@@ -166,12 +167,22 @@ export class Runner {
             return true;
           }
         },
+        expiresAt,
       );
+      if (record.results.some((r) => r.status === "unknown")) {
+        record.status = "failed";
+        record.error = "exchange outcome unknown; reconcile order IDs and account before resuming";
+        await store.setControls({ paused: true, updatedAt: now(), updatedBy: `unknown-outcome:${id}` });
+      }
       if (record.results.some((r) => r.status === "not_sent")) record.status = "failed";
       if (token.cancelled) record.error = `run timed out after ${config.runTimeoutMs / 1000}s; later batches not sent`;
       if (record.status === "failed") await alert(`${runId}: stopped remaining orders: ${record.error}`);
       const errors = record.results.filter((r) => r.status === "error");
-      if (errors.length > 0) await alert(`${runId}: ${errors.length} order(s) failed: ${errors[0].error}`);
+      if (errors.length > 0) {
+        record.status = "failed";
+        record.error ??= `${errors.length} order(s) failed: ${errors[0].error}`;
+        await alert(`${runId}: ${errors.length} order(s) failed: ${errors[0].error}`);
+      }
     } catch (e) {
       record.status = "failed";
       record.error = (e as Error).message;

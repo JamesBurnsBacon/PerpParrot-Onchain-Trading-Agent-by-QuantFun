@@ -4,7 +4,7 @@ name: Agent review checks
 
 on:
   push:
-    branches: [main, ai-agent-workflow]
+    branches: [main, ai-agent-workflow, ai-agent-mainnet-hardening]
   pull_request:
 
 permissions:
