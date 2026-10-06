@@ -43,6 +43,10 @@ const intentKeys = [
   "requestedLeverage", "avoidClones", "horizon", "clarify", "reply",
 ] as const satisfies readonly (keyof StrategyIntent)[];
 
+const CONTROLS = /[\x00-\x1f\x7f]/;
+const REPLY_CONTROLS = /[\x00-\x09\x0b-\x1f\x7f]/;
+const HIDDEN = /[\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/;
+
 const inEnum = (value: unknown, values: readonly string[]): boolean =>
   typeof value === "string" && values.includes(value);
 
@@ -103,8 +107,11 @@ export const checkStrategyIntent = (value: unknown): string[] => {
           }
           break;
       }
-      if ((key === "clarify" || key === "reply") && typeof field === "string" && /[\x00-\x1f\x7f]/.test(field)) {
-        problems.push(`${key} must not contain control characters`);
+      if ((key === "clarify" || key === "reply") && typeof field === "string") {
+        // The reply is shown as plain text and may span lines; the clarifying question may not.
+        if ((key === "reply" ? REPLY_CONTROLS : CONTROLS).test(field)) problems.push(`${key} must not contain control characters`);
+        // Zero-width and bidirectional controls can make text look like something else.
+        if (HIDDEN.test(field)) problems.push(`${key} must not contain hidden or bidirectional control characters`);
       }
     }
   } catch {
@@ -132,6 +139,8 @@ export type PolicyResult = {
 };
 
 export const intentToPolicy = (intent: StrategyIntent, base: Policy): PolicyResult => {
+  // Callers should have parsed the model output already; checking again keeps the mapper fail-closed.
+  parseStrategyIntent(intent);
   const policy = { ...base };
   const clamps: Clamp[] = [];
   const notes: string[] = [];
@@ -161,7 +170,7 @@ export const intentToPolicy = (intent: StrategyIntent, base: Policy): PolicyResu
   }
 
   const effectiveMaxSources = Math.max(intent.maxSources, Math.ceil((1 - policy.cashBuffer) / policy.maxSourceWeight));
-  if (effectiveMaxSources > 25) {
+  if (!Number.isFinite(effectiveMaxSources) || effectiveMaxSources > 25) {
     throw new Error(`infeasible: ${policy.maxSourceWeight} per source and ${policy.cashBuffer} cash need more than 25 sources`);
   }
   if (effectiveMaxSources > intent.maxSources) {
@@ -199,6 +208,7 @@ const compareAddress = (a: FinalistLike, b: FinalistLike): number => {
 };
 
 export const shortlist = (finalists: FinalistLike[], intent: StrategyIntent, effectiveMaxSources: number): string[] => {
+  parseStrategyIntent(intent);
   const excluded = new Set(["overflow", "ruin", "low-coverage", "no-intervals"]);
   const compareScore = (a: FinalistLike & { score: number }, b: FinalistLike & { score: number }): number =>
     b.score - a.score || compareAddress(a, b);

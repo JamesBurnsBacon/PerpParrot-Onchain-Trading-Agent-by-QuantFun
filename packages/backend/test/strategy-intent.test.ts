@@ -99,11 +99,12 @@ describe("strategy intent validation", () => {
     expect(checkStrategyIntent({ ...valid, [key]: value }).some((problem) => problem.includes(key))).toBe(true);
   });
 
-  test("rejects all ASCII controls in either text field", () => {
+  test("rejects ASCII controls in either text field, except a line feed in the reply", () => {
     for (const code of [...Array.from({ length: 32 }, (_, i) => i), 127]) {
       for (const field of ["clarify", "reply"]) {
-        expect(checkStrategyIntent({ ...valid, [field]: `a${String.fromCharCode(code)}b` })
-          .some((problem) => problem.includes(field) && problem.includes("control"))).toBe(true);
+        const rejected = checkStrategyIntent({ ...valid, [field]: `a${String.fromCharCode(code)}b` })
+          .some((problem) => problem.includes(field) && problem.includes("control"));
+        expect(rejected, `${field} U+${code.toString(16)}`).toBe(!(field === "reply" && code === 10));
       }
     }
   });
@@ -335,5 +336,37 @@ describe("shortlist", () => {
     const expected = riskStyle === "aggressive" ? ["0x0"] : ["0xa"];
     expect(shortlist(input, { ...valid, riskStyle }, 1)).toEqual(expected);
     expect(shortlist([...input].reverse(), { ...valid, riskStyle }, 1)).toEqual(expected);
+  });
+});
+
+// Added after review: fail-closed inputs, hidden characters, null-last ordering.
+describe("review follow-ups", () => {
+  test("a reply may span lines; a clarifying question may not", () => {
+    expect(checkStrategyIntent({ ...valid, reply: "line one\nline two" })).toEqual([]);
+    expect(checkStrategyIntent({ ...valid, clarify: "one\ntwo" }).some((p) => p.includes("clarify"))).toBe(true);
+  });
+
+  test.each(["\u202e", "\u200b", "\u2066", "\ufeff"])("rejects hidden or bidirectional character %j in both text fields", (ch) => {
+    for (const field of ["clarify", "reply"]) {
+      expect(checkStrategyIntent({ ...valid, [field]: `a${ch}b` }).some((p) => p.includes(field) && p.includes("hidden"))).toBe(true);
+    }
+  });
+
+  test("the mapper and shortlist refuse an unvalidated intent", () => {
+    const bad = { ...valid, riskStyle: "reckless" } as unknown as StrategyIntent;
+    expect(() => intentToPolicy(bad, base)).toThrow("invalid strategy intent");
+    expect(() => shortlist([], bad, 5)).toThrow("invalid strategy intent");
+  });
+
+  test("a non-finite feasibility result is infeasible, not NaN", () => {
+    expect(() => intentToPolicy(valid, { ...base, maxSourceWeight: 0, cashBuffer: 1 })).toThrow("infeasible");
+  });
+
+  test("balanced and conservative put a missing metric last", () => {
+    const f = (address: string, score: number, maxDrawdown: number | null, annualisedVol: number | null): FinalistLike =>
+      ({ address, kind: "trader", score, flags: [], maxDrawdown, annualisedVol, cloneOf: false });
+    const list = [f("0xa", 0.9, null, 0.2), f("0xb", 0.8, 0.3, 0.5), f("0xc", 0.7, 0.1, null)];
+    expect(shortlist(list, { ...valid, riskStyle: "balanced" }, 3)).toEqual(["0xc", "0xb", "0xa"]);
+    expect(shortlist(list, { ...valid, riskStyle: "conservative" }, 3)).toEqual(["0xa", "0xb", "0xc"]);
   });
 });
