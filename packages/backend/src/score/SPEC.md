@@ -264,7 +264,8 @@ Order of values: `"+inf"` is better than every number, `null` is worse than ever
   above); then `address` ascending (lower-cased). Never order by the floating-point `score` or by a sum of floating-point
   percentiles. `rank` is the 1-based position in the pool.
 - Implementation requirement: `rankPool(entries: { address: string; metrics: Metrics }[])` is a separate exported
-  function in `score.ts` (not re-exported from `index.ts`) so tests can feed hand-made metrics.
+  function in `score.ts` (not re-exported from `index.ts`) so tests can feed hand-made metrics. It returns
+  `{ address, percentiles, scoreNumerator, score, rank }[]` in rank order.
 
 **Cross-pool order** (used for the finalist list and the output): compare `score` exactly as fractions
 `scoreNumerator / (12(N-1))` (`1/2` for `N == 1`) by cross-multiplying integers; ties by raw `sharpe`, then address.
