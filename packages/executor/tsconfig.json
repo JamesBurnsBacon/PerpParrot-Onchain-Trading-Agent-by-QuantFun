@@ -11,7 +11,9 @@
     "noEmit": true,
     "types": [
       "bun"
-    ]
+    ],
+    "resolveJsonModule": true,
+    "allowImportingTsExtensions": true
   },
   "include": [
     "src",

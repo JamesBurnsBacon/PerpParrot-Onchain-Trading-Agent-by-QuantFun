@@ -12,7 +12,7 @@ export class SupabaseRpc implements Rpc {
     this.base=parsed.origin;
   }
   async call(name:string,args:Record<string,unknown>,signal:AbortSignal):Promise<unknown>{
-    if(!['persist_review_audit'].includes(name))throw new Error('unknown database operation');
+    if(!['persist_review_audit','load_paper_session','save_paper_review','freeze_paper_session','record_paper_event','get_paper_event','set_paper_pause'].includes(name))throw new Error('unknown database operation');
     return postJson(`${this.base}/rest/v1/rpc/${name}`,args,{apikey:this.serviceKey,Authorization:`Bearer ${this.serviceKey}`},signal,this.fetcher);
   }
 }

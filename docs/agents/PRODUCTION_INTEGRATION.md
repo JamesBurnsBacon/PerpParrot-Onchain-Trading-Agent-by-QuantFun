@@ -4,6 +4,11 @@ Updated 2026-10-06 when the review core (branch `ai-agent-workflow`) and the CRE
 (branch `cre-scaffold`) were merged; `docs/cre/INTEGRATION.md` records what came from where and
 why. Nothing here authorizes real trades.
 
+The [evidence-bound paper review integration](PAPER_LIFECYCLE.md) now connects rich
+specialist inputs, per-node audit, persistent paper freeze and monitoring-only
+reviews. A dry-run integration test follows the merged snapshot/report/executor
+path; the removed parallel preview lane is not restored.
+
 ## Review core (this contribution)
 
 | Component | Ownership and verified behavior |
@@ -29,8 +34,9 @@ HyperEVM freeze consumer and preview tables that were here were replaced by the 
 
 ## Remaining gates for the review core
 
-1. Complete actual Role/Risk/Red-Team model capability adapters and bind full rich evidence;
-   post-freeze reviews must remain monitoring-only.
+1. Complete deployed Role/Risk/Red-Team CRE capability adapters. Rich evidence,
+   server provider requests, per-node audit and paper monitoring-only behavior now
+   have integration tests; actual deployed DON committee runs remain a gate.
 2. Run the two-model point-in-time evaluation, select the winner and persist the full
    sanitized prompt/output audit with verified hashes and paper shadow state.
 3. Configure CRE/model secrets; run authenticated LLM simulations and verify deployed

@@ -146,6 +146,9 @@
 
 ### 4.6 AI layer: the agent in the CRE `review` workflow (hourly)
 
+The [evidence-bound AI review integration](docs/agents/PAPER_LIFECYCLE.md) includes full specialist inputs, per-node audit and persistent paper monitoring. `pnpm paper:lifecycle` checks that lifecycle; an executor integration test follows the merged snapshot/report/dry-run path. No live settings are changed.
+
+
 Status: the offline review core (`packages/cre-workflows/review/workflow.ts`, role/risk/red-team committee with DON-node quorum) and a real-SDK review spike (`review-spike`: per-node structured output, per-field median consensus) are built; see [CRE_SPIKE.md](docs/agents/CRE_SPIKE.md) and [production integration status](docs/agents/PRODUCTION_INTEGRATION.md). Its output, a frozen configuration, is the mirror's only execution authority (§4.7). Authenticated model runs and the two-model evaluation remain.
 
 A dedicated workstream, integrated into the CRE flow.
