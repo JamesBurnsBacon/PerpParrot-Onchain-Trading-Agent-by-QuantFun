@@ -12,7 +12,7 @@ export function describeVoiceError(code?: string): string {
   switch (code) {
     case "not-allowed": case "service-not-allowed": return "Microphone is blocked. Allow it for this site in the browser's site settings, then try again (or type your message).";
     case "audio-capture": return "No microphone found. Check that one is connected, or type your message.";
-    case "no-speech": return "I didn't hear anything. Hold the button while you speak, or type your message.";
+    case "no-speech": return "I didn't hear anything. Speak after tapping the button, or type your message.";
     case "network": return "Speech recognition needs a network connection to the browser's speech service. Try Chrome, or type your message.";
     case "aborted": return "";
     default: return `Voice input failed${code ? ` (${code})` : ""}. You can still type your message.`;
@@ -56,7 +56,7 @@ export function VoiceInput({ disabled, onTranscript, onListening }: { disabled: 
     const instance = new Constructor();
     recognition.current = instance; held.current = true; stopping.current = false;
     instance.lang = navigator.language;
-    instance.continuous = false; instance.interimResults = false;
+    instance.continuous = true; instance.interimResults = false;
     instance.onstart = () => {
       if (!held.current) { instance.stop(); return; }
       setListening(true); onListening(true);
@@ -72,14 +72,11 @@ export function VoiceInput({ disabled, onTranscript, onListening }: { disabled: 
   }
   if (!supported) return null;
   return <div>
-    <button type="button" className="parrot-button" disabled={disabled} aria-label="Hold to talk; release to place transcript in the message box" aria-pressed={listening}
-      onPointerDown={event => { if (event.button === 0) { event.currentTarget.setPointerCapture(event.pointerId); start(); } }}
-      onPointerUp={stop} onPointerCancel={stop} onPointerLeave={stop} onLostPointerCapture={stop} onBlur={stop}
-      onKeyDown={event => { if (event.key === " " || event.key === "Enter") { event.preventDefault(); if (!event.repeat) start(); } }}
-      onKeyUp={event => { if (event.key === " " || event.key === "Enter") { event.preventDefault(); stop(); } }}
-      onContextMenu={event => { event.preventDefault(); stop(); }}>
+    <button type="button" className="parrot-button" disabled={disabled} aria-pressed={listening}
+      aria-label={listening ? "Stop listening and place transcript in the message box" : "Start talking; click again to stop"}
+      onClick={() => { if (listening || held.current) stop(); else start(); }}>
       <svg width="16" height="20" viewBox="0 0 16 20" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><rect x="5" y="1" width="6" height="11" rx="3" /><path d="M2 8v2a6 6 0 0012 0V8M8 16v3M4 19h8" /></svg>
-      {listening ? "Listening…" : "Hold to talk"}
+      {listening ? "Listening… tap to stop" : "Tap to talk"}
     </button>
     {error && <p role="status" className="mt-2 max-w-64 text-xs">{error}</p>}
   </div>;
