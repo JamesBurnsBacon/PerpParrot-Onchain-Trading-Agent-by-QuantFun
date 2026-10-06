@@ -217,3 +217,24 @@ checks. Local mocked transport tests do not prove real exchange execution.
 
 References: [Hyperliquid exchange endpoint](https://hyperliquid.gitbook.io/Hyperliquid-docs/for-developers/api/exchange-endpoint)
 and [order-status queries](https://hyperliquid.gitbook.io/Hyperliquid-docs/for-developers/api/info-endpoint).
+
+### Preparing synchronized freeze artifacts
+
+`scripts/freeze.ts` now validates the frozen authority and mirror settings before
+writing either file. The prepared pair binds the same configuration hash and
+prints executor `HL_ACCOUNT`, `MAX_REPORT_TTL_SECONDS` and `MAX_GROSS_LEVERAGE`
+from that pair. Set those values together with the snapshot hash/path so service
+limits agree with the reviewed policy and mirror report lifetime.
+
+Preparation enforces the ten-minute schedule, HTTPS endpoints without embedded
+credentials, at most four multi-DEX source spot checks (14 HTTP calls including
+snapshot and executor), and at most 500 bps deviation. This follows the current
+multi-DEX workflow; ten spot checks would exceed its request budget.
+
+If a normal write fails, the writer attempts to restore both previous artifacts,
+including removing a newly created live file. It aborts before writing if the
+mirror configuration changed after preparation. A rollback failure is explicit.
+This is an offline preparation tool: do not run simultaneous freeze writers or
+serve these files while changing them. Process death can interrupt the two-file
+write. Inspect both hashes before committing/deploying after any interruption.
+No hosted service or production workflow is updated by local preparation alone.
