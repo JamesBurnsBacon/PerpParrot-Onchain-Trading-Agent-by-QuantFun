@@ -130,12 +130,21 @@ until fills are ingested, so demos and fixtures may set `allowUnknown: true`.
 Only eligible candidates with non-null metrics are ranked (N of them). Four terms, each "higher is better":
 `sortino`, `calmar`, `negMaxDrawdown = -maxDrawdown`, `pnlConsistency`. A `null` value is worse than every non-null
 value, and nulls tie with each other.
-- Percentile of a value: `N == 1 -> 0.5`; otherwise `(L + (E - 1) / 2) / (N - 1)`, where `L` is the number of values
-  strictly worse and `E` the number equal to it (including itself).
-- `score` = mean of the four percentiles (equal weights **[interpretation]**, from the README sentence
-  "Sortino, Calmar / -max drawdown and PnL consistency").
-- Order by `score` descending, ties by `address` ascending (compare lower-cased strings). `rank` is the 1-based
-  position. `finalist` is true for the first `config.finalists` candidates in that order.
+- Exact integer ranking. For a value, `L` is the number of values strictly worse and `E` the number equal to it
+  (including itself). Its integer **rank numerator** is `k = 2L + E - 1`, an integer in `0 .. 2(N-1)`.
+  Percentile = `k / (2(N - 1))`. For `N == 1` the percentile is `0.5`.
+- `scoreNumerator` = the sum of the four `k` values (an integer). `score` = `scoreNumerator / (8(N - 1))` (one
+  integer division, so equal numerators give bit-identical scores). For `N == 1`, `score = 0.5`.
+  The four terms have equal weights **[interpretation]**, from the README sentence
+  "Sortino, Calmar / -max drawdown and PnL consistency".
+- Order by `scoreNumerator` descending, compared as integers, **never by the floating-point `score` or by a sum of
+  floating-point percentiles** (such sums can differ in the last bit for mathematically equal totals, which would
+  break the address tie-break). Ties go to `address` ascending (compare lower-cased strings). For `N == 1` there is
+  nothing to order. `rank` is the 1-based position. `finalist` is true for the first `config.finalists` candidates.
+- Implementation requirement: the ranking step is a separate exported function in `score.ts`,
+  `rankByMetrics(entries: { address: string; metrics: Metrics }[], finalists: number)`, so tests can feed hand-made
+  metrics. It returns the entries in rank order with `percentiles`, `score`, `rank` and `finalist`. It is not
+  re-exported from `index.ts`.
 
 ## Output
 `candidates` lists ranked candidates first (by rank), then all others sorted by `address` ascending.

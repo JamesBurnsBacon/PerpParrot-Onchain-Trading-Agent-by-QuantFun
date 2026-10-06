@@ -19,3 +19,6 @@ ordering must match exactly.
   string `"NaN"`; convert it before use.
 - `ranking-set.json`: six inputs with `expected` for `scoreCandidates(inputs, { finalists: 3 })` (key `finalists-3`)
   and `scoreCandidates(inputs.slice(0, 1))` (key `single`). It covers ties, null metrics and the address tie-break.
+- `tie-noise.json`: four entries (`{address, metrics}`) whose scores are mathematically tied for `0x00` and `0x02`
+  but whose floating-point sums differ in the last bit, so a float-based ranking puts `0x02` first. `expected` is the
+  exact integer order (ties by address) for `rankByMetrics(entries, 3)`. It is a regression case for SPEC "Ranking".
