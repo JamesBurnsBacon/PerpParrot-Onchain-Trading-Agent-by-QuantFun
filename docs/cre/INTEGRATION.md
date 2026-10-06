@@ -1,7 +1,7 @@
 # Integrating `cre-scaffold` with the review core (`ai-agent-workflow`)
 
 Both branches touch the mirror path. This note maps what each has, where they agree, and what to
-decide before merging. Written 2026-10-06 against `ai-agent-workflow` at `8160323`.
+decide before merging. Written 2026-10-06 against `ai-agent-workflow` at `8160323`, updated for `f168b0d`.
 
 ## Shared contracts (already compatible)
 
@@ -50,6 +50,19 @@ decide before merging. Written 2026-10-06 against `ai-agent-workflow` at `816032
    `project.yaml`, so both work after a merge, but deploys go through
    `packages/cre-workflows`. *Proposal:* move `review-spike` under that project and add its
    targets there.
+
+9. **New since `f168b0d` (2026-10-06 15:44).** The review core now also adds:
+   - `packages/backend/src/snapshot.ts` (`produceSnapshot`, its own snapshot shape and
+     `perpparrot:positions:v1` hash): **same path as `cre-scaffold`'s snapshot builder**, a
+     certain merge conflict, and a second snapshot format for the same `:x9` job.
+   - `packages/backend/migrations/001_execution_state.sql` (`preview_*`, `mirror_health`,
+     `alert_outbox`, `review_audit`): a second schema next to `supabase/migrations/`, which is
+     the directory the Supabase project is linked to.
+   - `packages/contracts/src/FrozenMirrorConsumer.sol`: a HyperEVM freeze consumer, which the
+     2026-10-06 decision to drop onchain contracts (item 1) rules out.
+   - `packages/cre-workflows/mirror-spike`: a second mirror workflow.
+   *Proposal:* one snapshot builder, one schema directory (`supabase/migrations/`), one mirror
+   workflow; keep `review_audit` (the review core's own table) and drop the contract.
 
 ## Review core gates that `cre-scaffold` implements
 
