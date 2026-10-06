@@ -75,7 +75,7 @@ export type Candidate = {
   address: string;
   kind: Kind;
   pool: Pool;
-  activeDays: number | null;
+  activeDays: number | null;         // see "Filters"; null without activeStart
   filters: Record<FilterName, FilterStatus>;
   eligible: boolean;
   metrics: Metrics | null;           // null only when the month series is missing or invalid
@@ -113,7 +113,17 @@ export type ScoreConfig = {
 export function scoreCandidates(
   inputs: ScoreInput[],
   config?: Partial<ScoreConfig>,
-): { candidates: Candidate[]; finalists: string[]; funnel: FunnelStep[]; filterCounts: FilterCounts; config: ScoreConfig };
+): {
+  candidates: Candidate[];
+  finalists: string[];
+  correlations: { a: string; b: string; rho: number | null; linked: boolean }[]; // every finalist pair, a before b
+  funnel: FunnelStep[];
+  filterCounts: FilterCounts;
+  config: ScoreConfig;
+};
+
+// Metrics for one input (stitching, returns and metrics below); null when `month` is missing or invalid.
+export function computeMetrics(input: ScoreInput, config?: Partial<ScoreConfig>): Metrics | null;
 
 export function parsePortfolio(raw: unknown): { month: WindowHistory | null; allTime: WindowHistory | null };
 ```
@@ -143,15 +153,18 @@ Both windows end at the same timestamp, so `offset = allTime.pnl[last] - month.p
 baseline: `pnl'_i = month.pnl_i + offset`. On the 24 fixture accounts every `allTime` point that shares a timestamp
 with a `month` point matches `pnl'` to within 1e-9 USD.
 
-**Window.** `E` is the last `month` timestamp. `activeStart` is the first `allTime` point with account value > 0.
-`S = max(E - lookbackDays * 86_400_000, activeStart)`; if `activeStart > E - lookbackDays * 86_400_000`, add the
+**Window.** `E` is the last `month` timestamp. `activeStart` is the first point of a valid `allTime` with account
+value > 0 (none if `allTime` is missing or invalid, or has no such point).
+`S = max(E - lookbackDays * 86_400_000, activeStart)` (without `activeStart`, `S = E - lookbackDays * 86_400_000`); if `activeStart > E - lookbackDays * 86_400_000`, add the
 flag `short-history` (the account is scored on the history it has; `minActiveDays` still requires 30 days).
 
 **Alignment checks.** Tolerance: `|a - b| <= 0.01 + 1e-9 * |b|` (USD). Stitching with `allTime` requires that both
 windows are valid, end at the same timestamp with matching account value, and agree (account value and `pnl'`) at
-every shared timestamp. Otherwise drop `allTime` from the series and add `stitch-mismatch`. `history` must agree with
-`allTime` and `month` at shared timestamps; otherwise drop it and add `history-mismatch`. If `allTime` is missing or
-invalid, add `no-alltime`; the series is then `month` (plus `history`, which cannot be checked and is dropped).
+every shared timestamp. If `allTime` is missing or invalid, add `no-alltime`; if it is valid but fails these checks, add
+`stitch-mismatch`. In both cases `allTime` is not used: `month` keeps its own PnL baseline (no offset) and `history`
+is dropped (its baseline cannot be joined), so the series is `month` alone. When `allTime` is used, a non-null
+`history` must be valid and agree (account value and PnL, no offset) with `allTime` and with `month` (`pnl'`) at every
+shared timestamp; otherwise it is dropped and adds `history-mismatch`.
 
 **Series.** In time order, keeping only points with `ts >= S`:
 1. `allTime` points with `ts` before the first kept `history` point (or before the first `month` point if there is no
@@ -159,8 +172,9 @@ invalid, add `no-alltime`; the series is then `month` (plus `history`, which can
 2. `history` points with `ts` before the first `month` point: **fine**;
 3. all `month` points (with `pnl'`): **fine**.
 
-An interval is fine only if both of its end points are fine. `lookbackDays` (output) is the span of the series;
-`fineTimeShare` is the share of that span in fine intervals. Add `coarse-history` if any coarse interval is longer than
+An interval is fine only if both of its end points are fine. `lookbackDays` (output) is the span of the series,
+`(ts_last - ts_first) / 86_400_000`; `fineTimeShare` is the summed `dt` of fine intervals (used or skipped) divided by
+that span. Add `coarse-history` if any coarse interval is longer than
 `1.5 * coarseGridDays`.
 
 ## Returns
@@ -176,7 +190,9 @@ Over consecutive points `i = 1..n-1` of the series:
 **Dust guard.** `peak` is the largest account value in the series. An interval with
 `capital_i <= 0` or `capital_i < dustEquityFraction * peak` is skipped and adds `dust-equity`.
 `skippedTimeShare = sum(dt of skipped) / sum(dt of all)`. `T = sum(dt of used)`. If no interval is used or `T == 0`,
-every metric is `null` and the flag is `no-intervals`.
+add `no-intervals`: `sharpe`, `sortino`, `calmar`, `maxDrawdown`, `consistency`, `periodReturn`, `annualisedReturn`,
+`annualisedVol` and `realizedVol` are `null`; `lookbackDays`, `coveredDays` (0), `skippedTimeShare`, `fineTimeShare`
+and `allTimeMaxDrawdown` are still reported.
 
 ## Metrics
 With `mu = sum(r) / T` (mean return per day):
@@ -186,9 +202,11 @@ With `mu = sum(r) / T` (mean return per day):
 - Compounded curve: `C_0 = 1` at the first series point; after each used interval `C = C * (1 + r_i)`, recorded at
   `ts_i`. If `1 + r_i <= 0`, `C = 0` from then on and add `ruin`.
 - `periodReturn = C_last - 1`.
-- `maxDrawdown = max (peak_j - C_j) / peak_j` over the **drawdown points**: the curve sampled at
-  `ts_0 + k * coarseGridDays` (the last curve value at or before each grid time) for every grid time before the first
-  fine interval starts, followed by every curve point from there on. This puts the coarse part of every account on the
+- The **curve value at time t** is the value of the last curve point at or before `t` (`C_0` at the first series point).
+- `maxDrawdown = max (peak_j - C_j) / peak_j` (with `peak_j` the running maximum, so the result is in 0..1) over the
+  **drawdown points**, in time order. With `fineStart` the start time of the first fine interval: the curve value at
+  `ts_0 + k * coarseGridDays * 86_400_000` for `k = 0, 1, ...` while that time is `< fineStart`; then the curve value at
+  `fineStart`; then every curve point with `ts > fineStart`. Without coarse intervals `fineStart = ts_0`. This puts the coarse part of every account on the
   same 7-day grid, so accounts with daily `allTime` points are not penalised against accounts with fortnightly ones.
 - `calmar = ratio(periodReturn, maxDrawdown)`. Add `no-drawdown` when `maxDrawdown == 0, periodReturn > 0`.
 - `consistency` **[interpretation]** (README: "PnL consistency"): over all curve points (including `C_0`),
@@ -256,18 +274,20 @@ Two accounts running the same strategy (copies, sub-accounts, a vault and its le
 finalist slots and concentrate the copy portfolio in one strategy's idiosyncratic risk. Clones are grouped **before**
 the finalist cut, across both pools, so every slot goes to a distinct strategy.
 
-**Daily returns.** For each ranked candidate, take the curve points of its fine intervals (see "Metrics") and sample
-them at every UTC midnight (`ts % 86_400_000 == 0`) inside the fine span, using the last curve value at or before
-the midnight; `d_k = ln(C_k / C_{k-1})` for consecutive midnights. A day whose sample is 0 (after `ruin`) is not
+**Daily returns.** For each ranked candidate, the fine span runs from `fineStart` (see "Metrics") to the last series
+point. Take the curve value (see "Metrics") at every UTC midnight (`ts % 86_400_000 == 0`) inside the fine span, both
+ends included; `d_k = ln(C_k / C_{k-1})` for consecutive midnights, keyed by the later midnight. A day whose sample is 0 (after `ruin`) is not
 used (ruined accounts are not ranked anyway).
 
 **Correlation.** For two candidates, use the midnights both have; if there are fewer than `minOverlapDays` daily returns
 in common, or either side has zero variance, the pair has no correlation (`null`) and is not grouped by correlation.
-Otherwise `rho` is the Pearson correlation of the two daily-return lists.
+Otherwise `rho = sum((x - mean_x)(y - mean_y)) / sqrt(sum((x - mean_x)^2) * sum((y - mean_y)^2))` over the common
+days (zero variance means a sum of squared deviations exactly 0). The same `rho` is reported in `correlations`.
 
 **Greedy grouping** (deterministic). Walk the ranked candidates in cross-pool order. A candidate becomes a **clone**
-of the first earlier **representative** that it is linked to (either side lists the other in `links`, compared
-lower-cased) or with which `rho >= cloneCorrelation`; otherwise it becomes a representative. Comparisons are only
+of the first earlier **representative** (in cross-pool order) that it is linked to (either side lists the other in
+`links`, compared lower-cased) or with which `rho >= cloneCorrelation`; a link is recorded with `correlation: null`
+even when `rho` is also high. Otherwise it becomes a representative. Comparisons are only
 against representatives, never against clones, so groups cannot chain. A clone gets
 `cloneOf = { address, correlation }` (`correlation: null` for a link); its representative lists it in `clones`.
 Clones keep their percentiles, score and rank (they describe the account), but they are never finalists.
@@ -287,12 +307,14 @@ If `R_trader + R_vault <= F`, every representative is a finalist. Otherwise each
 `s_pool` representatives by rank are finalists:
 - `"proportional"` (provisional default, **[tune]**): `q = F * R_pool / (R_trader + R_vault)`; `s = floor(q)`; the
   remaining slots go one at a time to the pool with the larger fractional part (`trader` first on a tie); a pool with
-  `R_pool > 0` and `s = 0` takes one slot from the other pool.
+  `R_pool > 0` and `s = 0` takes one slot from the other pool if that pool has at least 2 slots.
 - `{ trader, vault }`: fixed slots that must sum to `F`; slots a pool cannot fill go to the other pool.
 
 ## Output
 `candidates`: ranked candidates in cross-pool order, then all others sorted by address. `finalists`: finalist
-addresses in cross-pool order. Addresses are compared case-insensitively; two inputs with the same lower-cased address
+addresses in cross-pool order. `correlations`: one entry per pair of finalists `(a, b)` with `a` before `b` in
+`finalists`, in that order (by `a`, then `b`); `rho` as in "Clone grouping", `linked` when either lists the other in
+`links`. Addresses are compared case-insensitively; two inputs with the same lower-cased address
 make `scoreCandidates` throw `Error("duplicate address: ...")`.
 `funnel`, in order: `universe` (all inputs); after each filter in funnel order, the number of candidates that pass that
 filter and all earlier ones (`unknown` counts as passed only for filters in `allowUnknown`); `eligible` (ranked
@@ -336,7 +358,7 @@ the rest. This needs schema version `1.1.0` with seven new fields:
 | **new** `lookbackDays` | `metrics.lookbackDays` |
 | **new** `scoreFlags` | `metrics.flags` |
 | **new** `clones` | `clones` (addresses grouped under this finalist), so the agent sees what was merged |
-| `pairs[].correlation`, `pairs[].linkedSource` | `rho` between finalists (`null` if under `minOverlapDays`) and `links` |
+| `pairs[].correlation`, `pairs[].linkedSource` | `correlations[].rho` and `.linked`, with `a`/`b` as finalist positions |
 | `oosWindows`, `oosSharpe`, `oosSortino`, `oosMaxDrawdown`, `crossWindowStability` | not from Score: `0` / `null` until the backtest supplies them |
 
 Consequence: `review/workflow.ts` rejects a candidate with `oosSharpe === null`, so no candidate passes the review
