@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { SQL } from "bun";
-import { hashIp, MemoryChatLimiter, PostgresChatLimiter, type ChatLimiter, type LimitConfig, type Kind } from "../src/chat/limits";
+import { CHAT_LIMITER_LOCK_KEY, hashIp, MemoryChatLimiter, PostgresChatLimiter, type ChatLimiter, type LimitConfig, type Kind } from "../src/chat/limits";
 
 const cfg: LimitConfig = { ipHourly: 10, previewIpHourly: 30, globalDaily: 100, dailyBudgetMicroUsd: 1000 };
 const nowMs = 2_000_000_000_000;
@@ -78,6 +78,31 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("PostgresChatLimiter", () => {
   beforeEach(async () => { await sql`truncate public.chat_usage`; });
   afterAll(async () => { await sql.close(); });
   cases(() => limiter);
+
+  // Deterministic proof that reserve takes the advisory lock: a burst can pass by luck, this cannot.
+  test("reserve waits while another transaction holds the advisory lock", async () => {
+    const cfg: LimitConfig = { ipHourly: 10, previewIpHourly: 30, globalDaily: 100, dailyBudgetMicroUsd: 5_000_000 };
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    let locked!: () => void;
+    const lockTaken = new Promise<void>((resolve) => { locked = resolve; });
+    const holder = sql.begin(async (tx) => {
+      await tx`select pg_advisory_xact_lock(${CHAT_LIMITER_LOCK_KEY}::bigint)`;
+      locked();
+      await held;
+    });
+    await lockTaken;
+    let settled = false;
+    const pending = limiter.reserve({ ipHash: "h", kind: "chat", nowMs: Date.now(), reserveMicroUsd: 1, cfg }).then((r) => {
+      settled = true;
+      return r;
+    });
+    await Bun.sleep(300);
+    expect(settled).toBe(false);
+    release();
+    await holder;
+    expect((await pending).ok).toBe(true);
+  });
 });
 
 test("salted IP SHA256", () => {

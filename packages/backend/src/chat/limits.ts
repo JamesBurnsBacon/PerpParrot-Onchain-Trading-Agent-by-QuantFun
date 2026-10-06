@@ -52,15 +52,17 @@ export class MemoryChatLimiter implements ChatLimiter {
 }
 
 
+// Fixed advisory-lock key shared by every chat limiter instance (exported so a test can hold it).
+export const CHAT_LIMITER_LOCK_KEY = 72478103621001;
+
 export class PostgresChatLimiter implements ChatLimiter {
   constructor(private readonly sql: SQL) {}
 
   async reserve({ ipHash, kind, nowMs, reserveMicroUsd, cfg }: Parameters<ChatLimiter["reserve"]>[0]): Promise<Reservation> {
     return await this.sql.begin(async (tx): Promise<Reservation> => {
-      // Fixed bigint key 72478103621001 is reserved for all chat limiter instances.
       // The transaction lock serializes reserves across processes and is pooler-safe.
       // Counts MUST be a later statement: READ COMMITTED then sees the prior commit.
-      await tx`select pg_advisory_xact_lock(72478103621001::bigint)`;
+      await tx`select pg_advisory_xact_lock(${CHAT_LIMITER_LOCK_KEY}::bigint)`;
       const [counts] = await tx`
         select
           count(*) filter (where kind = ${kind} and ip_hash = ${ipHash} and ts_ms > ${nowMs - HOUR_MS}) as hourly_count,
