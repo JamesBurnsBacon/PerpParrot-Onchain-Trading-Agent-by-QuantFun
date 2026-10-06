@@ -6,3 +6,4 @@ node_modules/
 work/
 dist/
 *.wasm
+packages/backend/data/

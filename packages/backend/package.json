@@ -6,12 +6,16 @@
   "scripts": {
     "dev": "bun run --watch src/server.ts",
     "start": "bun run src/server.ts",
+    "ingest": "bun run src/ingest/cli.ts",
+    "ingest:sync": "bun run src/ingest/sync-cli.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
   },
   "license": "UNLICENSED",
   "dependencies": {
-    "viem": "^2.57.3"
+    "@supabase/supabase-js": "^2.117.2",
+    "viem": "^2.57.3",
+    "zod": "3.25.76"
   },
   "devDependencies": {
     "@types/bun": "^1.4.2",

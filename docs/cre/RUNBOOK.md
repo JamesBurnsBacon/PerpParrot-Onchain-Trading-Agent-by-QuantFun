@@ -106,10 +106,12 @@ To deploy everything before CRE deploy access and the freeze, follow
 [DEPLOY_REHEARSAL.md](DEPLOY_REHEARSAL.md) first.
 
 1. **Supabase:** project `PerpParrot` (ref `clheeepphmomkymawsfq`, linked to this repo with working
-   directory `.`, automatic deploys off; see `docs/supabase` on its branch). Run
-   both files in `supabase/migrations/` in order (SQL editor, or `supabase link
-   --project-ref clheeepphmomkymawsfq && supabase db push`). Use the service-role connection
-   string as `DATABASE_URL` for both services.
+   directory `.`, automatic deploys off; see `docs/supabase` on its branch). Apply the
+   required files in `supabase/migrations/` in timestamp order for a fresh database.
+   In this linked project, `20261006070000_ingest.sql` was already applied through the SQL
+   Editor, but is not recorded in CLI migration history. Compare the live schema and
+   reconcile migration history before using `supabase db push`; do not reset the database.
+   Use the service-role connection string as `DATABASE_URL` for both services.
 2. **Railway:** two services from this repo, **root directory = repository root** (both import
    `packages/shared`). Config file: `packages/backend/railway.json` and
    `packages/executor/railway.json` (Dockerfile build, `/health` check, one replica each).
