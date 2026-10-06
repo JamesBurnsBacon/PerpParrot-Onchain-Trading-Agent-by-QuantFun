@@ -1,4 +1,5 @@
 // Hyperliquid reads for the executor: market metadata and our live account.
+import { portfolioEquityE6, type PortfolioResponse } from "../../shared/account";
 import { ELIGIBLE_DEXES } from "../../shared/snapshot";
 import type { LiveAccount, Market } from "./planner";
 
@@ -40,19 +41,22 @@ export const loadMarkets = async (info: InfoFn): Promise<Map<string, Market>> =>
 };
 
 type ClearinghouseState = {
-  marginSummary: { accountValue: string };
   assetPositions: { position: { coin: string; szi: string } }[];
 };
 
-// Equity and positions across the eligible dexes (core + xyz).
+// Positions across the eligible dexes (core + xyz) and HL's live account value
+// (the portfolio request; per-dex accountValue is misleading for unified accounts,
+// see shared/account.ts).
 export const loadAccount = async (info: InfoFn, user: string): Promise<LiveAccount> => {
-  const states = await Promise.all(
-    ELIGIBLE_DEXES.map((dex) => info<ClearinghouseState>({ type: "clearinghouseState", user, ...(dex ? { dex } : {}) })),
-  );
-  let equityUsd = 0;
+  const [states, portfolio] = await Promise.all([
+    Promise.all(
+      ELIGIBLE_DEXES.map((dex) => info<ClearinghouseState>({ type: "clearinghouseState", user, ...(dex ? { dex } : {}) })),
+    ),
+    info<PortfolioResponse>({ type: "portfolio", user }),
+  ]);
+  const equityUsd = Number(portfolioEquityE6(portfolio)) / 1e6;
   const positions = new Map<string, { szi: number }>();
   for (const state of states) {
-    equityUsd += Number(state.marginSummary.accountValue);
     for (const { position } of state.assetPositions) {
       const szi = Number(position.szi);
       if (szi !== 0) positions.set(position.coin, { szi });

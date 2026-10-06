@@ -11,7 +11,7 @@ export type SnapshotPosition = {
 
 export type SnapshotSource = {
   address: string;
-  // Account value across the eligible dexes (core + xyz) × 1e6.
+  // HL's live account value × 1e6 (shared/account.ts: portfolio request).
   equityE6: string;
   // Eligible assets only.
   positions: SnapshotPosition[];

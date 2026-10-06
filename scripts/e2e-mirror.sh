@@ -25,7 +25,7 @@ ACCOUNT="$(bun -e "console.log((await Bun.file('$CONFIGURATION').json()).account
 ADMIN_TOKEN="e2e-$RANDOM$RANDOM"
 PIDS=()
 
-cleanup() { for pid in "${PIDS[@]:-}"; do kill "$pid" 2>/dev/null && wait "$pid" 2>/dev/null; done; return 0; }
+cleanup() { for pid in "${PIDS[@]:-}"; do { kill "$pid" && wait "$pid"; } 2>/dev/null || true; done; }
 trap cleanup EXIT
 
 wait_up() {

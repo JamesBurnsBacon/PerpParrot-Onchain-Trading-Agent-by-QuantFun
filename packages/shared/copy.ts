@@ -15,33 +15,12 @@ export const decToE6 = (value: string): bigint => {
   return m[1] ? -abs : abs;
 };
 
-type ClearinghouseState = {
-  marginSummary: { accountValue: string };
-  assetPositions: { position: { coin: string; szi: string; positionValue: string } }[];
-};
-
 const abs = (n: bigint) => (n < 0n ? -n : n);
 
 export type AccountState = {
   equityE6: bigint;
   // Signed notional per eligible asset.
   positions: Map<string, bigint>;
-};
-
-// Merges HL clearinghouseState responses for each dex into one account view.
-export const parseAccount = (states: ClearinghouseState[], eligible: ReadonlySet<string>): AccountState => {
-  let equityE6 = 0n;
-  const positions = new Map<string, bigint>();
-  for (const state of states) {
-    equityE6 += decToE6(state.marginSummary.accountValue);
-    for (const { position } of state.assetPositions) {
-      if (!eligible.has(position.coin)) continue;
-      const value = decToE6(position.positionValue);
-      const signed = position.szi.startsWith("-") ? -value : value;
-      positions.set(position.coin, (positions.get(position.coin) ?? 0n) + signed);
-    }
-  }
-  return { equityE6, positions };
 };
 
 export type WeightedSource = SnapshotSource & { weightE6: number; ceilingE6: number };

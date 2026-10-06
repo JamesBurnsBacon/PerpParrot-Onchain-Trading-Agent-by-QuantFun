@@ -30,11 +30,10 @@ const fakeInfo = (account: { equity: string; core?: [string, string][]; xyz?: [s
             ];
       case "clearinghouseState": {
         const positions = (req.dex === "xyz" ? account.xyz : account.core) ?? [];
-        return {
-          marginSummary: { accountValue: req.dex === "xyz" ? "0" : account.equity },
-          assetPositions: positions.map(([coin, szi]) => ({ position: { coin, szi } })),
-        };
+        return { assetPositions: positions.map(([coin, szi]) => ({ position: { coin, szi } })) };
       }
+      case "portfolio":
+        return [["day", { accountValueHistory: [[1, "1"], [2, account.equity]] }]];
     }
     throw new Error(`unexpected info request ${req.type}`);
   }) as InfoFn;
@@ -52,6 +51,7 @@ const setup = (info: InfoFn) => {
     config: {
       account: ACCOUNT,
       maxGrossLeverage: 50,
+      equityTolerance: 0.1,
       plan: { minOrderUsd: 10, driftFraction: 0.1, marginCap: 0.95, slippageBps: 50 },
     },
   });
@@ -117,9 +117,18 @@ describe("Runner.executeReport (dry run)", () => {
     expect(exchange.recorded()).toEqual([]);
   });
 
+  test("rejects a report whose equity is far from ours and alerts", async () => {
+    // The report was sized for $470; the account holds $600.
+    const { runner, alerts } = setup(fakeInfo({ equity: "600" }));
+    const run = await runner.executeReport(await verified(), {});
+    expect(run.status).toBe("failed");
+    expect(run.error).toContain("differs from live $600.00 by more than 10%");
+    expect(alerts).toHaveLength(1);
+  });
+
   test("rejects targets beyond the gross leverage bound and alerts", async () => {
     const { runner, alerts } = setup(fakeInfo({ equity: "10" }));
-    const run = await runner.executeReport(await verified(), {});
+    const run = await runner.executeReport(await verified(body({ equityE6: 10_000_000n })), {});
     expect(run.status).toBe("failed");
     expect(run.error).toContain("exceeds 50× equity");
     expect(alerts).toHaveLength(1);

@@ -11,6 +11,9 @@ export type RunnerConfig = {
   plan: PlanConfig;
   // Sanity bound (README §4.8): reject reports whose gross target exceeds this × live equity.
   maxGrossLeverage: number;
+  // Reject reports whose equity differs from ours by more than this fraction: the
+  // DON sized the targets with it, so a mismatch means wrong sizing.
+  equityTolerance: number;
 };
 
 export type RunnerDeps = {
@@ -42,6 +45,11 @@ export class Runner {
   executeReport(report: VerifiedReport, envelope: unknown): Promise<RunRecord> {
     this.lastReportAt = this.deps.now();
     return this.serial(() => this.run(report.id, report.body.runId, "report", envelope, async (markets, account) => {
+      const reportEquity = Number(report.body.equityE6) / 1e6;
+      const { equityTolerance } = this.deps.config;
+      if (Math.abs(reportEquity - account.equityUsd) > equityTolerance * Math.max(account.equityUsd, 0)) {
+        throw new Error(`report equity $${reportEquity.toFixed(2)} differs from live $${account.equityUsd.toFixed(2)} by more than ${equityTolerance * 100}%`);
+      }
       const targets = new Map(report.body.targets.map((t) => [t.asset, Number(t.notionalE6) / 1e6]));
       const gross = [...targets.values()].reduce((sum, usd) => sum + Math.abs(usd), 0);
       const { maxGrossLeverage } = this.deps.config;

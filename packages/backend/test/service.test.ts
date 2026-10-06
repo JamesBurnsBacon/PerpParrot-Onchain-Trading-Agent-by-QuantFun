@@ -6,22 +6,25 @@ import configurationFixture from "../fixtures/frozen-configuration.json";
 import { applyHysteresis, EligibilityTracker, openInterestFromMeta } from "../src/eligibility";
 import type { ConfigurationSource } from "../src/configuration-source";
 import { nextRunAt, SnapshotError, SnapshotService } from "../src/service";
-import { buildSnapshot, keccakUtf8, MemorySnapshotStore, type ReadAccount } from "../src/snapshot";
+import type { HlReader } from "../src/hyperliquid";
+import { buildSnapshot, keccakUtf8, MemorySnapshotStore } from "../src/snapshot";
 
 const configuration = configurationFixture as FrozenConfiguration;
 const NOW = Date.parse("2026-10-07T12:09:10Z");
 
-// Every source: $1M equity on core, 0.5× long BTC, plus a DOGE position that isn't eligible.
-const readAccount: ReadAccount = async (_user, dex) =>
-  dex === "xyz"
-    ? { marginSummary: { accountValue: "0" }, assetPositions: [] }
-    : {
-        marginSummary: { accountValue: "1000000" },
-        assetPositions: [
-          { position: { coin: "BTC", szi: "5", positionValue: "500000" } },
-          { position: { coin: "DOGE", szi: "1", positionValue: "1" } },
-        ],
-      };
+// Every source: $1M account value, 0.5× long BTC, plus a DOGE position that isn't eligible.
+const hl: HlReader = {
+  perp: async (_user, dex) =>
+    dex === "xyz"
+      ? { assetPositions: [] }
+      : {
+          assetPositions: [
+            { position: { coin: "BTC", szi: "5", positionValue: "500000" } },
+            { position: { coin: "DOGE", szi: "1", positionValue: "1" } },
+          ],
+        },
+  portfolio: async () => [["day", { accountValueHistory: [[1, "900000"], [2, "1000000"]] }]],
+};
 
 describe("fixture configuration", () => {
   test("is a valid frozen configuration", () => {
@@ -29,7 +32,7 @@ describe("fixture configuration", () => {
   });
 
   test("matches the hash the mirror staging config pins", () => {
-    expect(configuration.configurationHash).toBe("0x941733b50dcecd3e3c631adaab703d8acf672df8fb399ac4b9427e92d67ce6b6");
+    expect(configuration.configurationHash).toBe("0xe315a6608a1ba198c5d4b9e6786dce9276773452eaff3aead1edab8ad647c3a6");
   });
 });
 
@@ -75,10 +78,8 @@ describe("checkFrozenConfiguration", () => {
   });
 
   test("rejects weights above their ceiling", () => {
-    const sources = configuration.sources.map((s, i) => (i === 0 ? { ...s, weightUnits: s.ceilingUnits + 1 } : s));
-    expect(pinnedTo(edited({ sources, cashUnits: configuration.cashUnits - sources[0].weightUnits + configuration.sources[0].weightUnits }))).toThrow(
-      "invalid frozen weight",
-    );
+    const sources = configuration.sources.map((s, i) => (i === 0 ? { ...s, ceilingUnits: s.weightUnits - 1 } : s));
+    expect(pinnedTo(edited({ sources }))).toThrow("invalid frozen weight");
   });
 
   test("rejects totals that don't add up to 1", () => {
@@ -135,7 +136,7 @@ describe("eligibility", () => {
 
 describe("buildSnapshot", () => {
   test("covers every frozen source, sorted, with eligible positions only", async () => {
-    const snap = await buildSnapshot(configuration, ["BTC", "ETH"], 1_791_281_400, 1_791_281_350, readAccount);
+    const snap = await buildSnapshot(configuration, ["BTC", "ETH"], 1_791_281_400, 1_791_281_350, hl);
     expect(snap.snapshotId).toBe("snap-1791281400");
     expect(snap.configuration).toBe(configuration);
     const addresses = snap.sources.map((s) => s.address);
@@ -154,10 +155,13 @@ describe("SnapshotService", () => {
       eligibility: new EligibilityTracker(async () => new Map([["BTC", 1e9]])),
       store: new MemorySnapshotStore(),
       nowMs: () => nowMs,
-      readAccount: async (...args) => {
-        builds++;
-        await Bun.sleep(5);
-        return readAccount(...args);
+      hl: {
+        perp: async (...args) => {
+          builds++;
+          await Bun.sleep(5);
+          return hl.perp(...args);
+        },
+        portfolio: hl.portfolio,
       },
     });
     return { service, builds: () => builds / (2 * configuration.sources.length) };

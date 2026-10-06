@@ -26,17 +26,20 @@ decide before merging. Written 2026-10-06 against `ai-agent-workflow` at `816032
    consensus on live prices and our live positions, which differ per node; targets only need
    consensus on deterministic exposures from an immutable snapshot plus a median equity.
 3. **Spot-check sample size.** The review core samples `min(10, sources)`. Each HL account needs
-   2 calls (core + `xyz` dex), so 10 sources + our account + snapshot + executor = 24 calls,
-   over CRE's 15. `cre-scaffold` samples 5 (14 calls).
-4. **Snapshot commitment.** The review core hashes positions snapshots under
+   3 calls (core + `xyz` positions, `portfolio` equity), so 10 sources would be 30 calls, over
+   CRE's 15. `cre-scaffold` samples 4 (1 snapshot + 1 own equity + 12 + 1 executor = 15).
+4. **Equity.** Read from HL's `portfolio` request (live account value), not Σ per-dex
+   `accountValue`, which understates equity for unified and portfolio-margin accounts (most
+   leaderboard traders). Worth using the same definition in the review core's evidence.
+5. **Snapshot commitment.** The review core hashes positions snapshots under
    `perpparrot:positions:v1`; `cre-scaffold` uses keccak256 of the served JSON bytes (nodes agree
    on bytes, not on a re-serialization). Either works; pick one before the dashboard verifies them.
-5. **Tooling.** Review core: pnpm workspace, Node 24 test runner, root `tsconfig.json` with
+6. **Tooling.** Review core: pnpm workspace, Node 24 test runner, root `tsconfig.json` with
    `NodeNext`. `cre-scaffold`: per-package Bun (`bun test`, `bun.lock`). The root `tsconfig.json`
    includes `packages/**/*.ts`, which would also typecheck `cre-scaffold`'s extensionless imports.
    *Proposal:* exclude `packages/{backend,executor,cre-workflows/mirror,cre-workflows/review}` from
    the root tsconfig, or move them into the workspace with `moduleResolution: "bundler"`.
-6. **File collisions.** Both branches add `packages/executor/package.json` and files under
+7. **File collisions.** Both branches add `packages/executor/package.json` and files under
    `packages/cre-workflows/mirror/`. The review core's `paper.ts`, `core.ts` and `runner.ts` don't
    collide by name with `cre-scaffold`'s files, but the two `package.json` files do.
 

@@ -42,6 +42,7 @@ const runner = new Runner({
   config: {
     account: config.account,
     maxGrossLeverage: config.maxGrossLeverage,
+    equityTolerance: config.equityTolerance,
     plan: {
       minOrderUsd: config.minOrderUsd,
       driftFraction: config.driftFraction,

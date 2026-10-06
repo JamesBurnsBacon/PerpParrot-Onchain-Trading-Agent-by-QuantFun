@@ -5,7 +5,6 @@ import {
   computeExposures,
   decToE6,
   deviationBps,
-  parseAccount,
   toTargetE6,
   type WeightedSource,
 } from "../../shared/copy";
@@ -28,26 +27,6 @@ describe("decToE6", () => {
 
   test("rejects non-decimals", () => {
     expect(() => decToE6("1e5")).toThrow("not a decimal");
-  });
-});
-
-describe("parseAccount", () => {
-  test("sums equity across dexes and signs notionals, keeping eligible assets only", () => {
-    const core = {
-      marginSummary: { accountValue: "1000.5" },
-      assetPositions: [
-        { position: { coin: "BTC", szi: "0.01", positionValue: "850.0" } },
-        { position: { coin: "ETH", szi: "-0.1", positionValue: "300.0" } },
-        { position: { coin: "DOGE", szi: "100", positionValue: "20.0" } },
-      ],
-    };
-    const xyz = {
-      marginSummary: { accountValue: "200" },
-      assetPositions: [{ position: { coin: "xyz:MSFT", szi: "-1", positionValue: "450.25" } }],
-    };
-    const acct = parseAccount([core, xyz], new Set(["BTC", "ETH", "xyz:MSFT"]));
-    expect(acct.equityE6).toBe(1_200_500_000n);
-    expect(Object.fromEntries(acct.positions)).toEqual({ BTC: 850_000_000n, ETH: -300_000_000n, "xyz:MSFT": -450_250_000n });
   });
 });
 

@@ -54,12 +54,13 @@ Unit tests per package: `bun test` in `packages/backend`, `packages/executor`,
 | `SLIPPAGE_BPS` | no | `50` | IOC limit = mark ± this |
 | `MIN_ORDER_USD` / `DRIFT_FRACTION` / `MARGIN_CAP` | no | `10` / `0.1` / `0.95` | README §4.4, §4.8 |
 | `MAX_GROSS_LEVERAGE` | no | `50` | Sanity bound: reject reports above this × equity |
+| `EQUITY_TOLERANCE` | no | `0.1` | Reject reports whose equity is further than this from our live account value |
 | `MAX_REPORT_LEAD_SECONDS` | no | `60` | How far `asOf` may be ahead of our clock (`600` for simulation) |
 | `MISSED_RUN_ALERT_MINUTES` | no | `25` | Alert after this long without a report |
 
 ### `mirror` workflow (`config.production.json`)
 
-`backendUrl`, `executorUrl`, `frozenConfigurationHash`, `spotCheckCount` (≤ 5: HTTP budget),
+`backendUrl`, `executorUrl`, `frozenConfigurationHash`, `spotCheckCount` (≤ 4: HTTP budget),
 `maxDeviationBps` (500), `maxSnapshotAgeSeconds` (120), `reportTtlSeconds` (300). No secrets.
 The production file holds placeholders until the services are deployed and the set is frozen.
 
@@ -113,5 +114,6 @@ CRE UI or with `cre workflow pause`.
 | Mirror error `spot-check failed` | Mirror log line with the deviation | A source traded between `:x9` and `:x0`, or a bad snapshot. Holds this run only |
 | Mirror error `executor rejected the report: HTTP 401` | Executor logs | Signature/owner check: `WORKFLOW_OWNER`, Ethereum RPC |
 | `HTTP 422` | Executor logs (`error` field) | Configuration hash, account or expiry mismatch |
+| Run `failed`: `report equity … differs from live` | `/runs` | Our account value moved > 10% between `:x0` and execution, or the account isn't the one in the configuration |
 | Run `failed` in `/runs` | `error` on the run | HL unreachable, or the gross-leverage bound |
 | Orders with `status: "error"` | `results` on the run | HL rejection (min size, margin); the next run retries |

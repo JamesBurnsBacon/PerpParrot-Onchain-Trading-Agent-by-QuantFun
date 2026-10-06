@@ -12,7 +12,7 @@ import { checkSnapshot, pickSample } from "./snapshot";
 const config = staging as Config;
 const configuration = configurationFixture as FrozenConfiguration;
 const RUN_AT = 1_791_281_400;
-const LEAD = "0x1e37a337ed460039d1b15bd3bc489de789768d5e"; // weight 0.2
+const LEAD = "0x1e37a337ed460039d1b15bd3bc489de789768d5e"; // weight 0.15
 
 const snapshot = (overrides: Partial<PositionsSnapshot> = {}): PositionsSnapshot => ({
   snapshotId: `snap-${RUN_AT}`,
@@ -39,9 +39,9 @@ describe("checkSnapshot", () => {
   test("accepts a snapshot for this run and attaches frozen weights and ceilings", () => {
     const sources = checkSnapshot(snapshot(), limits);
     const byAddress = new Map(sources.map((s) => [s.address, s.weightE6]));
-    expect(byAddress.get(LEAD)).toBe(200_000);
-    expect([...byAddress.values()].reduce((a, b) => a + b, 0)).toBe(800_000); // 20% cash
-    expect(sources.every((s) => s.ceilingE6 === 250_000)).toBe(true);
+    expect(byAddress.get(LEAD)).toBe(150_000);
+    expect([...byAddress.values()].reduce((a, b) => a + b, 0)).toBe(750_000); // 25% cash
+    expect(sources.every((s) => s.ceilingE6 === 300_000)).toBe(true);
   });
 
   test("rejects another run's snapshot", () => {
@@ -61,7 +61,7 @@ describe("checkSnapshot", () => {
   test("rejects a tampered configuration", () => {
     // Moves weight between sources: totals still add up, the commitment doesn't.
     const sources = configuration.sources.map((s, i) =>
-      i === 0 ? { ...s, weightUnits: 210_000 } : i === 1 ? { ...s, weightUnits: 140_000 } : s,
+      i === 0 ? { ...s, weightUnits: 160_000 } : i === 1 ? { ...s, weightUnits: 90_000 } : s,
     );
     expect(() => checkSnapshot(snapshot({ configuration: { ...configuration, sources } }), limits)).toThrow(
       "frozen commitment mismatch",
@@ -69,7 +69,7 @@ describe("checkSnapshot", () => {
   });
 
   test("rejects renormalization past a source's ceiling", () => {
-    // Only the 0.2-weight source is active: it would carry 0.8 against a 0.25 ceiling.
+    // Only the 0.15-weight source is active: it would carry 0.75 against a 0.3 ceiling.
     const s = snapshot();
     s.sources = s.sources.map((src) => (src.address === LEAD ? src : { ...src, positions: [] }));
     expect(() => checkSnapshot(s, limits)).toThrow("active-source concentration exceeds ceiling");

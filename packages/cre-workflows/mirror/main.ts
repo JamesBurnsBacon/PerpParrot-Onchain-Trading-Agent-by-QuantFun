@@ -17,7 +17,8 @@ import {
   text,
 } from "@chainlink/cre-sdk";
 import { z } from "zod";
-import { capGrossExposure, computeExposures, deviationBps, EXPOSURE_SCALE, parseAccount, toTargetE6 } from "../../shared/copy";
+import { portfolioEquityE6, readAccountState, type PerpState, type PortfolioResponse } from "../../shared/account";
+import { capGrossExposure, computeExposures, deviationBps, EXPOSURE_SCALE, toTargetE6 } from "../../shared/copy";
 import type { MirrorReport } from "../../shared/report";
 import { ELIGIBLE_DEXES } from "../../shared/snapshot";
 import { encodeReportBody, toEnvelope } from "./report";
@@ -33,9 +34,9 @@ const configSchema = z.object({
   // configurationHash of the frozen configuration (README §4.7 freeze commitment).
   // It also fixes our HL account, whose equity sizes the targets.
   frozenConfigurationHash: z.string().regex(/^0x[0-9a-f]{64}$/),
-  // 2 HTTP calls per source (core + xyz). Budget: 1 snapshot + 2 own account
-  // + 2 × spotCheckCount + 1 executor ≤ 15.
-  spotCheckCount: z.number().int().min(1).max(5),
+  // 3 HTTP calls per source (core + xyz positions, portfolio equity). Budget:
+  // 1 snapshot + 1 own equity + 3 × spotCheckCount + 1 executor ≤ CRE's 15.
+  spotCheckCount: z.number().int().min(1).max(4),
   maxDeviationBps: z.number().int().positive(),
   maxSnapshotAgeSeconds: z.number().int().positive(),
   // The executor rejects the report after asOf + reportTtlSeconds.
@@ -72,27 +73,31 @@ const observe = (nodeRuntime: NodeRuntime<Config>, runAt: number): Observation =
     maxSnapshotAgeSeconds: config.maxSnapshotAgeSeconds,
   });
 
+  const hlInfo = <T>(body: Record<string, unknown>): T => {
+    const res = http
+      .sendRequest(nodeRuntime, {
+        url: HL_INFO_URL,
+        method: "POST",
+        body: bytesToBase64(new TextEncoder().encode(JSON.stringify(body))),
+        headers: { "Content-Type": "application/json" },
+      })
+      .result();
+    if (!ok(res)) throw new Error(`HL ${body.type} failed: ${res.statusCode}`);
+    return json(res) as T;
+  };
+  const portfolio = (user: string) => hlInfo<PortfolioResponse>({ type: "portfolio", user });
+
+  // Live view of a source: positions on each eligible dex plus its account value.
   const eligible = new Set(snapshot.eligibleAssets);
-  const account = (user: string) =>
-    parseAccount(
-      ELIGIBLE_DEXES.map((dex) => {
-        const body = JSON.stringify({ type: "clearinghouseState", user, ...(dex ? { dex } : {}) });
-        const res = http
-          .sendRequest(nodeRuntime, {
-            url: HL_INFO_URL,
-            method: "POST",
-            body: bytesToBase64(new TextEncoder().encode(body)),
-            headers: { "Content-Type": "application/json" },
-          })
-          .result();
-        if (!ok(res)) throw new Error(`HL clearinghouseState failed: ${res.statusCode}`);
-        return json(res) as Parameters<typeof parseAccount>[0][number];
-      }),
+  const liveSource = (user: string) =>
+    readAccountState(
+      ELIGIBLE_DEXES.map((dex) => hlInfo<PerpState>({ type: "clearinghouseState", user, ...(dex ? { dex } : {}) })),
+      portfolio(user),
       eligible,
     );
 
   const sample = pickSample(sources, snapshot.snapshotId, config.spotCheckCount);
-  const maxDev = Math.max(...sample.map((s) => deviationBps(s, account(s.address))));
+  const maxDev = Math.max(...sample.map((s) => deviationBps(s, liveSource(s.address))));
 
   const maxGrossE9 = BigInt(Math.round(snapshot.configuration.policy.maxGrossLeverage * Number(EXPOSURE_SCALE)));
   const exposures = capGrossExposure(computeExposures(sources), maxGrossE9);
@@ -103,7 +108,8 @@ const observe = (nodeRuntime: NodeRuntime<Config>, runAt: number): Observation =
     snapshotHash: keccakUtf8(raw),
     exposures: JSON.stringify(exposures.map((e) => ({ asset: e.asset, exposureE9: e.exposureE9.toString() }))),
     maxDeviationBps: maxDev,
-    equityE6: account(snapshot.configuration.account).equityE6,
+    // Only our equity is needed here; the executor reads our positions itself.
+    equityE6: portfolioEquityE6(portfolio(snapshot.configuration.account)),
   };
 };
 

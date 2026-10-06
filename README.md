@@ -169,19 +169,20 @@ A dedicated workstream, integrated into the CRE flow.
 Each node runs steps 1–3 (`runInNodeMode`); the DON agrees per field, then signs and sends in step 4. Code: `packages/cre-workflows/mirror`, `packages/shared`.
 1. **Fetch the positions snapshot** for this run: `GET {backendUrl}/snapshots/{runAt}` (1 call). The backend builds it at `:x9` and never changes it, so every node gets identical bytes (`packages/shared/snapshot.ts`).
    - Contents: the **frozen configuration** (below), the eligible-asset list, and per frozen source its equity and eligible positions (signed USD notional). Amounts are decimal strings × 1e6.
+   - **Equity = HL's live account value** from the `portfolio` request (last point of the `day` window, live), not Σ per-dex `accountValue`. Most leaderboard traders use unified or portfolio-margin accounts (23 + 5 of 40 sampled), where per-dex `accountValue` is only the margin set aside on that dex; summing it understated equity, and so overstated leverage, by 2–10×. The portfolio value is also what the backtest's returns use.
    - The mirror rejects it if it's for another run, was taken > 120 s from `runAt`, contains an ineligible asset, doesn't cover exactly the frozen sources, or its configuration isn't the pinned one.
-2. **Spot-check 5 sources** and read our account via `clearinghouseState` on the core dex **and** `xyz` (HIP-3 positions and margin only come back per dex, so 2 calls per account). The sample is seeded by the snapshot ID, so every node checks the same sources. Deviation = the larger of Σ |snapshot − live notional| and |snapshot − live equity|, over live equity. **Reject the run if the worst source exceeds 5%.**
+2. **Spot-check 4 sources**: `clearinghouseState` on the core dex **and** `xyz` (HIP-3 positions only come back per dex) plus `portfolio` for equity, 3 calls each. Our own equity takes 1 more `portfolio` call. The sample is seeded by the snapshot ID, so every node checks the same sources. Deviation = the larger of Σ |snapshot − live notional| and |snapshot − live equity|, over live equity. **Reject the run if the worst source exceeds 5%.**
 3. **Exposures:** `exposure_c = Σᵢ wᵢ' · nᵢ,c / Eᵢ` per asset in bigint math (`packages/shared/copy.ts`), so every node gets identical results.
    - Weights are the frozen `weightUnits`; cash stays cash. Flat sources' weight goes to active ones (`wᵢ' = wᵢ · W_all / W_active`), but **never past a source's frozen ceiling** (the run fails instead). Gross exposure is capped at the policy's `maxGrossLeverage`.
    - **Consensus:** snapshot ID, snapshot hash, account and exposures are `identical`; max deviation and our equity are `median` (live reads differ slightly between nodes). Only ≤ 59 exposures go through consensus, not the snapshot, which stays under the 25 KB limit (a 25-source snapshot can be ~60 KB).
 4. **Targets** = exposure × our equity → `report()` → `sendReport()` POSTs it to the executor (§4.13). Orders, the drift rule (§4.4) and the 95% margin rule (§4.8) are the executor's job, against the live account.
 
-**HTTP calls: 14 of CRE's 15** (1 snapshot + 2 own account + 10 spot-check + 1 executor), enforced by the simulator.
+**HTTP calls: 15 of CRE's 15** (1 snapshot + 1 own equity + 12 spot-check + 1 executor), enforced by the simulator. No room for retries: a failed call fails the run, and the next run retries.
 - **Frozen configuration = execution authority.** The review core (branch `ai-agent-workflow`, `shared/src/frozen.ts`) turns a VALID/LIVE review into a `FrozenConfiguration`: sources with integer weight and ceiling units, cash units, **our account**, the policy, and a `configurationHash` (keccak over canonical JSON, domain `perpparrot:frozen:v1`). `packages/shared/frozen.ts` re-implements its checks without dependencies so they run in WASM; the fixture passes the review core's own validator.
 - **Freeze commitment:** the `configurationHash` is pinned in `mirror`'s production config, so it's part of the deployed workflow ID, and it's inside every DON-signed report. The executor rejects any other hash. **No onchain contract:** everything trades in our own HL account, and the signed reports (executor `/runs`, dashboard) are the verifiable record; anyone can check them against the Capability Registry. Freezing = set the hash in `config.production.json`, redeploy `mirror` via CI, set the executor's `FROZEN_CONFIGURATION_HASH`, load the configuration into the backend.
 - **On failure** (snapshot, consensus, spot-check, executor rejection, timeout): the run throws, the executor holds positions, and the next run retries. The executor alerts on Telegram after 25 min without a report (≈ 2 missed runs). There is no backend fallback.
 - **Assets that lose eligibility:** the executor closes them (they're absent from the targets) rather than following sources' reductions (§4.4 reduce-only). Simpler, and HL allows reduce-only closes of any size; revisit if it costs too much.
-- **Status (2026-10-06):** `scripts/e2e-mirror.sh` passes end to end in simulation on live HL data: backend snapshot (6 real vaults, 59 eligible assets) → `cre workflow simulate mirror` (configuration verified in WASM, 1 bps spot-check) → executor (verified, planned, signed in dry run). Not exercised until deploy: real multi-node consensus and the registry signature check.
+- **Status (2026-10-06):** `scripts/e2e-mirror.sh all` passes six scenarios in simulation on live HL data, with a frozen set covering every HL account mode (4 standard vaults, 2 unified and 1 portfolio-margin trader with HIP-3 positions): the happy path (configuration verified in WASM, report verified, planned and signed in dry run), a paused executor, backend down, executor down, a mismatched configuration (HTTP 422) and a tampered snapshot (spot-check fails). Not exercised until deploy: real multi-node consensus and the registry signature check.
 
 ### 4.8 Execute (executor service on Railway)
 Code: `packages/executor`. One long-running Bun service (Railway, `Dockerfile` + `railway.json`), so there's one HL nonce sequence, an in-process run queue and no function timeout.
@@ -191,7 +192,7 @@ Code: `packages/executor`. One long-running Bun service (Railway, `Dockerfile` +
   - **margin rule:** if `Σ |N_c| / maxLev_c` would exceed **95% of equity**, scale **all** targets down pro-rata
   - **drift rule:** trade a leg only if the gap is ≥ $10 and ≥ 10% of the target; full closes are always allowed (reduce-only)
   - reductions first; reduce-only whenever an order only shrinks a position
-  - **sanity bound:** reject the report if gross target > 50× equity
+  - **sanity bounds:** reject the report if gross target > 50× equity, or if its equity is > 10% away from our live account value (the targets were sized with it)
 - **Orders:** IOC limit at mark ± 50 bps, prices and sizes rounded to HL tick/lot rules, ≤ 20 orders per action, a deterministic `cloid` per report and asset. Remainders are retried on the next run.
 - **Leverage:** cross margin; each asset at its **max leverage** (`updateLeverage`, once per asset; many HIP-3 markets are 10x, BTC up to 40x).
 - **Dry run by default:** orders are built and signed through `@nktkas/hyperliquid` exactly as they'd be sent, then recorded instead of POSTed. `DRY_RUN=false` plus `HL_API_WALLET_KEY` goes live.
@@ -339,8 +340,7 @@ Budget ~1 h of testing per 2 h of features. Integrate only tested modules.
 - [ ] ❓ Mirror → executor report: **targets** (§4.13, built and tested) or **≤ 10 orders** (review core's `rebalance-report.schema.json`)? Targets keep live prices and our positions out of DON consensus.
 - [ ] ❓ Live bucket: README says Aggressive; the review core only allows **Balanced** live (`requireFrozenLiveManifest`, `validateFrozenConfiguration`)
 - [ ] ❓ Freeze confirmation: the review core's docs plan a HyperEVM freeze consumer; we dropped onchain contracts and pin the `configurationHash` in the mirror config instead (§4.7)
-- [ ] ❓ Does HL accept reduce-only closes under $10? The planner assumes yes (full closes skip the minimum)
-- [ ] ❓ Does spot USDC count toward our equity? Today equity = core + `xyz` perp account value
+- [ ] ❓ Our account mode: **unified** is simplest (one USDC balance margins core and `xyz`); standard mode needs USDC moved into each dex. Equity is read the same way either way
 
 ---
 

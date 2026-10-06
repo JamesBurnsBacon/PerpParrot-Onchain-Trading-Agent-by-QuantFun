@@ -10,7 +10,7 @@
     "capitalUsd": 470,
     "minOrderUsd": 10,
     "minExecutableTargets": 3,
-    "maxSourceWeight": 0.25,
+    "maxSourceWeight": 0.3,
     "maxGrossLeverage": 3,
     "cashBuffer": 0.1,
     "maxPairCorrelation": 0.8,
@@ -24,45 +24,51 @@
     "redTeamRebuildThreshold": 70,
     "redTeamExcludeThreshold": 85
   },
-  "policyHash": "0x05067d07259744af32de9b20391c5e75bd26c5ecf4cf668eaa71fcd56ec460cd",
+  "policyHash": "0xbb3a3c8c38f7cc363ec91f34ee7dd1f35cf7d70124944b509b23a45a3db3cc49",
   "sources": [
     {
       "candidate": 0,
       "sourceAddress": "0x1e37a337ed460039d1b15bd3bc489de789768d5e",
-      "weightUnits": 200000,
-      "ceilingUnits": 250000
+      "weightUnits": 150000,
+      "ceilingUnits": 300000
     },
     {
       "candidate": 1,
       "sourceAddress": "0xc179e03922afe8fa9533d3f896338b9fb87ce0c8",
-      "weightUnits": 150000,
-      "ceilingUnits": 250000
+      "weightUnits": 100000,
+      "ceilingUnits": 300000
     },
     {
       "candidate": 2,
       "sourceAddress": "0x07fd993f0fa3a185f7207adccd29f7a87404689d",
-      "weightUnits": 150000,
-      "ceilingUnits": 250000
+      "weightUnits": 100000,
+      "ceilingUnits": 300000
     },
     {
       "candidate": 3,
       "sourceAddress": "0x53f8f390fd4f70941c5d160a964f6893c8dbceff",
       "weightUnits": 100000,
-      "ceilingUnits": 250000
+      "ceilingUnits": 300000
     },
     {
       "candidate": 4,
-      "sourceAddress": "0x654016a8c9fcf0c4cb7ed6078aba21f7f399f7b7",
+      "sourceAddress": "0xfd4d5751b60a7a7a67bd6fd0aa72dc7d704abce1",
       "weightUnits": 100000,
-      "ceilingUnits": 250000
+      "ceilingUnits": 300000
     },
     {
       "candidate": 5,
-      "sourceAddress": "0xd6e56265890b76413d1d527eb9b75e334c0c5b42",
+      "sourceAddress": "0x1b9a49c3797b12f3b913a963cca7460d751b1073",
       "weightUnits": 100000,
-      "ceilingUnits": 250000
+      "ceilingUnits": 300000
+    },
+    {
+      "candidate": 6,
+      "sourceAddress": "0xa2ce35322f09280e98f104f955b1bce3cfa11fa9",
+      "weightUnits": 100000,
+      "ceilingUnits": 300000
     }
   ],
-  "cashUnits": 200000,
-  "configurationHash": "0x941733b50dcecd3e3c631adaab703d8acf672df8fb399ac4b9427e92d67ce6b6"
+  "cashUnits": 250000,
+  "configurationHash": "0xe315a6608a1ba198c5d4b9e6786dce9276773452eaff3aead1edab8ad647c3a6"
 }

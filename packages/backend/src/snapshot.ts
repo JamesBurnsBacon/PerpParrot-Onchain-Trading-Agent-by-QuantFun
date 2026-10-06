@@ -1,29 +1,30 @@
 import { keccak256, stringToBytes } from "viem";
-import { parseAccount } from "../../shared/copy";
+import { readAccountState } from "../../shared/account";
 import type { KeccakUtf8 } from "../../shared/commitments";
 import type { FrozenConfiguration } from "../../shared/frozen";
 import { ELIGIBLE_DEXES, type PositionsSnapshot } from "../../shared/snapshot";
-import { clearinghouseState } from "./hyperliquid";
+import { hlReader, type HlReader } from "./hyperliquid";
 
 export const keccakUtf8: KeccakUtf8 = (text) => keccak256(stringToBytes(text));
 
-export type ReadAccount = typeof clearinghouseState;
-
-// Reads every frozen source on each eligible dex. Sources are sorted by address
-// so the JSON is canonical for a given set of readings.
+// Reads every frozen source: positions on each eligible dex and HL's live account
+// value. Sources are sorted by address so the JSON is canonical for a given set of readings.
 export const buildSnapshot = async (
   configuration: FrozenConfiguration,
   eligibleAssets: string[],
   runAt: number,
   takenAt: number,
-  readAccount: ReadAccount = clearinghouseState,
+  hl: HlReader = hlReader,
 ): Promise<PositionsSnapshot> => {
   const eligible = new Set(eligibleAssets);
   const addresses = configuration.sources.map((s) => s.sourceAddress.toLowerCase()).sort();
   const sources = await Promise.all(
     addresses.map(async (address) => {
-      const states = await Promise.all(ELIGIBLE_DEXES.map((dex) => readAccount(address, dex)));
-      const account = parseAccount(states, eligible);
+      const [perpStates, portfolio] = await Promise.all([
+        Promise.all(ELIGIBLE_DEXES.map((dex) => hl.perp(address, dex))),
+        hl.portfolio(address),
+      ]);
+      const account = readAccountState(perpStates, portfolio, eligible);
       return {
         address,
         equityE6: account.equityE6.toString(),
