@@ -69,15 +69,16 @@ else
   echo "soak: $ROUNDS rounds, ${INTERVAL}s apart, logs in $OUT"
 fi
 for i in $(seq 1 "$ROUNDS"); do
-  if [ "$(code_state)" != "$START_STATE" ]; then
-    echo "stopping: the code changed during the soak (rounds after this would test a mix of versions)"
-    break
-  fi
   # Production timing: start 10 s before the run (the simulator compiles for ~4 s before it
   # reads the clock and stamps the next :x0), in a window whose snapshot the scheduler
   # prebuilt at ~:x8:30, so not within 2 minutes of the services starting.
+  # Waits before the code check below, so an edit during the wait is still caught.
   if [ "$TIMING" = production ]; then
     until s=$(( $(date +%s) % 600 )); [ "$s" -ge 590 ] && [ "$s" -le 594 ] && [ $(( $(date +%s) - SERVICES_AT )) -gt 120 ]; do sleep 1; done
+  fi
+  if [ "$(code_state)" != "$START_STATE" ]; then
+    echo "stopping: the code changed during the soak (rounds after this would test a mix of versions)"
+    break
   fi
   t0=$(date +%s)
   if out=$(cd "$ROOT/packages/cre-workflows" && "$CRE" workflow simulate mirror --target staging-settings --trigger-index 0 --non-interactive 2>&1); then
@@ -93,7 +94,10 @@ for i in $(seq 1 "$ROUNDS"); do
   printf '{"i":%d,"t":"%s","ok":%s,"secs":%d,"snap":"%s","leadS":%s,"devBps":%s,"err":"%s"}\n' \
     "$i" "$(date -u +%H:%M:%S)" "$([ $rc = 0 ] && echo true || echo false)" "$(( $(date +%s) - t0 ))" \
     "$snap" "$lead" "${dev:-null}" "$err" | tee -a "$RESULTS"
-  [ "$i" -lt "$ROUNDS" ] && [ "$TIMING" != production ] && sleep "$INTERVAL"
+  if [ "$i" -lt "$ROUNDS" ]; then
+    # Production timing: leave the start window, so a fast failure can't run twice for one run.
+    if [ "$TIMING" = production ]; then sleep 10; else sleep "$INTERVAL"; fi
+  fi
 done
 
 # Summary: pass/fail counts, failure reasons, deviation range, executor run outcomes.
