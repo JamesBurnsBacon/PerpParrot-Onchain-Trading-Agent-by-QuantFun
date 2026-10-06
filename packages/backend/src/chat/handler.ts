@@ -3,6 +3,7 @@ import type { Policy } from "../../../shared/src/contracts";
 import { intentToPolicy, parseStrategyIntent, shortlist, type FinalistLike, type StrategyIntent } from "../../../shared/strategy-intent";
 import { hashIp, type ChatLimiter, type Kind, type LimitConfig, type Reservation } from "./limits";
 import { callIntentModel, ModelError } from "./openai";
+import { selectStrategy } from "./strategy";
 import { buildPreview, PreviewError } from "./preview";
 import { buildMessages, type HistoryTurn } from "./prompt";
 
@@ -55,7 +56,7 @@ const REPLIES = {
 type FailureCode = keyof typeof REPLIES;
 const json = (body: unknown, status = 200, headers: Record<string, string> = {}): Response =>
   Response.json(body, { status, headers: { "Access-Control-Allow-Origin": "*", ...headers } });
-const failure = (status: number, code: FailureCode, retryAfterSec?: number): Response =>
+export const failure = (status: number, code: FailureCode, retryAfterSec?: number): Response =>
   json({ ok: false, code, reply: REPLIES[code], ...(retryAfterSec === undefined ? {} : { retryAfterSec }) }, status,
     retryAfterSec === undefined ? {} : { "Retry-After": String(retryAfterSec) });
 const object = (value: unknown): value is Record<string, unknown> =>
@@ -124,12 +125,10 @@ export const handleChat = async (req: Request, deps: ChatDeps): Promise<Response
     // USD per million tokens becomes micro-USD per token, cancelling both million factors.
     const costMicroUsd = Math.ceil(promptTokens * deps.env.priceInPerM + completionTokens * deps.env.priceOutPerM);
     await deps.limiter.settle({ id: reservation.id, tokens: promptTokens + completionTokens, costMicroUsd });
-    const { policy, ...policySummary } = intentToPolicy(intent, deps.basePolicy);
-    const { finalists, dataSource } = await deps.finalists();
-    const addresses = shortlist(finalists, intent, policySummary.effectiveMaxSources);
+    const { policyResult: _policyResult, ...selection } = selectStrategy(intent, deps.basePolicy, await deps.finalists());
     const latencyMs = deps.now() - started;
     audit("ok", { intent, promptTokens, completionTokens });
-    return json({ ok: true, reply: intent.reply, clarify: intent.clarify, intent, policy: policySummary, shortlist: { addresses, dataSource }, model: deps.env.model, latencyMs });
+    return json({ ok: true, reply: intent.reply, clarify: intent.clarify, intent, ...selection, model: deps.env.model, latencyMs });
   } catch (error) {
     const code = infeasible(error) ? "infeasible" : "unavailable";
     audit(code);

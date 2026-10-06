@@ -8,6 +8,19 @@ const cases = (get: () => ChatLimiter) => {
   const reserve = (ipHash = "ip-a", t = nowMs, kind: Kind = "chat", reserveMicroUsd = 1, config = cfg) =>
     get().reserve({ ipHash, nowMs: t, kind, reserveMicroUsd, cfg: config });
 
+  test("live counts are separate, costs shared and settlement releases either kind", async () => {
+    const config = { ...cfg, ipHourly: 1, globalDaily: 1 };
+    const live = await reserve("a", nowMs, "live", 600, config);
+    expect(live.ok).toBe(true);
+    expect(await reserve("a", nowMs, "live", 0, config)).toMatchObject({ ok: false, reason: "ip_hourly" });
+    expect(await reserve("b", nowMs, "live", 0, config)).toMatchObject({ ok: false, reason: "global_daily" });
+    expect(await reserve("b", nowMs, "chat", 401, config)).toMatchObject({ ok: false, reason: "daily_budget" });
+    expect((await reserve("b", nowMs, "chat", 400, config)).ok).toBe(true);
+    if (!live.ok) throw new Error("reserve failed");
+    await get().settle({ id: live.id, tokens: 0, costMicroUsd: 0 });
+    expect((await reserve("c", nowMs, "live", 600, cfg)).ok).toBe(true);
+    expect(await reserve("d", nowMs, "chat", 1, cfg)).toMatchObject({ ok: false, reason: "daily_budget" });
+  });
   test("ten accepted then ip limit, separate IP unaffected", async () => {
     for (let i = 0; i < 10; i++) expect((await reserve()).ok).toBe(true);
     expect(await reserve()).toEqual({ ok: false, reason: "ip_hourly", retryAfterSec: 3600 });
@@ -73,6 +86,9 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("PostgresChatLimiter", () => {
   beforeAll(async () => {
     sql = new SQL(process.env.TEST_DATABASE_URL!);
     await sql.unsafe(await Bun.file(new URL("../../../supabase/migrations/20261006140000_chat.sql", import.meta.url)).text());
+    const liveMigration = await Bun.file(new URL("../../../supabase/migrations/20261007000000_live_usage.sql", import.meta.url)).text();
+    await sql.unsafe(liveMigration);
+    await sql.unsafe(liveMigration);
     limiter = new PostgresChatLimiter(sql);
   });
   beforeEach(async () => { await sql`truncate public.chat_usage`; });

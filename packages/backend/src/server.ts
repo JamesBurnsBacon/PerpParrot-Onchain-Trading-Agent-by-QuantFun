@@ -14,6 +14,8 @@ import { handleChat, handlePreview, MemoryRequestStore, PostgresRequestStore, ty
 import { MemoryChatLimiter, PostgresChatLimiter } from "./chat/limits";
 import { callIntentModel } from "./chat/openai";
 import { loadFinalists } from "./chat/finalists";
+import { readLiveEnv } from "./live/config";
+import { handleLiveSession, handleLiveStrategy } from "./live/handler";
 import { validateRuntimePolicy } from "../../shared/src/policy-runtime";
 
 const env = process.env;
@@ -116,6 +118,7 @@ const chatStores = {
   limiter: sql ? new PostgresChatLimiter(sql) : new MemoryChatLimiter(),
   requests: sql ? new PostgresRequestStore(sql) : new MemoryRequestStore(),
 };
+const liveEnv = readLiveEnv(env);
 let chatDeps: Promise<ChatDeps> | undefined;
 const loadChatDeps = (): Promise<ChatDeps> => chatDeps ??= configurations.load(Date.now()).then(
   ({ policy }): ChatDeps => {
@@ -158,6 +161,17 @@ const server = Bun.serve({
     const { pathname: path, searchParams } = new URL(req.url);
     // Public under /api/backend on Vercel; the bare paths serve local runs.
     const pathname = path.replace(/^\/api\/backend(?=\/|$)/, "") || "/";
+    if (pathname === "/live/session" || pathname === "/live/strategy") {
+      if (!liveEnv.enabled || (pathname === "/live/session" && !liveEnv.apiKey)) return chatDisabled();
+      if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: chatCors });
+      let chat: ChatDeps;
+      try { chat = await loadChatDeps(); }
+      catch { return chatDisabled(); }
+      const deps = { ...chat, env: liveEnv, chatEnv, fetchImpl: fetch };
+      const response = await (pathname === "/live/session" ? handleLiveSession(req, deps) : handleLiveStrategy(req, deps));
+      for (const [name, value] of Object.entries(chatCors)) response.headers.set(name, value);
+      return response;
+    }
     if (pathname === "/chat" || pathname === "/chat/preview") {
       if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: chatCors });
       if (req.method === "POST") {
