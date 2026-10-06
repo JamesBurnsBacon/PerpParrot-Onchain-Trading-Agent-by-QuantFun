@@ -116,13 +116,19 @@
   - risk-adjusted return: **Sharpe** and **Sortino**
   - drawdown: **Calmar** and **−max drawdown**
   - **PnL consistency**: R² of the log equity curve against time (0 if it trends down)
+- **Pure takers score slightly lower.** If under 5% of an account's perp volume in the last 30 days was maker fills,
+  0.02 is taken off its score (❓ *both values tuned*). Accounts with unknown maker share are not penalized.
+  - Why: in an out-of-sample test (2 × 200 accounts), a high maker share did not predict returns.
+  - Near-zero maker accounts had about twice the drawdowns, mostly because they trade more of their equity.
+  - Evidence: `scripts/research/maker-share/`.
 - **Clone grouping before the cut:** accounts whose daily returns correlate ≥ 0.9 (❓ *tuned*), or that are known to be linked (vault ↔ leader, sub-accounts), are grouped and only the best-scoring one can be a finalist. Duplicates would concentrate the portfolio in one strategy's idiosyncratic risk.
 - **Top ~25 distinct strategies → finalists**, with slots split between traders and vaults (❓ *split set in tuning*). Full definitions: `packages/backend/src/score/SPEC.md`.
 - **Also computed** for the agent:
   - annualized return and volatility, all-time max drawdown (reported, not ranked)
   - realized volatility and average leverage
   - time in market and holding times
-  - **maker/taker volume split** (from `crossed` on fills, or `userFees`; verify). A high maker share suggests sophistication, but market-maker inventory may not be copyable. ❓ *Plus or exclusion?*
+  - **maker/taker volume split**: maker notional / total perp notional, from `crossed` on fills. `userFees` daily
+    volumes disagreed with fills on sampled accounts. The split also drives the pure-taker penalty above.
 
 ### 4.3 Buckets
 | Bucket | Source universe | Exposure | Hackathon mode |
@@ -359,7 +365,7 @@ Budget ~1 h of testing per 2 h of features. Integrate only tested modules.
 ## 8. Open questions
 - [ ] ❓ Which two models (≥ 1 OpenAI)
 - [ ] ❓ Agent output format: weight grid, continuous weights, or ranking
-- [ ] ❓ Maker share: a plus or an exclusion?
+- [x] Maker share: **neither**. Zero or near-zero maker volume (< 5%) is a slight score penalty (§4.2); a high share earns nothing. Evidence: `scripts/research/maker-share/`
 - [ ] ❓ Balanced multiplier `m` (from the backtest)
 - [ ] ❓ How to read sources' lending positions for Conservative
 - [ ] ❓ Per-tier type-B threshold N (production)

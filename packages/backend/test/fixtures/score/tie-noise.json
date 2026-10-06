@@ -93,6 +93,7 @@
     "consistency": 1.0
    },
    "scoreNumerator": 24,
+   "makerPenalty": 0,
    "score": 0.6666666666666666,
    "rank": 1
   },
@@ -106,6 +107,7 @@
     "consistency": 0.3333333333333333
    },
    "scoreNumerator": 20,
+   "makerPenalty": 0,
    "score": 0.5555555555555556,
    "rank": 2
   },
@@ -119,6 +121,7 @@
     "consistency": 0.6666666666666666
    },
    "scoreNumerator": 14,
+   "makerPenalty": 0,
    "score": 0.3888888888888889,
    "rank": 3
   },
@@ -132,6 +135,7 @@
     "consistency": 0.0
    },
    "scoreNumerator": 14,
+   "makerPenalty": 0,
    "score": 0.3888888888888889,
    "rank": 4
   }

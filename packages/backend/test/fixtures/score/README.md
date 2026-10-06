@@ -69,6 +69,11 @@ The funnel stage formerly named `eligible` is now `ranked` in `clones.json`, `ra
 `portfolio-sample.expected.json`, and is also `ranked` in `links.json`. It counts ranked candidates, which can be fewer
 than the candidates remaining after `noRuin`; the candidate's `eligible` boolean still describes filter eligibility.
 
+The pure-taker penalty (SPEC "Ranking", 2026-10-06) added `makerPenalty` to every candidate and `rankPool` entry
+(`0` when ranked, `null` otherwise) and `pureTakerMakerShare: 0.05`, `pureTakerPenalty: 0.02` to every full config.
+These were added mechanically. No fixture input has a `makerShare` below 0.05, so no reference value changed. The
+penalty itself is checked by hand-computed cases in `test/score/rank.test.ts` and `test/score/score.test.ts`.
+
 ## Comparison rule
 - Numbers match within `1e-9 * max(1, |expected|)`.
 - `null`, `"+inf"`, booleans, strings, `flags` and every ordering (candidates, finalists, correlations, funnel,

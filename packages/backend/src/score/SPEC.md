@@ -40,7 +40,8 @@ export type ScoreInput = {
   avgLeverage?: number | null;
   timeInMarket?: number | null;
   medianHoldHours?: number | null;
-  makerShare?: number | null;
+  makerShare?: number | null;    // maker notional / total perp notional, fills of the 30 days before scoring;
+                                 // also drives the pure-taker penalty (see "Ranking"); null = unknown, no penalty
 };
 
 export type FilterName =
@@ -81,7 +82,8 @@ export type Candidate = {
   eligible: boolean;
   metrics: Metrics | null;           // null only when month is missing or invalid; overflow metrics remain reported
   percentiles: Percentiles | null;   // within the pool; null unless ranked
-  scoreNumerator: number | null;     // integer; null unless ranked
+  scoreNumerator: number | null;     // integer, net of makerPenalty; null unless ranked
+  makerPenalty: number | null;       // integer units taken off a pure taker (see "Ranking"); 0 if none; null unless ranked
   score: number | null;              // 0..1; null unless ranked
   rank: number | null;               // 1-based within the pool; null unless ranked
   cloneOf: { address: string; correlation: number | null; via?: string } | null; // null correlation = non-head link-group member;
@@ -110,6 +112,8 @@ export type ScoreConfig = {
   finalists: number;             // 25
   finalistSplit: "proportional" | { trader: number; vault: number }; // "proportional" [tune]
   allowUnknown: FilterName[];    // []. See "Eligibility".
+  pureTakerMakerShare: number;   // 0.05  [tune] maker share below this is a pure taker. See "Ranking".
+  pureTakerPenalty: number;      // 0.02  [tune] score taken off a pure taker, on a 0.001 grid
 };
 
 export function scoreCandidates(
@@ -265,14 +269,22 @@ Order of values: `"+inf"` is better than every number, `null` is worse than ever
 - Exact integer ranking. For a value, `L` is the number of values in the pool strictly worse and `E` the number equal to
   it (including itself). Its **rank numerator** is `k = 2L + E - 1`, an integer in `0 .. 2(N-1)`.
   Percentile = `k / (2(N - 1))`.
-- `scoreNumerator = sum(weight * k)`, an integer in `0 .. 12(N-1)`. `score = scoreNumerator / (12(N - 1))`.
-  For `N == 1` every percentile and the score are `0.5` and `scoreNumerator = 0`.
+- `scoreNumerator = sum(weight * k) - makerPenalty`, an integer in `0 .. 12(N-1)`. `score = scoreNumerator / (12(N - 1))`.
+  For `N == 1` every percentile and the score are `0.5`, `scoreNumerator = 0` and `makerPenalty = 0`.
+- **Pure-taker penalty** (README §4.2, decided 2026-10-06). A candidate whose `makerShare` is known and
+  `< pureTakerMakerShare` is a pure taker. Its `makerPenalty = min(P, sum(weight * k))`, where
+  `P = floor((2 * m * 12(N-1) + 1000) / 2000)` and `m = round(1000 * pureTakerPenalty)`. In words: `P` is the
+  penalty in numerator units, `pureTakerPenalty * 12(N-1)` rounded half up, computed in integers. Everyone else
+  has `makerPenalty = 0`, including an unknown (`null` or absent) `makerShare`. The penalty changes the score and
+  the order, never the percentiles. In a small pool it can round to 0 (default 0.02 needs `N >= 4`).
 - Order within the pool: `scoreNumerator` descending (integers); then raw `sharpe` descending (same value order as
   above); then `address` ascending (lower-cased). Never order by the floating-point `score` or by a sum of floating-point
   percentiles. `rank` is the 1-based position in the pool.
-- Implementation requirement: `rankPool(entries: { address: string; metrics: Metrics }[])` is a separate exported
-  function in `score.ts` (not re-exported from `index.ts`) so tests can feed hand-made metrics. It returns
-  `{ address, percentiles, scoreNumerator, score, rank }[]` in rank order.
+- Implementation requirement:
+  `rankPool(entries: { address: string; metrics: Metrics; makerShare?: number | null }[], config?)` is a separate
+  exported function in `score.ts` (not re-exported from `index.ts`), so tests can feed hand-made metrics. `config`
+  holds `pureTakerMakerShare` and `pureTakerPenalty` and defaults to the defaults. It returns
+  `{ address, percentiles, scoreNumerator, makerPenalty, score, rank }[]` in rank order.
 
 **Cross-pool order** (used for the finalist list and the output): compare `score` exactly as fractions
 `scoreNumerator / (12(N-1))` (`1/2` for `N == 1`) by cross-multiplying integers; ties by raw `sharpe`, then address.
@@ -358,7 +370,8 @@ Invalid config throws, and the error names the field: `finalists`, `minMonthPoin
 >= 1; `coarseGridDays` > 0; `dustEquityFraction` and `maxSkippedTimeShare` in [0, 1]; `cloneCorrelation` in
 (0, 1]; `minOverlapDays` an integer >= 3; the other thresholds finite and
 >= 0 (a non-integer `minTrades` is allowed); fixed `finalistSplit` values non-negative integers summing to `finalists`;
-`allowUnknown` entries must be filter names.
+`allowUnknown` entries must be filter names; `pureTakerMakerShare` in [0, 1]; `pureTakerPenalty` in [0, 1] and a
+multiple of 0.001.
 
 ## Snapshots (ingest, README 4.1)
 Hyperliquid serves `month` at about 16-hour resolution but older history only through the coarse `allTime` window.
@@ -413,6 +426,8 @@ Files: `src/score/{types,config,parse,stitch,returns,metrics,filters,score,clone
 ## To decide in tuning (2026-10-07)
 - The **[tune]** values: `lookbackDays` 90, `stillActiveDays` 7, `dustEquityFraction` 0.01, `maxSkippedTimeShare`
   0.20, `cloneCorrelation` 0.90, and the `finalistSplit` between traders and vaults (to be set after seeing how live traders and vaults differ).
+- **Pure-taker penalty** `pureTakerMakerShare` 0.05 and `pureTakerPenalty` 0.02. It is dormant until ingest supplies
+  `makerShare` from fills; recheck its size against live funnels.
 - **Near-cash accounts rank first.** On the sample, `addr-21` (+0.4% over 82 days, 0.008% drawdown, R² 0.94)
   ranks #1. All five terms are risk-adjusted or shape-based, so an account with almost no risk and almost no return
   wins. A return hurdle (minimum `annualisedReturn`) or a return term may be needed.
@@ -462,10 +477,24 @@ Funnel on the sample (synthetic `closed`/`tradeCount` overlay, default config): 
 - The funnel counts candidates that passed each filter and all earlier ones.
 - Pure functions in `packages/backend/src/score/`, nothing exported from a package entry point, no new dependencies.
 - Fill-derived values (`tradeCount`, `avgLeverage`, `timeInMarket`, `medianHoldHours`, `makerShare`) are inputs that a
-  future ingest supplies. Score only passes them through.
+  future ingest supplies. Score passes them through. `makerShare` also drives the pure-taker penalty (next item).
 - Fixture addresses are replaced by `addr-NN`. `closed` and `tradeCount` in `portfolio-sample.json` are synthetic.
 - **Decided 2026-10-06** (after PR #18): link groups are built over all inputs, so an unranked account can bridge two
   ranked ones; a unit moves as a whole when its head is a correlation clone; a head is compared with every member of
   each earlier representative's link unit (not with correlation clones), and `cloneOf.via` names the member that matched.
 - **[interpretation of this task]** The flag for a non-finite main-path drawdown is named `overflow`.
 - **Decided 2026-10-06** (after PR #18): `toFrameCandidates` stays pure and returns `skipped`; its caller logs it.
+- **Decided 2026-10-06** (README §8 "Maker share: a plus or an exclusion?"): neither. Zero or near-zero maker volume is a
+  **slight negative**: the pure-taker penalty in "Ranking". The evidence is `scripts/research/maker-share/`, an
+  out-of-sample test with maker share measured on the 30 days before t0 and the outcome on the 30 days after.
+  There were two periods of 200 randomly drawn accounts each.
+  - A high maker share predicted neither forward return nor Sharpe (ρ 0.01-0.04 and 0.12, n.s.), so it is not a plus.
+  - Accounts below 5% maker had about twice the median forward drawdown in both periods. In period 1 it was 30% vs
+    15%, family-wise p = 0.017 across ten thresholds. Period 2 was coarse: 6.9% vs 3.4%, n.s.
+  - Most of that gap is turnover (notional / equity / day, about 2.7x higher for pure takers). Controlling for it
+    leaves +0.26 rank-SD in period 1 (95% CI -0.01 to 0.52) and +0.03 in period 2.
+  - Forward returns were no worse.
+  - Hence a slight penalty, not an exclusion.
+  - Exactly 0% alone was not the signal: the 0-5% group was worse in both periods, so the cut is 5%.
+  - The heaviest makers (more than HL's ~10k-fill cap a month) could not be measured, so the finding covers
+    copy-sized traders.
