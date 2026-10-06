@@ -38,9 +38,9 @@ export const gridSamples = (curve: CurvePoint[], firstTs: number, fineStart: num
       continue;
     }
     const tickAt = (k: number): number => k === 0 ? firstTs : firstTs + k * step;
-    let k = from > firstTs ? Math.max(1, Math.ceil(ticks)) : 0; // a step that overflows to Infinity leaves only k = 0
+    let k = Math.ceil(ticks);
     if (k > 1 && tickAt(k - 1) >= from) k -= 1; // `ticks` rounded up past an exact tick
-    else if (tickAt(k) < from) k += 1; // or rounded down to a tick just before this segment
+    else if (tickAt(k) < from) k += 1; // or rounded down to a tick just before this segment (also an Infinity step)
     if (Math.max(tickAt(k), from) < to) samples.push(curve[j].value);
   }
   return samples;
