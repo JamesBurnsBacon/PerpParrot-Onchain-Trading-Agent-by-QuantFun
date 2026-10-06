@@ -1,5 +1,8 @@
 import { SQL } from "bun";
-import type { Controls, ExecutorStore, RunRecord } from "./store";
+import type { Controls, ExecutorStore, OrderBatch, RunRecord } from "./store";
+import type { OrderResult } from "./exchange";
+import type { PlannedOrder } from "./planner";
+import type { Hex } from "viem";
 
 // Every query gets a deadline so a dead database fails a run instead of hanging it
 // (and with it the run queue and the kill switch).
@@ -10,10 +13,61 @@ const deadline = <T>(query: Promise<T>): Promise<T> =>
     new Promise<never>((_, reject) => setTimeout(() => reject(new Error("database query timed out")), QUERY_TIMEOUT_MS).unref?.()),
   ]);
 
-// executor_reports / executor_runs / executor_controls
-// (supabase/migrations/20261006120000_cre_mirror.sql).
+// executor_reports / executor_runs / executor_controls / executor_order_batches
+// (supabase/migrations/20261006120000_cre_mirror.sql and 20261006180000_executor_order_journal.sql).
 export class PostgresStore implements ExecutorStore {
   constructor(private readonly sql: SQL) {}
+
+  async withExecutionLock<T>(fn: () => Promise<T>): Promise<T> {
+    const connection = await this.sql.reserve({ signal: AbortSignal.timeout(QUERY_TIMEOUT_MS) });
+    try {
+      return await connection.begin(async (tx) => {
+        const [row] = await deadline(tx`select pg_try_advisory_xact_lock(1347442768, 1163414851) as locked`);
+        if (row?.locked !== true) throw new Error("another executor instance owns the trading lock");
+        return await fn();
+      });
+    } finally {
+      await connection.release();
+    }
+  }
+
+  async beginOrderBatch(batch: Omit<OrderBatch, "state" | "results" | "resolution">): Promise<void> {
+    await deadline(this.sql`
+      insert into executor_order_batches (id, report_id, created_at, kind, details, orders, cloids, state)
+      values (${batch.id}, ${batch.reportId}, ${new Date(batch.createdAt)}, ${batch.kind}, ${batch.details ? JSON.stringify(batch.details) : null}::jsonb, ${JSON.stringify(batch.orders)}::jsonb, ${JSON.stringify(batch.cloids)}::jsonb, 'dispatching')`);
+  }
+
+  async finishOrderBatch(id: string, results: OrderResult[]): Promise<void> {
+    const state = results.some((result) => result.status === "unknown") ? "uncertain" : "settled";
+    const rows = await deadline(this.sql`
+      update executor_order_batches set state = ${state}, results = ${JSON.stringify(results)}::jsonb
+      where id = ${id} and state = 'dispatching' returning id`);
+    if (rows.length !== 1) throw new Error("order batch is not dispatching");
+  }
+
+  async unresolvedOrderBatches(): Promise<OrderBatch[]> {
+    const rows = await deadline(this.sql`
+      select id, report_id, created_at, kind, details, orders, cloids, state, results
+      from executor_order_batches where state in ('dispatching', 'uncertain') order by created_at`);
+    return rows.map((r: Record<string, unknown>) => ({
+      id: r.id as string,
+      reportId: r.report_id as string,
+      createdAt: (r.created_at as Date).getTime(),
+      orders: r.orders as PlannedOrder[],
+      kind: r.kind as OrderBatch["kind"],
+      details: (r.details as OrderBatch["details"]) ?? undefined,
+      cloids: r.cloids as Hex[],
+      state: r.state as OrderBatch["state"],
+      results: (r.results as OrderResult[] | null) ?? undefined,
+    }));
+  }
+
+  async reconcileOrderBatch(id: string, by: string, evidence: string, at: number): Promise<void> {
+    const rows = await deadline(this.sql`
+      update executor_order_batches set state = 'reconciled', resolved_by = ${by}, resolution = ${evidence}, resolved_at = ${new Date(at)}
+      where id = ${id} and state in ('dispatching', 'uncertain') returning id`);
+    if (rows.length !== 1) throw new Error("order batch is not unresolved");
+  }
 
   async claimReport(id: string): Promise<boolean> {
     const rows = await deadline(this.sql`

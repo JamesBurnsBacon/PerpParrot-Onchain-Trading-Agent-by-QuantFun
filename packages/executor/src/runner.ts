@@ -55,7 +55,10 @@ export class Runner {
         void this.deps.alert(`${runId}: still running after ${runTimeoutMs / 1000}s; cancelling before its next order batch`).catch(() => undefined);
       }, runTimeoutMs);
       try {
-        return await fn(token);
+        return await this.deps.store.withExecutionLock(() => fn(token));
+      } catch (e) {
+        await this.deps.alert(`${runId}: execution lock or durable store failed: ${(e as Error).message}`).catch(() => undefined);
+        throw e;
       } finally {
         clearTimeout(timer);
         this.lastFinishedAt = this.deps.now();
@@ -103,6 +106,14 @@ export class Runner {
     const { store, exchange, info, alert, now, config } = this.deps;
     const record: RunRecord = { id, runId, kind, status: "executed", dryRun: exchange.dryRun, startedAt: now(), finishedAt: 0, envelope };
     try {
+      const unresolved = await store.unresolvedOrderBatches();
+      if (kind === "report" && unresolved.length > 0) {
+        await store.setControls({ paused: true, updatedAt: now(), updatedBy: `unresolved-order-batch:${unresolved[0].id}` });
+        record.status = "skipped_paused";
+        record.error = `${unresolved.length} order batch(es) need reconciliation`;
+        await alert(`${runId}: execution held; reconcile order batch ${unresolved[0].id}`);
+        return record;
+      }
       const controls = await store.getControls();
       if (kind === "report" && controls.paused) {
         record.status = "skipped_paused";
@@ -129,27 +140,22 @@ export class Runner {
         if (reason) throw new Error(reason);
       };
 
-      // Cross margin at each asset's max leverage, set once per asset (README §4.8). If HL
-      // refuses for one asset, skip only that asset's order; reductions still go out.
-      const failedLeverage = new Set<string>();
+      // Journal account leverage changes before dispatch; ambiguous results block
+      // every later exchange action until an operator checks account state.
       for (const o of plan.orders) {
         await assertActive();
         if (o.reduceOnly || this.leverageSet.has(o.assetId)) continue;
-        try {
-          await exchange.setLeverage(o.assetId, markets.get(o.asset)!.maxLeverage, expiresAt);
-          this.leverageSet.add(o.assetId);
-        } catch (e) {
-          failedLeverage.add(o.asset);
-          await alert(`${runId}: leverage update failed for ${o.asset}: ${(e as Error).message}`);
-        }
-      }
-      if (failedLeverage.size > 0) {
-        plan.skipped.push(
-          ...plan.orders
-            .filter((o) => failedLeverage.has(o.asset))
-            .map((o) => ({ asset: o.asset, reason: "LEVERAGE_FAILED" as const, targetUsd: o.targetUsd, currentUsd: o.currentUsd })),
-        );
-        plan.orders = plan.orders.filter((o) => !failedLeverage.has(o.asset));
+        const leverage = markets.get(o.asset)!.maxLeverage;
+        const journalId = `${id}:leverage:${o.assetId}`;
+        await store.beginOrderBatch({
+          id: journalId, reportId: id, createdAt: now(), orders: [], cloids: [], kind: "leverage",
+          details: { asset: o.asset, assetId: o.assetId, leverage },
+        });
+        // Persist intent before dispatch. If the request or process fails before a
+        // durable result, startup reconciliation must treat the leverage state as unknown.
+        await exchange.setLeverage(o.assetId, leverage, expiresAt);
+        await store.finishOrderBatch(journalId, []);
+        this.leverageSet.add(o.assetId);
       }
       await assertActive();
       record.results = await exchange.submit(
@@ -168,6 +174,17 @@ export class Runner {
           }
         },
         expiresAt,
+        {
+          beforeDispatch: (batchIndex, orders, cloids) => store.beginOrderBatch({
+            id: `${id}:${batchIndex}`,
+            reportId: id,
+            createdAt: now(),
+            orders: structuredClone(orders),
+            cloids: [...cloids],
+            kind: "orders",
+          }),
+          afterResponse: (batchIndex, results) => store.finishOrderBatch(`${id}:${batchIndex}`, results),
+        },
       );
       if (record.results.some((r) => r.status === "unknown")) {
         record.status = "failed";

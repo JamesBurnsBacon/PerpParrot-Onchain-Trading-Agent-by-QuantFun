@@ -64,9 +64,27 @@ export const createApp = (deps: AppDeps) => async (req: Request): Promise<Respon
     return json(result.body, result.status);
   }
 
+  if (req.method === "GET" && pathname === "/admin/order-batches") {
+    if (!authorized(req, deps.adminToken)) return json({ error: "unauthorized" }, 401);
+    return json(await deps.store.unresolvedOrderBatches());
+  }
+
   if (req.method === "POST" && pathname.startsWith("/admin/")) {
     if (!authorized(req, deps.adminToken)) return json({ error: "unauthorized" }, 401);
     const by = req.headers.get("x-operator") ?? "admin";
+    if (pathname === "/admin/reconcile-batch") {
+      let payload: unknown;
+      try { payload = await req.json(); } catch { return json({ error: "invalid JSON" }, 400); }
+      const body = payload as { id?: unknown; evidence?: unknown };
+      if (typeof body?.id !== "string" || body.id.length > 200 || typeof body?.evidence !== "string" || body.evidence.trim().length < 40 || body.evidence.trim().length > 2_000) {
+        return json({ error: "batch id and reconciliation evidence (at least 40 characters) are required" }, 400);
+      }
+      await deps.store.setControls({ paused: true, updatedAt: Date.now(), updatedBy: `reconciliation:${by}` });
+      await deps.store.reconcileOrderBatch(body.id, by, body.evidence.trim(), Date.now());
+      const unresolved = await deps.store.unresolvedOrderBatches();
+      deps.log("order batch reconciled", { id: body.id, by, remaining: unresolved.length });
+      return json({ reconciled: body.id, unresolved: unresolved.length, paused: true });
+    }
     switch (pathname) {
       case "/admin/pause":
       case "/admin/resume": {

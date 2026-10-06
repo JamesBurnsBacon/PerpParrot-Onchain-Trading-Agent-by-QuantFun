@@ -27,11 +27,19 @@ const mode: VerifyMode = config.verifyReports
     }
   : { kind: "simulation" };
 
-// Supabase Postgres when DATABASE_URL is set: report dedupe, runs and the kill
-// switch then survive restarts. In memory otherwise (report expiry still bounds replays).
+// Supabase Postgres supplies durable report dedupe, runs, controls and action journals.
+// Production configuration rejects a missing DATABASE_URL.
 const store = process.env.DATABASE_URL ? new PostgresStore(new SQL(process.env.DATABASE_URL)) : new MemoryStore();
-const exchange = createExchange({ privateKey: config.apiWalletKey, dryRun: config.dryRun });
 const alert = createAlert({ botToken: config.telegramBotToken, chatId: config.telegramChatId, log: (m) => log(m) });
+// Recover write-ahead intents before exposing the listener. A crash can leave a
+// batch ambiguous even if the old process never persisted the pause control.
+const unresolvedOnStartup = await store.unresolvedOrderBatches();
+if (unresolvedOnStartup.length > 0) {
+  await store.setControls({ paused: true, updatedAt: Date.now(), updatedBy: `startup-recovery:${unresolvedOnStartup[0].id}` });
+  await alert(`executor held at startup: ${unresolvedOnStartup.length} order action(s) need reconciliation`);
+}
+
+const exchange = createExchange({ privateKey: config.apiWalletKey, dryRun: config.dryRun });
 const runner = new Runner({
   store,
   exchange,

@@ -10,7 +10,7 @@ CRE `mirror` workflow → executor. Design: README §4.7, §4.8, §4.13, §4.14.
 | Snapshot service | `packages/backend` (`src/server.ts`) | Railway | HL Info API, Supabase |
 | `mirror` workflow | `packages/cre-workflows/mirror` | Chainlink DON (private registry) | snapshot service, HL Info API, executor |
 | Executor | `packages/executor` (`src/server.ts`) | Railway | HL Info + Exchange API, Ethereum RPC (DON signers), Supabase, Telegram |
-| Tables | `supabase/migrations/20261006120000_cre_mirror.sql` | Supabase | — |
+| Tables | `supabase/migrations/20261006120000_cre_mirror.sql`, `20261006180000_executor_order_journal.sql` | Supabase | — |
 
 ## Run it locally
 
@@ -86,8 +86,9 @@ The production file holds placeholders until the services are deployed and the s
 
 1. **Supabase:** project `PerpParrot` (ref `clheeepphmomkymawsfq`, linked to this repo with working
    directory `.`, automatic deploys off; see `docs/supabase` on its branch). Run
-   `supabase/migrations/20261006120000_cre_mirror.sql` (SQL editor, or `supabase link
-   --project-ref clheeepphmomkymawsfq && supabase db push`). Use the service-role connection
+   both `supabase/migrations/20261006120000_cre_mirror.sql` and
+   `supabase/migrations/20261006180000_executor_order_journal.sql` (SQL editor, or
+   `supabase link --project-ref clheeepphmomkymawsfq && supabase db push`). Use the service-role connection
    string as `DATABASE_URL` for both services.
 2. **Railway:** two services from this repo, **root directory = repository root** (both import
    `packages/shared`). Config file: `packages/backend/railway.json` and
@@ -238,3 +239,59 @@ This is an offline preparation tool: do not run simultaneous freeze writers or
 serve these files while changing them. Process death can interrupt the two-file
 write. Inspect both hashes before committing/deploying after any interruption.
 No hosted service or production workflow is updated by local preparation alone.
+
+### Order write-ahead journal and restart recovery
+
+Before every leverage update and every IOC order batch, the executor writes a
+`dispatching` record to `executor_order_batches`. It includes the report id, exact
+planned orders, deterministic client order IDs, and leverage details where
+applicable. Only after the exchange response is received does the executor mark the
+record settled. A lost response is marked uncertain when possible; if the process
+crashes first, the durable record remains dispatching.
+
+At startup, the executor checks unresolved records and persists a pause before
+opening its listener. It also checks before each report in case an action becomes
+uncertain while the process is already running. It pauses and reports the batch IDs.
+The authenticated operator endpoint `GET /admin/order-batches` lists those records
+and their client order IDs. For each order, query Hyperliquid's `orderStatus` by
+client order ID for `HL_ACCOUNT`; compare returned status with fills and current
+positions. A response `unknownOid` alone is not enough to conclude no fill. For a
+leverage record, inspect the account's current market leverage. Keep the executor
+paused while evidence is incomplete.
+
+After reviewing a batch, record the operator and evidence with
+`POST /admin/reconcile-batch` and JSON `{ "id": "<batch-id>", "evidence": "<what was checked>" }`.
+This records a human attestation; the service does not independently verify the
+exchange evidence. Reconciliation keeps the executor paused. Only after every
+uncertain action has been reviewed should an operator explicitly call
+`POST /admin/resume`. Never replay the old report. The next fresh report sizes from
+the current account state.
+
+Apply `20261006180000_executor_order_journal.sql` before deploying this executor.
+Postgres tests must apply both mirror and journal migrations. The journal narrows
+the crash window to the durable write itself, but it cannot make Hyperliquid and
+Postgres one atomic transaction. Database outage during dispatch prevents sending
+before the journal exists; outage after dispatch leaves the durable row unresolved
+or a failed executor run, which requires operator review. A Postgres advisory lock serializes execution across service instances. If the
+lock cannot be acquired, the report is not dispatched; check the active instance
+and wait for the next fresh mirror report.
+
+### What the CRE tutorials establish
+
+The official CRE bootcamp video walks through a trigger/capability workflow and
+ends with a Sepolia testnet write. That is a useful integration pattern for the
+review and mirror workflows; it does not validate exchange-side crash recovery
+or funded trading. Chainlink's current CRE overview says trigger executions are
+independent and stateless, and local simulation can make real API and public EVM
+calls. We therefore keep trading idempotency and recovery in our durable executor
+store, and treat CRE simulation as an integration check that may touch live read
+endpoints—not as proof of DON deployment behavior or a substitute for a testnet
+soak.
+
+For the exchange side, Hyperliquid documents `orderStatus` lookups by client order
+ID and returns `unknownOid` when the ID is missing. Reconciliation must also check
+fills and current positions before an operator records evidence and resumes.
+
+References: [CRE Bootcamp Day 1 video](https://www.youtube.com/watch?v=pLAttM7-UTA),
+[CRE execution and simulation model](https://docs.chain.link/cre/overview),
+[Hyperliquid order-status API](https://hyperliquid.gitbook.io/Hyperliquid-docs/for-developers/api/info-endpoint).

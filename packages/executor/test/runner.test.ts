@@ -99,6 +99,7 @@ describe("Runner.executeReport (dry run)", () => {
     expect(orderReq.signature.r).toMatch(/^0x[0-9a-f]{64}$/);
     expect(orderReq.nonce).toBeGreaterThan(0);
     expect(await store.recentRuns(1)).toEqual([run]);
+    expect(await store.unresolvedOrderBatches()).toEqual([]);
   });
 
   test("expiry during leverage setup prevents the order batch", async () => {
@@ -172,9 +173,12 @@ describe("Runner.executeReport (dry run)", () => {
   test("unknown exchange outcome pauses subsequent reports for reconciliation", async () => {
     const { runnerDeps, exchange, store } = setup(fakeInfo({ equity: "400" }));
     let submissions = 0;
-    exchange.submit = async () => {
+    exchange.submit = async (orders, cloids, _stop, _expiry, journal) => {
       submissions++;
-      return [{ asset: "BTC", status: "unknown", error: "response lost" }];
+      await journal?.beforeDispatch(0, orders, cloids);
+      const results = [{ asset: "BTC", status: "unknown" as const, error: "response lost" }];
+      await journal?.afterResponse(0, results);
+      return results;
     };
     const runner = new Runner(runnerDeps);
     const run = await runner.executeReport(await verified(), {});
@@ -184,6 +188,20 @@ describe("Runner.executeReport (dry run)", () => {
     const next = await runner.executeReport(await verified(body({ runId: "next" })), {});
     expect(next.status).toBe("skipped_paused");
     expect(submissions).toBe(1);
+    const [batch] = await store.unresolvedOrderBatches();
+    expect(batch).toMatchObject({ state: "uncertain", reportId: run.id });
+    await store.reconcileOrderBatch(batch.id, "operator", "Verified all client order IDs and current positions against the exchange", AS_OF * 1000);
+    expect(await store.unresolvedOrderBatches()).toEqual([]);
+  });
+
+  test("a batch left dispatching after a crash blocks the next report", async () => {
+    const { runner, store, exchange } = setup(fakeInfo({ equity: "400" }));
+    await store.beginOrderBatch({ id: "orphaned:0", reportId: "orphaned", createdAt: AS_OF * 1000, orders: [], cloids: [], kind: "orders" });
+    const next = await runner.executeReport(await verified(body({ runId: "after-crash" })), {});
+    expect(next.status).toBe("skipped_paused");
+    expect(next.error).toContain("need reconciliation");
+    expect((await store.getControls()).paused).toBe(true);
+    expect(exchange.recorded()).toEqual([]);
   });
 
   test("sets leverage once per asset across runs", async () => {
@@ -217,7 +235,7 @@ describe("Runner.executeReport (dry run)", () => {
     expect(alerts).toHaveLength(1);
   });
 
-  test("skips only the asset whose leverage update fails; reductions still go out", async () => {
+  test("uncertain leverage update is journaled and prevents all later orders", async () => {
     const s = setup(fakeInfo({ equity: "400", core: [["ETH", "0.1"]] }));
     const original = s.exchange.setLeverage;
     s.exchange.setLeverage = async (assetId, lev) => {
@@ -227,10 +245,10 @@ describe("Runner.executeReport (dry run)", () => {
     // BTC (asset 0) opens: its leverage fails. ETH reduces from $400 to −$350: a flip, not reduce-only,
     // so its leverage is set and it trades.
     const run = await s.runner.executeReport(await verified(), {});
-    expect(run.status).toBe("executed");
-    expect(run.plan?.orders.map((o) => o.asset)).toEqual(["ETH"]);
-    expect(run.plan?.skipped).toContainEqual(expect.objectContaining({ asset: "BTC", reason: "LEVERAGE_FAILED" }));
-    expect(s.alerts[0]).toContain("leverage update failed for BTC");
+    expect(run.status).toBe("failed");
+    expect(run.error).toBe("Invalid leverage value");
+    expect(s.exchange.recorded().filter((r) => (r.payload as { action: { type: string } }).action.type === "order")).toEqual([]);
+    expect(await s.store.unresolvedOrderBatches()).toMatchObject([{ kind: "leverage", details: { asset: "BTC", assetId: 0 } }]);
   });
 
   test("doesn't execute a report that expired while queued", async () => {
@@ -354,6 +372,30 @@ describe("app routes", () => {
     const ok = await app(post("/admin/pause", { headers: { authorization: "Bearer s3cret", "x-operator": "james" } }));
     expect(ok.status).toBe(200);
     expect(await store.getControls()).toMatchObject({ paused: true, updatedBy: "james" });
+  });
+
+  test("uncertain order batches can only be reconciled with authenticated evidence", async () => {
+    const { app, store } = make("s3cret");
+    await store.beginOrderBatch({
+      id: "report:0", reportId: "report", createdAt: AS_OF * 1000,
+      orders: [], cloids: [`0x${"12".repeat(16)}` as `0x${string}`], kind: "orders",
+    });
+    const get = (headers: Record<string, string> = {}) => new Request("http://x/admin/order-batches", { headers });
+    expect((await app(get())).status).toBe(401);
+    const listing = await app(get({ authorization: "Bearer s3cret" }));
+    expect(await listing.json()).toMatchObject([{ id: "report:0", state: "dispatching" }]);
+    const invalid = await app(post("/admin/reconcile-batch", {
+      headers: { authorization: "Bearer s3cret", "content-type": "application/json" },
+      body: JSON.stringify({ id: "report:0", evidence: "looked" }),
+    }));
+    expect(invalid.status).toBe(400);
+    const resolved = await app(post("/admin/reconcile-batch", {
+      headers: { authorization: "Bearer s3cret", "x-operator": "james", "content-type": "application/json" },
+      body: JSON.stringify({ id: "report:0", evidence: "Verified client order ID, fills and positions against Hyperliquid" }),
+    }));
+    expect(await resolved.json()).toMatchObject({ reconciled: "report:0", unresolved: 0, paused: true });
+    expect(await store.unresolvedOrderBatches()).toEqual([]);
+    expect((await store.getControls()).paused).toBe(true);
   });
 
   test("admin routes are disabled without a configured token", async () => {

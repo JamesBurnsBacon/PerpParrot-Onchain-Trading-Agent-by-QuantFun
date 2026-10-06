@@ -73,6 +73,29 @@ describe("live submission", () => {
     expect(results).toEqual([{ asset: "BTC", status: "error", error: "User or API Wallet does not exist." }]);
   });
 
+  test("malformed order result is uncertain and stops later batches", async () => {
+    const requests: unknown[] = [];
+    const transport: IRequestTransport = {
+      isTestnet: false,
+      async request<T>(_endpoint: string, payload: unknown) {
+        requests.push(payload);
+        return { status: "ok", response: { type: "order", data: { statuses: [{ unexpected: true }] } } } as T;
+      },
+    };
+    const ex = createExchange({ privateKey: KEY, dryRun: false, transport });
+    const results = await ex.submit(Array.from({ length: 21 }, (_, i) => planned(`A${i}`, i)), cloids(21));
+    expect(requests).toHaveLength(1);
+    expect(results[0].status).toBe("unknown");
+    expect(results.filter((r) => r.status === "not_sent")).toHaveLength(1);
+  });
+
+  test("rejects incomplete client order ID lists before submission", async () => {
+    const { transport, requests } = fakeHl(() => ({ status: "ok", response: {} }));
+    const ex = createExchange({ privateKey: KEY, dryRun: false, transport });
+    await expect(ex.submit([planned("BTC", 0)], [])).rejects.toThrow("one client order ID");
+    expect(requests).toHaveLength(0);
+  });
+
   test("lost response records uncertainty and prevents later batches", async () => {
     const requests: unknown[] = [];
     const transport: IRequestTransport = {
