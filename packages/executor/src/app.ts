@@ -38,9 +38,12 @@ export const createApp = (deps: AppDeps) => async (req: Request): Promise<Respon
     return json({ ...deps.status(), controls: await deps.store.getControls() }, 200, PUBLIC);
   }
   // Public run log: plans, order results and raw signed reports (README §4.11).
+  // ?summary=1 drops plan, results and report (~30 days of runs for an equity curve).
   if (req.method === "GET" && pathname === "/runs") {
-    const limit = Math.min(Math.max(Number(searchParams.get("limit") ?? 20) || 20, 1), 200);
-    return json(await deps.store.recentRuns(limit), 200, PUBLIC);
+    const summary = searchParams.get("summary") === "1";
+    const max = summary ? 5000 : 200;
+    const limit = Math.min(Math.max(Number(searchParams.get("limit") ?? 20) || 20, 1), max);
+    return json(await (summary ? deps.store.recentRunSummaries(limit) : deps.store.recentRuns(limit)), 200, PUBLIC);
   }
 
   if (req.method === "POST" && pathname === "/reports") {

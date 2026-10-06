@@ -291,6 +291,16 @@ describe("app routes", () => {
     const runs = (await res.json()) as { runId: string }[];
     expect(runs[0].runId).toBe(`mirror-${AS_OF}`);
   });
+
+  test("GET /runs?summary=1 leaves out plans and reports", async () => {
+    const { app } = make();
+    await app(post("/reports", { body: JSON.stringify(await envelope(keys.slice(0, 2))) }));
+    await Bun.sleep(20);
+    const [run] = (await (await app(new Request("http://x/runs?summary=1&limit=1000"))).json()) as Record<string, unknown>[];
+    expect(run).toMatchObject({ runId: `mirror-${AS_OF}`, status: "executed", orders: expect.any(Number) });
+    expect(run).not.toHaveProperty("envelope");
+    expect(run).not.toHaveProperty("plan");
+  });
 });
 
 describe("loadConfig", () => {

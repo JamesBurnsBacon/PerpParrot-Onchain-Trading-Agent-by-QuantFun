@@ -1,5 +1,5 @@
 import { SQL } from "bun";
-import type { Controls, ExecutorStore, RunRecord } from "./store";
+import type { Controls, ExecutorStore, RunRecord, RunSummary } from "./store";
 
 // Every query gets a deadline so a dead database fails a run instead of hanging it
 // (and with it the run queue and the kill switch).
@@ -58,6 +58,27 @@ export class PostgresStore implements ExecutorStore {
         results: (r.results as RunRecord["results"]) ?? undefined,
         error: (r.error as string | null) ?? undefined,
         envelope: r.envelope ?? undefined,
+      }),
+    );
+  }
+
+  async recentRunSummaries(limit: number): Promise<RunSummary[]> {
+    const rows = await deadline(this.sql`
+      select id, run_id, kind, status, dry_run, started_at, finished_at, equity_usd, error,
+             coalesce(jsonb_array_length(plan -> 'orders'), 0) as orders
+      from executor_runs order by started_at desc limit ${limit}`);
+    return rows.map(
+      (r: Record<string, unknown>): RunSummary => ({
+        id: r.id as string,
+        runId: r.run_id as string,
+        kind: r.kind as RunRecord["kind"],
+        status: r.status as RunRecord["status"],
+        dryRun: r.dry_run as boolean,
+        startedAt: (r.started_at as Date).getTime(),
+        finishedAt: (r.finished_at as Date).getTime(),
+        equityUsd: (r.equity_usd as number | null) ?? undefined,
+        error: (r.error as string | null) ?? undefined,
+        orders: Number(r.orders),
       }),
     );
   }

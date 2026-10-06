@@ -31,16 +31,21 @@ export type Run = {
   finishedAt: number;
   equityUsd?: number;
   error?: string;
+  orders?: number; // summaries only
   plan?: { orders: { asset: string; isBuy: boolean; notionalUsd: number }[]; skipped: unknown[] };
   results?: { status: string }[];
+  envelope?: { report: string; context: string; signatures: string[] };
 };
+
+export const ordersOf = (r: Run) => r.orders ?? r.plan?.orders.length ?? 0;
 
 export type Status = { dryRun: boolean; account: string; controls: { paused: boolean }; lastReportAt: number | null };
 export type Exposures = { runAt: number; exposures: { asset: string; fraction: number }[] };
 
 export type DashboardData = {
   paper: PaperView | null;
-  runs: Run[] | null;
+  runs: Run[] | null; // summaries, ~30 days
+  recent: Run[] | null; // full records with signed reports, newest first
   status: Status | null;
   exposures: Exposures | null;
   backtest: BacktestArtifact | null;
@@ -58,25 +63,26 @@ const get = async <T,>(url: string): Promise<T | null> => {
 };
 
 export const load = async (): Promise<DashboardData> => {
-  const [paper, runs, status, exposures, backtest, funnel] = await Promise.all([
+  const [paper, runs, recent, status, exposures, backtest, funnel] = await Promise.all([
     get<PaperView>(`${BACKEND}/paper`),
-    get<Run[]>(`${EXECUTOR}/runs?limit=200`),
+    get<Run[]>(`${EXECUTOR}/runs?summary=1&limit=4320`),
+    get<Run[]>(`${EXECUTOR}/runs?limit=8`),
     get<Status>(`${EXECUTOR}/status`),
     get<Exposures>(`${BACKEND}/exposures`),
     get<BacktestArtifact>(`${BACKEND}/artifacts/backtest`),
     get<FunnelArtifact>(`${BACKEND}/artifacts/funnel`),
   ]);
-  return { paper, runs, status, exposures, backtest, funnel, loadedAt: Date.now() };
+  return { paper, runs, recent, status, exposures, backtest, funnel, loadedAt: Date.now() };
 };
 
-// Refreshes every 30 s: mirror runs land every 10 min, so this is plenty live.
+// Refreshes every minute: mirror runs land every 10 min, so this is plenty live.
 export const useDashboard = (): DashboardData | null => {
   const [data, setData] = useState<DashboardData | null>(null);
   useEffect(() => {
     let alive = true;
     const tick = () => load().then((d) => alive && setData(d));
     tick();
-    const id = setInterval(tick, 30_000);
+    const id = setInterval(tick, 60_000);
     return () => {
       alive = false;
       clearInterval(id);
@@ -132,3 +138,11 @@ export const pct = (v: number, digits = 2) => `${v >= 0 ? "+" : ""}${v.toFixed(d
 export const usd = (v: number) =>
   v.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: v >= 1000 ? 0 : 2 });
 export const time = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+const dayTime = (ms: number) =>
+  new Date(ms).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+
+// Time labels for a chart: clock time within a day and a half, date and time beyond.
+export const stamp = (series: Series[]) => {
+  const ts = series.flatMap((s) => s.points.map((p) => p[0]));
+  return Math.max(...ts) - Math.min(...ts) > 36 * 3600e3 ? dayTime : time;
+};

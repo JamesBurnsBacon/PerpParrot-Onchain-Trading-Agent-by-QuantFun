@@ -11,7 +11,7 @@ type Props = {
   zeroLine?: boolean;
 };
 
-const PAD = { top: 12, right: 132, bottom: 26, left: 52 };
+const BASE_PAD = { top: 12, right: 132, bottom: 26, left: 52 };
 
 const niceTicks = (min: number, max: number, count = 4) => {
   const span = max - min || 1;
@@ -19,6 +19,16 @@ const niceTicks = (min: number, max: number, count = 4) => {
   const nice = [1, 2, 2.5, 5, 10].map((m) => m * step).find((s) => span / s <= count) ?? step * 10;
   const ticks: number[] = [];
   for (let v = Math.ceil(min / nice) * nice; v <= max + 1e-9; v += nice) ticks.push(Number(v.toFixed(10)));
+  return ticks;
+};
+
+// Time ticks on round local times: 10 min … 30 days (multi-day steps count from the epoch).
+const TIME_STEPS = [10, 30, 60, 120, 360, 720, 1440, 2880, 7200, 14400, 43200].map((m) => m * 60e3);
+const timeTicks = (min: number, max: number, count: number) => {
+  const step = TIME_STEPS.find((s) => (max - min) / s <= count) ?? TIME_STEPS.at(-1)!;
+  const off = new Date(min).getTimezoneOffset() * 60e3;
+  const ticks: number[] = [];
+  for (let t = Math.ceil((min - off) / step) * step + off; t <= max; t += step) ticks.push(t);
   return ticks;
 };
 
@@ -36,6 +46,8 @@ export function LineChart({ series, height = 300, format, xFormat, zeroLine = tr
   const [ref, width] = useWidth<HTMLDivElement>();
   const [hoverT, setHoverT] = useState<number | null>(null);
   const [table, setTable] = useState(false);
+  // Narrow screens: less room for end labels.
+  const PAD = width < 480 ? { ...BASE_PAD, right: 112 } : BASE_PAD;
 
   const { xs, x, y, yTicks, times } = useMemo(() => {
     const all = series.flatMap((s) => s.points);
@@ -55,9 +67,9 @@ export function LineChart({ series, height = 300, format, xFormat, zeroLine = tr
     const x = (t: number) => PAD.left + (tMax === tMin ? plotW : ((t - tMin) / (tMax - tMin)) * plotW);
     const y = (v: number) => PAD.top + plotH - ((v - lo) / (hi - lo || 1)) * plotH;
     const times = [...new Set(all.map((p) => p[0]))].sort((a, b) => a - b);
-    const xs = niceTicks(tMin, tMax, Math.max(2, Math.floor(plotW / 110))).filter((t) => t >= tMin && t <= tMax);
+    const xs = timeTicks(tMin, tMax, Math.max(3, Math.floor(plotW / 110)));
     return { xs: xs.length ? xs : [tMin], x, y, yTicks, times };
-  }, [series, width, height, zeroLine]);
+  }, [series, width, height, zeroLine]); // PAD derives from width
 
   if (!series.length || !times.length) return null;
 
@@ -79,7 +91,7 @@ export function LineChart({ series, height = 300, format, xFormat, zeroLine = tr
   const tooltipLeft = hoverT === null ? 0 : Math.min(x(hoverT) + 12, width - 200);
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative min-w-0 overflow-hidden">
       <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs" style={{ color: "var(--ink-2)" }}>
         {series.map((s) => (
           <span key={s.id} className="inline-flex items-center gap-1.5">

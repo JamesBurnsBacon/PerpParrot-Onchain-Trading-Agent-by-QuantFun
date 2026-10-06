@@ -1,12 +1,12 @@
 "use client";
 import { useState } from "react";
 import type { Run } from "../lib/data";
-import { pct, time } from "../lib/data";
+import { ordersOf, pct, runTime, time } from "../lib/data";
 import { useWidth } from "./useWidth";
 
 export function Panel({ title, meta, children }: { title: string; meta?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <section className="rounded-xl p-4" style={{ background: "var(--surface)", border: "1px solid var(--ring)" }}>
+    <section className="min-w-0 rounded-xl p-4" style={{ background: "var(--surface)", border: "1px solid var(--ring)" }}>
       <header className="mb-3 flex items-baseline justify-between gap-2">
         <h2 className="text-sm font-semibold">{title}</h2>
         {meta && <span className="text-xs" style={{ color: "var(--muted)" }}>{meta}</span>}
@@ -29,8 +29,8 @@ export function Waiting({ what, source }: { what: string; source: string }) {
 // Hero number with an optional signed change (tone + arrow) and a neutral note.
 export function StatTile({ label, value, tone, note }: { label: string; value: string; tone?: "up" | "down"; note?: string }) {
   return (
-    <div className="rounded-xl p-4" style={{ background: "var(--surface)", border: "1px solid var(--ring)" }}>
-      <div className="text-xs" style={{ color: "var(--ink-2)" }}>{label}</div>
+    <div className="min-w-0 rounded-xl p-4" style={{ background: "var(--surface)", border: "1px solid var(--ring)" }}>
+      <div className="truncate text-xs" style={{ color: "var(--ink-2)" }}>{label}</div>
       <div className="mt-1 flex items-baseline gap-1.5 text-2xl font-semibold">
         {tone && (
           <span className="text-sm" style={{ color: tone === "up" ? "var(--up)" : "var(--critical)" }} aria-label={tone === "up" ? "up" : "down"}>
@@ -57,7 +57,7 @@ export function ExposureBars({ exposures }: { exposures: { asset: string; fracti
   const mid = labelW + valueW + half;
   const rowH = 20;
   return (
-    <div ref={ref}>
+    <div ref={ref} className="min-w-0 overflow-hidden">
       <svg width={width} height={rows.length * rowH + 4} role="img" aria-label="Exposures by asset, as a share of equity">
         <line x1={mid} x2={mid} y1={0} y2={rows.length * rowH} stroke="var(--axis)" />
         {rows.map((r, i) => {
@@ -93,7 +93,7 @@ export function ExposureBars({ exposures }: { exposures: { asset: string; fracti
   );
 }
 
-const RUN_STATUS = {
+export const RUN_STATUS = {
   executed: { color: "var(--good)", icon: "●", label: "Executed" },
   skipped_paused: { color: "var(--warning)", icon: "‖", label: "Paused" },
   failed: { color: "var(--critical)", icon: "✕", label: "Failed" },
@@ -123,7 +123,7 @@ export function RunStrip({ runs }: { runs: Run[] }) {
         {hover ? (
           <span className="tabular">
             <span className="font-semibold" style={{ color: "var(--ink)" }}>{RUN_STATUS[hover.status].icon} {RUN_STATUS[hover.status].label}</span>{" "}
-            {time(hover.startedAt)} · {hover.plan?.orders.length ?? 0} orders{hover.dryRun ? " (dry run)" : ""}
+            {time(runTime(hover))} · {ordersOf(hover)} orders{hover.dryRun ? " (dry run)" : ""}
             {hover.error ? ` · ${hover.error}` : ""}
           </span>
         ) : (
@@ -145,7 +145,7 @@ export function Funnel({ steps }: { steps: { stage: string; label: string; count
   const ramp = ["var(--funnel-1)", "var(--funnel-2)", "var(--funnel-3)", "var(--funnel-4)", "var(--funnel-5)"];
   const labelW = 120;
   return (
-    <div ref={ref}>
+    <div ref={ref} className="min-w-0 overflow-hidden">
       <svg width={width} height={steps.length * 26} role="img" aria-label="Selection funnel">
         {steps.map((s, i) => {
           // Square-root scale so the last stages (25, then 5–25) stay visible next to ~47k.
