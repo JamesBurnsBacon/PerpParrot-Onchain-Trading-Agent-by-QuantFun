@@ -1,0 +1,33 @@
+{
+  "verified_at": "2026-10-06T15:19:53.397022+08:00",
+  "project_ref": "clheeepphmomkymawsfq",
+  "repository": "JamesBurnsBacon/PerpParrot-Onchain-Trading-Agent-by-QuantFun",
+  "integration_url": "https://supabase.com/dashboard/project/clheeepphmomkymawsfq/settings/integrations",
+  "connection_status": "connected_verified_after_reload",
+  "settings": {
+    "working_directory": ".",
+    "production_branch_name": "main",
+    "deploy_to_production": false,
+    "automatic_branching": false,
+    "branch_limit": 0,
+    "supabase_changes_only": false
+  },
+  "acceptance": {
+    "exact_repository_selected": true,
+    "enable_integration_completed": true,
+    "connection_persists_after_reload": true,
+    "disable_integration_button_present": true,
+    "save_changes_disabled_no_unsaved_changes": true
+  },
+  "scope": "Persisted Supabase to GitHub repository connection only",
+  "documentation_branch": "docs/supabase",
+  "repository_main_commit_at_inspection": "8192f2fc429dd2bdc64f7797bef119a5ccbcd6c8",
+  "deployment_tested": false,
+  "application_database_connection_tested": false,
+  "evidence": {
+    "screenshot": "supabase-github-connected.jpg",
+    "screenshot_sha256": "75baeb7f1113ff67890dd3ec53c76c873214166d919559b5d96f067c85c018a1",
+    "record_type": "dashboard_observation",
+    "full_repository_name_source": "Selected repository control text after page reload"
+  }
+}
