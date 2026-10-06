@@ -84,7 +84,8 @@ export type Candidate = {
   scoreNumerator: number | null;     // integer; null unless ranked
   score: number | null;              // 0..1; null unless ranked
   rank: number | null;               // 1-based within the pool; null unless ranked
-  cloneOf: { address: string; correlation: number | null } | null; // null correlation = non-head link-group member
+  cloneOf: { address: string; correlation: number | null; via?: string } | null; // null correlation = non-head link-group member;
+                                 // via = the link-unit member that matched, when it is not the representative
   clones: string[];                  // on a representative: the addresses grouped under it, in cross-pool order
   finalist: boolean;
   passthrough: { avgLeverage: number | null; timeInMarket: number | null; medianHoldHours: number | null; makerShare: number | null };
@@ -296,20 +297,29 @@ days (zero variance means a sum of squared deviations exactly 0). The same `rho`
 
 **Link groups** (deterministic). Build an undirected graph over **all inputs**, ranked or not. Two addresses share
 an edge when either lists the other in `links` (lower-case comparison); a link to an address not among the inputs is
-ignored. Connected components are link groups. Unranked accounts can bridge ranked ones. The **unit** of a ranked
-candidate is the ranked members of its link group in cross-pool order; its **head** is the first (best-ranked) member.
+ignored. Connected components are link groups. Unranked accounts can bridge ranked ones: a link means "same
+operator", which is transitive whether or not the account in the middle is ranked (decided 2026-10-06). The **unit** of
+a ranked candidate is the ranked members of its link group in cross-pool order; its **head** is the first (best-ranked)
+member.
 
-Walk ranked candidates in cross-pool order, handling each unit once at its head. Compare the head only with earlier
-**representatives**, never clones. If `rho >= cloneCorrelation` with the first such representative, the whole unit
-becomes its clones: the head gets `cloneOf = { address: representative.address, correlation: rho }` and every other
-member gets `{ address: representative.address, correlation: null }`. Otherwise the head becomes a representative
-and the other members become its clones with `correlation: null`. A singleton is a unit of one.
-Each representative's `clones` lists all its clones in cross-pool order, not discovery order. Clones keep their
-percentiles, score and rank (they describe the account), but they are never finalists.
+Walk ranked candidates in cross-pool order, handling each unit once at its head. Compare the head with the **unit of
+each earlier representative**, representatives in the order they appeared and, within a unit, its members in
+cross-pool order (the representative first, then its link-clones, including members ranked below the head). Never
+compare with correlation clones, or with the members of a unit that joined another group by correlation. The first
+member with `rho >= cloneCorrelation` decides: the whole unit becomes clones of that member's representative. The head
+gets `cloneOf = { address: representative.address, correlation: rho }`, plus `via: member.address` when the member is
+not the representative itself; every other member gets `{ address: representative.address, correlation: null }`.
+Otherwise the head becomes a representative and the other members become its clones with `correlation: null`. A
+singleton is a unit of one. Each representative's `clones` lists all its clones in cross-pool order, not discovery
+order. Clones keep their percentiles, score and rank (they describe the account), but they are never finalists.
 
-A correlation clone of a link-clone is not grouped through that clone, because comparisons are only against
-representatives. In the sample chain case, `addr-24` correlates 0.949 with `addr-18`, which is now a clone of
-`addr-21`, so `addr-24` stays its own representative. `links.json` checks these link-group cases against the independent reference.
+A representative's link unit is one operator, so an account that correlates with any of its accounts is a clone of that
+operator (decided 2026-10-06). Correlation still cannot chain: an account that correlates only with a correlation clone
+is not grouped through it. In the sample chain case (`addr-21` links `addr-18`, `addr-18` links `addr-13`), `addr-24`
+correlates 0.949 with `addr-18` and so joins `addr-21` via `addr-18` (8 distinct instead of 10). With `addr-21` linked to
+`addr-19` (rank 14), `addr-23` (rank 11) joins via `addr-19` at 0.976 although `addr-19` ranks below it, and `addr-16`
+and `addr-17` also join via `addr-19` (0.922 and 0.924). `links.json` checks these cases against
+`test/fixtures/score/reference/grouping_ref.py`.
 
 On the 24-account sample (16 ranked), the default 0.9 gives 10 distinct strategies: `addr-06` (rho 0.991), `addr-09`
 (0.964) and `addr-02` (0.944) -> `addr-04`; `addr-24` (0.949) -> `addr-18`; `addr-19` (0.976) -> `addr-23`; `addr-17`
@@ -438,7 +448,7 @@ the implementation and checked against the independent Python reference.
 | - | Cumulative funnel only | Plus `filterCounts` per filter | Shows which filter does the work. |
 | - | One ranking | Percentiles within pool (traders, vaults) | HyperCore vaults (legacy, profit share, lockups) have different return profiles. |
 | - | Duplicate window: last wins | Throws | A duplicated window is a malformed response. |
-| - | (none) | Clone grouping before the finalist cut: link components form units; heads join earlier representatives at rho >= 0.9; other unit members follow the head | `addr-04`, `-06`, `-09`, `-02` are ranks 2-5 of the 16 ranked accounts, with daily-return rho 0.94-0.99 against `addr-04` (`addr-04`/`-06`: 0.991 and the same account value). Duplicates concentrate the copy portfolio in one strategy's idiosyncratic risk; widening the finalist set would only spend more slots on them. |
+| - | (none) | Clone grouping before the finalist cut: link components form units; a head joins the first earlier representative with a link-unit member at rho >= 0.9; other unit members follow the head | `addr-04`, `-06`, `-09`, `-02` are ranks 2-5 of the 16 ranked accounts, with daily-return rho 0.94-0.99 against `addr-04` (`addr-04`/`-06`: 0.991 and the same account value). Duplicates concentrate the copy portfolio in one strategy's idiosyncratic risk; widening the finalist set would only spend more slots on them. |
 
 Funnel on the sample (synthetic `closed`/`tradeCount` overlay, default config): 24 -> 23 (account value) -> 23 -> 22
 (still active) -> 17 (trades) -> 17 -> 17 -> 16 (coverage: `addr-08`) -> 16 ranked -> 10 distinct -> 10 finalists.
@@ -456,7 +466,8 @@ Funnel on the sample (synthetic `closed`/`tradeCount` overlay, default config): 
 - Fill-derived values (`tradeCount`, `avgLeverage`, `timeInMarket`, `medianHoldHours`, `makerShare`) are inputs that a
   future ingest supplies. Score only passes them through.
 - Fixture addresses are replaced by `addr-NN`. `closed` and `tradeCount` in `portfolio-sample.json` are synthetic.
-- **[interpretation of this task]** Link groups are built over all inputs, so an unranked account can bridge two ranked ones.
-- **[interpretation of this task]** A unit moves as a whole when its head is a correlation clone.
+- **Decided 2026-10-06** (after PR #18): link groups are built over all inputs, so an unranked account can bridge two
+  ranked ones; a unit moves as a whole when its head is a correlation clone; a head is compared with every member of
+  each earlier representative's link unit (not with correlation clones), and `cloneOf.via` names the member that matched.
 - **[interpretation of this task]** The flag for a non-finite main-path drawdown is named `overflow`.
-- **[interpretation of this task]** `toFrameCandidates` returns `skipped` instead of logging.
+- **Decided 2026-10-06** (after PR #18): `toFrameCandidates` stays pure and returns `skipped`; its caller logs it.

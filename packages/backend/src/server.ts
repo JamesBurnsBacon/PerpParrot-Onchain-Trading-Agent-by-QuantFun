@@ -23,7 +23,10 @@ const required = (name: string) => {
 // a fresh instance, so memory would lose snapshots and the paper books between requests.
 if (env.VERCEL && !env.DATABASE_URL) throw new Error("DATABASE_URL is required on Vercel");
 if (env.VERCEL && !env.CRON_SECRET) throw new Error("CRON_SECRET is required on Vercel (Vercel Cron sends it to /cron/snapshot)");
-const sql = env.DATABASE_URL ? new SQL(env.DATABASE_URL) : undefined;
+// Supabase's session pooler allows 15 connections across every instance of both services
+// (Bun's default pool is 10), and a stopped Vercel instance keeps its connections until
+// they idle out. On Vercel: small pools that let go quickly (the executor takes 3).
+const sql = env.DATABASE_URL ? new SQL(env.DATABASE_URL, env.VERCEL ? { max: 2, idleTimeout: 5 } : {}) : undefined;
 const store = sql ? new PostgresSnapshotStore(sql) : new MemorySnapshotStore();
 const log = (msg: string, extra: Record<string, unknown> = {}) =>
   console.log(JSON.stringify({ t: new Date().toISOString(), msg, ...extra }));
