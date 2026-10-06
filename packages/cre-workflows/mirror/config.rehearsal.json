@@ -1,0 +1,10 @@
+{
+  "schedule": "0 */10 * * * *",
+  "backendUrl": "http://localhost:18788",
+  "executorUrl": "http://localhost:18787/reports",
+  "frozenConfigurationHash": "0x088fe80aef2b0d1d58a2e483073105c141fcf4d13ef80f934dfe811c81e6e1dd",
+  "spotCheckCount": 4,
+  "maxDeviationBps": 500,
+  "maxSnapshotAgeSeconds": 120,
+  "reportTtlSeconds": 300
+}

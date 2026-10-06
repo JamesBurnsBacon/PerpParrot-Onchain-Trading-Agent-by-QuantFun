@@ -10,6 +10,8 @@ CRE `mirror` workflow → executor. Design: README §4.7, §4.8, §4.13, §4.14.
 | Snapshot service | `packages/backend` (`src/server.ts`) | Railway | HL Info API, Supabase |
 | `mirror` workflow | `packages/cre-workflows/mirror` | Chainlink DON (private registry) | snapshot service, HL Info API, executor |
 | Executor | `packages/executor` (`src/server.ts`) | Railway | HL Info + Exchange API, Ethereum RPC (DON signers), Supabase, Telegram |
+| Paper books | `packages/backend/src/paper` (inside the snapshot service) | Railway | HL Info API (marks), Supabase |
+| Dashboard | `packages/dashboard` (Next.js) | Vercel | snapshot service, executor (browser fetches, read-only) |
 | Tables | `supabase/migrations/20261006120000_cre_mirror.sql` | Supabase | — |
 
 ## Run it locally
@@ -42,6 +44,9 @@ Unit tests per package: `bun test` in `packages/backend`, `packages/executor`,
 | `FROZEN_CONFIGURATION_HASH` | yes | Its `configurationHash`; the service refuses any other |
 | `DATABASE_URL` | prod | Supabase Postgres (service role). Without it snapshots and the eligibility list live in memory |
 | `SNAPSHOT_MAX_LEAD_SECONDS` | no | How close to a run a snapshot may be built (default 120). `600` only for local simulation |
+| `PAPER_BALANCED_MULTIPLIER` | no | Balanced book = Aggressive weights × this (default 0.5) |
+| `PAPER_SLIPPAGE_BPS` | no | Paper fills at mark ± this (default 5) |
+| `ARTIFACTS_DIR` | no | Without `DATABASE_URL`: folder of `backtest.json` / `funnel.json` for the dashboard (default `artifacts`) |
 | `PORT` | no | Railway sets it |
 
 ### Executor (`packages/executor`)
@@ -69,6 +74,16 @@ Unit tests per package: `bun test` in `packages/backend`, `packages/executor`,
 | `DON_ID` | live | — | Pins the DON (`verify-run` prints it). Required for `DRY_RUN=false` in production |
 | `MISSED_RUN_ALERT_MINUTES` | no | `25` | Alert after this long without a finished run |
 
+### Dashboard (`packages/dashboard`, Vercel)
+
+| Variable | Meaning |
+|---|---|
+| `NEXT_PUBLIC_BACKEND_URL` | Snapshot service URL (no trailing slash) |
+| `NEXT_PUBLIC_EXECUTOR_URL` | Executor URL |
+
+Both are baked in at build time: redeploy the dashboard after changing them. Locally they default to
+`localhost:8788` / `localhost:8787` (`bun run dev`, then `?theme=light|dark` pins a mode).
+
 ### `mirror` workflow (`config.production.json`)
 
 Secret `mirrorSamplingKey` (`secrets.yaml` → env `MIRROR_SAMPLING_KEY`): 32 bytes as `0x` + 64 hex,
@@ -84,9 +99,15 @@ The production file holds placeholders until the services are deployed and the s
 
 ## Deploy
 
+Before and after each step, `bun scripts/predeploy-check.ts --backend https://… --executor https://…
+[--dashboard https://…]` (with `DATABASE_URL=…` to include Supabase) checks that the mirror config,
+`frozen/live.json`, both services and the tables agree. Read-only; exit 1 on any failure.
+To deploy everything before CRE deploy access and the freeze, follow
+[DEPLOY_REHEARSAL.md](DEPLOY_REHEARSAL.md) first.
+
 1. **Supabase:** project `PerpParrot` (ref `clheeepphmomkymawsfq`, linked to this repo with working
    directory `.`, automatic deploys off; see `docs/supabase` on its branch). Run
-   `supabase/migrations/20261006120000_cre_mirror.sql` (SQL editor, or `supabase link
+   both files in `supabase/migrations/` in order (SQL editor, or `supabase link
    --project-ref clheeepphmomkymawsfq && supabase db push`). Use the service-role connection
    string as `DATABASE_URL` for both services.
 2. **Railway:** two services from this repo, **root directory = repository root** (both import
@@ -97,11 +118,16 @@ The production file holds placeholders until the services are deployed and the s
 4. **`mirror`:** create the `mirrorSamplingKey` secret (above), put the two Railway URLs and the configuration hash in
    `packages/cre-workflows/mirror/config.production.json`, merge, then run the **CRE deploy**
    GitHub Action (`mirror`, `production-settings`). Needs deploy access and `CRE_API_KEY`.
-5. **Watch a dry-run cycle:** `GET {executor}/runs?limit=3` should show a run every 10 minutes
+5. **Dashboard (Vercel):** new project from this repo, **Root Directory `packages/dashboard`**
+   (keep "Include files outside the root directory" on: it imports types from `packages/shared`).
+   Framework, install and build come from `packages/dashboard/vercel.json`. Set the two
+   `NEXT_PUBLIC_*` variables to the Railway URLs, deploy, and open it: the header should read
+   "Dry run · Copying" and the heartbeat gains a cell every 10 minutes.
+6. **Watch a dry-run cycle:** `GET {executor}/runs?limit=3` should show a run every 10 minutes
    with `status: "executed"`, `dryRun: true` and a plan you agree with. Then run
    `bun run scripts/verify-run.ts --executor … --backend …` in `packages/executor` and set
    `WORKFLOW_NAME` and `DON_ID` on the executor from what it prints.
-6. **Go live:**
+7. **Go live** (not part of the dry-run rehearsal):
    1. Fund the account (README §4.8 Capital): USDC in the account, no other transfers needed in
       unified mode.
    2. Create the executor's API wallet key (a fresh key; its address is `GET /status` → `apiWallet`
@@ -151,11 +177,40 @@ CRE UI or with `cre workflow pause`.
 
 | Source | What | Access |
 |---|---|---|
+| `GET {backend}/paper[?since=unix]` | paper books: equity, return, fees, trades, open positions, equity curve | public, CORS `*` |
+| `GET {backend}/exposures` | the latest DON-agreed exposures (fraction of equity per asset) | public, CORS `*` |
+| `GET {backend}/artifacts/backtest`, `/artifacts/funnel` | what other jobs published to `dashboard_artifacts` (below); 404 until then | public, CORS `*` |
 | `GET {executor}/status` | dry run on/off, account, API wallet, pinned configuration hash, last report time, kill-switch state | public, CORS `*` |
+| `GET {executor}/runs?summary=1&limit=N` (≤ 5000) | runs without plan, results and report: time, status, equity, order count | public, CORS `*` |
 | `GET {executor}/runs?limit=N` (≤ 200) | per run: `runId`, `status`, `dryRun`, equity, `plan` (orders, skipped legs with reasons, margin scale), `results` (per-order fill/error), `envelope` (raw DON-signed report) | public, CORS `*` |
 | Supabase `executor_runs` | same rows as `/runs` | anon `select` |
 | Supabase `cre_snapshots` | each run's snapshot JSON (`body`, exact bytes) and its keccak hash | anon `select` |
 | Supabase `executor_controls` | kill-switch state | anon `select` |
+
+### Publishing the backtest, funnel and finalists
+
+The backtest and the score/ingest jobs publish one JSON document each to `dashboard_artifacts`
+(service role); the dashboard picks it up within a minute. Shapes: `packages/shared/dashboard.ts`.
+
+```sql
+insert into dashboard_artifacts (name, body) values ('backtest', '{
+  "generatedAt": 1791277800000, "window": "1 month",
+  "series": [
+    {"id": "algo",    "label": "Algo only",      "points": [[1788685800000, 1.0], [1788707400000, 1.004]]},
+    {"id": "model-a", "label": "Model A",        "points": [...]},
+    {"id": "model-b", "label": "Model B",        "points": [...]},
+    {"id": "btc",     "label": "BTC buy & hold", "points": [...]}
+  ]}'::jsonb)
+on conflict (name) do update set body = excluded.body, updated_at = now();
+```
+
+- `backtest`: points are `[unix ms, value]` with **1.0 = start of the window**; the series with
+  `id: "btc"` is drawn as the dashed benchmark.
+- `funnel`: `steps` in order (`{stage, label, count}`, e.g. 47k addresses → … → finalists → frozen
+  set) and optionally `finalists` (`{address, kind, score, picked, rationale?}`); `picked` marks the
+  frozen set. The finalists panel renders from this field.
+- Locally (no `DATABASE_URL`), drop `backtest.json` / `funnel.json` in the snapshot service's
+  `ARTIFACTS_DIR` instead.
 
 Re-verifying a run's report, independently of the executor:
 
@@ -183,3 +238,5 @@ the run ID is `keccak256(report)`, and that the stored snapshot hashes to the re
 | `HTTP 422` | Executor logs (`error` field) | Configuration hash, account or expiry mismatch |
 | Run `failed` in `/runs` | `error` on the run | HL unreachable, or the gross-leverage bound |
 | Orders with `status: "error"` | `results` on the run | HL rejection (min size, margin); the next run retries |
+| Dashboard pills say "Executor offline" / panels empty | Browser console (CORS, mixed content) | `NEXT_PUBLIC_*` URLs wrong or not `https`; redeploy after fixing them |
+| Paper curves stop | Snapshot service log `paper books stepped` | No snapshot built this run (mirror not calling), or HL marks unavailable |

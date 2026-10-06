@@ -230,11 +230,15 @@ Code: `packages/executor`. One long-running Bun service (Railway, `Dockerfile` +
 - *Stretch:* fills-based replay with the 10-minute delay, the $10 minimum and netting.
 
 ### 4.10 Paper books (backend only)
+
+Status: built (`packages/backend/src/paper/`), stepped from every DON-agreed snapshot and served at `GET /paper`. Running now: Aggressive at $470 (live size), its $10k twin, Balanced at $470 (Aggressive's weights × 0.5, `PAPER_BALANCED_MULTIPLIER`) and BTC buy & hold. Conservative, the shadow model and the $10k Balanced book wait for the review core to emit their configurations; adding one is a `BookSpec` in `defaultBooks`.
 - **Books:** Balanced, Conservative, the shadow model, and a $10k twin of live Aggressive.
 - **Sizes:** each at **~$470 and $10k**, to show the strategy both with and without the minimum-order effect.
 - **Fills:** at HL mark price, plus the taker fee, plus the backtest slippage, with the $10 minimum applied.
 
 ### 4.11 Dashboard (Next.js + Tailwind on Vercel): public, read-only
+
+Status: built (`packages/dashboard`): live account vs paper books vs BTC, current exposures, CRE heartbeat and run log (signed reports downloadable for `verify-run`), backtest vs BTC, funnel and finalists. Backtest, funnel and finalists render once their jobs publish to `dashboard_artifacts` (contract: `packages/shared/dashboard.ts`, RUNBOOK § Data for the dashboard). Not yet: per-source PnL, positions vs targets, admin actions (Pause/Flatten stay on the executor's authenticated API).
 - **Landing:** the backtest vs. BTC (algo-only, model A, model B).
 - **Also:**
   - the funnel

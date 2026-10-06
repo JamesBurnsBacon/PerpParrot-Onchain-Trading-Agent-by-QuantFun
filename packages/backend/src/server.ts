@@ -63,7 +63,10 @@ const server = Bun.serve({
   port: Number(env.PORT ?? 8788),
   async fetch(req) {
     const { pathname, searchParams } = new URL(req.url);
-    if (req.method === "GET" && pathname === "/health") return Response.json({ ok: true });
+    // Pinned hash and store type, for the pre-deploy check (scripts/predeploy-check.ts).
+    if (req.method === "GET" && pathname === "/health") {
+      return Response.json({ ok: true, frozenConfigurationHash: env.FROZEN_CONFIGURATION_HASH, store: sql ? "postgres" : "memory" });
+    }
     // Public, for the dashboard.
     const cors = { "Access-Control-Allow-Origin": "*" };
     if (req.method === "GET" && pathname === "/paper") {

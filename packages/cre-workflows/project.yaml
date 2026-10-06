@@ -43,3 +43,11 @@ production-settings:
   rpcs:
     - chain-name: hyperliquid-mainnet
       url: https://rpc.hyperliquid.xyz/evm
+
+# ==========================================================================
+# Simulation only, never deployed: production settings against the deployed (or locally
+# containerized) services, before deploy access or a freeze. docs/cre/DEPLOY_REHEARSAL.md.
+rehearsal-settings:
+  rpcs:
+    - chain-name: hyperliquid-mainnet
+      url: https://rpc.hyperliquid.xyz/evm
