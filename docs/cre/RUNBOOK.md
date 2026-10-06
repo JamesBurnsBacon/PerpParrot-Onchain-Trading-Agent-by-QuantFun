@@ -77,8 +77,21 @@ The production file holds placeholders until the services are deployed and the s
    GitHub Action (`mirror`, `production-settings`). Needs deploy access and `CRE_API_KEY`.
 5. **Watch a dry-run cycle:** `GET {executor}/runs?limit=3` should show a run every 10 minutes
    with `status: "executed"`, `dryRun: true` and a plan you agree with.
-6. **Go live:** fund the account (README §4.8 Capital), approve the API wallet on HL, set
-   `HL_API_WALLET_KEY` and `DRY_RUN=false`, redeploy the executor.
+6. **Go live:**
+   1. Fund the account (README §4.8 Capital): USDC in the account, no other transfers needed in
+      unified mode.
+   2. Create the executor's API wallet key (a fresh key; its address is `GET /status` → `apiWallet`
+      once `HL_API_WALLET_KEY` is set).
+   3. With the **master key**, on your own machine (never on Railway):
+      ```sh
+      cd packages/executor
+      HL_ACCOUNT=0x… HL_API_WALLET_ADDRESS=0x… bun run scripts/setup-account.ts            # status
+      HL_ACCOUNT=0x… HL_API_WALLET_ADDRESS=0x… HL_MASTER_KEY=0x… bun run scripts/setup-account.ts --apply
+      ```
+      This switches the account to **unified** mode (one USDC balance margins core and `xyz`
+      perps) and approves the API wallet (trade, no withdraw). It never moves funds.
+   4. Set `HL_API_WALLET_KEY` and `DRY_RUN=false` on the executor and redeploy. Watch the next
+      run's `results` in `/runs`.
 
 ## Freeze (go-live set)
 
