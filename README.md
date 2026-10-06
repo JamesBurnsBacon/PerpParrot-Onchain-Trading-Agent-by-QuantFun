@@ -42,17 +42,44 @@
 
 ## 3. Architecture
 ```
- BACKEND (Railway)                    CRE: review (hourly)            CRE: mirror (every 10 min)         EXECUTOR (serverless)
-┌──────────────────────────┐ shortlist ┌───────────────────────┐ notes ┌─────────────────────────────┐ signed ┌──────────────────────┐
-│ leaderboard + vault list │──────────►│ LLM agent (2 models)  │──────►│ fetch positions snapshot (1)│ report │ verify DON signature │
-│ ingest → label → score   │           │ monitor sources, flag │       │ spot-check ~10 sources (HL) │───────►│ dedupe report ID     │──► Hyperliquid
-│ backtest · ledger        │ positions │ risks, write rationale│       │ slices → net → diff vs. ours│        │ sign w/ API wallet   │    (our account)
-│ positions snapshot API   │──────────►└───────────────────────┘       │ report() → executor+HyperEVM│        └──────────┬───────────┘
-└────────────┬─────────────┘                                           └─────────────────────────────┘                   │
-             └───────────────────────────────► Supabase ◄──────────── fills / PnL / ledger ◄─────────────────────────────┘
-                                                  │
-                                        Dashboard (Next.js on Vercel)
-```
+ BACKEND (Railway)
+ ┌──────────────────────────────┐
+ │ leaderboard + vault list     │
+ │ ingest → label → score       │──────┐
+ │ backtest · ledger            │      │
+ │ positions snapshot API       │      │
+ └──┬───────────────────────────┘      │
+    │ shortlist                        │ positions
+    v                                  │
+ CRE: review (hourly)                  │
+ ┌──────────────────────────────┐      │
+ │ LLM agent (2 models)         │      │
+ │ monitor sources, flag        │      │
+ │ risks, write rationale       │      │
+ └──┬───────────────────────────┘      │
+    │ notes                            │
+    v                                  │
+ CRE: mirror (every 10 min)            │
+ ┌──────────────────────────────┐      │
+ │ fetch positions snapshot (1) │<─────┘
+ │ spot-check ~10 sources (HL)  │
+ │ slices → net → diff vs. ours │
+ │ report() → executor+HyperEVM │
+ └──┬───────────────────────────┘
+    │ signed report
+    v
+ EXECUTOR (serverless)
+ ┌──────────────────────────────┐
+ │ verify DON signature         │
+ │ dedupe report ID             │──> Hyperliquid (our account)
+ │ sign w/ API wallet           │
+ └──┬───────────────────────────┘
+    │ fills / PnL / ledger
+    v
+ Supabase  <── backend also writes here
+    │
+    v
+ Dashboard (Next.js on Vercel)
 ```
 
 ## 4. Components
