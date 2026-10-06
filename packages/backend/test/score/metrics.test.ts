@@ -139,8 +139,17 @@ describe("computeMetrics edge cases", () => {
   });
 
   test("a step that overflows keeps only the first grid time; one denser than a millisecond samples every segment", () => {
-    expect(metricsOf(drawdownCase, { coarseGridDays: 1e300 }).maxDrawdown).toBe(0);
+    expect(metricsOf(drawdownCase, { coarseGridDays: 1e305 }).maxDrawdown).toBe(0); // 1e305 * 86_400_000 is Infinity
     expect(metricsOf(drawdownCase, { coarseGridDays: 5e-324 }).maxDrawdown).toBeCloseTo(1 / 6, 12);
+  });
+
+  test("a grid time exactly on a curve point is sampled although the tick count rounds above an integer", () => {
+    // 7 * step is exactly one day, but one day / step is 7.000000000000001, so a plain ceil would pick the next tick.
+    const step = (1 / 7) * DAY;
+    expect(7 * step).toBe(DAY);
+    expect(DAY / step).toBeGreaterThan(7);
+    const curve: CurvePoint[] = [{ ts: BASE, value: 1 }, { ts: BASE + DAY, value: 2 }, { ts: BASE + DAY + 3_600_000, value: 3 }];
+    expect(gridSamples(curve, BASE, BASE + 2 * DAY, step)).toEqual([1, 2, 3]);
   });
 
   test("gridSamples visits the same curve values as walking every grid time (SPEC Metrics)", () => {
