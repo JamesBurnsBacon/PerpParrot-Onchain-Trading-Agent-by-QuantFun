@@ -58,7 +58,7 @@ type Observation = {
   maxDeviationBps: number;
 };
 
-const observe = (nodeRuntime: NodeRuntime<Config>, runAt: number): Observation => {
+const observe = (nodeRuntime: NodeRuntime<Config>, runAt: number, sampleSeed: string): Observation => {
   const { config } = nodeRuntime;
   const http = new HTTPClient();
 
@@ -95,7 +95,7 @@ const observe = (nodeRuntime: NodeRuntime<Config>, runAt: number): Observation =
       eligible,
     );
 
-  const sample = pickSample(sources, snapshot.snapshotId, config.spotCheckCount);
+  const sample = pickSample(sources, `${snapshot.snapshotId}:${sampleSeed}`, config.spotCheckCount);
   const maxDev = Math.max(...sample.map((s) => deviationBps(s, liveSource(s.address))));
 
   const maxGrossE9 = BigInt(Math.round(snapshot.configuration.policy.maxGrossLeverage * Number(EXPOSURE_SCALE)));
@@ -129,6 +129,11 @@ export const onCronTrigger = (runtime: Runtime<Config>, payload: CronPayload): s
   const { config } = runtime;
   const runAt = Number(payload.scheduledExecutionTime?.seconds ?? BigInt(Math.floor(runtime.now().getTime() / 1000)));
 
+  // Which sources get spot-checked must be unpredictable to the backend, which built
+  // the snapshot before this execution existed. Math.random() in DON mode is seeded
+  // per execution and identical on every node (it differs per node only in node mode).
+  const sampleSeed = Math.floor(Math.random() * Number.MAX_SAFE_INTEGER).toString(16);
+
   const obs = runtime
     .runInNodeMode(
       observe,
@@ -139,7 +144,7 @@ export const onCronTrigger = (runtime: Runtime<Config>, payload: CronPayload): s
         exposures: identical,
         maxDeviationBps: median,
       }),
-    )(runAt)
+    )(runAt, sampleSeed)
     .result();
 
   runtime.log(`${obs.snapshotId}: spot-check max deviation ${obs.maxDeviationBps} bps`);

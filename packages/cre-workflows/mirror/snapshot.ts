@@ -62,7 +62,7 @@ export const checkSnapshot = (s: PositionsSnapshot, limits: SnapshotLimits): Wei
   return weighted;
 };
 
-// Deterministic per snapshot, so every node spot-checks the same sources.
+// Deterministic per seed, so every node spot-checks the same sources.
 export const pickSample = <T>(items: T[], seed: string, count: number): T[] => {
   const picked = new Set<number>();
   for (let i = 0; picked.size < Math.min(count, items.length); i++) {

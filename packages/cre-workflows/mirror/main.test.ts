@@ -92,7 +92,7 @@ describe("checkSnapshot", () => {
 });
 
 describe("pickSample", () => {
-  test("is deterministic, distinct and capped", () => {
+  test("is deterministic per seed, distinct and capped", () => {
     const items = [...Array(25).keys()];
     const a = pickSample(items, "snap-1", 5);
     expect(a).toEqual(pickSample(items, "snap-1", 5));
