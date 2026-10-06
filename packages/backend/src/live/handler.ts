@@ -2,7 +2,7 @@ import { parseStrategyIntent, type StrategyIntent } from "../../../shared/strate
 import { failure, type ChatDeps } from "../chat/handler";
 import { hashIp } from "../chat/limits";
 import { buildPreview, PreviewError } from "../chat/preview";
-import { selectStrategy } from "../chat/strategy";
+import { selectStrategy, explainSelection } from "../chat/strategy";
 import { buildLiveConfig, liveReservationMicroUsd, SET_STRATEGY_TOOL, type LiveEnv } from "./config";
 
 export type LiveDeps = Pick<ChatDeps, "limiter" | "finalists" | "basePolicy" | "now" | "log"> & {
@@ -80,9 +80,10 @@ export const handleLiveSession = async (req: Request, deps: LiveDeps): Promise<R
   } catch { return failure(503, "unavailable"); }
 };
 
-export const strategyFacts = (intent: StrategyIntent, selection: Omit<ReturnType<typeof selectStrategy>, "policyResult">): string => {
+export const strategyFacts = (intent: StrategyIntent, selection: Omit<ReturnType<typeof selectStrategy>, "policyResult"> & Partial<ReturnType<typeof explainSelection>>): string => {
   const { policy, shortlist } = selection;
-  return [
+  const safety = "No orders are placed; an operator must review and freeze any strategy.";
+  const core = [
     `Style: ${intent.riskStyle}. Sources: ${shortlist.addresses.length}; source limit: ${policy.effectiveMaxSources}.`,
     `Diversification: ${intent.diversification}. Leverage comfort: ${intent.leverageComfort}.`,
     `Requested leverage: ${intent.requestedLeverage === null ? "not specified" : `${intent.requestedLeverage}x`}.`,
@@ -91,8 +92,18 @@ export const strategyFacts = (intent: StrategyIntent, selection: Omit<ReturnType
     ...policy.clamps.map(c => `${c.field}: requested ${c.requested}x, policy cap ${c.applied}x.`),
     ...(!policy.liveEligible ? ["Paper-only; not eligible for live trading."] : []),
     `Data source: ${shortlist.dataSource}.`,
-    "No orders are placed; an operator must review and freeze any strategy.",
   ].join(" ");
+  let facts = core;
+  for (const side of ["added", "removed"] as const) {
+    const items: string[] = [];
+    for (const item of selection.changes?.[side].slice(0, 3) ?? []) {
+      const next = `${item.address} (${item.reason})`;
+      if (facts.length + items.join(", ").length + next.length + safety.length + 16 > 1200) break;
+      items.push(next);
+    }
+    if (items.length) facts += ` ${side === "added" ? "Added" : "Removed"} ${items.join(", ")}.`;
+  }
+  return `${facts} ${safety}`;
 };
 
 export const handleLiveStrategy = async (req: Request, deps: LiveDeps): Promise<Response> => {
@@ -102,14 +113,20 @@ export const handleLiveStrategy = async (req: Request, deps: LiveDeps): Promise<
   if (body instanceof Response) return body;
   let intent: StrategyIntent;
   try {
-    if (!object(body) || Object.keys(body).length !== 1 || !object(body.intent) ||
+    if (!object(body) || Object.keys(body).some(k => !["intent", "previous"].includes(k)) || !object(body.intent) ||
         Object.keys(body.intent).some(k => !Object.hasOwn(SET_STRATEGY_TOOL.parameters.properties, k))) throw new Error();
+    if (body.previous !== undefined && (!Array.isArray(body.previous) || body.previous.length > 25 ||
+        !body.previous.every(id => typeof id === "string" && /^[\w.:-]{1,66}$/.test(id)) || new Set(body.previous).size !== body.previous.length)) throw new Error();
     intent = parseStrategyIntent({ ...body.intent, reply: "Strategy checked by code. No orders are placed.", clarify: null });
   } catch { return failure(400, "invalid_model_output"); }
   try {
     const reservation = await deps.limiter.reserve({ ipHash: ipHash(req, deps), kind: "preview", nowMs: deps.now(), reserveMicroUsd: 0, cfg: deps.chatEnv.limits });
     if (!reservation.ok) return failure(429, "rate_limited", reservation.retryAfterSec);
-    const { policyResult, ...selection } = selectStrategy(intent, deps.basePolicy, await deps.finalists());
+    const data = await deps.finalists();
+    const previous = (body as { previous?: string[] }).previous;
+    if (previous?.some(id => !data.finalists.some(f => f.address === id))) return failure(400, "invalid_model_output");
+    const { policyResult, ...selected } = selectStrategy(intent, deps.basePolicy, data);
+    const selection = { ...selected, ...explainSelection(intent, deps.basePolicy, data, previous) };
     buildPreview({ intent, policyResult, addresses: selection.shortlist.addresses });
     return json({ ok: true, intent, ...selection, facts: strategyFacts(intent, selection) });
   } catch (error) {

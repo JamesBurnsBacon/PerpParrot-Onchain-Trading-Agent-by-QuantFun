@@ -12,7 +12,11 @@ type Runtime = {
 export type LiveView = { phase: Phase; user: string; parrot: string; avatar: "listening" | "speaking" | "thinking"; remaining: number; status: string; failure: Failure | null; playbackBlocked: boolean };
 const idle: LiveView = { phase: "idle", user: "", parrot: "", avatar: "listening", remaining: 0, status: "", failure: null, playbackBlocked: false };
 
-export function useLiveTalk(onStrategy: (chat: ChatResponse) => void, onStale: () => void) {
+export function useLiveTalk(onStrategy: (chat: ChatResponse) => void, onStale: () => void, previousIds: string[] = [], activity?: { gesture: () => void; input: () => void }) {
+  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+  const shown = useRef(previousIds);
+  const activityRef = useRef(activity);
+  useEffect(() => { shown.current = previousIds; activityRef.current = activity; }, [previousIds, activity]);
   const [view, setView] = useState<LiveView>(idle);
   const audio = useRef<HTMLAudioElement | null>(null);
   const active = useRef<Runtime | null>(null);
@@ -30,6 +34,7 @@ export function useLiveTalk(onStrategy: (chat: ChatResponse) => void, onStale: (
   const cleanup = useCallback((run: Runtime, status?: string, failure: Failure | null = null) => {
     if (active.current !== run) return;
     active.current = null;
+    setRemoteStream(null);
     run.controller.abort();
     for (const timer of run.timers) clearTimeout(timer);
     run.mic?.getTracks().forEach(track => track.stop());
@@ -46,6 +51,7 @@ export function useLiveTalk(onStrategy: (chat: ChatResponse) => void, onStale: (
     if (!run || run.closing) return;
     if (!run.events.started || run.channel?.readyState !== "open") { cleanup(run, "Conversation canceled."); return; }
     run.closing = true;
+    setRemoteStream(null);
     run.mic?.getTracks().forEach(track => track.stop());
     notifyStale(run);
     setView(v => ({ ...v, phase: "closing", status: "Finishing our conversation…" }));
@@ -76,6 +82,7 @@ export function useLiveTalk(onStrategy: (chat: ChatResponse) => void, onStale: (
 
   async function start() {
     if (active.current) return;
+    activityRef.current?.gesture();
     const run: Runtime = { controller: new AbortController(), timers: new Set(), events: initialLiveEvents(), closing: false, draining: false, processedCalls: new Set() };
     active.current = run;
     setView({ ...idle, phase: "connecting", avatar: "thinking", status: "Warming up my voice…" });
@@ -101,10 +108,13 @@ export function useLiveTalk(onStrategy: (chat: ChatResponse) => void, onStale: (
             if (!current() || run.closing) return;
             let output = call.error ?? "Strategy could not be checked. Please try again.";
             if (call.args) {
-              const result = await post("/live/strategy", { intent: call.args }, isLiveStrategy, signal());
+              const result = await post("/live/strategy", { intent: call.args, previous: shown.current }, isLiveStrategy, signal());
               if (!current() || run.closing) return;
               if ("data" in result) {
-                if (run.events.calls.at(-1)?.callId === call.callId) callback.current(liveAsChat(result.data));
+                if (run.events.calls.at(-1)?.callId === call.callId) {
+                  shown.current = result.data.shortlist.addresses;
+                  callback.current(liveAsChat(result.data));
+                }
                 output = result.data.facts;
               }
             }
@@ -128,7 +138,9 @@ export function useLiveTalk(onStrategy: (chat: ChatResponse) => void, onStale: (
       const peer = new RTCPeerConnection(); run.peer = peer;
       peer.ontrack = event => {
         if (!current() || !audio.current) return;
-        audio.current.srcObject = new MediaStream([event.track]);
+        const stream = new MediaStream([event.track]);
+        audio.current.srcObject = stream;
+        setRemoteStream(stream);
         void audio.current.play().catch(() => { if (current()) setView(v => ({ ...v, playbackBlocked: true })); });
       };
       peer.onconnectionstatechange = () => {
@@ -150,6 +162,7 @@ export function useLiveTalk(onStrategy: (chat: ChatResponse) => void, onStale: (
           clearTimeout(startup); run.timers.delete(startup);
           setView(v => ({ ...v, phase: "live", avatar: "listening", status: "I'm listening. What strategy is on your mind?" }));
         }
+        if (previous.transcripts !== run.events.transcripts && run.events.transcripts.at(-1)?.speaker === "user") activityRef.current?.input();
         const speaking = previous.parrot !== run.events.parrot;
         const thinking = run.events.delegations.some(d => d.running) || run.draining ||
           run.events.calls.some(c => !run.processedCalls.has(c.callId));
@@ -212,5 +225,5 @@ export function useLiveTalk(onStrategy: (chat: ChatResponse) => void, onStale: (
       if (active.current === run) setView(v => ({ ...v, playbackBlocked: false }));
     } catch { /* Keep the user-gesture retry available if playback is still blocked. */ }
   }
-  return { view, audio, start, end, resumeAudio, active: view.phase !== "idle" };
+  return { view, audio, remoteStream, start, end, resumeAudio, active: view.phase !== "idle" };
 }

@@ -1,8 +1,11 @@
+import { WALLET_TAGS, isSelectionReason, type WalletEvidence, type WalletChanges } from "../../shared/wallet-evidence";
 import type { StrategyIntent } from "../../shared/strategy-intent";
 
 export type Clamp = { field: string; requested: number; applied: number };
 export type ChatResponse = {
   ok: true;
+  evidence?: WalletEvidence[];
+  changes?: WalletChanges;
   reply: string;
   clarify: string | null;
   intent: StrategyIntent;
@@ -57,14 +60,27 @@ const isIntent = (v: unknown): v is StrategyIntent => record(v) &&
   nullableString(v.clarify) && (v.clarify === null || v.clarify.length <= 200) &&
   str(v.reply) && v.reply.length > 0 && v.reply.length <= 400;
 
+export const isWalletEvidence = (v: unknown): v is WalletEvidence[] => Array.isArray(v) && v.length <= 25 &&
+  new Set(v.map(e => record(e) ? e.address : null)).size === v.length && v.every(e => record(e) &&
+    Object.keys(e).every(k => ["address", "rank", "maxDrawdown", "annualisedVol", "tags"].includes(k)) && walletId(e.address) && integer(e.rank) && e.rank > 0 &&
+    (e.maxDrawdown === null || (nonnegative(e.maxDrawdown) && e.maxDrawdown <= 1)) &&
+    (e.annualisedVol === null || nonnegative(e.annualisedVol)) && Array.isArray(e.tags) && e.tags.length <= 6 &&
+    e.tags.every(t => typeof t === "string" && (WALLET_TAGS as readonly string[]).includes(t)));
+export const isWalletChanges = (v: unknown): v is WalletChanges => record(v) && Object.keys(v).length === 2 &&
+  [v.added, v.removed].every(side => Array.isArray(side) && side.length <= 25 &&
+    new Set(side.map(e => record(e) ? e.address : null)).size === side.length && side.every(e => record(e) &&
+      Object.keys(e).length === 2 && walletId(e.address) && isSelectionReason(e.reason)));
+
 export function isChatResponse(v: unknown): v is ChatResponse {
   if (!record(v) || v.ok !== true || !str(v.reply) || !nullableString(v.clarify) || !isIntent(v.intent) ||
-      !str(v.model) || !nonnegative(v.latencyMs) || !record(v.policy) || !record(v.shortlist)) return false;
+      !str(v.model) || !nonnegative(v.latencyMs) || !record(v.policy) || !record(v.shortlist) || !Array.isArray(v.shortlist.addresses)) return false;
+  if (v.evidence !== undefined && (!isWalletEvidence(v.evidence) || JSON.stringify(v.evidence.map(e => e.address)) !== JSON.stringify(v.shortlist.addresses))) return false;
+  if (v.changes !== undefined && (!isWalletChanges(v.changes) || v.changes.added.some(e => !(v.shortlist as {addresses: string[]}).addresses.includes(e.address)) || v.changes.removed.some(e => (v.shortlist as {addresses: string[]}).addresses.includes(e.address)))) return false;
   const p = v.policy;
   return typeof p.liveEligible === "boolean" && integer(p.effectiveMaxSources) && p.effectiveMaxSources >= 5 && p.effectiveMaxSources <= 25 &&
     Array.isArray(p.changes) && p.changes.every(c => record(c) && str(c.field) && scalar(c.from) && scalar(c.to)) &&
     Array.isArray(p.clamps) && p.clamps.every(c => record(c) && str(c.field) && finite(c.requested) && finite(c.applied)) &&
-    strings(p.notes) && Array.isArray(v.shortlist.addresses) && v.shortlist.addresses.every(walletId) &&
+    strings(p.notes) && Array.isArray(v.shortlist.addresses) && v.shortlist.addresses.length <= 25 && new Set(v.shortlist.addresses).size === v.shortlist.addresses.length && v.shortlist.addresses.every(walletId) &&
     oneOf(v.shortlist.dataSource, ["live", "sample"]);
 }
 

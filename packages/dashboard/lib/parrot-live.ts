@@ -1,6 +1,6 @@
 import { isChatResponse, type ChatResponse } from "./parrot";
 
-export type LiveStrategy = Pick<ChatResponse, "ok" | "intent" | "policy" | "shortlist"> & { facts: string };
+export type LiveStrategy = Pick<ChatResponse, "ok" | "intent" | "policy" | "shortlist" | "changes"> & { evidence: NonNullable<ChatResponse["evidence"]> } & { facts: string };
 export type LiveSession = { ok: true; session: { id: string }; transport: { sdp: string }; maxSessionSeconds: number };
 const record = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v);
 const id = (v: unknown): v is string => typeof v === "string" && /^[\w-]{1,256}$/.test(v);
@@ -10,7 +10,7 @@ export const isLiveSession = (v: unknown): v is LiveSession => record(v) && v.ok
   typeof v.maxSessionSeconds === "number" && Number.isInteger(v.maxSessionSeconds) && v.maxSessionSeconds >= 1 && v.maxSessionSeconds <= 900;
 export const liveAsChat = (v: LiveStrategy): ChatResponse => ({ ...v, reply: v.intent.reply, clarify: null, model: "Live voice", latencyMs: 0 });
 export const isLiveStrategy = (v: unknown): v is LiveStrategy => record(v) && record(v.intent) && typeof v.facts === "string" &&
-  v.facts.length <= 1200 && isChatResponse({ ...v, reply: v.intent.reply, clarify: null, model: "Live voice", latencyMs: 0 });
+  Array.isArray(v.evidence) && v.facts.length <= 1200 && isChatResponse({ ...v, reply: v.intent.reply, clarify: null, model: "Live voice", latencyMs: 0 });
 
 export type Transcript = { delta: string; startMs: number; endMs: number; speaker: "user" | "parrot" };
 export type ToolCall = { callId: string; responseId: string; delegationId: string; args?: Record<string, unknown>; error?: string };

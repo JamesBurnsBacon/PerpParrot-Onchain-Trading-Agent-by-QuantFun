@@ -1,6 +1,6 @@
 import type { SQL } from "bun";
 import type { Policy } from "../../../shared/src/contracts";
-import { intentToPolicy, parseStrategyIntent, shortlist, type FinalistLike, type StrategyIntent } from "../../../shared/strategy-intent";
+import { parseStrategyIntent, type FinalistLike, type StrategyIntent } from "../../../shared/strategy-intent";
 import { hashIp, type ChatLimiter, type Kind, type LimitConfig, type Reservation } from "./limits";
 import { callIntentModel, ModelError } from "./openai";
 import { selectStrategy } from "./strategy";
@@ -176,9 +176,7 @@ export const handlePreview = async (req: Request, deps: ChatDeps): Promise<Respo
   try {
     const reservation = await reserve(req, deps, "preview");
     if (!reservation.ok) { audit(reservation.reason); return denied(reservation); }
-    const policyResult = intentToPolicy(intent, deps.basePolicy);
-    const { finalists } = await deps.finalists();
-    const addresses = shortlist(finalists, intent, policyResult.effectiveMaxSources);
+    const { policyResult, shortlist: { addresses } } = selectStrategy(intent, deps.basePolicy, await deps.finalists());
     const preview = buildPreview({ intent, policyResult, addresses });
     const requestId = deps.newId();
     await deps.requests.save({ id: requestId, createdAtMs: deps.now(), previewHash: preview.previewHash, intent, preview });

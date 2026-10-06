@@ -17,9 +17,10 @@ export function StepRail({ chat, demo, step, setStep, preview, busy, failure, on
       <span className="parrot-step-number">{i + 1}</span><span>{label}</span>
     </button>)}</nav>
     <div id="parrot-step-panel" className="mt-5">
-      {step === 0 ? <SelectPanel chat={chat} demo={demo} onVerify={() => setStep(1)} /> : step === 1 ?
-        <VerifyPanel demo={demo} previewHash={preview?.preview.previewHash} canExecute={unlocked[2]} onExecute={() => setStep(2)} /> :
-        <ExecutePanel chat={chat} demo={demo} result={preview} busy={busy} failure={failure} onConfirm={onConfirm} executionDisabled={executionDisabled} />}
+      <div hidden={step !== 0}><SelectPanel chat={chat} demo={demo} onVerify={() => setStep(1)} /></div>
+      {step === 1 ?
+        <VerifyPanel demo={demo} previewHash={preview?.preview.previewHash} canExecute={unlocked[2]} onExecute={() => setStep(2)} /> : step === 2 ?
+        <ExecutePanel chat={chat} demo={demo} result={preview} busy={busy} failure={failure} onConfirm={onConfirm} executionDisabled={executionDisabled} /> : null}
     </div>
   </aside>;
 }

@@ -97,7 +97,7 @@ test("live response validators reject unsafe shapes and bridge to existing page 
   for (const seconds of [0, 901, 1.5, "180"]) expect(isLiveSession({ ...valid, maxSessionSeconds: seconds })).toBe(false);
   expect(isLiveSession({ ...valid, transport: { sdp: "bad" } })).toBe(false);
   const { intent, policy, shortlist } = PARROT_PRESETS[0].chat;
-  const result = { ok: true as const, intent, policy, shortlist, facts: "Facts." };
+  const result = { ok: true as const, intent, policy, shortlist, evidence: shortlist.addresses.map((address, i) => ({ address, rank: i + 1, maxDrawdown: .1, annualisedVol: .2, tags: [] })), facts: "Facts." };
   expect(isLiveStrategy(result)).toBe(true);
   expect(isLiveStrategy({ ...result, facts: "x".repeat(1201) })).toBe(false);
   expect(isLiveStrategy({ ...result, intent: { ...intent, maxSources: 1000 } })).toBe(false);

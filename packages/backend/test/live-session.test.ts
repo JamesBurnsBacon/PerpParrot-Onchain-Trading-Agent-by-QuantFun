@@ -150,7 +150,7 @@ test("live malformed success, secret echoes and thrown errors stay private", asy
 test("live strategy clamps 100x to 3x with deterministic safe facts", async () => {
   const d = deps(); d.fetchImpl = (async (_url: string | URL | Request, _init?: RequestInit) => { throw new Error("must not call"); }) as unknown as typeof fetch;
   const body = await check(await handleLiveStrategy(request({ intent: args }), d), 200);
-  expect(Object.keys(body).sort()).toEqual(["facts", "intent", "ok", "policy", "shortlist"]);
+  expect(Object.keys(body).sort()).toEqual(["evidence", "facts", "intent", "ok", "policy", "shortlist"]);
   expect(body.policy.clamps).toEqual([{ field: "maxGrossLeverage", requested: 100, applied: 3 }]);
   expect(body.facts).toContain("requested 100x, policy cap 3x");
   expect(body.facts).toContain("Data source: sample.");

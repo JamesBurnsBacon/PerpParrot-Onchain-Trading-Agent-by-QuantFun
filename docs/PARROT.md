@@ -26,7 +26,7 @@ browser ── hold to confirm ──► POST /chat/preview ──► PENDING re
 | Route | Purpose | Switch |
 | --- | --- | --- |
 | `POST /live/session` | Exchange the browser's SDP for a GPT-Live session. The session config (model, voice, prompts, tools, delegation) is **server-owned**; the body is `{sdp}` only | `LIVE_ENABLED=true` |
-| `POST /live/strategy` | Validate the `set_strategy` arguments, clamp, shortlist, return code-built facts. No model call | `LIVE_ENABLED=true` |
+| `POST /live/strategy` | Body `{ intent, previous? }`: optional `previous` is up to 25 distinct known finalist ids. Unknown keys/ids are rejected. Validate, clamp, shortlist, return code-built facts. No model call | `LIVE_ENABLED=true` |
 | `POST /chat`, `POST /chat/preview` | Text intent extraction (strict JSON schema) and the pending-request preview | `CHAT_ENABLED=true` |
 
 Both switches are **off by default** and independent. Turn Live on only for recording and judging.
@@ -84,3 +84,9 @@ Dashboard (from `packages/dashboard`): `bun run dev` (its dev rewrite sends `/ap
   `event_not_allowed` for browser reconfiguration, 429 after the per-IP limit, normal and requested close with usage.
 - Offline: backend suite against a real Postgres 16 (701 tests), recorded real GPT-Live events replayed through the event reducer, mutation controls for the limiter, kill switch, body validation and config forwarding.
 - **Not verified:** live microphone calls and voice quality in a browser, a deployment on Vercel, and the default Turbopack build (the webpack build passes).
+
+## Wallet board
+
+The wallet board uses 40 deterministic synthetic finalists. Evidence includes original Score rank, rounded risk metrics and fixed code tags; `changes` explains membership against `previous`. Spoken facts include at most three wallets per side, stay within 1200 characters and retain the no-orders statement. Conservative selection uses a slightly wider candidate window; Score is unchanged, and pending previews use the same selector. Reels, feathers and sound celebrate strategy selection or a pending request, never gains. SAMPLE DATA stays visible; Calm/reduced motion keep static states, and visitor speech suppresses effects.
+
+Offline implementation evidence and full pairwise measurements: [Wallet board verification](WALLET-BOARD-VERIFICATION.md).
