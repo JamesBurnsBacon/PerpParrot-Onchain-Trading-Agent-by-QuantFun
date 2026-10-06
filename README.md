@@ -68,7 +68,7 @@
  └──┬───────────────────────────┘
     │ signed report
     v
- EXECUTOR (serverless)
+ EXECUTOR (Railway)
  ┌──────────────────────────────┐
  │ verify DON signature         │
  │ dedupe report ID             │──> Hyperliquid (our account)
@@ -166,36 +166,43 @@ A dedicated workstream, integrated into the CRE flow.
 - **First deliverable:** a CRE `review` spike proving an LLM call plus consensus works in `cre workflow simulate`. Then schemas in `packages/shared`, a prompt + offline eval, and the point-in-time backtest harness.
 
 ### 4.7 Mirror (CRE workflow, every 10 min: `0 */10 * * * *`)
-Each node runs steps 1–3 (`runInNodeMode`); the DON agrees per field, then signs and sends in step 4.
-1. **Fetch the positions snapshot** for this run: `GET {backendUrl}/snapshots/{runAt}` (1 call). The backend builds it at `:x9` and never changes it, so every node gets identical bytes. Contract: `packages/shared/snapshot.ts`.
-   - Per source: address, weight, equity and eligible positions (signed USD notional), plus the eligible-asset list and the frozen-set hash. Amounts are decimal strings × 1e6.
-   - The mirror rejects it if it's for another run, was taken > 120 s from `runAt`, contains an ineligible asset, or its sources don't hash to the frozen set in config.
-2. **Spot-check 5 sources** and read our account via `clearinghouseState` on the core dex **and** `xyz` (HIP-3 positions and margin only come back per dex, so 2 calls per account). The sample is seeded by the snapshot ID, so every node checks the same sources. Deviation = Σ |snapshot − live notional| / live equity. **Reject the run if the worst source exceeds 5%.**
-3. **Exposures:** `exposure_c = Σᵢ wᵢ' · nᵢ,c / Eᵢ` per asset, in bigint math (`packages/shared/copy.ts`), so every node gets identical results.
-   - **Consensus:** snapshot ID and exposures are `identical`; max deviation and our equity are `median` (live reads differ slightly between nodes). Only ≤ 59 exposures go through consensus, not the snapshot, which stays under the 25 KB limit (a 25-source snapshot can be ~60 KB).
-4. **Targets** = exposure × our equity → `report()` → `sendReport()` POSTs it to the executor (§4.13). The drift rule (§4.4) and the 95% margin rule (§4.8) run in the executor, against the live account.
+Each node runs steps 1–3 (`runInNodeMode`); the DON agrees per field, then signs and sends in step 4. Code: `packages/cre-workflows/mirror`, `packages/shared`.
+1. **Fetch the positions snapshot** for this run: `GET {backendUrl}/snapshots/{runAt}` (1 call). The backend builds it at `:x9` and never changes it, so every node gets identical bytes (`packages/shared/snapshot.ts`).
+   - Contents: the **frozen configuration** (below), the eligible-asset list, and per frozen source its equity and eligible positions (signed USD notional). Amounts are decimal strings × 1e6.
+   - The mirror rejects it if it's for another run, was taken > 120 s from `runAt`, contains an ineligible asset, doesn't cover exactly the frozen sources, or its configuration isn't the pinned one.
+2. **Spot-check 5 sources** and read our account via `clearinghouseState` on the core dex **and** `xyz` (HIP-3 positions and margin only come back per dex, so 2 calls per account). The sample is seeded by the snapshot ID, so every node checks the same sources. Deviation = the larger of Σ |snapshot − live notional| and |snapshot − live equity|, over live equity. **Reject the run if the worst source exceeds 5%.**
+3. **Exposures:** `exposure_c = Σᵢ wᵢ' · nᵢ,c / Eᵢ` per asset in bigint math (`packages/shared/copy.ts`), so every node gets identical results.
+   - Weights are the frozen `weightUnits`; cash stays cash. Flat sources' weight goes to active ones (`wᵢ' = wᵢ · W_all / W_active`), but **never past a source's frozen ceiling** (the run fails instead). Gross exposure is capped at the policy's `maxGrossLeverage`.
+   - **Consensus:** snapshot ID, snapshot hash, account and exposures are `identical`; max deviation and our equity are `median` (live reads differ slightly between nodes). Only ≤ 59 exposures go through consensus, not the snapshot, which stays under the 25 KB limit (a 25-source snapshot can be ~60 KB).
+4. **Targets** = exposure × our equity → `report()` → `sendReport()` POSTs it to the executor (§4.13). Orders, the drift rule (§4.4) and the 95% margin rule (§4.8) are the executor's job, against the live account.
 
 **HTTP calls: 14 of CRE's 15** (1 snapshot + 2 own account + 10 spot-check + 1 executor), enforced by the simulator.
-- **Spike status (2026-10-06):** passed end to end in simulation on live HL data: 6 real vaults as the frozen set, 59 eligible assets (21 on `xyz`), a 4.5 KB snapshot, 0 bps spot-check deviation, 30 net targets delivered and executed once. The stand-in "our account" is a large vault until our wallet exists.
-- **Not built yet:** eligibility hysteresis ($15M exit) and reduce-only for assets that lose eligibility (both need yesterday's state); whether our spot USDC counts toward equity.
-- **On failure** (consensus, spot-check, timeout): hold positions, retry on the next run, and send a Telegram alert after 2 consecutive failures. There is no backend fallback.
-- **Freeze commitment:** the frozen-set hash (sources + weights) is pinned in `mirror`'s config, so it's part of the deployed workflow ID, and it's inside every DON-signed report. The executor rejects reports with any other hash. **No onchain contract:** everything trades in our own HL account, and the signed reports (stored in Supabase, shown on the dashboard) are the verifiable record. Anyone can check them against the Capability Registry.
+- **Frozen configuration = execution authority.** The review core (branch `ai-agent-workflow`, `shared/src/frozen.ts`) turns a VALID/LIVE review into a `FrozenConfiguration`: sources with integer weight and ceiling units, cash units, **our account**, the policy, and a `configurationHash` (keccak over canonical JSON, domain `perpparrot:frozen:v1`). `packages/shared/frozen.ts` re-implements its checks without dependencies so they run in WASM; the fixture passes the review core's own validator.
+- **Freeze commitment:** the `configurationHash` is pinned in `mirror`'s production config, so it's part of the deployed workflow ID, and it's inside every DON-signed report. The executor rejects any other hash. **No onchain contract:** everything trades in our own HL account, and the signed reports (executor `/runs`, dashboard) are the verifiable record; anyone can check them against the Capability Registry. Freezing = set the hash in `config.production.json`, redeploy `mirror` via CI, set the executor's `FROZEN_CONFIGURATION_HASH`, load the configuration into the backend.
+- **On failure** (snapshot, consensus, spot-check, executor rejection, timeout): the run throws, the executor holds positions, and the next run retries. The executor alerts on Telegram after 25 min without a report (≈ 2 missed runs). There is no backend fallback.
+- **Assets that lose eligibility:** the executor closes them (they're absent from the targets) rather than following sources' reductions (§4.4 reduce-only). Simpler, and HL allows reduce-only closes of any size; revisit if it costs too much.
+- **Status (2026-10-06):** `scripts/e2e-mirror.sh` passes end to end in simulation on live HL data: backend snapshot (6 real vaults, 59 eligible assets) → `cre workflow simulate mirror` (configuration verified in WASM, 1 bps spot-check) → executor (verified, planned, signed in dry run). Not exercised until deploy: real multi-node consensus and the registry signature check.
 
-### 4.8 Execute (serverless executor)
-- **Checks:**
-  - verify the report: ≥ f+1 DON signatures and the pinned workflow owner (§4.13)
-  - dedupe by report ID = `keccak256(rawReport)` (HL nonces back this up)
-  - **sanity bounds:** the source set must match the frozen set, and total notional must stay ≤ e.g. 50× equity
-- **Orders:** IOC limit at mark ± a slippage cap. Remainders are retried on the next run.
-- **Leverage:** cross margin; each asset at its **max leverage** (`updateLeverage`; many HIP-3 markets are 10x, BTC up to 40x). Exposure is mirrored exactly.
-  - If initial margin `Σ |N_c| / maxLev_c` would exceed **95% of equity**, scale **all** targets down pro-rata.
+### 4.8 Execute (executor service on Railway)
+Code: `packages/executor`. One long-running Bun service (Railway, `Dockerfile` + `railway.json`), so there's one HL nonce sequence, an in-process run queue and no function timeout.
+- **Intake** (`POST /reports`): verify the report (≥ f+1 DON signatures, pinned workflow owner, §4.13), then check the configuration hash, our account and expiry, dedupe by report ID, **answer 200 at once** and execute in the background (DON nodes time out after 10 s). Runs are queued, never concurrent.
+- **Plan** against the live account (`src/planner.ts`):
+  - targets for every eligible asset; anything we hold that isn't targeted goes to 0
+  - **margin rule:** if `Σ |N_c| / maxLev_c` would exceed **95% of equity**, scale **all** targets down pro-rata
+  - **drift rule:** trade a leg only if the gap is ≥ $10 and ≥ 10% of the target; full closes are always allowed (reduce-only)
+  - reductions first; reduce-only whenever an order only shrinks a position
+  - **sanity bound:** reject the report if gross target > 50× equity
+- **Orders:** IOC limit at mark ± 50 bps, prices and sizes rounded to HL tick/lot rules, ≤ 20 orders per action, a deterministic `cloid` per report and asset. Remainders are retried on the next run.
+- **Leverage:** cross margin; each asset at its **max leverage** (`updateLeverage`, once per asset; many HIP-3 markets are 10x, BTC up to 40x).
+- **Dry run by default:** orders are built and signed through `@nktkas/hyperliquid` exactly as they'd be sent, then recorded instead of POSTed. `DRY_RUN=false` plus `HL_API_WALLET_KEY` goes live.
 - **Keys:** a fresh EOA. A human holds the master key; the executor holds only an **HL API wallet** key (trade, no withdraw).
-- **Kill switch:** manual only. Any team member can press it (Supabase auth).
-  - **Pause:** stop trading, keep positions.
-  - **Flatten:** close everything.
-- **Alerts:** a Telegram bot.
+- **Kill switch:** manual, bearer-token admin routes (any team member with `ADMIN_TOKEN`; the dashboard calls them behind auth).
+  - **Pause / resume:** stop or restart trading, keep positions.
+  - **Flatten:** pause, then close everything reduce-only, bypassing CRE.
+- **Run log:** `GET /runs` (plans, order results, raw signed reports) and `GET /status`. In memory until the Supabase tables land.
+- **Alerts:** Telegram bot (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`) for failed runs, failed orders and missed reports.
 - **Capital:** 5 HYPE, currently on HyperEVM.
-  - Keep **0.1 HYPE** there for contract gas.
+  - Keep **0.1 HYPE** there for gas.
   - Send ~4.9 HYPE to HyperCore via the system address `0x2222…2222` (verify).
   - Swap it to **USDC on spot** (`@107`). Portfolio margin needs $10k, and we have just under $500.
 
@@ -243,20 +250,16 @@ Each node runs steps 1–3 (`runInNodeMode`); the DON agrees per field, then sig
 | `dashboard` | all tables | — |
 
 ### 4.13 Mirror → executor report
-- **Transport:** `runtime.report()` (`evm` / `ecdsa` / `keccak256`), then `sendReport()` POSTs JSON `{report, context, signatures}` (hex, no `0x`) to the executor. **Every DON node POSTs its own copy.** `cacheSettings` only trims duplicates, because each node's signatures differ.
-- **Body** (ABI-encoded after the 109-byte header, `packages/shared/report.ts`): `string runId, string snapshotId, uint64 asOf, bytes32 frozenSetHash, int256 equityE6, (string asset, int256 notionalE6)[] targets`.
-  - **Targets, not orders.** The executor diffs targets against the live account when it runs, so price moves between report and execution don't matter.
-- **Report ID** = `keccak256(rawReport)`, identical across nodes. The first valid copy is executed; later copies get `200 duplicate`.
-- **Verification** in the executor:
-  - ≥ f+1 signatures from the DON's signers, read from the Capability Registry `0x76c9cf548b4179F8901cda1f8623568b58215E62` on **Ethereum mainnet**. Cache the signers per DON ID. The executor therefore needs an Ethereum mainnet RPC.
-  - `workflowOwner` in the header = our **organization address** `0xc5feb3cf878c9ba42a776e9edf62a4558ab08b85` (private registry, §4.14; from `cre whoami -v` → `derivedWorkflowOwners`). The executor reads it from `WORKFLOW_OWNER`: `packages/executor/.env` locally, Vercel env vars in production. **Don't pin the workflow ID:** it is a hash of the binary + config and changes on every update.
-  - Reject reports whose `asOf` is older than 5 minutes.
-- **Simulation:** `cre workflow simulate` signs with local test keys, which fail verification. `VERIFY_REPORTS=false` is allowed only outside production; the executor refuses to start with it in production.
-- **Spike status (2026-10-06):** passed end to end in simulation.
-  - `mirror/` signs a fixture of 3 targets and `sendReport()`s it to the local executor (`packages/executor`, `bun run dev`), which recovers all 4 simulator signatures, decodes the body, and executes once. The body ABI lives in `packages/shared/report.ts`.
-  - The registry code reads real signer sets from Ethereum mainnet (e.g. DON 1: f = 3, 10 signers → 4 signatures needed).
-  - Not yet exercised against a real DON: the f+1 registry check, the owner pin, and dedupe across nodes (the simulator is one node). Unit tests cover all three.
-  - `mirror`'s production `executorUrl` is a placeholder until the executor is deployed, so the CI simulate step fails for `mirror` until then.
+- **Transport:** `runtime.report()` (`evm` / `ecdsa` / `keccak256`), then `sendReport()` POSTs JSON `{report, context, signatures}` (hex, no `0x`) to the executor. **Every DON node POSTs its own copy.** `cacheSettings` only trims duplicates, because each node's signatures differ. The mirror reaches consensus on the executor's HTTP status, so it fails loudly on a rejection.
+- **Body** (ABI-encoded after the 109-byte header, `packages/shared/report.ts`): `string runId, bytes32 snapshotHash, bytes32 configurationHash, address account, uint64 asOf, uint64 expiresAt, int256 equityE6, (string asset, int256 notionalE6)[] targets`.
+  - **Targets, not orders.** The executor diffs targets against the live account when it runs, so price moves between report and execution don't matter, and nodes never have to agree on prices or our positions.
+  - The review core's `rebalance-report.schema.json` (branch `ai-agent-workflow`) puts ≤ 10 **orders** in the report instead. ❓ *§8: reconcile before merging.*
+- **Report ID** = `keccak256(rawReport)`, identical across nodes. The first valid copy is accepted; later copies get `200 duplicate`.
+- **Verification** in the executor (`src/verify.ts`, `src/handler.ts`):
+  - ≥ f+1 signatures from the DON's signers, read from the Capability Registry `0x76c9cf548b4179F8901cda1f8623568b58215E62` on **Ethereum mainnet** (cached per DON ID; e.g. DON 1: f = 3, 10 signers). The executor needs an Ethereum mainnet RPC.
+  - `workflowOwner` in the header = our **organization address** `0xc5feb3cf878c9ba42a776e9edf62a4558ab08b85` (private registry, §4.14; `cre whoami -v` → `derivedWorkflowOwners`), from `WORKFLOW_OWNER`. **Don't pin the workflow ID:** it is a hash of the binary + config and changes on every update.
+  - `configurationHash` = `FROZEN_CONFIGURATION_HASH`, `account` = `HL_ACCOUNT`, now ≤ `expiresAt` (`asOf` + 300 s), and `asOf` no more than 60 s ahead of our clock.
+- **Simulation:** `cre workflow simulate` signs with local test keys, which fail verification, and stamps the next `:x0` as `asOf`. `VERIFY_REPORTS=false` (simulation mode: signatures must still recover) is refused in production; `MAX_REPORT_LEAD_SECONDS=600` covers the early stamp.
 
 ### 4.14 CRE setup and team access
 - **Organization** `PerpParrot`: James is the Owner. Ownership can't be transferred, and only the Owner can invite members. Teammates have been invited; members see every workflow, its runs and status at app.chain.link/cre/workflows.
@@ -294,8 +297,8 @@ Each node runs steps 1–3 (`runInNodeMode`); the DON agrees per field, then sig
 | Prices | Hyperliquid oracle/mark prices via the Info API (`metaAndAssetCtxs`). BTC history from `candleSnapshot`. No Chainlink Data Feeds. |
 | Orchestration | Chainlink CRE (`@chainlink/cre-sdk`, `cre` CLI), DON access from the sponsor on-site. No onchain contract. Private registry; deploys from GitHub Actions with `CRE_API_KEY` (§4.14). |
 | AI | Two LLMs (≥ 1 OpenAI), structured JSON |
-| Storage / hosting | Supabase. Backend on Railway (the leaderboard download is too slow for serverless). Executor + dashboard on Vercel. |
-| Secrets | Railway/Vercel env vars plus CRE secrets. `.env.example` only in the repo. |
+| Storage / hosting | Supabase. Backend and executor on Railway (the leaderboard download is too slow for serverless; the executor needs one long-running process for nonces and run ordering). Dashboard on Vercel. |
+| Secrets | Railway/Vercel env vars plus CRE secrets. `.env.example` only in the repo. Runbook: `docs/cre/RUNBOOK.md`. |
 | Testing | Fixtures, then $10–20 mainnet runs before the freeze. No testnet. |
 | Optional / unused | NOWNodes (HyperEVM RPC + an Info API copy) if it helps with rate limits; not a track. No AgentKit. |
 
@@ -333,6 +336,11 @@ Budget ~1 h of testing per 2 h of features. Integrate only tested modules.
 - [ ] ❓ How to read sources' lending positions for Conservative
 - [ ] ❓ Per-tier type-B threshold N (production)
 - [ ] ❓ Org-owned CRE secrets on the private registry: confirm with the sponsor
+- [ ] ❓ Mirror → executor report: **targets** (§4.13, built and tested) or **≤ 10 orders** (review core's `rebalance-report.schema.json`)? Targets keep live prices and our positions out of DON consensus.
+- [ ] ❓ Live bucket: README says Aggressive; the review core only allows **Balanced** live (`requireFrozenLiveManifest`, `validateFrozenConfiguration`)
+- [ ] ❓ Freeze confirmation: the review core's docs plan a HyperEVM freeze consumer; we dropped onchain contracts and pin the `configurationHash` in the mirror config instead (§4.7)
+- [ ] ❓ Does HL accept reduce-only closes under $10? The planner assumes yes (full closes skip the minimum)
+- [ ] ❓ Does spot USDC count toward our equity? Today equity = core + `xyz` perp account value
 
 ---
 
