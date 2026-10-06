@@ -6,11 +6,15 @@ name: CRE checks
 
 on:
   push:
-    branches: [main, cre-scaffold]
+    branches: [main, cre-scaffold, ai-agent-workflow, ai-agent-mainnet-hardening]
     paths:
       - "packages/backend/**"
       - "packages/executor/**"
-      - "packages/shared/*.ts"
+      - "packages/shared/**"
+      - "packages/cre-workflows/review/**"
+      - "tests/support/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
       - "packages/cre-workflows/mirror/**"
       - "packages/cre-workflows/project.yaml"
       - "packages/dashboard/**"
@@ -51,7 +55,18 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Install review core dependencies for integration checks
+        run: npm install --global pnpm@11.25.0 && pnpm --dir ../.. install --frozen-lockfile
+        if: matrix.package == 'executor'
       - run: bun install --frozen-lockfile
+      - name: Install integration dependency packages
+        if: matrix.package == 'executor'
+        run: |
+          bun install --frozen-lockfile --cwd ../backend
+          bun install --frozen-lockfile --cwd ../cre-workflows/mirror
       - run: bun test
       - run: bunx tsc --noEmit
 

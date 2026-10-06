@@ -1,5 +1,5 @@
 import type { Policy } from "../../../shared/src/contracts";
-import { intentToPolicy, shortlist, type FinalistLike, type StrategyIntent } from "../../../shared/strategy-intent";
+import { intentToPolicy, shortlist, type FinalistLike, type StrategyIntent } from "../../../shared/parrot-intent";
 
 export const selectStrategy = (intent: StrategyIntent, basePolicy: Policy, data: {
   finalists: FinalistLike[]; dataSource: "live" | "sample";

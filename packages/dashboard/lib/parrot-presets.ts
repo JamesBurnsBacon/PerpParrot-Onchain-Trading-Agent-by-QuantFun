@@ -1,4 +1,4 @@
-import type { StrategyIntent } from "../../shared/strategy-intent";
+import type { StrategyIntent } from "../../shared/parrot-intent";
 import type { ChatResponse, PreviewResponse } from "./parrot";
 
 export type ParrotPreset = { id: string; label: string; message: string; chat: ChatResponse; preview: PreviewResponse };

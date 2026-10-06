@@ -7,6 +7,8 @@
     "dev": "bun run --watch src/server.ts",
     "start": "bun run src/server.ts",
     "test": "bun test",
+    "backtest:public": "bun src/backtest/fetch-public.ts",
+    "backtest:explore:active": "bun src/backtest/explore-active-cohort.ts",
     "typecheck": "tsc --noEmit"
   },
   "license": "UNLICENSED",

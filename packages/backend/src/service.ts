@@ -56,7 +56,7 @@ export class SnapshotService {
     const nowMs = this.deps.nowMs();
     const configuration = await this.deps.configurations.load(nowMs);
     const eligible = await this.deps.eligibility.current(nowMs);
-    const snapshot = await buildSnapshot(configuration, eligible, runAt, Math.floor(nowMs / 1000), this.deps.hl);
+    const snapshot = await buildSnapshot(configuration, eligible, runAt, this.deps.nowMs, this.deps.hl);
     const json = await this.deps.store.putIfAbsent(runAt, JSON.stringify(snapshot));
     // After serving starts, so a slow hook never delays a DON node.
     if (this.deps.onBuilt) queueMicrotask(() => void this.deps.onBuilt!(runAt, json).catch(() => undefined));

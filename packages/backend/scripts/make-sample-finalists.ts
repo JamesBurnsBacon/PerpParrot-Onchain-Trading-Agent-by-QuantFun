@@ -1,5 +1,5 @@
 import { parsePortfolio, scoreCandidates, type ScoreInput } from "../src/score";
-import type { FinalistLike } from "../../shared/strategy-intent";
+import type { FinalistLike } from "../../shared/parrot-intent";
 import sample from "../test/fixtures/score/portfolio-sample.json";
 
 export const makeSampleFinalists = (): FinalistLike[] => {

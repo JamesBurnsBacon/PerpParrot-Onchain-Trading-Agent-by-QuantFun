@@ -1,4 +1,4 @@
-import type { StrategyIntent } from "../../shared/strategy-intent";
+import type { StrategyIntent } from "../../shared/parrot-intent";
 
 export type Clamp = { field: string; requested: number; applied: number };
 export type ChatResponse = {

@@ -1,12 +1,12 @@
 import type { Policy } from "./src/contracts";
+import { validateRuntimePolicy } from "./src/policy-runtime";
 
-export type RiskStyle = "aggressive" | "balanced" | "conservative";
-export type Level = "low" | "med" | "high";
+/** The bounded, user-facing preferences an LLM may extract. Never contains addresses, weights, or policy fields. */
 export type StrategyIntent = {
-  riskStyle: RiskStyle;
+  riskStyle: "aggressive" | "balanced" | "conservative";
   maxSources: number;
-  diversification: Level;
-  leverageComfort: Level;
+  diversification: "low" | "medium" | "high";
+  leverageComfort: "low" | "medium" | "high";
   requestedLeverage: number | null;
   avoidClones: boolean;
   horizon: "short" | "medium";
@@ -20,15 +20,12 @@ export const STRATEGY_INTENT_JSON_SCHEMA = {
   schema: {
     type: "object",
     additionalProperties: false,
-    required: [
-      "riskStyle", "maxSources", "diversification", "leverageComfort",
-      "requestedLeverage", "avoidClones", "horizon", "clarify", "reply",
-    ],
+    required: ["riskStyle", "maxSources", "diversification", "leverageComfort", "requestedLeverage", "avoidClones", "horizon", "clarify", "reply"],
     properties: {
       riskStyle: { type: "string", enum: ["aggressive", "balanced", "conservative"] },
       maxSources: { type: "integer", minimum: 5, maximum: 25 },
-      diversification: { type: "string", enum: ["low", "med", "high"] },
-      leverageComfort: { type: "string", enum: ["low", "med", "high"] },
+      diversification: { type: "string", enum: ["low", "medium", "high"] },
+      leverageComfort: { type: "string", enum: ["low", "medium", "high"] },
       requestedLeverage: { type: ["number", "null"], exclusiveMinimum: 0, maximum: 1000 },
       avoidClones: { type: "boolean" },
       horizon: { type: "string", enum: ["short", "medium"] },
@@ -38,266 +35,281 @@ export const STRATEGY_INTENT_JSON_SCHEMA = {
   },
 } as const;
 
-const intentKeys = [
-  "riskStyle", "maxSources", "diversification", "leverageComfort",
-  "requestedLeverage", "avoidClones", "horizon", "clarify", "reply",
-] as const satisfies readonly (keyof StrategyIntent)[];
+const INTENT_KEYS = Object.keys(STRATEGY_INTENT_JSON_SCHEMA.schema.properties) as (keyof StrategyIntent)[];
+const INTENT_KEY_SET = new Set<string>(INTENT_KEYS);
+const HIDDEN_OR_BIDI = /[\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]/u;
+const CONTROL = /[\u0000-\u001f\u007f]/u;
+const REPLY_CONTROL = /[\u0000-\u0009\u000b-\u001f\u007f]/u;
 
-const CONTROLS = /[\x00-\x1f\x7f]/;
-const REPLY_CONTROLS = /[\x00-\x09\x0b-\x1f\x7f]/;
-const HIDDEN = /[\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/;
+type SnapshotResult = { value: Record<string, unknown> | null; problems: string[] };
 
-const inEnum = (value: unknown, values: readonly string[]): boolean =>
-  typeof value === "string" && values.includes(value);
-
-const inspectStrategyIntent = (value: unknown) => {
+/** Reads own data descriptors into a new object, avoiding repeated getter/proxy property reads. */
+function snapshotPlainRecord(input: unknown, expectedKeys?: Set<string>): SnapshotResult {
   const problems: string[] = [];
-  const snapshot: Record<string, unknown> = {};
   try {
-    if (value === null || typeof value !== "object" || Array.isArray(value)) {
-      return { snapshot, problems: ["strategy intent must be a plain object"] };
+    if (input === null || typeof input !== "object" || Array.isArray(input)) {
+      return { value: null, problems: ["value must be a plain object"] };
     }
-    const prototype: unknown = Object.getPrototypeOf(value);
-    if (prototype !== Object.prototype && prototype !== null) {
-      return { snapshot, problems: ["strategy intent must be a plain object"] };
-    }
-    const input = value as Record<string, unknown>;
-    const descriptors = new Map<PropertyKey, PropertyDescriptor>();
-    for (const key of Reflect.ownKeys(input)) {
-      if (!intentKeys.some((expected) => expected === key)) problems.push(`extra key: ${String(key)}`);
-      const descriptor = Object.getOwnPropertyDescriptor(input, key);
-      if (descriptor) {
-        descriptors.set(key, descriptor);
-        if ("get" in descriptor || "set" in descriptor) problems.push(`accessor property: ${String(key)}`);
-      }
-    }
-    for (const key of intentKeys) {
-      const descriptor = descriptors.get(key);
-      if (!descriptor) {
-        problems.push(`missing key: ${key}`);
+    const prototype = Object.getPrototypeOf(input);
+    if (prototype !== Object.prototype && prototype !== null) return { value: null, problems: ["value must be a plain object"] };
+    const keys = Reflect.ownKeys(input);
+    const value: Record<string, unknown> = {};
+    for (const key of keys) {
+      if (typeof key !== "string" || expectedKeys && !expectedKeys.has(key)) {
+        problems.push(`unexpected key: ${String(key)}`);
         continue;
       }
-      if (!("get" in descriptor || "set" in descriptor)) snapshot[key] = input[key];
-    }
-    // Only the captured values are validated; a proxy must not get a second read.
-    for (const key of intentKeys) {
-      if (!Object.hasOwn(snapshot, key)) continue;
-      const field = snapshot[key];
-      switch (key) {
-        case "riskStyle":
-          if (!inEnum(field, ["aggressive", "balanced", "conservative"])) {
-            problems.push("riskStyle must be aggressive, balanced or conservative");
-          }
-          break;
-        case "maxSources":
-          if (typeof field !== "number" || !Number.isSafeInteger(field) || field < 5 || field > 25) {
-            problems.push("maxSources must be a safe integer in 5..25");
-          }
-          break;
-        case "diversification":
-        case "leverageComfort":
-          if (!inEnum(field, ["low", "med", "high"])) problems.push(`${key} must be low, med or high`);
-          break;
-        case "requestedLeverage":
-          if (field !== null && (typeof field !== "number" || !Number.isFinite(field) || field <= 0 || field > 1000)) {
-            problems.push("requestedLeverage must be null or a finite number in (0, 1000]");
-          }
-          break;
-        case "avoidClones":
-          if (typeof field !== "boolean") problems.push("avoidClones must be a boolean");
-          break;
-        case "horizon":
-          if (!inEnum(field, ["short", "medium"])) problems.push("horizon must be short or medium");
-          break;
-        case "clarify":
-          if (field !== null && (typeof field !== "string" || field.length > 200)) {
-            problems.push("clarify must be null or a string of length <= 200");
-          }
-          break;
-        case "reply":
-          if (typeof field !== "string" || field.length < 1 || field.length > 400) {
-            problems.push("reply must be a string of length 1..400");
-          }
-          break;
-      }
-      if ((key === "clarify" || key === "reply") && typeof field === "string") {
-        // The reply is shown as plain text and may span lines; the clarifying question may not.
-        if ((key === "reply" ? REPLY_CONTROLS : CONTROLS).test(field)) problems.push(`${key} must not contain control characters`);
-        // Zero-width and bidirectional controls can make text look like something else.
-        if (HIDDEN.test(field)) problems.push(`${key} must not contain hidden or bidirectional control characters`);
+      const descriptor = Object.getOwnPropertyDescriptor(input, key);
+      if (!descriptor) {
+        problems.push(`unreadable key: ${key}`);
+      } else if (!Object.hasOwn(descriptor, "value")) {
+        problems.push(`accessor property: ${key}`);
+      } else {
+        value[key] = descriptor.value;
       }
     }
+    return { value, problems };
   } catch {
-    // Unknown callers can supply proxies or getters instead of decoded JSON.
-    problems.push("strategy intent could not be inspected");
+    return { value: null, problems: ["value could not be inspected safely"] };
   }
-  return { snapshot, problems };
-};
+}
 
-export const checkStrategyIntent = (value: unknown): string[] => inspectStrategyIntent(value).problems;
+function validateIntentFields(value: Record<string, unknown>, initialProblems: string[]): string[] {
+  const problems = [...initialProblems];
+  for (const key of INTENT_KEYS) if (!Object.hasOwn(value, key)) problems.push(`missing key: ${key}`);
+  const oneOf = (key: keyof StrategyIntent, choices: readonly string[]) => {
+    if (typeof value[key] !== "string" || !choices.includes(value[key] as string)) problems.push(`${key} has an unsupported value`);
+  };
+  oneOf("riskStyle", ["aggressive", "balanced", "conservative"]);
+  oneOf("diversification", ["low", "medium", "high"]);
+  oneOf("leverageComfort", ["low", "medium", "high"]);
+  oneOf("horizon", ["short", "medium"]);
+  if (typeof value.maxSources !== "number" || !Number.isSafeInteger(value.maxSources) || value.maxSources < 5 || value.maxSources > 25) {
+    problems.push("maxSources must be an integer from 5 to 25");
+  }
+  if (value.requestedLeverage !== null && (typeof value.requestedLeverage !== "number" || !Number.isFinite(value.requestedLeverage) || value.requestedLeverage <= 0 || value.requestedLeverage > 1000)) {
+    problems.push("requestedLeverage must be null or a finite number in (0, 1000]");
+  }
+  if (typeof value.avoidClones !== "boolean") problems.push("avoidClones must be a boolean");
+  if (value.clarify !== null && (typeof value.clarify !== "string" || value.clarify.length > 200)) problems.push("clarify must be null or at most 200 characters");
+  if (typeof value.reply !== "string" || value.reply.length < 1 || value.reply.length > 400) problems.push("reply must contain 1 to 400 characters");
+  for (const key of ["clarify", "reply"] as const) {
+    const text = value[key];
+    if (typeof text !== "string") continue;
+    if (HIDDEN_OR_BIDI.test(text)) problems.push(`${key} contains hidden or bidirectional characters`);
+    if ((key === "reply" ? REPLY_CONTROL : CONTROL).test(text)) problems.push(`${key} contains control characters`);
+  }
+  return problems;
+}
 
-export const parseStrategyIntent = (value: unknown): StrategyIntent => {
-  const { snapshot, problems } = inspectStrategyIntent(value);
-  if (problems.length > 0) throw new Error(`invalid strategy intent: ${problems[0]}`);
-  return Object.freeze(snapshot) as StrategyIntent;
-};
+export function checkStrategyIntent(input: unknown): string[] {
+  const snapshot = snapshotPlainRecord(input, INTENT_KEY_SET);
+  if (snapshot.value === null) return snapshot.problems;
+  return validateIntentFields(snapshot.value, snapshot.problems);
+}
 
-export type PolicyChange = { field: string; from: number | string; to: number | string };
-export type Clamp = { field: string; requested: number; applied: number };
-export type PolicyResult = {
+export function parseStrategyIntent(input: unknown): StrategyIntent {
+  const snapshot = snapshotPlainRecord(input, INTENT_KEY_SET);
+  if (snapshot.value === null) throw new TypeError(`invalid strategy intent: ${snapshot.problems[0]}`);
+  const problems = validateIntentFields(snapshot.value, snapshot.problems);
+  if (problems.length) throw new TypeError(`invalid strategy intent: ${problems[0]}`);
+  return Object.freeze(snapshot.value) as StrategyIntent;
+}
+
+export type PolicyChange = { field: keyof Policy; from: string | number; to: string | number };
+export type PolicyClamp = { field: "maxGrossLeverage"; requested: number; applied: number };
+export type StrategyPreview = {
   policy: Policy;
+  maxSources: number;
+  requiredSources: number;
   changes: PolicyChange[];
-  clamps: Clamp[];
-  effectiveMaxSources: number;
-  liveEligible: boolean;
-  notes: string[];
+  clamps: PolicyClamp[];
+  approvalRequired: true;
+  executionMode: "SIMULATION_PREVIEW";
 };
 
-export const intentToPolicy = (intent: StrategyIntent, base: Policy): PolicyResult => {
-  // Callers should have parsed the model output already; checking again keeps the mapper fail-closed.
-  intent = parseStrategyIntent(intent);
-  const fields = [
-    "bucket", "mode", "maxSourceWeight", "maxGrossLeverage", "cashBuffer", "maxPairCorrelation", "maxExposureOverlap",
-  ] as const;
-  // Spread captures every own enumerable value once, including extra and symbol keys.
-  const snapshot = { ...base };
-  for (const field of fields) {
-    // Required fields may be inherited or non-enumerable; capture those once too.
-    if (!Object.hasOwn(snapshot, field)) {
-      Object.defineProperty(snapshot, field, { value: base[field], enumerable: true });
-    }
+const POLICY_KEYS = new Set([
+  "bucket", "mode", "capitalUsd", "minOrderUsd", "minExecutableTargets", "maxSourceWeight", "maxGrossLeverage", "cashBuffer",
+  "maxPairCorrelation", "maxExposureOverlap", "minHistoryDays", "maxFrameAgeMs", "minExecutionFit", "riskRejectThreshold",
+  "riskWatchThreshold", "minConfidence", "redTeamRebuildThreshold", "redTeamExcludeThreshold",
+]);
+
+/** Exact decimal-rational ceil prevents floating-point boundary errors in the feasibility check. */
+function fraction(value: number): [bigint, bigint] {
+  const match = /^(-?)(\d+)(?:\.(\d*))?(?:e([+-]?\d+))?$/i.exec(value.toString());
+  if (!match) throw new Error("policy values must be finite decimals");
+  const sign = match[1] === "-" ? -1n : 1n;
+  const digits = `${match[2]}${match[3] ?? ""}`;
+  const exponent = Number(match[4] ?? 0) - (match[3]?.length ?? 0);
+  const scale = 10n ** BigInt(Math.abs(exponent));
+  const numerator = sign * BigInt(digits);
+  return exponent >= 0 ? [numerator * scale, 1n] : [numerator, scale];
+}
+
+function requiredSourceCount(maxSourceWeight: number, cashBuffer: number): number {
+  const [weightN, weightD] = fraction(maxSourceWeight);
+  const [cashN, cashD] = fraction(cashBuffer);
+  const numerator = (cashD - cashN) * weightD;
+  const denominator = cashD * weightN;
+  if (denominator <= 0n || numerator < 0n) throw new Error("policy cannot produce a source feasibility bound");
+  return Number((numerator + denominator - 1n) / denominator);
+}
+
+function snapshotPolicy(input: unknown): Policy {
+  const snapshot = snapshotPlainRecord(input, POLICY_KEYS);
+  if (snapshot.value === null || snapshot.problems.length) throw new TypeError(`invalid base policy: ${snapshot.problems[0] ?? "unknown policy field"}`);
+  for (const key of POLICY_KEYS) {
+    if (!Object.hasOwn(snapshot.value, key)) throw new TypeError(`invalid base policy: missing ${key}`);
   }
-  const validFields = [
-    ["maxSourceWeight", Number.isFinite(snapshot.maxSourceWeight) && snapshot.maxSourceWeight > 0 && snapshot.maxSourceWeight <= 1],
-    ["maxGrossLeverage", Number.isFinite(snapshot.maxGrossLeverage) && snapshot.maxGrossLeverage > 0],
-    ["cashBuffer", Number.isFinite(snapshot.cashBuffer) && snapshot.cashBuffer >= 0 && snapshot.cashBuffer < 1],
-    ["maxPairCorrelation", Number.isFinite(snapshot.maxPairCorrelation) && snapshot.maxPairCorrelation >= 0 && snapshot.maxPairCorrelation <= 1],
-    ["maxExposureOverlap", Number.isFinite(snapshot.maxExposureOverlap) && snapshot.maxExposureOverlap >= 0 && snapshot.maxExposureOverlap <= 1],
-    ["bucket", inEnum(snapshot.bucket, ["CONSERVATIVE", "BALANCED", "AGGRESSIVE"])],
-    ["mode", inEnum(snapshot.mode, ["LIVE", "SIMULATION"])],
-  ] as const;
-  for (const [field, valid] of validFields) {
-    if (!valid) throw new Error(`invalid base policy: ${field}`);
+  // The runtime policy schema is the existing contract authority; do not duplicate it here.
+  try {
+    validateRuntimePolicy(snapshot.value);
+  } catch (error) {
+    throw new TypeError(`invalid base policy: ${error instanceof Error ? error.message : "policy schema validation failed"}`);
   }
-  const policy = { ...snapshot };
-  const clamps: Clamp[] = [];
-  const notes: string[] = [];
-  // Each independent preference intersects the existing bounds, so none can loosen them.
-  if (intent.riskStyle !== "aggressive") {
-    const balanced = intent.riskStyle === "balanced";
-    policy.maxSourceWeight = Math.min(snapshot.maxSourceWeight, balanced ? 0.20 : 0.12);
-    policy.maxGrossLeverage = Math.min(snapshot.maxGrossLeverage, balanced ? 2 : 1);
-    policy.cashBuffer = Math.max(snapshot.cashBuffer, balanced ? 0.20 : 0.35);
-    policy.bucket = balanced ? "BALANCED" : "CONSERVATIVE";
-    policy.mode = "SIMULATION";
-    notes.push(`${intent.riskStyle} runs as a paper book: live is Aggressive-only`);
+  return { ...snapshot.value } as unknown as Policy;
+}
+
+const bucketRank: Record<Policy["bucket"], number> = { CONSERVATIVE: 0, BALANCED: 1, AGGRESSIVE: 2 };
+
+/** Compiles intent to a bounded preview. It can never produce a LIVE policy. */
+export function intentToPreview(input: unknown, baseInput: unknown): StrategyPreview {
+  const intent = parseStrategyIntent(input);
+  if (intent.clarify !== null) throw new Error("strategy intent needs clarification before a preview can be compiled");
+  const base = snapshotPolicy(baseInput);
+  const policy: Policy = { ...base, mode: "SIMULATION" };
+  const requestedBucket = intent.riskStyle.toUpperCase() as Policy["bucket"];
+  policy.bucket = bucketRank[requestedBucket] < bucketRank[base.bucket] ? requestedBucket : base.bucket;
+
+  if (intent.riskStyle === "balanced") {
+    policy.maxSourceWeight = Math.min(policy.maxSourceWeight, 0.2);
+    policy.maxGrossLeverage = Math.min(policy.maxGrossLeverage, 2.5);
+    policy.cashBuffer = Math.max(policy.cashBuffer, 0.2);
+  } else if (intent.riskStyle === "conservative") {
+    policy.maxSourceWeight = Math.min(policy.maxSourceWeight, 0.12);
+    policy.maxGrossLeverage = Math.min(policy.maxGrossLeverage, 1);
+    policy.cashBuffer = Math.max(policy.cashBuffer, 0.35);
   }
-  if (intent.diversification !== "low") {
-    const medium = intent.diversification === "med";
-    policy.maxPairCorrelation = Math.min(snapshot.maxPairCorrelation, medium ? 0.70 : 0.55);
-    policy.maxExposureOverlap = Math.min(snapshot.maxExposureOverlap, medium ? 0.40 : 0.30);
+
+  if (intent.diversification === "medium") {
+    policy.maxPairCorrelation = Math.min(policy.maxPairCorrelation, 0.7);
+    policy.maxExposureOverlap = Math.min(policy.maxExposureOverlap, 0.4);
+  } else if (intent.diversification === "high") {
+    policy.maxPairCorrelation = Math.min(policy.maxPairCorrelation, 0.55);
+    policy.maxExposureOverlap = Math.min(policy.maxExposureOverlap, 0.3);
   }
-  if (intent.leverageComfort !== "high") {
-    policy.maxGrossLeverage = Math.min(policy.maxGrossLeverage, intent.leverageComfort === "low" ? 1.5 : 2.5);
-  }
+  if (intent.leverageComfort === "medium") policy.maxGrossLeverage = Math.min(policy.maxGrossLeverage, 2.5);
+  if (intent.leverageComfort === "low") policy.maxGrossLeverage = Math.min(policy.maxGrossLeverage, 1.5);
+
+  const clamps: PolicyClamp[] = [];
   if (intent.requestedLeverage !== null) {
-    if (intent.requestedLeverage > policy.maxGrossLeverage) {
-      clamps.push({ field: "maxGrossLeverage", requested: intent.requestedLeverage, applied: policy.maxGrossLeverage });
-    }
+    if (intent.requestedLeverage > policy.maxGrossLeverage) clamps.push({ field: "maxGrossLeverage", requested: intent.requestedLeverage, applied: policy.maxGrossLeverage });
     policy.maxGrossLeverage = Math.min(policy.maxGrossLeverage, intent.requestedLeverage);
   }
 
-  // Human-chosen decimal bounds can put an integer ratio just above that integer.
-  const requiredSources = Math.ceil((1 - policy.cashBuffer) / policy.maxSourceWeight - 1e-12);
-  const effectiveMaxSources = Math.max(intent.maxSources, requiredSources);
-  if (!Number.isFinite(effectiveMaxSources) || effectiveMaxSources > 25) {
-    throw new Error(`infeasible: ${policy.maxSourceWeight} per source and ${policy.cashBuffer} cash need more than 25 sources`);
+  const requiredSources = requiredSourceCount(policy.maxSourceWeight, policy.cashBuffer);
+  if (requiredSources > intent.maxSources) {
+    throw new RangeError(`infeasible intent: risk limits require ${requiredSources} sources but the requested maximum is ${intent.maxSources}`);
   }
-  if (effectiveMaxSources > intent.maxSources) {
-    notes.push(`maxSources raised from ${intent.maxSources} to ${effectiveMaxSources} to fit the per-source cap and cash buffer`);
-  }
+  validateRuntimePolicy(policy);
+  const changes = (Object.keys(base) as (keyof Policy)[])
+    .filter((field) => base[field] !== policy[field])
+    .map((field) => ({ field, from: base[field] as string | number, to: policy[field] as string | number }));
 
   return {
     policy,
-    changes: fields.filter((field) => policy[field] !== snapshot[field])
-      .map((field) => ({ field, from: snapshot[field], to: policy[field] })),
+    maxSources: intent.maxSources,
+    requiredSources,
+    changes,
     clamps,
-    effectiveMaxSources,
-    liveEligible: intent.riskStyle === "aggressive" && snapshot.bucket === "AGGRESSIVE" && snapshot.mode === "LIVE",
-    notes,
+    approvalRequired: true,
+    executionMode: "SIMULATION_PREVIEW",
   };
-};
+}
 
 export type FinalistLike = {
   address: string;
   kind: string;
   score: number | null;
-  flags: string[];
+  flags: readonly string[];
   maxDrawdown: number | null;
-  annualisedVol: number | null;
-  cloneOf: boolean;
+  realizedVol: number | null;
+  /** null means no verified clone determination is available. */
+  cloneOf: boolean | null;
 };
 
-const compareAddress = (a: FinalistLike, b: FinalistLike): number => {
-  const left = a.address.toLowerCase();
-  const right = b.address.toLowerCase();
-  return left < right ? -1 : left > right ? 1 : a.address < b.address ? -1 : a.address > b.address ? 1 : 0;
-};
-
-const nullableFinite = (value: unknown): value is number | null =>
-  value === null || (typeof value === "number" && Number.isFinite(value));
-
-const snapshotFinalist = (value: unknown): FinalistLike | null => {
+function snapshotFlags(input: unknown): string[] | null {
   try {
-    if (value === null || typeof value !== "object") return null;
-    const { address, kind, score, flags, maxDrawdown, annualisedVol, cloneOf } = value as Record<string, unknown>;
-    if (typeof address !== "string" || address.length === 0 || typeof kind !== "string" ||
-        !Array.isArray(flags) || !nullableFinite(score) || !nullableFinite(maxDrawdown) ||
-        !nullableFinite(annualisedVol) || typeof cloneOf !== "boolean") return null;
-    // Copy flag entries too: an array may itself contain getters or be a proxy.
-    const flagSnapshot: unknown[] = Array.from(flags);
-    if (!flagSnapshot.every((flag): flag is string => typeof flag === "string")) return null;
-    return { address, kind, score, flags: flagSnapshot, maxDrawdown, annualisedVol, cloneOf };
+    if (!Array.isArray(input)) return null;
+    const length = input.length;
+    if (!Number.isSafeInteger(length) || length < 0) return null;
+    const result: string[] = [];
+    for (let index = 0; index < length; index++) {
+      const descriptor = Object.getOwnPropertyDescriptor(input, String(index));
+      if (!descriptor || !Object.hasOwn(descriptor, "value") || typeof descriptor.value !== "string") return null;
+      result.push(descriptor.value);
+    }
+    return result;
   } catch {
-    // One malformed row, including a throwing getter or proxy, cannot break selection.
     return null;
   }
-};
+}
 
-const compareNullableMetric = (left: number | null, right: number | null): number =>
-  left === null ? (right === null ? 0 : 1) : right === null ? -1 : left - right;
+function snapshotFinalist(input: unknown): FinalistLike | null {
+  const fields = new Set(["address", "kind", "score", "flags", "maxDrawdown", "realizedVol", "cloneOf"]);
+  const snapshot = snapshotPlainRecord(input, fields);
+  if (!snapshot.value || snapshot.problems.length) return null;
+  const row = snapshot.value;
+  const flags = snapshotFlags(row.flags);
+  if (typeof row.address !== "string" || !/^0x[0-9a-fA-F]{40}$/.test(row.address) || typeof row.kind !== "string" || !row.kind ||
+      !(row.score === null || typeof row.score === "number" && Number.isFinite(row.score)) || !flags ||
+      !(row.maxDrawdown === null || typeof row.maxDrawdown === "number" && Number.isFinite(row.maxDrawdown)) ||
+      !(row.realizedVol === null || typeof row.realizedVol === "number" && Number.isFinite(row.realizedVol)) ||
+      !(typeof row.cloneOf === "boolean" || row.cloneOf === null)) return null;
+  return { address: row.address, kind: row.kind, score: row.score as number | null, flags, maxDrawdown: row.maxDrawdown as number | null, realizedVol: row.realizedVol as number | null, cloneOf: row.cloneOf as boolean | null };
+}
 
+const EXCLUDED_FLAGS = new Set(["overflow", "ruin", "low-coverage", "no-intervals"]);
 const compareText = (left: string, right: string): number => left < right ? -1 : left > right ? 1 : 0;
+const compareNullable = (left: number | null, right: number | null): number => left === null ? (right === null ? 0 : 1) : right === null ? -1 : left < right ? -1 : left > right ? 1 : 0;
 
-export const shortlist = (finalists: FinalistLike[], intent: StrategyIntent, effectiveMaxSources: number): string[] => {
-  if (!Number.isSafeInteger(effectiveMaxSources) || effectiveMaxSources < 5 || effectiveMaxSources > 25) {
-    throw new RangeError("effectiveMaxSources must be an integer from 5 to 25");
+function compareScore(left: FinalistLike & { score: number }, right: FinalistLike & { score: number }): number {
+  const addressOrder = compareText(left.address.toLowerCase(), right.address.toLowerCase()) || compareText(left.address, right.address);
+  const flagsOrder = compareText([...left.flags].sort().join("\u0000"), [...right.flags].sort().join("\u0000"));
+  const cloneRank = (value: boolean | null) => value === false ? 0 : value === null ? 1 : 2;
+  return compareNullable(right.score, left.score) || addressOrder || compareNullable(left.maxDrawdown, right.maxDrawdown) ||
+    compareNullable(left.realizedVol, right.realizedVol) || compareText(left.kind, right.kind) || flagsOrder || cloneRank(left.cloneOf) - cloneRank(right.cloneOf);
+}
+
+/** Deterministic preview shortlist over already-scored candidates; it cannot create or place orders. */
+export function shortlist(finalistsInput: unknown, intentInput: unknown, maxSources: number): string[] {
+  const intent = parseStrategyIntent(intentInput);
+  if (intent.clarify !== null) throw new Error("strategy intent needs clarification before finalists can be shortlisted");
+  if (!Number.isSafeInteger(maxSources) || maxSources < 5 || maxSources > intent.maxSources) throw new RangeError("maxSources must be an integer from 5 to the intent maximum");
+  if (!Array.isArray(finalistsInput)) throw new TypeError("finalists must be an array");
+  const rows: unknown[] = [];
+  try {
+    for (let index = 0; index < finalistsInput.length; index++) {
+      const descriptor = Object.getOwnPropertyDescriptor(finalistsInput, String(index));
+      if (!descriptor || !Object.hasOwn(descriptor, "value")) continue;
+      rows.push(descriptor.value);
+    }
+  } catch {
+    return [];
   }
-  intent = parseStrategyIntent(intent);
-  const excluded = new Set(["overflow", "ruin", "low-coverage", "no-intervals"]);
-  const compareScore = (a: FinalistLike & { score: number }, b: FinalistLike & { score: number }): number =>
-    b.score - a.score || compareAddress(a, b) ||
-    compareNullableMetric(a.maxDrawdown, b.maxDrawdown) ||
-    compareNullableMetric(a.annualisedVol, b.annualisedVol) ||
-    compareText(a.kind, b.kind) || compareText([...a.flags].sort().join(","), [...b.flags].sort().join(",")) ||
-    Number(a.cloneOf) - Number(b.cloneOf);
-  const candidates = finalists.map(snapshotFinalist).filter((candidate): candidate is FinalistLike & { score: number } =>
-    candidate !== null && candidate.score !== null && !candidate.flags.some((flag) => excluded.has(flag)) &&
-    !(intent.avoidClones && candidate.cloneOf === true),
+
+  const candidates = rows.map(snapshotFinalist).filter((row): row is FinalistLike & { score: number } =>
+    row !== null && row.score !== null && !row.flags.some((flag) => EXCLUDED_FLAGS.has(flag)) && !(intent.avoidClones && row.cloneOf !== false),
   );
-  // Collapse eligible snapshots before the score window or risk-metric ranking.
   const unique = new Map<string, FinalistLike & { score: number }>();
   for (const candidate of candidates) {
-    const key = candidate.address.toLowerCase();
-    const previous = unique.get(key);
-    if (!previous || compareScore(candidate, previous) < 0) unique.set(key, candidate);
+    const address = candidate.address.toLowerCase();
+    const previous = unique.get(address);
+    if (!previous || compareScore(candidate, previous) < 0) unique.set(address, candidate);
   }
   const ranked = [...unique.values()].sort(compareScore);
-  if (intent.riskStyle === "aggressive") {
-    return ranked.slice(0, effectiveMaxSources).map((candidate) => candidate.address);
-  }
-  const metric = intent.riskStyle === "balanced" ? "maxDrawdown" : "annualisedVol";
-  return ranked.slice(0, 2 * effectiveMaxSources).sort((a, b) => {
-    return compareNullableMetric(a[metric], b[metric]) || compareScore(a, b);
-  }).slice(0, effectiveMaxSources).map((candidate) => candidate.address);
-};
+  if (intent.riskStyle === "aggressive") return ranked.slice(0, maxSources).map((row) => row.address);
+  const riskField = intent.riskStyle === "balanced" ? "maxDrawdown" : "realizedVol";
+  return ranked.slice(0, maxSources * 2).sort((left, right) => compareNullable(left[riskField], right[riskField]) || compareScore(left, right))
+    .slice(0, maxSources).map((row) => row.address);
+}

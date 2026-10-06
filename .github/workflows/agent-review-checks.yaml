@@ -4,7 +4,7 @@ name: Agent review checks
 
 on:
   push:
-    branches: [main, ai-agent-workflow]
+    branches: [main, ai-agent-workflow, ai-agent-mainnet-hardening]
   pull_request:
 
 permissions:
@@ -26,8 +26,11 @@ jobs:
           bun-version: '1.4.2'
       - run: npm install --global pnpm@11.25.0
       - run: pnpm install --frozen-lockfile
+      # Backend dependencies too: review code under packages/backend must not resolve their zod 4.
+      - run: bun install --frozen-lockfile --cwd packages/backend
       - run: pnpm typecheck
       - run: pnpm test
+      - run: pnpm paper:lifecycle
       - run: pnpm test:cre
       - name: Check original JSON contracts
         run: |

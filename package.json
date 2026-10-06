@@ -9,7 +9,8 @@
     "test": "node --test tests/*.test.ts",
     "typecheck": "tsc --noEmit && tsc --noEmit -p packages/cre-workflows/review-spike/tsconfig.json",
     "test:cre": "bun test packages/cre-workflows/tests/*.test.ts",
-    "compile:review-spike": "bun packages/cre-workflows/node_modules/@chainlink/cre-sdk/bin/cre-compile.ts packages/cre-workflows/review-spike/main.ts work/review-spike.wasm"
+    "compile:review-spike": "bun packages/cre-workflows/node_modules/@chainlink/cre-sdk/bin/cre-compile.ts packages/cre-workflows/review-spike/main.ts work/review-spike.wasm",
+    "paper:lifecycle": "node --test tests/paper_lifecycle.test.ts"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.3.14",

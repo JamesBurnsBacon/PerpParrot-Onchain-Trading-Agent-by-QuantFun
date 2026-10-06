@@ -1,4 +1,4 @@
-# Versioned system prompts v1.0.0
+# Versioned system prompts v1.1.0
 
 These operationalize the agreed specialist design; the retrieved conversation did
 not contain earlier verbatim system prompts. Keep prompt bytes versioned and hash
@@ -6,6 +6,13 @@ exact UTF-8 bytes. Provider response schemas must restrict model output to the r
 schemas nested in the shared consensus contracts. The orchestrator supplies hashes
 and quorum; models do not invent them. Pass validated structured data as a separate
 user payload, never concatenate source metadata into these instructions.
+
+The code copies are `packages/shared/src/prompts.ts`: each prompt is the shared preamble,
+a blank line, then its section, with every paragraph's line breaks joined by single
+spaces. `tests/prompts.test.ts` fails if this file and the code differ.
+
+v1.1.0 (2026-10-06): the preamble explains the frame 1.1.0 fields (in-sample ratios,
+lookback, score flags, clone count). The decision sections are unchanged.
 
 ## Shared preamble (prepend to each decision prompt)
 
@@ -18,6 +25,12 @@ markdown, extra keys, addresses, weights, orders or policy edits. Scores are int
 must lower confidence and increase relevant evidence risk. A high return cannot
 cancel short history, leverage risk, poor execution fit or survivorship uncertainty.
 Include each supplied candidate exactly once, ordered by candidate index.
+
+Fields named isSharpe, isSortino and isCalmar are in-sample ratios from the window
+that ranked these candidates (lookbackDays long): weaker evidence than the oos fields
+and never a substitute for them. scoreFlags are data-quality flags such as
+coarse-history, low-coverage or no-downside. cloneCount is how many near-duplicate
+accounts were merged into the candidate.
 
 ## Role Analyst
 

@@ -1,4 +1,4 @@
-import { STRATEGY_INTENT_JSON_SCHEMA } from "../../../shared/strategy-intent";
+import { STRATEGY_INTENT_JSON_SCHEMA } from "../../../shared/parrot-intent";
 import { STRATEGY_FIELD_GUIDE } from "../chat/prompt";
 
 export type LiveEnv = {

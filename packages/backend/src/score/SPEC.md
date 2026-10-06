@@ -40,7 +40,8 @@ export type ScoreInput = {
   avgLeverage?: number | null;
   timeInMarket?: number | null;
   medianHoldHours?: number | null;
-  makerShare?: number | null;
+  makerShare?: number | null;    // maker notional / total perp notional, fills of the 30 days before scoring;
+                                 // also drives the pure-taker penalty (see "Ranking"); null = unknown, no penalty
 };
 
 export type FilterName =
@@ -81,10 +82,12 @@ export type Candidate = {
   eligible: boolean;
   metrics: Metrics | null;           // null only when month is missing or invalid; overflow metrics remain reported
   percentiles: Percentiles | null;   // within the pool; null unless ranked
-  scoreNumerator: number | null;     // integer; null unless ranked
+  scoreNumerator: number | null;     // integer, net of makerPenalty; null unless ranked
+  makerPenalty: number | null;       // integer units taken off a pure taker (see "Ranking"); 0 if none; null unless ranked
   score: number | null;              // 0..1; null unless ranked
   rank: number | null;               // 1-based within the pool; null unless ranked
-  cloneOf: { address: string; correlation: number | null } | null; // null correlation = non-head link-group member
+  cloneOf: { address: string; correlation: number | null; via?: string } | null; // null correlation = non-head link-group member;
+                                 // via = the link-unit member that matched, when it is not the representative
   clones: string[];                  // on a representative: the addresses grouped under it, in cross-pool order
   finalist: boolean;
   passthrough: { avgLeverage: number | null; timeInMarket: number | null; medianHoldHours: number | null; makerShare: number | null };
@@ -109,6 +112,8 @@ export type ScoreConfig = {
   finalists: number;             // 25
   finalistSplit: "proportional" | { trader: number; vault: number }; // "proportional" [tune]
   allowUnknown: FilterName[];    // []. See "Eligibility".
+  pureTakerMakerShare: number;   // 0.05  [tune] maker share below this is a pure taker. See "Ranking".
+  pureTakerPenalty: number;      // 0.02  [tune] score taken off a pure taker, on a 0.001 grid
 };
 
 export function scoreCandidates(
@@ -264,14 +269,22 @@ Order of values: `"+inf"` is better than every number, `null` is worse than ever
 - Exact integer ranking. For a value, `L` is the number of values in the pool strictly worse and `E` the number equal to
   it (including itself). Its **rank numerator** is `k = 2L + E - 1`, an integer in `0 .. 2(N-1)`.
   Percentile = `k / (2(N - 1))`.
-- `scoreNumerator = sum(weight * k)`, an integer in `0 .. 12(N-1)`. `score = scoreNumerator / (12(N - 1))`.
-  For `N == 1` every percentile and the score are `0.5` and `scoreNumerator = 0`.
+- `scoreNumerator = sum(weight * k) - makerPenalty`, an integer in `0 .. 12(N-1)`. `score = scoreNumerator / (12(N - 1))`.
+  For `N == 1` every percentile and the score are `0.5`, `scoreNumerator = 0` and `makerPenalty = 0`.
+- **Pure-taker penalty** (README §4.2, decided 2026-10-06). A candidate whose `makerShare` is known and
+  `< pureTakerMakerShare` is a pure taker. Its `makerPenalty = min(P, sum(weight * k))`, where
+  `P = floor((2 * m * 12(N-1) + 1000) / 2000)` and `m = round(1000 * pureTakerPenalty)`. In words: `P` is the
+  penalty in numerator units, `pureTakerPenalty * 12(N-1)` rounded half up, computed in integers. Everyone else
+  has `makerPenalty = 0`, including an unknown (`null` or absent) `makerShare`. The penalty changes the score and
+  the order, never the percentiles. In a small pool it can round to 0 (default 0.02 needs `N >= 4`).
 - Order within the pool: `scoreNumerator` descending (integers); then raw `sharpe` descending (same value order as
   above); then `address` ascending (lower-cased). Never order by the floating-point `score` or by a sum of floating-point
   percentiles. `rank` is the 1-based position in the pool.
-- Implementation requirement: `rankPool(entries: { address: string; metrics: Metrics }[])` is a separate exported
-  function in `score.ts` (not re-exported from `index.ts`) so tests can feed hand-made metrics. It returns
-  `{ address, percentiles, scoreNumerator, score, rank }[]` in rank order.
+- Implementation requirement:
+  `rankPool(entries: { address: string; metrics: Metrics; makerShare?: number | null }[], config?)` is a separate
+  exported function in `score.ts` (not re-exported from `index.ts`), so tests can feed hand-made metrics. `config`
+  holds `pureTakerMakerShare` and `pureTakerPenalty` and defaults to the defaults. It returns
+  `{ address, percentiles, scoreNumerator, makerPenalty, score, rank }[]` in rank order.
 
 **Cross-pool order** (used for the finalist list and the output): compare `score` exactly as fractions
 `scoreNumerator / (12(N-1))` (`1/2` for `N == 1`) by cross-multiplying integers; ties by raw `sharpe`, then address.
@@ -293,20 +306,29 @@ days (zero variance means a sum of squared deviations exactly 0). The same `rho`
 
 **Link groups** (deterministic). Build an undirected graph over **all inputs**, ranked or not. Two addresses share
 an edge when either lists the other in `links` (lower-case comparison); a link to an address not among the inputs is
-ignored. Connected components are link groups. Unranked accounts can bridge ranked ones. The **unit** of a ranked
-candidate is the ranked members of its link group in cross-pool order; its **head** is the first (best-ranked) member.
+ignored. Connected components are link groups. Unranked accounts can bridge ranked ones: a link means "same
+operator", which is transitive whether or not the account in the middle is ranked (decided 2026-10-06). The **unit** of
+a ranked candidate is the ranked members of its link group in cross-pool order; its **head** is the first (best-ranked)
+member.
 
-Walk ranked candidates in cross-pool order, handling each unit once at its head. Compare the head only with earlier
-**representatives**, never clones. If `rho >= cloneCorrelation` with the first such representative, the whole unit
-becomes its clones: the head gets `cloneOf = { address: representative.address, correlation: rho }` and every other
-member gets `{ address: representative.address, correlation: null }`. Otherwise the head becomes a representative
-and the other members become its clones with `correlation: null`. A singleton is a unit of one.
-Each representative's `clones` lists all its clones in cross-pool order, not discovery order. Clones keep their
-percentiles, score and rank (they describe the account), but they are never finalists.
+Walk ranked candidates in cross-pool order, handling each unit once at its head. Compare the head with the **unit of
+each earlier representative**, representatives in the order they appeared and, within a unit, its members in
+cross-pool order (the representative first, then its link-clones, including members ranked below the head). Never
+compare with correlation clones, or with the members of a unit that joined another group by correlation. The first
+member with `rho >= cloneCorrelation` decides: the whole unit becomes clones of that member's representative. The head
+gets `cloneOf = { address: representative.address, correlation: rho }`, plus `via: member.address` when the member is
+not the representative itself; every other member gets `{ address: representative.address, correlation: null }`.
+Otherwise the head becomes a representative and the other members become its clones with `correlation: null`. A
+singleton is a unit of one. Each representative's `clones` lists all its clones in cross-pool order, not discovery
+order. Clones keep their percentiles, score and rank (they describe the account), but they are never finalists.
 
-A correlation clone of a link-clone is not grouped through that clone, because comparisons are only against
-representatives. In the sample chain case, `addr-24` correlates 0.949 with `addr-18`, which is now a clone of
-`addr-21`, so `addr-24` stays its own representative. `links.json` checks these link-group cases against the independent reference.
+A representative's link unit is one operator, so an account that correlates with any of its accounts is a clone of that
+operator (decided 2026-10-06). Correlation still cannot chain: an account that correlates only with a correlation clone
+is not grouped through it. In the sample chain case (`addr-21` links `addr-18`, `addr-18` links `addr-13`), `addr-24`
+correlates 0.949 with `addr-18` and so joins `addr-21` via `addr-18` (8 distinct instead of 10). With `addr-21` linked to
+`addr-19` (rank 14), `addr-23` (rank 11) joins via `addr-19` at 0.976 although `addr-19` ranks below it, and `addr-16`
+and `addr-17` also join via `addr-19` (0.922 and 0.924). `links.json` checks these cases against
+`test/fixtures/score/reference/grouping_ref.py`.
 
 On the 24-account sample (16 ranked), the default 0.9 gives 10 distinct strategies: `addr-06` (rho 0.991), `addr-09`
 (0.964) and `addr-02` (0.944) -> `addr-04`; `addr-24` (0.949) -> `addr-18`; `addr-19` (0.976) -> `addr-23`; `addr-17`
@@ -348,7 +370,8 @@ Invalid config throws, and the error names the field: `finalists`, `minMonthPoin
 >= 1; `coarseGridDays` > 0; `dustEquityFraction` and `maxSkippedTimeShare` in [0, 1]; `cloneCorrelation` in
 (0, 1]; `minOverlapDays` an integer >= 3; the other thresholds finite and
 >= 0 (a non-integer `minTrades` is allowed); fixed `finalistSplit` values non-negative integers summing to `finalists`;
-`allowUnknown` entries must be filter names.
+`allowUnknown` entries must be filter names; `pureTakerMakerShare` in [0, 1]; `pureTakerPenalty` in [0, 1] and a
+multiple of 0.001.
 
 ## Snapshots (ingest, README 4.1)
 Hyperliquid serves `month` at about 16-hour resolution but older history only through the coarse `allTime` window.
@@ -363,7 +386,7 @@ tracked address.
 The review workflow consumes `packages/shared/schemas/candidate-curation-frame.schema.json`. Its `oos*` and
 `crossWindowStability` fields mean **out-of-sample** (from the backtest). Score's metrics are in-sample and must not be
 put there. The adapter (`src/score/frame.ts`, `toFrameCandidates`) fills only the fields Score owns; other modules fill
-the rest. This needs schema version `1.1.0` with six new fields (the `pairs` fields already exist in schema `1.0.0`):
+the rest. Schema `1.1.0` (2026-10-06) adds the six Score fields below; the `pairs` fields already existed in `1.0.0`.
 
 | Frame field | From Score |
 |---|---|
@@ -377,12 +400,16 @@ the rest. This needs schema version `1.1.0` with six new fields (the `pairs` fie
 | **new** `isSharpe`, `isSortino`, `isCalmar` | the ratio; `"+inf"` -> `null` (the reason is in `scoreFlags`) |
 | **new** `lookbackDays` | `metrics.lookbackDays` |
 | **new** `scoreFlags` | `metrics.flags` |
-| **new** `clones` | `clones` (addresses grouped under this finalist), so the agent sees what was merged |
+| **new** `clones` (candidate level) | `clones` (addresses grouped under this finalist): the audit trail. Models never see addresses; they get `metrics.cloneCount` = `clones.length` |
 | `pairs[].correlation`, `pairs[].linkedSource` | `correlations[].rho` and `.linked`, with `a`/`b` as kept-finalist positions |
 | `oosWindows`, `oosSharpe`, `oosSortino`, `oosMaxDrawdown`, `crossWindowStability` | not from Score: `0` / `null` until the backtest supplies them |
 
 `toFrameCandidates(result)` returns
-`{ candidates: FrameCandidate[], pairs: FramePair[], skipped: { address: string; reason: "unknown-history" }[] }`.
+`{ candidates: FrameCandidate[], addresses: string[], pairs: FramePair[], skipped: { address: string; reason: "unknown-history" }[] }`,
+where `addresses[i]` is candidate `i`'s address (the frame's source mapping, never model input).
+`packages/backend/review/input.ts` (`buildReviewInput`) completes the frame: it marks the fields no module supplies yet
+as unknown (`null`, `survivorshipQuality: "UNKNOWN"`), adds each finalist's month PnL curve and live positions as
+model evidence, and validates the frame, the evidence and the input commitments; `scripts/review-input.ts` runs it.
 `skipped` lists finalists with `activeDays === null` in finalist order; the pure adapter returns this list instead of
 logging, and the caller logs it. Candidate positions count only kept finalists. Pairs touching a skipped finalist are
 dropped; remaining pairs are remapped to the kept positions. A finalist with missing metrics or
@@ -399,6 +426,8 @@ Files: `src/score/{types,config,parse,stitch,returns,metrics,filters,score,clone
 ## To decide in tuning (2026-10-07)
 - The **[tune]** values: `lookbackDays` 90, `stillActiveDays` 7, `dustEquityFraction` 0.01, `maxSkippedTimeShare`
   0.20, `cloneCorrelation` 0.90, and the `finalistSplit` between traders and vaults (to be set after seeing how live traders and vaults differ).
+- **Pure-taker penalty** `pureTakerMakerShare` 0.05 and `pureTakerPenalty` 0.02. It is dormant until ingest supplies
+  `makerShare` from fills; recheck its size against live funnels.
 - **Near-cash accounts rank first.** On the sample, `addr-21` (+0.4% over 82 days, 0.008% drawdown, R² 0.94)
   ranks #1. All five terms are risk-adjusted or shape-based, so an account with almost no risk and almost no return
   wins. A return hurdle (minimum `annualisedReturn`) or a return term may be needed.
@@ -432,7 +461,7 @@ the implementation and checked against the independent Python reference.
 | - | Cumulative funnel only | Plus `filterCounts` per filter | Shows which filter does the work. |
 | - | One ranking | Percentiles within pool (traders, vaults) | HyperCore vaults (legacy, profit share, lockups) have different return profiles. |
 | - | Duplicate window: last wins | Throws | A duplicated window is a malformed response. |
-| - | (none) | Clone grouping before the finalist cut: link components form units; heads join earlier representatives at rho >= 0.9; other unit members follow the head | `addr-04`, `-06`, `-09`, `-02` are ranks 2-5 of the 16 ranked accounts, with daily-return rho 0.94-0.99 against `addr-04` (`addr-04`/`-06`: 0.991 and the same account value). Duplicates concentrate the copy portfolio in one strategy's idiosyncratic risk; widening the finalist set would only spend more slots on them. |
+| - | (none) | Clone grouping before the finalist cut: link components form units; a head joins the first earlier representative with a link-unit member at rho >= 0.9; other unit members follow the head | `addr-04`, `-06`, `-09`, `-02` are ranks 2-5 of the 16 ranked accounts, with daily-return rho 0.94-0.99 against `addr-04` (`addr-04`/`-06`: 0.991 and the same account value). Duplicates concentrate the copy portfolio in one strategy's idiosyncratic risk; widening the finalist set would only spend more slots on them. |
 
 Funnel on the sample (synthetic `closed`/`tradeCount` overlay, default config): 24 -> 23 (account value) -> 23 -> 22
 (still active) -> 17 (trades) -> 17 -> 17 -> 16 (coverage: `addr-08`) -> 16 ranked -> 10 distinct -> 10 finalists.
@@ -448,9 +477,24 @@ Funnel on the sample (synthetic `closed`/`tradeCount` overlay, default config): 
 - The funnel counts candidates that passed each filter and all earlier ones.
 - Pure functions in `packages/backend/src/score/`, nothing exported from a package entry point, no new dependencies.
 - Fill-derived values (`tradeCount`, `avgLeverage`, `timeInMarket`, `medianHoldHours`, `makerShare`) are inputs that a
-  future ingest supplies. Score only passes them through.
+  future ingest supplies. Score passes them through. `makerShare` also drives the pure-taker penalty (next item).
 - Fixture addresses are replaced by `addr-NN`. `closed` and `tradeCount` in `portfolio-sample.json` are synthetic.
-- **[interpretation of this task]** Link groups are built over all inputs, so an unranked account can bridge two ranked ones.
-- **[interpretation of this task]** A unit moves as a whole when its head is a correlation clone.
+- **Decided 2026-10-06** (after PR #18): link groups are built over all inputs, so an unranked account can bridge two
+  ranked ones; a unit moves as a whole when its head is a correlation clone; a head is compared with every member of
+  each earlier representative's link unit (not with correlation clones), and `cloneOf.via` names the member that matched.
 - **[interpretation of this task]** The flag for a non-finite main-path drawdown is named `overflow`.
-- **[interpretation of this task]** `toFrameCandidates` returns `skipped` instead of logging.
+- **Decided 2026-10-06** (after PR #18): `toFrameCandidates` stays pure and returns `skipped`; its caller logs it.
+- **Decided 2026-10-06** (README §8 "Maker share: a plus or an exclusion?"): neither. Zero or near-zero maker volume is a
+  **slight negative**: the pure-taker penalty in "Ranking". The evidence is `scripts/research/maker-share/`, an
+  out-of-sample test with maker share measured on the 30 days before t0 and the outcome on the 30 days after.
+  There were two periods of 200 randomly drawn accounts each.
+  - A high maker share predicted neither forward return nor Sharpe (ρ 0.01-0.04 and 0.12, n.s.), so it is not a plus.
+  - Accounts below 5% maker had about twice the median forward drawdown in both periods. In period 1 it was 30% vs
+    15%, family-wise p = 0.017 across ten thresholds. Period 2 was coarse: 6.9% vs 3.4%, n.s.
+  - Most of that gap is turnover (notional / equity / day, about 2.7x higher for pure takers). Controlling for it
+    leaves +0.26 rank-SD in period 1 (95% CI -0.01 to 0.52) and +0.03 in period 2.
+  - Forward returns were no worse.
+  - Hence a slight penalty, not an exclusion.
+  - Exactly 0% alone was not the signal: the 0-5% group was worse in both periods, so the cut is 5%.
+  - The heaviest makers (more than HL's ~10k-fill cap a month) could not be measured, so the finding covers
+    copy-sized traders.

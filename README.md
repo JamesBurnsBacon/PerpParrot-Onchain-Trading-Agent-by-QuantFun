@@ -116,13 +116,19 @@
   - risk-adjusted return: **Sharpe** and **Sortino**
   - drawdown: **Calmar** and **−max drawdown**
   - **PnL consistency**: R² of the log equity curve against time (0 if it trends down)
+- **Pure takers score slightly lower.** If under 5% of an account's perp volume in the last 30 days was maker fills,
+  0.02 is taken off its score (❓ *both values tuned*). Accounts with unknown maker share are not penalized.
+  - Why: in an out-of-sample test (2 × 200 accounts), a high maker share did not predict returns.
+  - Near-zero maker accounts had about twice the drawdowns, mostly because they trade more of their equity.
+  - Evidence: `scripts/research/maker-share/`.
 - **Clone grouping before the cut:** accounts whose daily returns correlate ≥ 0.9 (❓ *tuned*), or that are known to be linked (vault ↔ leader, sub-accounts), are grouped and only the best-scoring one can be a finalist. Duplicates would concentrate the portfolio in one strategy's idiosyncratic risk.
 - **Top ~25 distinct strategies → finalists**, with slots split between traders and vaults (❓ *split set in tuning*). Full definitions: `packages/backend/src/score/SPEC.md`.
 - **Also computed** for the agent:
   - annualized return and volatility, all-time max drawdown (reported, not ranked)
   - realized volatility and average leverage
   - time in market and holding times
-  - **maker/taker volume split** (from `crossed` on fills, or `userFees`; verify). A high maker share suggests sophistication, but market-maker inventory may not be copyable. ❓ *Plus or exclusion?*
+  - **maker/taker volume split**: maker notional / total perp notional, from `crossed` on fills. `userFees` daily
+    volumes disagreed with fills on sampled accounts. The split also drives the pure-taker penalty above.
 
 ### 4.3 Buckets
 | Bucket | Source universe | Exposure | Hackathon mode |
@@ -220,7 +226,8 @@ Code: `packages/executor`. A Bun service. Dry run deploys as the `executor` serv
 - **Kill switch:** manual, bearer-token admin routes (any team member with `ADMIN_TOKEN`; the dashboard calls them behind auth).
   - **Pause / resume:** stop or restart trading, keep positions.
   - **Flatten:** pause, then close everything reduce-only, bypassing CRE.
-- **Run log:** `GET /runs` (plans, order results, raw signed reports) and `GET /status`; stored in Supabase (`executor_runs`) when `DATABASE_URL` is set.
+- **Durable recovery:** report claims, runs, controls, and each exchange action's write-ahead intent/results are stored in Supabase. Before dispatch the executor journals the exact order batch and deterministic client IDs; an unknown response or restart with an unresolved batch pauses all new reports. Inspect `GET /admin/order-batches` with `ADMIN_TOKEN`; reconcile only after checking Hyperliquid order and position state, submit operator identity and evidence through `POST /admin/reconcile-batch`, then explicitly resume. Never retry an ambiguous order blindly. Apply `20261006180000_executor_order_journal.sql` before enabling the journaled executor.
+- **Run log:** `GET /runs` (plans, order results, raw signed reports), `GET /runs?summary=1`, `GET /equity` and `GET /status`; retained in Supabase when `DATABASE_URL` is set. Vercel dry-run mode requires Supabase and `CRON_SECRET`; live trading remains restricted to one long-running executor.
 - **Alerts:** Telegram bot (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`) for failed runs, failed orders and missed reports.
 - **Account mode: unified** (one USDC balance margins core and `xyz` perps; `scripts/setup-account.ts`). Equity and the margin rule use HL's account value, which is only all usable margin in unified mode.
 - **Capital:** 5 HYPE, currently on HyperEVM.
@@ -279,7 +286,7 @@ Status: built (`packages/dashboard`): live account vs paper books vs BTC, target
 - **Transport:** `runtime.report()` (`evm` / `ecdsa` / `keccak256`), then `sendReport()` POSTs JSON `{report, context, signatures}` (hex, no `0x`) to the executor. **Every DON node POSTs its own copy.** `cacheSettings` only trims duplicates, because each node's signatures differ. The mirror reaches consensus on the executor's HTTP status, so it fails loudly on a rejection.
 - **Body** (ABI-encoded after the 109-byte header, `packages/shared/report.ts`): `string runId, bytes32 snapshotHash, bytes32 configurationHash, address account, uint64 asOf, uint64 expiresAt, (string asset, int256 exposureE9)[] exposures`.
   - **Exposures, not orders or USD targets.** Exposure = target notional as a fraction of our equity. The executor multiplies by our live equity and diffs against the live account when it runs, so price and equity moves between report and execution don't matter, and nodes never have to agree on prices, our equity or our positions.
-  - The review core's `rebalance-report.schema.json` (branch `ai-agent-workflow`) puts ≤ 10 **orders** in the report instead. ❓ *§8: reconcile before merging.*
+  - `packages/shared/schemas/rebalance-report.schema.json` is a review-core contract fixture, not the runtime mirror/executor transport. It is not accepted by the executor; only the exposure report described above is executable.
 - **Report ID** = `keccak256(rawReport)`, identical across nodes. The first valid copy is accepted; later copies get `200 duplicate`.
 - **Verification** in the executor (`src/verify.ts`, `src/handler.ts`):
   - ≥ f+1 signatures from the DON's signers, read from the Capability Registry `0x76c9cf548b4179F8901cda1f8623568b58215E62` on **Ethereum mainnet** (cached per DON ID; e.g. DON 1: f = 3, 10 signers). The executor needs an Ethereum mainnet RPC.
@@ -358,7 +365,7 @@ Budget ~1 h of testing per 2 h of features. Integrate only tested modules.
 ## 8. Open questions
 - [ ] ❓ Which two models (≥ 1 OpenAI)
 - [ ] ❓ Agent output format: weight grid, continuous weights, or ranking
-- [ ] ❓ Maker share: a plus or an exclusion?
+- [x] Maker share: **neither**. Zero or near-zero maker volume (< 5%) is a slight score penalty (§4.2); a high share earns nothing. Evidence: `scripts/research/maker-share/`
 - [ ] ❓ Balanced multiplier `m` (from the backtest)
 - [ ] ❓ How to read sources' lending positions for Conservative
 - [ ] ❓ Per-tier type-B threshold N (production)

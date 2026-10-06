@@ -1,6 +1,6 @@
 import { keccak256, stringToBytes } from "viem";
 import { commitment } from "../../../shared/commitments";
-import type { PolicyResult, StrategyIntent } from "../../../shared/strategy-intent";
+import type { PolicyResult, StrategyIntent } from "../../../shared/parrot-intent";
 
 export class PreviewError extends Error {
   constructor(readonly code: "too_few_sources" | "infeasible") {

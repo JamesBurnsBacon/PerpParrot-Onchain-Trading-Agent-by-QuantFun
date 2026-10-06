@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { SQL } from "bun";
 import { MemoryRequestStore, PostgresRequestStore } from "../src/chat/handler";
-import type { StrategyIntent } from "../../shared/strategy-intent";
+import type { StrategyIntent } from "../../shared/parrot-intent";
 
 const intent: StrategyIntent = { riskStyle: "aggressive", maxSources: 10, diversification: "low", leverageComfort: "high", requestedLeverage: null, avoidClones: false, horizon: "medium", clarify: null, reply: "Squawk." };
 const request = () => ({ id: crypto.randomUUID(), createdAtMs: Date.now(), previewHash: `0x${"ab".repeat(32)}`, intent, preview: { sources: ["source-a"], cashUnits: 100_000 } });
