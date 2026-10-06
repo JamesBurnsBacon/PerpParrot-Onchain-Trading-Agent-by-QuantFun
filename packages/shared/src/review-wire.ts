@@ -23,7 +23,7 @@ export const finalistSchema = z.object({
   patterns: z.object({
     increasesAfterLoss: ratio.nullable(),
     repeatedRoundTrips: ratio.nullable(),
-    observedFills: z.number().int().min(0).max(10000),
+    observedFills: z.number().int().min(0).max(10000).nullable(),
   }).strict(),
 }).strict();
 export const evidenceSchema = z.object({

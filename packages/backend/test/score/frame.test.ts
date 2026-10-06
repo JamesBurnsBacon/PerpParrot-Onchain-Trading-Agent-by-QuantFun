@@ -8,7 +8,8 @@ describe("toFrameCandidates (SPEC Frame adapter)", () => {
 
   test("one frame candidate per finalist, indexed by finalist position", () => {
     expect(frame.candidates.map(({ candidate }) => candidate)).toEqual(result.finalists.map((_, i) => i));
-  });
+      expect(frame.addresses).toEqual(result.finalists.filter((address) => !frame.skipped.some((s) => s.address === address)));
+});
 
   test("maps Score fields and never fills the out-of-sample fields", () => {
     frame.candidates.forEach((entry, i) => {
@@ -25,6 +26,7 @@ describe("toFrameCandidates (SPEC Frame adapter)", () => {
         isCalmar: metrics.calmar === "+inf" ? null : metrics.calmar,
         lookbackDays: metrics.lookbackDays,
         scoreFlags: metrics.flags,
+        cloneCount: source.clones.length,
         oosWindows: 0,
         oosSharpe: null,
         oosSortino: null,

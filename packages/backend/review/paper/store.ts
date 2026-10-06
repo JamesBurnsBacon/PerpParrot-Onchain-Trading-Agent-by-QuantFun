@@ -1,5 +1,5 @@
 // @env node
-import {z} from 'zod';
+import {z} from '../../../shared/src/zod.ts';
 import type {Rpc} from '../supabase.ts';
 import type {CommitteeReceipt} from '../../../cre-workflows/review/committee/types.ts';
 import {validateCommitteeReceipt} from '../../../cre-workflows/review/committee/workflow.ts';

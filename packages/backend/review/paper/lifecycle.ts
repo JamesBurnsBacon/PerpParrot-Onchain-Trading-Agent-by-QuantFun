@@ -1,5 +1,5 @@
 // @env node
-import {z} from 'zod';
+import {z} from '../../../shared/src/zod.ts';
 import {runCommitteeReview,validateCommitteeReceipt} from '../../../cre-workflows/review/committee/workflow.ts';
 import type {CommitteeDependencies,CommitteeReceipt} from '../../../cre-workflows/review/committee/types.ts';
 import {bindCommitteeEvidence} from '../../../shared/src/committee-evidence.ts';
