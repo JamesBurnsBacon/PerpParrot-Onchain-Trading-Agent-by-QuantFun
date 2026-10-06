@@ -15,6 +15,7 @@ export type PaperView = {
     equityUsd: number;
     returnPct: number;
     feesUsd: number;
+    fundingUsd?: number; // net paid; negative = received
     trades: number;
     openPositions: number;
     curve: [number, number][];

@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { ExposureBars, Funnel, Panel, RunStrip, StatTile, TargetsVsHeld, Waiting } from "../components/Charts";
+import { ExposureBars, Funnel, Panel, PaperTable, RunStrip, StatTile, TargetsVsHeld, Waiting } from "../components/Charts";
 import { Finalists } from "../components/Finalists";
 import { LineChart } from "../components/LineChart";
 import { RunLog } from "../components/RunLog";
@@ -90,6 +90,11 @@ export default function Page() {
           ) : (
             <Waiting what="No runs yet" source="Curves start with the first mirror run" />
           )}
+          {data?.paper?.books.length ? (
+            <div className="mt-4">
+              <PaperTable books={data.paper.books} series={series} />
+            </div>
+          ) : null}
         </Panel>
       </div>
 
