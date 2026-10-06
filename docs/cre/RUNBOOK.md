@@ -106,14 +106,20 @@ The production file holds placeholders until the services are deployed and the s
 ## Freeze (go-live set)
 
 The review core produces a `FrozenConfiguration` (branch `ai-agent-workflow`, `proposeFreeze`).
-Its `account` must be our HL account and `chainId` is part of its hash.
+Its `account` must be our HL account, and its `chainId` is part of its hash.
 
-1. Save the JSON where the snapshot service reads it (`CONFIGURATION_PATH`); set
-   `FROZEN_CONFIGURATION_HASH` on the snapshot service **and** the executor.
-2. Set `frozenConfigurationHash` in `mirror/config.production.json` and redeploy `mirror`
-   (the hash becomes part of the workflow ID).
-3. Until all three agree, runs fail closed: the backend won't serve, the mirror rejects the
-   snapshot, or the executor rejects the report.
+```sh
+cd packages/backend
+bun run scripts/freeze.ts path/to/frozen-configuration.json --account 0xOUR_ACCOUNT           # check
+bun run scripts/freeze.ts path/to/frozen-configuration.json --account 0xOUR_ACCOUNT --write   # save
+```
+
+`--write` saves it as `packages/backend/frozen/live.json` and pins its hash in
+`mirror/config.production.json`; the script prints the Railway variables to set
+(`CONFIGURATION_PATH=frozen/live.json` and `FROZEN_CONFIGURATION_HASH` on the snapshot service,
+`FROZEN_CONFIGURATION_HASH` and `HL_ACCOUNT` on the executor). Commit, then redeploy `mirror`
+(CRE deploy Action) and both services. Until all three agree, runs fail closed: the backend
+won't serve, the mirror rejects the snapshot, or the executor rejects the report.
 
 ## Stop
 
