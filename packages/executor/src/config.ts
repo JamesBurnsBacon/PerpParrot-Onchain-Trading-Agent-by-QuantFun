@@ -3,6 +3,9 @@ import type { Hex } from "viem";
 export type ExecutorConfig = {
   port: number;
   production: boolean;
+  // Deployed on Vercel (vercel.json): no in-process timers, and Vercel Cron calls /cron/watchdog.
+  vercel: boolean;
+  cronSecret?: string;
   verifyReports: boolean;
   workflowOwner: Hex;
   ethRpcUrl: string;
@@ -42,11 +45,12 @@ const num = (env: Record<string, string | undefined>, name: string, fallback: nu
 };
 
 // Safe by default: DRY_RUN and VERIFY_REPORTS are on unless explicitly "false",
-// and production refuses to run without report verification.
+// and production (any Vercel deployment, previews too) refuses to run without report verification.
 export const loadConfig = (env: Record<string, string | undefined>): ExecutorConfig => requirePinsForLive(readConfig(env));
 
 const readConfig = (env: Record<string, string | undefined>): ExecutorConfig => {
-  const production = env.NODE_ENV === "production";
+  const vercel = !!env.VERCEL;
+  const production = env.NODE_ENV === "production" || vercel;
   const verifyReports = env.VERIFY_REPORTS !== "false";
   if (production && !verifyReports) throw new Error("VERIFY_REPORTS=false is not allowed in production");
   const dryRun = env.DRY_RUN !== "false";
@@ -54,10 +58,18 @@ const readConfig = (env: Record<string, string | undefined>): ExecutorConfig => 
   const apiWalletKey = env.HL_API_WALLET_KEY ? hex("HL_API_WALLET_KEY", env.HL_API_WALLET_KEY, 32) : undefined;
   if (!dryRun && !apiWalletKey) throw new Error("HL_API_WALLET_KEY is required when DRY_RUN=false");
   if (production && !env.ADMIN_TOKEN) throw new Error("ADMIN_TOKEN is required in production");
+  // Live trading needs one long-running process: one HL nonce sequence and an in-process run
+  // queue (README §4.8). Vercel may run several instances and stops them between requests.
+  if (vercel && !dryRun) throw new Error("DRY_RUN=false is not allowed on Vercel: live trading needs one long-running executor (README §4.8)");
+  // Instances don't outlive requests there, so memory would lose dedupe, runs and the kill switch.
+  if (vercel && !env.DATABASE_URL) throw new Error("DATABASE_URL is required on Vercel");
+  if (vercel && !env.CRON_SECRET) throw new Error("CRON_SECRET is required on Vercel (Vercel Cron sends it to /cron/watchdog)");
 
   return {
     port: num(env, "PORT", 8787),
     production,
+    vercel,
+    cronSecret: env.CRON_SECRET || undefined,
     verifyReports,
     workflowOwner: hex("WORKFLOW_OWNER", env.WORKFLOW_OWNER, 20),
     ethRpcUrl: env.ETH_MAINNET_RPC_URL || "https://ethereum-rpc.publicnode.com",

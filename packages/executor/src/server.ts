@@ -1,5 +1,7 @@
-// Executor service (README §4.8). Runs on Railway; locally: bun run dev.
+// Executor service (README §4.8). Runs on Vercel as the `executor` service under
+// /api/executor (vercel.json), dry run only there; locally: bun run dev.
 import { SQL } from "bun";
+import { waitUntil } from "@vercel/functions";
 import { createPublicClient, http } from "viem";
 import { mainnet } from "viem/chains";
 import { createAlert } from "./alerts";
@@ -13,6 +15,7 @@ import { noLock, postgresRunLock } from "./lock";
 import { PostgresStore } from "./pg-store";
 import { MemoryStore } from "./store";
 import type { VerifyMode } from "./verify";
+import { cronWatchdog } from "./watchdog";
 
 const config = loadConfig(process.env);
 const log = (msg: string, extra: Record<string, unknown> = {}) =>
@@ -69,6 +72,9 @@ const app = createApp({
   runner,
   store,
   adminToken: config.adminToken,
+  watchdog: cronWatchdog({ store, alert, now: Date.now, afterMs: config.missedRunAlertMinutes * 60_000, everyMs: 5 * 60_000 }),
+  cronSecret: config.cronSecret,
+  background: waitUntil,
   log,
   status: () => ({
     dryRun: config.dryRun,
@@ -87,18 +93,21 @@ const app = createApp({
 const server = Bun.serve({ port: config.port, fetch: app, maxRequestBodySize: 256 * 1024 });
 
 // Missed-run watchdog: mirror runs every 10 min, so no finished run means CRE runs are
-// failing or a run is stuck (README §4.7: alert after 2 consecutive failures).
+// failing or a run is stuck (README §4.7: alert after 2 consecutive failures). Not on
+// Vercel, where instances stop between requests: Vercel Cron calls /cron/watchdog there.
 const startedAt = Date.now();
 let alerted = false;
-setInterval(() => {
-  const since = Date.now() - (runner.lastFinishedAt || startedAt);
-  if (since > config.missedRunAlertMinutes * 60_000) {
-    if (!alerted) void alert(`no finished run for ${Math.round(since / 60_000)} min (last report accepted ${runner.lastReportAt ? new Date(runner.lastReportAt).toISOString() : "never"})`);
-    alerted = true;
-  } else {
-    alerted = false;
-  }
-}, 60_000);
+if (!config.vercel) {
+  setInterval(() => {
+    const since = Date.now() - (runner.lastFinishedAt || startedAt);
+    if (since > config.missedRunAlertMinutes * 60_000) {
+      if (!alerted) void alert(`no finished run for ${Math.round(since / 60_000)} min (last report accepted ${runner.lastReportAt ? new Date(runner.lastReportAt).toISOString() : "never"})`);
+      alerted = true;
+    } else {
+      alerted = false;
+    }
+  }, 60_000);
+}
 
 log("executor listening", {
   port: server.port,
