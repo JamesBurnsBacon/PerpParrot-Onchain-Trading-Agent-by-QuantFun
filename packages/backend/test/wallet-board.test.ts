@@ -8,6 +8,7 @@ import { intents } from "../scripts/measure-wallet-board";
 import fixture from "../fixtures/frozen-configuration.json";
 import type { Policy } from "../../shared/src/contracts";
 import { isLiveStrategy } from "../../dashboard/lib/parrot-live";
+import { walletNickname } from "../../shared/wallet-persona";
 const base = fixture.policy as Policy;
 const deps = (): LiveDeps => ({ env: readLiveEnv({ LIVE_ENABLED: "true" }), chatEnv: { ipSalt: "salt", limits: { ipHourly: 10, previewIpHourly: 100, previewGlobalDaily: 500, globalDaily: 100, dailyBudgetMicroUsd: 5000000 } }, limiter: new MemoryChatLimiter(), now: () => 2000000000000, log: () => {}, basePolicy: base, finalists: loadFinalists, fetchImpl: (() => { throw Error("No model calls"); }) as unknown as typeof fetch });
 const request = (body: unknown) => new Request("http://localhost/live/strategy", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -42,7 +43,11 @@ test("facts preserve policy and safety, cap each side at three and total at 1200
   const selection = { ...strategy.selectStrategy(intents.clamped, base, data), ...strategy.explainSelection(intents.clamped, base, data, data.finalists.slice(15, 40).map(f => f.address)) };
   const facts = strategyFacts(intents.clamped, selection);
   expect(facts).toContain("Added "); expect(facts).toContain("Removed ");
-  for (const side of ["Added", "Removed"]) expect((facts.split(side)[1].split(".")[0].match(/ \(/g) ?? []).length).toBeLessThanOrEqual(3);
+  for (const side of ["Added", "Removed"]) expect((facts.split(side)[1].split(".")[0].match(/\(addr-\d+\)/g) ?? []).length).toBeLessThanOrEqual(3);
+  for (const side of ["added", "removed"] as const) {
+    const item = selection.changes![side][0];
+    expect(facts).toContain(`${side === "added" ? "Added" : "Removed"} ${walletNickname(item.address)} (${item.address})`);
+  }
   expect(facts.length).toBeLessThanOrEqual(1200);
   expect(facts).toEndWith("No orders are placed; an operator must review and freeze any strategy.");
 });

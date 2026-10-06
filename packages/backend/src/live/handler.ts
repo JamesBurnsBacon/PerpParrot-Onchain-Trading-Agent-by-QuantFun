@@ -1,4 +1,5 @@
 import { parseStrategyIntent, type StrategyIntent } from "../../../shared/parrot-intent";
+import { walletNickname } from "../../../shared/wallet-persona";
 import { failure, type ChatDeps } from "../chat/handler";
 import { hashIp } from "../chat/limits";
 import { buildPreview, PreviewError } from "../chat/preview";
@@ -97,7 +98,7 @@ export const strategyFacts = (intent: StrategyIntent, selection: Omit<ReturnType
   for (const side of ["added", "removed"] as const) {
     const items: string[] = [];
     for (const item of selection.changes?.[side].slice(0, 3) ?? []) {
-      const next = `${item.address} (${item.reason})`;
+      const next = `${walletNickname(item.address)} (${item.address}): ${item.reason}`;
       if (facts.length + items.join(", ").length + next.length + safety.length + 16 > 1200) break;
       items.push(next);
     }

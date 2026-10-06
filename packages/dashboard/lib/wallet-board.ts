@@ -1,3 +1,8 @@
+import type { WalletVibe } from "../../shared/wallet-persona";
+export { walletNickname, walletVibe } from "../../shared/wallet-persona";
+export const walletLabel = (nickname: string, vibe: WalletVibe, change?: "new" | "removed") =>
+  `${nickname}, ${vibe} vibe${change ? `, ${change}` : ""}`;
+
 export function diffWallets(previous: readonly string[], next: readonly string[]) {
   const before = new Set(previous), after = new Set(next);
   return { added: [...after].filter(id => !before.has(id)), removed: [...before].filter(id => !after.has(id)), kept: [...after].filter(id => before.has(id)) };

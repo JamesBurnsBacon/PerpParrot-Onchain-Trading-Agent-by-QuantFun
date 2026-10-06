@@ -12,6 +12,7 @@ import { isPreviewResponse, type ChatResponse, type PreviewResponse } from "../.
 import { PARROT_PRESETS, type ParrotPreset } from "../../lib/parrot-presets";
 import { ParrotEffectsProvider, useParrotEffects, FunControls, Fever } from "../../components/parrot/ParrotEffects";
 import { diffWallets } from "../../lib/wallet-board";
+import { WaitingFlock } from "../../components/parrot/WalletBoard";
 import "./parrot.css";
 
 export default function ParrotPage() { return <ParrotEffectsProvider><ParrotContent /></ParrotEffectsProvider>; }
@@ -76,7 +77,7 @@ function ParrotContent() {
         <h1 className="sr-only">Talk with PerpParrot</h1>
         <ThemeToggle />
       </header>
-      <div className={`parrot-layout${chat ? " parrot-layout--result" : ""}`}>
+      <div className="parrot-layout parrot-layout--result">
         <section className="parrot-stage min-w-0" aria-label="Talk with PerpParrot">
           <div className="parrot-scene"><ParrotAvatar state={state} stream={live.remoteStream} live={live.view.phase === "live" && !live.view.playbackBlocked} /></div>
           <LiveTalk live={live} disabled={busy} />
@@ -91,6 +92,7 @@ function ParrotContent() {
           <p className="sr-only" role="status">Strategy ready. Review Select, Verify, and Execute.</p>
           <StepRail chat={chat} demo={!!demo} step={step} setStep={setStep} preview={preview} busy={busy} executionDisabled={live.active} failure={previewError} onConfirm={() => void confirm()} />
         </div>}
+        {!chat && <WaitingFlock />}
       </div>
       <footer className="parrot-privacy">Voice is processed by OpenAI. The parrot cannot trade.</footer>
     </div>

@@ -14,6 +14,7 @@ export function SelectPanel({ chat, onVerify }: { chat: ChatResponse; demo: bool
   }, [chat]);
   return (
     <div className="space-y-4">
+      <WalletBoard chat={chat} />
       <Panel title="Your intent, bounded by code" meta={<span className="parrot-eyebrow">01 / SELECT</span>}>
         <div className="flex flex-wrap gap-2">{intentChips(chat.intent).map(chip => <span className={`parrot-chip ${flash.chips.includes(chip) ? "parrot-policy-flash" : ""}`} key={chip}>{chip}</span>)}</div>
         {banner && <div key={banner} className={`parrot-clamp mt-4 ${flash.banner ? "parrot-policy-flash" : ""}`} role="status"><span className="parrot-eyebrow">THE POLICY HAS THE FINAL SAY</span><p className="mt-2 text-lg font-extrabold">{banner}</p></div>}
@@ -27,7 +28,6 @@ export function SelectPanel({ chat, onVerify }: { chat: ChatResponse; demo: bool
         <StatTile label="Shortlisted sources" value={String(chat.shortlist.addresses.length)} note="Selected by code" />
         <StatTile label="Effective source limit" value={String(chat.policy.effectiveMaxSources)} note="After policy checks" />
       </div>
-      <WalletBoard chat={chat} />
       <button className="parrot-button parrot-button--primary w-full" onClick={onVerify}>Inspect the evidence <span aria-hidden="true">→</span></button>
     </div>
   );

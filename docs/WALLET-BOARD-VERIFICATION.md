@@ -2,6 +2,42 @@
 
 Offline worktree verification; no screen, speakers, network, provider session or database was used.
 
+## Flock tile simplification — current verification
+
+The Flock now uses inline bird SVGs with three evidence-derived moods, shared deterministic nicknames, one three-zone meter, native expandable evidence, NEW!/Bye! stickers and three columns at every viewport size. Kept tiles have no reel or entry animation. Ghost expiry remains 2500 ms; Calm and reduced motion keep static stickers. The board precedes the policy controls in Select, and the empty/connecting state is one line. No selection, Score, protected strategy-intent file, dependency, execution, provider or sound-hook code changed.
+
+Pure logic lives in `packages/shared/wallet-persona.ts` and is re-exported by dashboard `lib/wallet-board.ts`. All 40 sample identities have distinct stable names, as do all six cached identities; arbitrary future ids may collide in the finite vocabulary. Backend facts use that same function. Exact thresholds and the missing-evidence Steady fallback are documented beside the function and in PARROT.md.
+
+Verification on this change:
+
+- Dashboard `bunx tsc --noEmit && bun test`: passed, **7 pass / 0 fail**.
+- Backend `bunx tsc --noEmit && bun test`: passed, **795 pass / 20 skip / 0 fail**. `TEST_DATABASE_URL` was unset for offline verification; real DB checks remain for Claude.
+- `bun run build`: Turbopack failed while processing CSS because its process could not bind a local port (`Operation not permitted`). `NEXT_TELEMETRY_DISABLED=1 bun run build --webpack`: passed, including static `/parrot` generation.
+- `git diff --check`: passed. Git staging was denied at the external worktree `index.lock`; changes remain uncommitted.
+- The only changed existing test is `backend/test/wallet-board.test.ts`: facts now assert the shared nickname and count parenthesized wallet ids rather than the old parenthesized reasons. No existing DOM tests asserted the old card face. New render tests stay under `dashboard/test/wallet-board-render.test.tsx`; backend tests/scripts have no React dependency.
+
+Red/green proof: the new logic/render tests initially failed on absent exports. With persona logic added but the old facts builder retained, the facts assertion failed on the missing nickname. The reproducible pure negative controls (`bun packages/backend/scripts/check-wallet-persona-mutations.ts`, run alone) then produced **12 assertion failures**, one per removed behavior, followed by **15 passing tests** with sources restored:
+
+```text
+RED: calm drawdown boundary (1 fail)
+RED: calm volatility boundary (1 fail)
+RED: wild drawdown boundary (1 fail)
+RED: wild volatility boundary (1 fail)
+RED: missing evidence neutrality (2 fail)
+RED: nickname determinism (1 fail)
+RED: nickname uniqueness (1 fail)
+RED: nickname vocabulary safety (1 fail)
+RED: board identity diff (1 fail)
+RED: spoken nicknames (1 fail)
+RED: facts length budget (1 fail)
+RED: accessible change label (1 fail)
+GREEN: restored sources; 15 pass
+```
+
+Render assertions verify closed details, exact supplied percentages and server text, one face bird/meter in static mode, removal of old face labels, accessible names, static stickers, no reels on kept birds, cached-data fallback, SAMPLE DATA, waiting text and the hidden live region. These are markup checks, not browser interaction tests.
+
+**Still unverified visually/on-device:** desktop and 375 px sizing/no horizontal scroll; nickname wrapping and meter legibility; mood recognition and clay appearance; both themes and contrast; bounce/reels, wave/ghost collapse and rapid reentry; native detail toggling and visible focus; screen-reader announcements; reduced-motion/Calm transitions; sound and real microphone/provider behavior. The earlier verification below describes the preceding board implementation, not these new visuals.
+
 ## Selection and fixture
 
 40 synthetic rows: 36 generated price/equity paths run through the existing Score implementation, including eight deliberate clone copies; four explicit exclusion controls. Fixed seed 20261006. Every row and response is labelled sample. No Score code or shared strategy-intent source changed.

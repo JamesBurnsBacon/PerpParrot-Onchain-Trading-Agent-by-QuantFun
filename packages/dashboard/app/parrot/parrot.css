@@ -65,7 +65,7 @@
 .parrot-page { min-height: 100svh; }
 .parrot-shell { min-height: calc(100svh - 56px); display: flex; flex-direction: column; }
 .parrot-layout { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr); align-items: center; gap: 36px; padding: 36px 0; }
-.parrot-layout--result { grid-template-columns: minmax(0, .96fr) minmax(0, 1.04fr); align-items: start; }
+.parrot-layout--result { grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); align-items: start; }
 .parrot-stage { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; min-height: 520px; }
 .parrot-eyebrow { color: var(--ink-2); font-size: 10px; font-weight: 800; letter-spacing: .13em; line-height: 1.6; }
 .parrot-back { display: inline-flex; align-items: center; min-height: 44px; font-size: 12px; font-weight: 650; padding: 8px 0; }
@@ -144,39 +144,53 @@
 
 /* Wallet board: transforms/opacity only for traveling elements; no blinking flashes. */
 .parrot-fun-controls { display:flex; flex-wrap:wrap; justify-content:center; gap:8px; margin-top:16px; }
+/* Three roomy perches on desktop, three compact perches even at 375px. */
 .wallet-board { position:relative; min-width:0; isolation:isolate; }
+.parrot-rail .wallet-board { padding:0; box-shadow:none; border-radius:0; }
 .wallet-board-heading { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:8px; }
-.wallet-board-heading h2 { font-size:18px; font-weight:850; }
-.wallet-change-chip { display:inline-block; margin:12px 0; padding:6px 12px; border:1px solid var(--ring); border-radius:999px; background:var(--parrot-stage); color:var(--ink); font-size:12px; font-weight:800; animation:board-pop .55s cubic-bezier(.2,1.5,.4,1) both; }
-.wallet-grid { --count:1; display:grid; grid-template-columns:repeat(auto-fit,minmax(min(145px,100%),1fr)); gap:10px; position:relative; }
+.wallet-board-heading h2 { font-size:18px; font-weight:850; letter-spacing:-.03em; }
+.wallet-change-chip { display:inline-block; margin:16px 0 22px; padding:9px 16px; border:3px solid var(--ring); border-radius:18px; background:var(--parrot-stage); color:var(--ink); font-size:14px; font-weight:850; box-shadow:0 3px 0 #262c4810; animation:board-pop .55s cubic-bezier(.2,1.5,.4,1) both; }
+.wallet-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:20px 16px; position:relative; align-items:start; }
 .wallet-position { position:relative; min-width:0; }
-.wallet-card { position:relative; height:100%; border-radius:16px; border:1px solid var(--ring); background:var(--surface); color:var(--ink); box-shadow:0 3px 0 #24351a10; }
-.wallet-face { width:100%; height:100%; position:relative; display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px 4px; padding:12px; text-align:left; border-radius:15px; transition:transform .2s; transform-style:preserve-3d; }
-.wallet-face:hover, .wallet-face:active { transform:perspective(550px) rotateX(3deg) rotateY(-4deg) translateY(-2px); }
-.wallet-face:focus-visible, .parrot-fun-controls button:focus-visible { outline:3px solid var(--parrot-orange); outline-offset:3px; }
-.wallet-id { font-family:ui-monospace,monospace; font-size:12px; font-weight:850; overflow-wrap:anywhere; }
-.wallet-rank { font-size:10px; font-weight:800; color:var(--ink-2); }
-.wallet-state { grid-column:1/-1; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-2); }
-.is-added .wallet-state { color:var(--ink); }
-.wallet-metrics { grid-column:1/-1; display:grid; gap:8px; }
-.wallet-metric { display:grid; gap:4px; font-size:10px; color:var(--ink-2); }
-.wallet-metric > span { display:flex; justify-content:space-between; gap:4px; }
-.wallet-metric b { color:var(--ink); font-variant-numeric:tabular-nums; }
-.wallet-metric > i { display:block; height:4px; overflow:hidden; border-radius:9px; background:var(--ring); }
-.wallet-metric > i > i { display:block; width:var(--bar); height:100%; background:var(--parrot-deep); transform-origin:left; transform:scaleX(var(--count)); }
-.wallet-metric:nth-child(2) > i > i { background:var(--parrot-orange); }
-.wallet-tags { display:flex; flex-wrap:wrap; gap:4px; grid-column:1/-1; font-size:9px; min-height:20px; }
-.wallet-tags > span { border:1px solid var(--ring); border-radius:6px; padding:3px 5px; }
-.wallet-reason { position:absolute; left:4px; right:4px; bottom:calc(100% + 6px); padding:8px; font-size:11px; line-height:1.4; background:var(--parrot-navy); color:white; border-radius:8px; opacity:0; pointer-events:none; z-index:8; overflow-wrap:anywhere; }
-.wallet-card:hover, .wallet-card:focus-within { z-index:9; }
-.wallet-card:hover .wallet-reason, .wallet-card:focus-within .wallet-reason { opacity:1; }
-.wallet-card.is-added { border-color:var(--parrot-deep); animation:wallet-enter .6s cubic-bezier(.18,1.3,.4,1) var(--stagger) both; }
-.wallet-card.is-added::after { content:""; position:absolute; inset:0; border:2px solid #91df62; border-radius:inherit; pointer-events:none; box-shadow:0 0 13px #70d65560; animation:wallet-glow 1.4s ease-out both; }
-.wallet-card.is-out { filter:grayscale(1); opacity:.75; animation:wallet-out .55s ease-out both; }
-.wallet-ghost .wallet-metric > i > i { transform:none; }
-.wallet-reel { position:absolute; inset:5px 5px auto; height:32px; overflow:hidden; border-radius:10px; background:var(--surface); z-index:2; pointer-events:none; animation:reel-cover var(--lock) linear both; }
+.wallet-card { position:relative; border-radius:26px; border:3px solid var(--ring); background:var(--surface); color:var(--ink); box-shadow:0 6px 0 #24351a12,0 12px 20px #24351a08; }
+.wallet-face { width:100%; position:relative; display:flex; flex-direction:column; align-items:center; gap:8px; padding:16px 10px; text-align:center; border-radius:23px; list-style:none; }
+.wallet-face::-webkit-details-marker { display:none; }
+.wallet-face:focus-visible, .parrot-fun-controls button:focus-visible { outline:3px solid var(--parrot-orange); outline-offset:4px; }
+.wallet-portrait { position:relative; display:block; width:min(100%,140px); aspect-ratio:140/132; }
+.wallet-bird { display:block; width:100%; height:auto; }
+.wallet-nickname { display:flex; align-items:center; justify-content:center; min-height:2.5em; font-size:16px; line-height:1.25; font-weight:850; overflow-wrap:anywhere; }
+.wallet-id { max-width:100%; color:var(--muted); font-family:ui-monospace,monospace; font-size:10px; line-height:1.3; overflow-wrap:anywhere; }
+.wallet-risk { position:relative; display:flex; width:80%; height:12px; margin:7px 0 2px; border-radius:99px; box-shadow:inset 0 2px 2px #262c4820; }
+.wallet-risk > i { flex:1; background:#6cc04a; }
+.wallet-risk > i:first-child { border-radius:99px 0 0 99px; }
+.wallet-risk > i:nth-child(2) { background:#262c48; }
+.wallet-risk > i:nth-child(3) { background:#f29a2e; border-radius:0 99px 99px 0; }
+.wallet-risk > b { position:absolute; left:50%; top:50%; width:14px; height:18px; border:3px solid #fffcf5; border-radius:7px; background:#262c48; box-shadow:0 0 0 1px #262c48; transform:translate(-50%,-50%); }
+[data-vibe="calm"] .wallet-risk > b { left:16.667%; background:#3f9a3a; }
+[data-vibe="wild"] .wallet-risk > b { left:83.333%; background:#f29a2e; }
+.wallet-details { padding:0 12px 14px; font-size:11px; line-height:1.6; color:var(--ink-2); overflow-wrap:anywhere; }
+.wallet-details p + p { margin-top:4px; }
+.wallet-sticker { position:absolute; top:-10px; right:4px; padding:4px 7px; border:2px solid #262c48; border-radius:9px; background:#b4df7e; color:#262c48; font-size:11px; line-height:1; font-weight:950; transform:rotate(8deg); box-shadow:0 2px 0 #262c4820; }
+.wallet-sticker.is-bye { background:#ffe0a8; transform:rotate(-8deg); }
+.wallet-card.is-added { border-color:var(--parrot-deep); animation:wallet-enter .65s cubic-bezier(.18,1.3,.4,1) var(--stagger) both; }
+.wallet-card.is-out { background:var(--parrot-chip); border-style:dashed; opacity:.72; animation:wallet-out .8s ease-out both; }
+.wallet-card.is-out .wallet-wing { transform-box:fill-box; transform-origin:80% 20%; animation:bird-wave .65s ease-in-out 2; }
+.wallet-reel { position:absolute; inset:0; overflow:hidden; border-radius:16px; background:var(--surface); pointer-events:none; animation:reel-cover var(--lock) linear both; }
 .wallet-reel > span { display:flex; flex-direction:column; animation:reel-roll var(--lock) cubic-bezier(.15,.7,.3,1) both; filter:blur(1px); }
-.wallet-reel b { height:30px; flex-shrink:0; padding:7px; font-family:ui-monospace,monospace; font-size:12px; }
+.wallet-reel .wallet-bird { flex-shrink:0; }
+.wallet-empty { padding:32px 0; color:var(--ink-2); font-size:14px; }
+.wallet-waiting { align-self:center; padding:24px; border:3px dashed var(--ring); border-radius:26px; }
+.wallet-card.is-quiet, .wallet-card.is-quiet *, .wallet-board.is-calm * { animation:none !important; transition:none !important; }
+@media (max-width:600px) {
+  .wallet-grid { gap:16px 8px; }
+  .wallet-card { border-radius:18px; }
+  .wallet-face { padding:14px 5px 12px; gap:6px; border-radius:15px; }
+  .wallet-nickname { font-size:12px; min-height:3.75em; }
+  .wallet-id { font-size:9px; }
+  .wallet-sticker { font-size:9px; padding:4px 5px; }
+  .wallet-risk { width:84%; height:10px; }
+  .wallet-details { padding:0 6px 10px; font-size:10px; }
+}
 .parrot-policy-flash { animation:policy-highlight .8s ease-out; }
 .parrot-clamp.parrot-policy-flash { animation:clamp-slam .6s cubic-bezier(.15,1.4,.4,1); }
 .parrot-fever-slot { position:relative; height:48px; margin-bottom:8px; isolation:isolate; }
@@ -194,11 +208,12 @@
 .parrot-avatar[data-reactive="true"] .parrot-halo { animation:none; transform:scale(calc(1 + var(--level) * .12)); opacity:.85; }
 .parrot-avatar--idle .parrot-portrait { animation:parrot-idle 6s ease-in-out infinite; }
 .parrot-avatar--idle .parrot-portrait img { animation:parrot-blink 7s ease-in-out infinite; }
-@keyframes wallet-enter { from { opacity:0; transform:translateY(22px) scale(.93); } to { opacity:1; transform:none; } }
-@keyframes wallet-out { 20% { transform:translateX(-4px) rotate(-2deg); } 45% { transform:translateX(3px); } to { opacity:.75; transform:none; } }
+@keyframes wallet-enter { from { opacity:0; transform:translateY(22px) scale(.85); } 65% { opacity:1; transform:translateY(-5px) scale(1.04); } to { opacity:1; transform:none; } }
+@keyframes wallet-out { 25% { transform:translateY(-6px) rotate(-3deg); } 55% { transform:translateY(-2px) rotate(3deg); } to { transform:none; } }
+@keyframes bird-wave { 50% { transform:rotate(45deg); } }
 @keyframes wallet-glow { from { opacity:.85; } to { opacity:0; } }
 @keyframes board-pop { from { transform:scale(.8); } to { transform:scale(1); } }
-@keyframes reel-roll { from { transform:translateY(-90px); } to { transform:translateY(0); filter:blur(0); } }
+@keyframes reel-roll { from { transform:translateY(-66.667%); } to { transform:translateY(0); filter:blur(0); } }
 @keyframes reel-cover { 0%,85% { opacity:1; } 100% { opacity:0; visibility:hidden; } }
 @keyframes policy-highlight { from { box-shadow:0 0 0 3px #d1ae5660; } to { box-shadow:0 0 0 0 transparent; } }
 @keyframes clamp-slam { from { transform:translateY(-10px) scale(1.03); } 55% { transform:translateX(-3px); } 80% { transform:translateX(2px); } to { transform:none; } }
@@ -217,7 +232,6 @@
 /* All luminance accents share the provider's globally throttled envelope. */
 .parrot-result:not([data-fever]) .parrot-policy-flash,
 .parrot-result:not([data-fever]) .wallet-change-chip { animation:none; }
-.parrot-result:not([data-fever]) .wallet-card.is-added::after { display:none; }
 @keyframes ghost-collapse { 0%,88% { max-height:300px; overflow:visible; } 89% { overflow:hidden; } 100% { max-height:0; opacity:0; overflow:hidden; } }
 .wallet-ghost { animation:ghost-collapse 2.5s ease-in both; }
 .wallet-ghost > .wallet-card { min-height:0; }

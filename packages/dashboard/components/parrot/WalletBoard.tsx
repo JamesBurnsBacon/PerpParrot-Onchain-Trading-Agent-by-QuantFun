@@ -1,8 +1,49 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { shortenAddress, type ChatResponse } from "../../lib/parrot";
-import { barScale, changeSummary, diffWallets, reelSchedule } from "../../lib/wallet-board";
+import { changeSummary, diffWallets, reelSchedule, walletLabel, walletNickname, walletVibe } from "../../lib/wallet-board";
+import type { WalletEvidence } from "../../../shared/wallet-evidence";
 import { Badge } from "./Badge";
 import { useParrotEffects } from "./ParrotEffects";
+import { WalletBird } from "./WalletBird";
+
+export function WaitingFlock() {
+  return <section className="wallet-board wallet-waiting" aria-label="The Flock">
+    <header className="wallet-board-heading"><h2>The Flock</h2><Badge kind="SAMPLE DATA" /></header>
+    <p className="wallet-empty" role="status">Waiting for birds...</p>
+  </section>;
+}
+
+export function WalletTile({ address, evidence, reason, change, quiet = false, index = 0, lock = 0, epoch = 0 }: {
+  address: string; evidence?: WalletEvidence; reason?: string; change?: "new" | "removed";
+  quiet?: boolean; index?: number; lock?: number; epoch?: number;
+}) {
+  const vibe = walletVibe(evidence), nickname = walletNickname(address);
+  const metric = (value: number | null | undefined) => value == null || !Number.isFinite(value) ? "unavailable" : `${Number((value * 100).toFixed(2))}%`;
+  return <details className={`wallet-card ${quiet ? "is-quiet" : ""} ${change === "new" ? "is-added" : change === "removed" ? "is-out" : ""}`}
+    data-vibe={vibe} style={{ "--stagger": `${Math.min(index * 22, 220)}ms`, "--lock": `${lock}ms` } as CSSProperties}>
+    <summary className="wallet-face" aria-label={walletLabel(nickname, vibe, change)}>
+      <span className="wallet-portrait">
+        <WalletBird vibe={vibe} />
+        {change === "new" && !quiet && <span key={epoch} className="wallet-reel" aria-hidden="true"><span>
+          {(["wild", "calm", "steady"] as const).map(mood => <WalletBird key={mood} vibe={mood} />)}
+        </span></span>}
+      </span>
+      <span className="wallet-nickname">{nickname}</span>
+      <span className="wallet-id">{shortenAddress(address)}</span>
+      <span className="wallet-risk" aria-hidden="true"><i /><i /><i /><b /></span>
+      {change && <span className={`wallet-sticker ${change === "removed" ? "is-bye" : ""}`} aria-hidden="true">{change === "new" ? "NEW!" : "Bye!"}</span>}
+    </summary>
+    <div className="wallet-details">
+      {evidence ? <>
+        <p>Score rank: {evidence.rank}</p>
+        <p>Drawdown: {metric(evidence.maxDrawdown)}</p>
+        <p>Volatility: {metric(evidence.annualisedVol)}</p>
+        {evidence.tags.length > 0 && <p>{evidence.tags.join(" · ")}</p>}
+      </> : <p>Metrics unavailable</p>}
+      {reason && <p>{reason}</p>}
+    </div>
+  </details>;
+}
 
 type Ghost = { expiresAt: number; address: string; evidence: ChatResponse["evidence"]; reason?: string };
 export function WalletBoard({ chat }: { chat: ChatResponse }) {
@@ -48,47 +89,23 @@ export function WalletBoard({ chat }: { chat: ChatResponse }) {
     positions.current = next;
     return () => { frames.forEach(cancelAnimationFrame); nodes.forEach(n => { n.style.transform = ""; n.style.transition = ""; }); };
   }, [chat, state.ghosts, quiet]);
-  useEffect(() => {
-    const nodes = [...(board.current?.querySelectorAll<HTMLElement>(".wallet-current [data-metric]") ?? [])];
-    const start = performance.now(); let frame = 0;
-    const update = (now: number) => {
-      const progress = quiet ? 1 : Math.min(1, Math.max(0, (now - start - 500) / 600));
-      board.current?.style.setProperty("--count", String(progress));
-      nodes.forEach(node => { node.textContent = `${(Number(node.dataset.metric) * progress).toFixed(1)}%`; });
-      if (progress < 1) frame = requestAnimationFrame(update);
-    };
-    update(start);
-    return () => { cancelAnimationFrame(frame); nodes.forEach(node => { node.textContent = `${Number(node.dataset.metric).toFixed(1)}%`; }); };
-  }, [chat, quiet]);
   const rows = [...chat.shortlist.addresses.map(address => ({ address, out: false, evidence: chat.evidence,
     reason: chat.changes?.added.find(e => e.address === address)?.reason })), ...state.ghosts.map(g => ({ ...g, out: true }))];
-  return <section className={`wallet-board ${quiet ? "is-calm" : ""} ${celebration?.animated ? "has-fever" : ""}`} aria-label="Wallet board">
-    <header className="wallet-board-heading"><h2>Wallet board</h2><Badge kind={chat.shortlist.dataSource === "sample" ? "SAMPLE DATA" : "LIVE"} /></header>
+  return <section className={`wallet-board ${quiet ? "is-calm" : ""} ${celebration?.animated ? "has-fever" : ""}`} aria-label="The Flock">
+    <header className="wallet-board-heading"><h2>The Flock</h2><Badge kind={chat.shortlist.dataSource === "sample" ? "SAMPLE DATA" : "LIVE"} /></header>
     <div key={state.epoch} className="wallet-change-chip">{summary.chip}</div>
     <p className="sr-only" aria-live="polite">{summary.announcement}</p>
     <div ref={board} className="wallet-grid">
       {rows.map((row, i) => {
         const e = row.evidence?.find(e => e.address === row.address);
         const added = !row.out && state.labels && diff.added.includes(row.address);
-        const reason = row.reason ?? e?.tags.join(" · ");
         const lock = reels[i]?.at ?? 0;
         return <div key={row.address} data-id={row.address} className={`wallet-position ${row.out ? "wallet-ghost" : "wallet-current"}`}>
-          <article className={`wallet-card ${added ? "is-added" : ""} ${row.out ? "is-out" : ""}`} style={{ "--stagger": `${Math.min(i * 22, 220)}ms`, "--lock": `${lock}ms` } as CSSProperties}>
-            <button type="button" className="wallet-face" aria-label={`${shortenAddress(row.address)}, ${row.out ? "out" : added ? "added" : "selected"}${e ? `, Score rank ${e.rank}` : ""}`} aria-describedby={`wallet-reason-${row.address}`} onClick={event => event.currentTarget.focus()}>
-              <span className="wallet-id">{shortenAddress(row.address)}</span><span className="wallet-rank">{e ? `#${e.rank}` : "—"}</span>
-              {!row.out && !quiet && <span key={state.epoch} className="wallet-reel" aria-hidden="true"><span>{[...chat.shortlist.addresses.slice(Math.max(0, i - 2), i + 1), row.address].map((id, n) => <b key={n}>{shortenAddress(id)}</b>)}</span></span>}
-              <span className="wallet-state">{row.out ? "out" : added ? "added" : "selected"}</span>
-              <span className="wallet-metrics">{([['Drawdown', e?.maxDrawdown, 1], ['Volatility', e?.annualisedVol, 1.5]] as const).map(([label, value, cap]) => <span key={label} className="wallet-metric" aria-label={`${label}: ${value == null ? "unavailable" : `${(value * 100).toFixed(1)} percent`}`}>
-                <span>{label} <b aria-hidden="true" data-metric={value == null ? undefined : value * 100}>{value == null ? "—" : `${(value * 100).toFixed(1)}%`}</b></span>
-                <i aria-hidden="true"><i style={{ "--bar": `${barScale(value ?? null, cap)}%` } as CSSProperties} /></i>
-              </span>)}</span>
-              <span className="wallet-tags">{e?.tags.slice(0, 2).map(tag => <span key={tag}>{tag}</span>) ?? <span>Metrics unavailable</span>}</span>
-            </button>
-            <span id={`wallet-reason-${row.address}`} className="wallet-reason" role="tooltip">{reason || "Metrics unavailable"}</span>
-          </article>
+          <WalletTile address={row.address} evidence={e} reason={row.reason} change={row.out ? "removed" : added ? "new" : undefined}
+            quiet={quiet} index={i} lock={lock} epoch={state.epoch} />
         </div>;
       })}
     </div>
-    {!rows.length && <p>No wallets selected.</p>}
+    {!rows.length && <p className="wallet-empty" role="status">Waiting for birds...</p>}
   </section>;
 }
