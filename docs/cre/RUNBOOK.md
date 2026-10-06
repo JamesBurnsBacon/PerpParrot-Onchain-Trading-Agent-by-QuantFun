@@ -126,7 +126,16 @@ CRE UI or with `cre workflow pause`.
 | Supabase `cre_snapshots` | each run's snapshot JSON (`body`, exact bytes) and its keccak hash | anon `select` |
 | Supabase `executor_controls` | kill-switch state | anon `select` |
 
-Re-verifying a run's report: `envelope.report` is the raw report (109-byte header + ABI body,
+Re-verifying a run's report, independently of the executor:
+
+```sh
+cd packages/executor
+bun run scripts/verify-run.ts --executor https://… --backend https://… [--run mirror-…]
+```
+
+It checks ≥ f+1 DON signatures against the Capability Registry and the pinned workflow owner, that
+the run ID is `keccak256(report)`, and that the stored snapshot hashes to the report's
+`snapshotHash` (`--simulation` for runs from `cre workflow simulate`). By hand: `envelope.report` is the raw report (109-byte header + ABI body,
 `packages/shared/report.ts`). `keccak256(report)` is the run `id`; the body's `snapshotHash` is
 `keccak256` of the stored snapshot `body`; signatures verify against the Capability Registry as in
 `packages/executor/src/verify.ts`.
