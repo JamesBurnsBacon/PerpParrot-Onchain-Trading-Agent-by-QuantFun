@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "PerpParrot",
-  description: "Copy the best Hyperliquid traders, picked by quant screens and an AI agent, orchestrated by Chainlink CRE.",
+  description: "Copy the best Hyperliquid traders, picked by quant screens and an AI agent, mirrored every ten minutes.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {buildReviewInput} from '../packages/backend/review/input.ts';
 import {openAIPaperCommittee} from '../packages/backend/review/models/openai-paper.ts';
-import {runCommitteeReview} from '../packages/cre-workflows/review/committee/workflow.ts';
+import {runCommitteeReview} from '../packages/backend/review/committee/workflow.ts';
 import {RED_TEAM_PROMPT,RISK_PROMPT,ROLE_PROMPT,promptHash} from '../packages/shared/src/prompts.ts';
 import {setup,address,NOW} from './support/score-frame.ts';
 const model='gpt-4.1-mini-2025-04-14',endpoint='http://localhost:9/v1/chat/completions';

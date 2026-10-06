@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {buildReviewInput,positionsFromStates} from '../packages/backend/review/input.ts';
-import {runReview,type Dependencies} from '../packages/cre-workflows/review/workflow.ts';
+import {runReview,type Dependencies} from '../packages/backend/review/workflow.ts';
 import {verifyInputCommitments} from '../packages/shared/src/commitments.ts';
 import {CONTRACT_VERSION,type Observation,type Row} from '../packages/shared/src/contracts.ts';
 import {setup,address,NOW} from './support/score-frame.ts';

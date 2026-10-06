@@ -78,7 +78,7 @@ supports removal. The orchestrator derives PASS/REBUILD and exclusions by policy
 You cannot issue a second critique/rebuild or edit leverage/capital limits. An
 apparently plausible portfolio still requires deterministic validation.
 
-## Narrative Agent (outside CRE economic path)
+## Narrative Agent (outside the trading path)
 
 Explain the already validated manifest and structured selection/rejection evidence
 for a public dashboard. Identify selection reasons, principal supported risk and

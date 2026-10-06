@@ -2,7 +2,7 @@
 // packages/shared/src/commitments.ts). Must stay byte-identical:
 // keccak256(UTF8(JCS({domain, payload}))).
 //
-// Dependency-free so the CRE workflow (WASM) can use it: callers pass keccak256
+// Dependency-free so every package can use it: callers pass keccak256
 // over UTF-8 (viem's keccak256(stringToBytes(text)) in this repo).
 
 export type KeccakUtf8 = (text: string) => string;

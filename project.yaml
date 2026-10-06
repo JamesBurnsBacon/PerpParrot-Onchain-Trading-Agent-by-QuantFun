@@ -1,3 +1,0 @@
-# No deployment target, wallet, RPC or execution credentials in this spike.
-simulation-settings:
-  rpcs: []

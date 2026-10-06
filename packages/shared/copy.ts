@@ -1,6 +1,6 @@
-// Pure bigint copy math shared by the backend, the mirror workflow and paper books.
-// No imports and no floats, so every DON node computes identical results.
-import type { SnapshotSource } from "./snapshot";
+// Pure bigint copy math shared by the backend (targets, paper books), the executor and tests.
+// No floats, so the same snapshot always gives the same targets.
+import type { PositionsSnapshot, SnapshotSource } from "./snapshot";
 
 const E6 = 1_000_000n;
 // Exposures are fractions of our equity × 1e9.
@@ -75,15 +75,22 @@ export const capGrossExposure = (
   return exposures.map((e) => ({ asset: e.asset, exposureE9: (e.exposureE9 * maxGrossE9) / gross }));
 };
 
-// Spot-check deviation in basis points of live equity (README §4.7: reject > 5%):
-// the larger of Σ_c |snapshot − live notional| (long/short errors can't cancel)
-// and |snapshot − live equity|.
-export const deviationBps = (snapshot: SnapshotSource, live: AccountState): number => {
-  if (live.equityE6 <= 0n) return 10_000;
-  const assets = new Set([...snapshot.positions.map((p) => p.asset), ...live.positions.keys()]);
-  const snap = new Map(snapshot.positions.map((p) => [p.asset, BigInt(p.notionalE6)]));
-  let diff = 0n;
-  for (const a of assets) diff += abs((snap.get(a) ?? 0n) - (live.positions.get(a) ?? 0n));
-  const equityDiff = abs(BigInt(snapshot.equityE6) - live.equityE6);
-  return Number(((diff > equityDiff ? diff : equityDiff) * 10_000n) / live.equityE6);
+// A run's target exposures (README §4.4): every source must be in the frozen configuration and hold
+// only eligible assets, weights renormalize over active sources within their ceilings, and gross is
+// capped at the policy's maxGrossLeverage. Used for the executor's targets and the paper books.
+export const targetsFromSnapshot = (snapshot: PositionsSnapshot): { asset: string; exposureE9: bigint }[] => {
+  const frozen = new Map(snapshot.configuration.sources.map((s) => [s.sourceAddress.toLowerCase(), s]));
+  const eligible = new Set(snapshot.eligibleAssets);
+  for (const s of snapshot.sources) {
+    if (!frozen.has(s.address)) throw new Error(`source ${s.address} is not in the frozen configuration`);
+    for (const p of s.positions) if (!eligible.has(p.asset)) throw new Error(`ineligible asset in snapshot: ${p.asset}`);
+  }
+  const sources = snapshot.sources.map((s) => ({
+    ...s,
+    weightE6: frozen.get(s.address)!.weightUnits,
+    ceilingE6: frozen.get(s.address)!.ceilingUnits,
+  }));
+  checkActiveCeilings(sources);
+  const maxGrossE9 = BigInt(Math.round(snapshot.configuration.policy.maxGrossLeverage * Number(EXPOSURE_SCALE)));
+  return capGrossExposure(computeExposures(sources), maxGrossE9);
 };

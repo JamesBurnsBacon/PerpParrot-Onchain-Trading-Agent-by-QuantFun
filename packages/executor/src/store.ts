@@ -1,5 +1,5 @@
 // Shared executor storage contract. MemoryStore is for local/tests; PostgresStore
-// supplies durable production report claims, controls, run history and action journal.
+// supplies durable production run claims, controls, run history and action journal.
 import type { OrderResult } from "./exchange";
 import type { Plan, PlannedOrder } from "./planner";
 import type { Hex } from "viem";
@@ -7,10 +7,10 @@ import type { Hex } from "viem";
 export type Controls = { paused: boolean; updatedAt: number; updatedBy: string };
 
 export type RunRecord = {
-  // Report ID (keccak256 of the raw report), or "flatten-<ms>" for a manual flatten.
+  // "mirror-<runAt>" for a scheduled run, "flatten-<ms>" for a manual flatten.
   id: string;
   runId: string;
-  kind: "report" | "flatten";
+  kind: "mirror" | "flatten";
   status: "executed" | "skipped_paused" | "failed";
   dryRun: boolean;
   startedAt: number;
@@ -19,12 +19,12 @@ export type RunRecord = {
   plan?: Plan;
   results?: OrderResult[];
   error?: string;
-  // The raw signed report, kept so anyone can re-verify it (README §4.7).
-  envelope?: unknown;
+  // What the run traded toward: the backend snapshot hash, configuration and target exposures.
+  evidence?: unknown;
 };
 
-export type RunSummary = Omit<RunRecord, "plan" | "results" | "envelope"> & { orders: number };
-export const summarize = ({ plan, results: _results, envelope: _envelope, ...run }: RunRecord): RunSummary => ({ ...run, orders: plan?.orders.length ?? 0 });
+export type RunSummary = Omit<RunRecord, "plan" | "results" | "evidence"> & { orders: number };
+export const summarize = ({ plan, results: _results, evidence: _evidence, ...run }: RunRecord): RunSummary => ({ ...run, orders: plan?.orders.length ?? 0 });
 export const runAtMs = (run: Pick<RunRecord, "runId" | "startedAt">): number => {
   const m = /-(\d+)$/.exec(run.runId);
   return m ? Number(m[1]) * 1000 : run.startedAt;
@@ -33,7 +33,7 @@ export type EquityPoint = { t: number; equityUsd: number; dryRun: boolean };
 
 export type OrderBatch = {
   id: string;
-  reportId: string;
+  runId: string;
   createdAt: number;
   orders: PlannedOrder[];
   cloids: Hex[];
@@ -49,8 +49,8 @@ export interface ExecutorStore {
   finishOrderBatch(id: string, results: OrderResult[]): Promise<void>;
   unresolvedOrderBatches(): Promise<OrderBatch[]>;
   reconcileOrderBatch(id: string, by: string, evidence: string, at: number): Promise<void>;
-  // Atomically records a report ID; false if it was already claimed.
-  claimReport(id: string): Promise<boolean>;
+  // Atomically claims a run (one per 10-minute slot); false if another trigger already did.
+  claimRun(runId: string): Promise<boolean>;
   saveRun(run: RunRecord): Promise<void>;
   recentRuns(limit: number): Promise<RunRecord[]>;
   recentRunSummaries(limit: number): Promise<RunSummary[]>;
@@ -90,9 +90,9 @@ export class MemoryStore implements ExecutorStore {
     batch.resolution = { by, evidence, at };
   }
 
-  async claimReport(id: string) {
-    if (this.claimed.has(id)) return false;
-    this.claimed.add(id);
+  async claimRun(runId: string) {
+    if (this.claimed.has(runId)) return false;
+    this.claimed.add(runId);
     return true;
   }
 
@@ -108,7 +108,7 @@ export class MemoryStore implements ExecutorStore {
   async recentRunSummaries(limit: number) { return (await this.recentRuns(limit)).map(summarize); }
 
   async equityCurve() {
-    return this.runs.filter((r) => r.kind === "report" && r.status === "executed" && r.equityUsd !== undefined)
+    return this.runs.filter((r) => r.kind === "mirror" && r.status === "executed" && r.equityUsd !== undefined)
       .map((r): EquityPoint => ({ t: runAtMs(r), equityUsd: r.equityUsd!, dryRun: r.dryRun })).sort((a, b) => a.t - b.t);
   }
 

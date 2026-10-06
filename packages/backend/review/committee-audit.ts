@@ -1,7 +1,7 @@
 // @env node
 import {persistCommitteeAudit} from './audit.ts';
 import type {Rpc} from './supabase.ts';
-import type {CommitteeDependencies} from '../../cre-workflows/review/committee/types.ts';
+import type {CommitteeDependencies} from './committee/types.ts';
 
 /** Store each node response independently: unrelated node outputs must never be
  * mislabeled as aggregated consensus. quorum=1 denotes one validated observation. */

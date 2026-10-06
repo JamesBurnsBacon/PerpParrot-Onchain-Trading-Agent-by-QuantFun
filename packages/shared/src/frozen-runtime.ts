@@ -21,7 +21,7 @@ export interface FrozenConfiguration {
   configurationHash: string;
 }
 /** Trusted adapter output, not fields supplied by the snapshot API or model.
- * The chain adapter must verify the consumer, workflow identity and confirmed state.
+ * The adapter must verify the consumer and the confirmed state.
  */
 export interface ConfirmedFreeze {
   configurationHash: string;

@@ -10,7 +10,7 @@ const url = process.env.TEST_DATABASE_URL;
 describe.skipIf(!url)("PostgresSnapshotStore", async () => {
   if (!url) return;
   const sql = new SQL(url);
-  await sql.unsafe(await Bun.file(new URL("../../../supabase/migrations/20261006120000_cre_mirror.sql", import.meta.url)).text());
+  await sql.unsafe(await Bun.file(new URL("../../../supabase/migrations/20261006120000_mirror.sql", import.meta.url)).text());
   const store = new PostgresSnapshotStore(sql);
   const runAt = 2_000_000_000 + Math.floor(Math.random() * 1e6) * 600;
   // Key order and spacing that jsonb would normalize away.
@@ -24,7 +24,7 @@ describe.skipIf(!url)("PostgresSnapshotStore", async () => {
   });
 
   test("records the snapshot and configuration hashes", async () => {
-    const [row] = await sql`select snapshot_hash, configuration_hash from cre_snapshots where run_at = ${runAt}`;
+    const [row] = await sql`select snapshot_hash, configuration_hash from run_snapshots where run_at = ${runAt}`;
     expect(row.configuration_hash).toBe(`0x${"ab".repeat(32)}`);
     expect(row.snapshot_hash).toMatch(/^0x[0-9a-f]{64}$/);
   });

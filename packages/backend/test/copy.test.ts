@@ -4,7 +4,6 @@ import {
   checkActiveCeilings,
   computeExposures,
   decToE6,
-  deviationBps,
   type WeightedSource,
 } from "../../shared/copy";
 
@@ -131,25 +130,3 @@ describe("capGrossExposure", () => {
   });
 });
 
-describe("deviationBps", () => {
-  const snap = src("0xa", 1, "10000000000", [["BTC", "1000000000"], ["ETH", "-500000000"]]);
-
-  test("measures total notional drift against live equity", () => {
-    const live = { equityE6: 10_000_000_000n, positions: new Map([["BTC", 1_100_000_000n], ["ETH", -500_000_000n]]) };
-    expect(deviationBps(snap, live)).toBe(100); // 100 / 10,000 = 1%
-  });
-
-  test("counts positions missing on either side", () => {
-    const live = { equityE6: 10_000_000_000n, positions: new Map([["SOL", 100_000_000n]]) };
-    expect(deviationBps(snap, live)).toBe(1_600); // (1000 + 500 + 100) / 10,000
-  });
-
-  test("catches an equity mismatch even when positions agree", () => {
-    const live = { equityE6: 9_000_000_000n, positions: new Map([["BTC", 1_000_000_000n], ["ETH", -500_000_000n]]) };
-    expect(deviationBps(snap, live)).toBe(1_111); // |10,000 − 9,000| / 9,000
-  });
-
-  test("treats zero live equity as a full mismatch", () => {
-    expect(deviationBps(snap, { equityE6: 0n, positions: new Map() })).toBe(10_000);
-  });
-});

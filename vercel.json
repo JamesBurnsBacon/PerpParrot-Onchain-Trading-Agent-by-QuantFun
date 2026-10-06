@@ -20,7 +20,10 @@
       "devCommand": "bun run dev",
       "functions": {
         "src/server.ts": { "includeFiles": "packages/executor/node_modules/**/@noble/hashes/**" }
-      }
+      },
+      "bindings": [
+        { "type": "service", "service": "backend", "format": "url", "env": "BACKEND_URL" }
+      ]
     },
     "dashboard": {
       "root": "packages/dashboard",
@@ -36,6 +39,7 @@
   ],
   "crons": [
     { "path": "/api/backend/cron/snapshot", "schedule": "9,19,29,39,49,59 * * * *" },
+    { "path": "/api/executor/cron/run", "schedule": "0,10,20,30,40,50 * * * *" },
     { "path": "/api/executor/cron/watchdog", "schedule": "*/5 * * * *" }
   ]
 }

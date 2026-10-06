@@ -1,6 +1,7 @@
-// Positions snapshot served by the backend to the mirror workflow (README §4.7).
-// GET {backendUrl}/snapshots/{runAt}: immutable once built, so every DON node
-// gets byte-identical JSON. Amounts are decimal strings scaled by 1e6.
+// Positions snapshot the backend reads for each run (README §4.7): the frozen sources' positions
+// and equity. GET {backendUrl}/snapshots/{runAt}; immutable once built, so the run's targets,
+// the paper books and the recorded snapshot hash all come from the same bytes. Amounts are
+// decimal strings scaled by 1e6.
 import type { FrozenConfiguration } from "./frozen";
 
 export type SnapshotPosition = {

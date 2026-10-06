@@ -1,4 +1,4 @@
-import type {CommitteeDependencies} from '../../../cre-workflows/review/committee/types.ts';
+import type {CommitteeDependencies} from '../committee/types.ts';
 export type CommitteeStage='role'|'risk'|'redteam';
 export interface PaperModelOptions {
   apiKey:string;model:string;

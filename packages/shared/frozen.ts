@@ -3,8 +3,8 @@
 // ai-agent-workflow), which builds it from a VALID/LIVE review with proposeFreeze().
 //
 // That core expects a ConfirmedFreeze from a chain adapter. Here the trusted
-// confirmation is the configurationHash pinned in the deployed mirror workflow's
-// config (README §4.7), so no onchain contract is needed.
+// confirmation is the configurationHash pinned in both services' environment
+// (FROZEN_CONFIGURATION_HASH, README §4.7), so no onchain contract is needed.
 import { commitment, type KeccakUtf8 } from "./commitments";
 
 export const WEIGHT_UNITS = 1_000_000;

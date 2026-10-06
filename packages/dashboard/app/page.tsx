@@ -47,10 +47,10 @@ const lastReturn = (series: Series[], id: string) => series.find((s) => s.id ===
 export default function Page() {
   const data = useDashboard();
   const series = performanceSeries(data?.paper ?? null, data?.equity ?? null);
-  const lastRun = data?.runs?.filter((r) => r.kind === "report").sort((a, b) => b.startedAt - a.startedAt)[0];
+  const lastRun = data?.runs?.filter((r) => r.kind === "mirror").sort((a, b) => b.startedAt - a.startedAt)[0];
   const finalists = data?.funnel?.finalists ?? [];
-  // The newest executed report run with a plan: targets vs held.
-  const lastPlanned = data?.recent?.find((r) => r.kind === "report" && r.status === "executed" && r.plan);
+  // The newest executed run with a plan: targets vs held.
+  const lastPlanned = data?.recent?.find((r) => r.kind === "mirror" && r.status === "executed" && r.plan);
   const live = lastReturn(series, "live");
   const paper470 = lastReturn(series, "aggressive-470");
   const twin = lastReturn(series, "aggressive-10k");
@@ -72,12 +72,12 @@ export default function Page() {
         ) : (
           <Pill color="var(--muted)">Executor offline</Pill>
         )}
-        {lastRun && <Pill color="var(--series-1)">Last CRE run {time(runTime(lastRun))}</Pill>}
+        {lastRun && <Pill color="var(--series-1)">Last run {time(runTime(lastRun))}</Pill>}
         <ThemeToggle />
       </header>
 
       <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatTile label="Live account" value={live === undefined ? "—" : pct(live)} tone={tone(live)} note={executed ? `${executed} CRE run${executed === 1 ? "" : "s"} executed${live === undefined ? " · no live trades yet" : ""}` : undefined} />
+        <StatTile label="Live account" value={live === undefined ? "—" : pct(live)} tone={tone(live)} note={executed ? `${executed} run${executed === 1 ? "" : "s"} executed${live === undefined ? " · no live trades yet" : ""}` : undefined} />
         <StatTile label="Paper · $470" value={paper470 === undefined ? "—" : pct(paper470)} tone={tone(paper470)} note={book470 ? `${book470.openPositions} positions · ${usd(book470.equityUsd)}` : undefined} />
         <StatTile label="Paper · $10k twin" value={twin === undefined ? "—" : pct(twin)} tone={tone(twin)} note={book10k ? `${book10k.openPositions} positions · ${usd(book10k.equityUsd)}` : undefined} />
         <StatTile label="BTC buy & hold" value={btc === undefined ? "—" : pct(btc)} tone={tone(btc)} note="benchmark" />
@@ -108,8 +108,8 @@ export default function Page() {
             {data?.exposures?.exposures.length ? <ExposureBars exposures={data.exposures.exposures} /> : <Waiting what="No exposures yet" source="Computed from the latest run's snapshot" />}
           </Panel>
         )}
-        <Panel title="CRE heartbeat" meta="one cell per 10-min run">
-          {data?.runs?.length ? <RunStrip runs={data.runs} /> : <Waiting what="No CRE runs yet" source="executor /runs" />}
+        <Panel title="Heartbeat" meta="one cell per 10-min run">
+          {data?.runs?.length ? <RunStrip runs={data.runs} /> : <Waiting what="No runs yet" source="executor /runs" />}
         </Panel>
       </div>
 
@@ -142,8 +142,8 @@ export default function Page() {
         <Panel title="Finalists" meta={finalists.length ? `${finalists.filter((f) => f.picked).length} of ${finalists.length} picked` : undefined}>
           {finalists.length ? <Finalists finalists={finalists} /> : <Waiting what="Finalists not published yet" source="dashboard_artifacts · funnel.finalists" />}
         </Panel>
-        <Panel title="CRE run log" meta="DON-signed reports">
-          {data?.recent?.some((r) => r.kind === "report") ? <RunLog runs={data.recent} /> : <Waiting what="No CRE runs yet" source="executor /runs" />}
+        <Panel title="Run log" meta="what each run traded toward">
+          {data?.recent?.some((r) => r.kind === "mirror") ? <RunLog runs={data.recent} /> : <Waiting what="No runs yet" source="executor /runs" />}
         </Panel>
       </div>
     </main>

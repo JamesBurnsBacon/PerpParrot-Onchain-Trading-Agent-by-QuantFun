@@ -102,7 +102,7 @@ export const RUN_STATUS = {
 // One cell per mirror run (newest right); hover for details.
 export function RunStrip({ runs }: { runs: Run[] }) {
   const [hover, setHover] = useState<Run | null>(null);
-  const recent = [...runs].filter((r) => r.kind === "report").sort((a, b) => a.startedAt - b.startedAt).slice(-72);
+  const recent = [...runs].filter((r) => r.kind === "mirror").sort((a, b) => a.startedAt - b.startedAt).slice(-72);
   return (
     <div>
       <div className="flex flex-wrap gap-[2px]">

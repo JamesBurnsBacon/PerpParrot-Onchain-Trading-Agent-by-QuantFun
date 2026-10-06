@@ -1,5 +1,0 @@
-# pnpm (Node 24) covers the review core: packages/shared/src, packages/cre-workflows (review-spike),
-# packages/backend/review and tests/. The CRE mirror path (packages/backend, packages/executor,
-# packages/cre-workflows/mirror) uses Bun per package; see docs/cre/RUNBOOK.md.
-packages:
-  - 'packages/cre-workflows'

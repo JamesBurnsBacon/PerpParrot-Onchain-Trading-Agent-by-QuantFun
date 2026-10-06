@@ -1,6 +1,7 @@
-// Positions snapshot API for the mirror workflow (README §4.7). Runs on Vercel as the
-// `backend` service under /api/backend (vercel.json); locally: bun run dev (set
-// CONFIGURATION_PATH and FROZEN_CONFIGURATION_HASH).
+// Backend service (README §4.7): reads the frozen sources' positions from Hyperliquid once per
+// 10-minute run, turns them into the run's target exposures for the executor, steps the paper
+// books, and serves the dashboard's data. Runs on Vercel as the `backend` service under
+// /api/backend (vercel.json); locally: bun run dev (set CONFIGURATION_PATH and FROZEN_CONFIGURATION_HASH).
 import { resolve } from "node:path";
 import { SQL } from "bun";
 import { waitUntil } from "@vercel/functions";
@@ -8,6 +9,9 @@ import { EligibilityTracker, MemoryEligibilityStore } from "./eligibility";
 import { FileConfigurationSource } from "./configuration-source";
 import { SnapshotError, SnapshotService } from "./service";
 import { exposuresFromSnapshot, MemoryPaperStore, PaperService, defaultBooks } from "./paper/service";
+import { targetsFromSnapshot } from "../../shared/copy";
+import type { PositionsSnapshot } from "../../shared/snapshot";
+import { keccakUtf8 } from "./snapshot";
 import { PostgresEligibilityStore, PostgresPaperStore, PostgresSnapshotStore, readPostgresArtifact } from "./pg-store";
 import { MemorySnapshotStore } from "./snapshot";
 
@@ -63,7 +67,7 @@ const service = new SnapshotService({
   ),
   store,
   nowMs: Date.now,
-  // Only `cre workflow simulate` needs more (it stamps the next :x0): set 600 locally.
+  // Local end-to-end runs ask for the next :x0 ahead of time (scripts/e2e-mirror.sh): set 600 there.
   maxLeadSeconds: leadSeconds(env.SNAPSHOT_MAX_LEAD_SECONDS),
   onBuilt: (runAt, json) => {
     const step = paper.step(runAt, json).then(
@@ -138,14 +142,29 @@ const server = Bun.serve({
         : Response.json(body, { headers: cors });
     }
 
-    const m = /^\/snapshots\/(\d{1,12})$/.exec(pathname);
+    // GET /snapshots/:runAt: the positions read for a run (public, for audit).
+    // GET /targets/:runAt: that run's target exposures, which the executor trades toward.
+    const m = /^\/(snapshots|targets)\/(\d{1,12})$/.exec(pathname);
     if (req.method !== "GET" || !m) return new Response("not found", { status: 404 });
 
-    const runAt = Number(m[1]);
+    const runAt = Number(m[2]);
     try {
       const json = await service.get(runAt);
-      log("snapshot served", { runAt, bytes: json.length });
-      return new Response(json, { headers: { "Content-Type": "application/json" } });
+      if (m[1] === "snapshots") {
+        log("snapshot served", { runAt, bytes: json.length });
+        return new Response(json, { headers: { "Content-Type": "application/json", ...cors } });
+      }
+      const snapshot = JSON.parse(json) as PositionsSnapshot;
+      const targets = {
+        runId: `mirror-${runAt}`,
+        runAt,
+        snapshotHash: keccakUtf8(json),
+        configurationHash: snapshot.configuration.configurationHash,
+        account: snapshot.configuration.account,
+        exposures: targetsFromSnapshot(snapshot).map((e) => ({ asset: e.asset, exposureE9: e.exposureE9.toString() })),
+      };
+      log("targets served", { runAt, exposures: targets.exposures.length });
+      return Response.json(targets, { headers: cors });
     } catch (e) {
       const status = e instanceof SnapshotError ? e.status : 502;
       log("snapshot failed", { runAt, status, error: (e as Error).message });
