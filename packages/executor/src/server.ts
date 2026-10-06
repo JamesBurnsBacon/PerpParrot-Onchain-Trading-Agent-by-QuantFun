@@ -73,7 +73,8 @@ const app = createApp({
   }),
 });
 
-const server = Bun.serve({ port: config.port, fetch: app });
+// Reports are a few KB; cap bodies well above that.
+const server = Bun.serve({ port: config.port, fetch: app, maxRequestBodySize: 256 * 1024 });
 
 // Missed-run watchdog: mirror runs every 10 min, so silence means CRE runs are failing
 // (README §4.7: alert after 2 consecutive failures).

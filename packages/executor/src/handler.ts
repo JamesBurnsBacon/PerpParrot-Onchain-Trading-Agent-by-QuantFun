@@ -1,4 +1,5 @@
 import type { ReportEnvelope } from "../../shared/report";
+import { SignerLookupError } from "./signers";
 import { verifyEnvelope, type VerifiedReport, type VerifyMode } from "./verify";
 
 export type HandlerDeps = {
@@ -23,7 +24,9 @@ export const handleReport = async (payload: unknown, deps: HandlerDeps): Promise
   try {
     report = await verifyEnvelope(payload as ReportEnvelope, deps.mode);
   } catch (e) {
-    return { status: 401, body: { error: (e as Error).message } };
+    // 503: we couldn't check the signatures (registry unreadable); the next run retries.
+    const status = e instanceof SignerLookupError ? 503 : 401;
+    return { status, body: { error: (e as Error).message } };
   }
 
   const { body, id } = report;
