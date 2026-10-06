@@ -95,3 +95,19 @@ begin
   end if;
 exception when duplicate_object then null;
 end $$;
+
+-- Results other modules publish for the dashboard (packages/shared/dashboard.ts):
+-- "backtest" (README §4.9) and "funnel" (§4.2). Written with the service role; public read.
+create table if not exists dashboard_artifacts (
+  name       text primary key,
+  body       jsonb not null,
+  updated_at timestamptz not null default now()
+);
+alter table dashboard_artifacts enable row level security;
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'anon') then
+    execute 'create policy dashboard_artifacts_public_read on dashboard_artifacts for select to anon using (true)';
+  end if;
+exception when duplicate_object then null;
+end $$;

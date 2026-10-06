@@ -20,6 +20,8 @@ export type SnapshotServiceDeps = {
   maxLeadSeconds?: number;
   // Refuse to build snapshots for runs that are this far in the past.
   maxLagSeconds?: number;
+  // Called once per run after its snapshot is stored (paper books step here).
+  onBuilt?: (runAt: number, json: string) => Promise<void>;
 };
 
 export class SnapshotService {
@@ -55,7 +57,10 @@ export class SnapshotService {
     const configuration = await this.deps.configurations.load(nowMs);
     const eligible = await this.deps.eligibility.current(nowMs);
     const snapshot = await buildSnapshot(configuration, eligible, runAt, Math.floor(nowMs / 1000), this.deps.hl);
-    return this.deps.store.putIfAbsent(runAt, JSON.stringify(snapshot));
+    const json = await this.deps.store.putIfAbsent(runAt, JSON.stringify(snapshot));
+    // After serving starts, so a slow hook never delays a DON node.
+    if (this.deps.onBuilt) queueMicrotask(() => void this.deps.onBuilt!(runAt, json).catch(() => undefined));
+    return json;
   }
 
   // Scheduler tick: at :x9 build the snapshot for the coming :x0 run (README §4.7).

@@ -74,3 +74,9 @@ export class PostgresPaperStore implements PaperStore {
     return rows.map((r: Record<string, unknown>) => ({ bookId: r.book_id as string, t: Number(r.t), equityUsd: Number(r.equity_usd) }));
   }
 }
+
+// dashboard_artifacts: results other modules publish for the dashboard (shared/dashboard.ts).
+export const readPostgresArtifact = (sql: SQL) => async (name: string): Promise<unknown | undefined> => {
+  const [row] = await sql`select body from dashboard_artifacts where name = ${name}`;
+  return row?.body;
+};

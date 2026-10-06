@@ -12,7 +12,7 @@ test('both migrations apply cleanly, and again (the CRE one is idempotent)',asyn
  const db=await init();try {
  await db.exec(readFileSync(new URL('../supabase/migrations/20261006120000_cre_mirror.sql',import.meta.url),'utf8'));
  const tables=(await db.query<{tablename:string}>("select tablename from pg_tables where schemaname='public' order by 1")).rows.map(r=>r.tablename);
- assert.deepEqual(tables,['cre_eligibility','cre_snapshots','executor_controls','executor_reports','executor_runs','paper_points','paper_state','review_audit']);
+ assert.deepEqual(tables,['cre_eligibility','cre_snapshots','dashboard_artifacts','executor_controls','executor_reports','executor_runs','paper_points','paper_state','review_audit']);
  }finally{await db.close();}
 });
 test('audit persistence is idempotent and rejects content changes under the same identity',async()=>{
