@@ -238,7 +238,7 @@ Status: built (`packages/backend/src/paper/`), stepped from every DON-agreed sna
 
 ### 4.11 Dashboard (Next.js + Tailwind on Vercel): public, read-only
 
-Status: built (`packages/dashboard`): live account vs paper books vs BTC, current exposures, CRE heartbeat and run log (signed reports downloadable for `verify-run`), backtest vs BTC, funnel and finalists. Backtest, funnel and finalists render once their jobs publish to `dashboard_artifacts` (contract: `packages/shared/dashboard.ts`, RUNBOOK § Data for the dashboard). Not yet: per-source PnL, positions vs targets, admin actions (Pause/Flatten stay on the executor's authenticated API).
+Status: built (`packages/dashboard`): live account vs paper books vs BTC, targets vs held with the executor's action per asset (last run), CRE heartbeat and run log (signed reports downloadable for `verify-run`), backtest vs BTC, funnel and finalists. Backtest, funnel and finalists render once their jobs publish to `dashboard_artifacts` (contract: `packages/shared/dashboard.ts`, RUNBOOK § Data for the dashboard). Not yet: per-source PnL, admin actions (Pause/Flatten stay on the executor's authenticated API).
 - **Landing:** the backtest vs. BTC (algo-only, model A, model B).
 - **Also:**
   - the funnel
