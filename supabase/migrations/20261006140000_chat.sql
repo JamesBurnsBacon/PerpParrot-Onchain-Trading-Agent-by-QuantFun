@@ -21,7 +21,23 @@ create table if not exists public.strategy_requests (
 
 alter table public.chat_usage enable row level security;
 alter table public.strategy_requests enable row level security;
-revoke all on public.chat_usage, public.strategy_requests from public, anon, authenticated;
-grant select, insert, update on public.chat_usage, public.strategy_requests to service_role;
-revoke all on sequence public.chat_usage_id_seq from public, anon, authenticated;
-grant usage on sequence public.chat_usage_id_seq to service_role;
+revoke all on public.chat_usage, public.strategy_requests from public;
+revoke all on sequence public.chat_usage_id_seq from public;
+
+-- Supabase roles only exist on Supabase; a plain Postgres (CI, local tests) has none of them,
+-- so each statement is guarded like the policies in 20261006120000_cre_mirror.sql.
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'anon') then
+    revoke all on public.chat_usage, public.strategy_requests from anon;
+    revoke all on sequence public.chat_usage_id_seq from anon;
+  end if;
+  if exists (select 1 from pg_roles where rolname = 'authenticated') then
+    revoke all on public.chat_usage, public.strategy_requests from authenticated;
+    revoke all on sequence public.chat_usage_id_seq from authenticated;
+  end if;
+  if exists (select 1 from pg_roles where rolname = 'service_role') then
+    grant select, insert, update on public.chat_usage, public.strategy_requests to service_role;
+    grant usage on sequence public.chat_usage_id_seq to service_role;
+  end if;
+end $$;

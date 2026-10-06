@@ -10,7 +10,7 @@ import fixture from "../fixtures/frozen-configuration.json";
 const intent: StrategyIntent = { riskStyle: "aggressive", maxSources: 10, diversification: "low", leverageComfort: "high", requestedLeverage: null, avoidClones: false, horizon: "medium", clarify: null, reply: "Squawk, here is your selection." };
 const apiKey = "secret-key-not-for-output";
 const deps = (): ChatDeps => ({
-  env: { enabled: true, apiKey, model: "test-model", limits: { ipHourly: 10, previewIpHourly: 30, globalDaily: 100, dailyBudgetMicroUsd: 5_000_000 }, reserveMicroUsd: 10_000, priceInPerM: 1.1, priceOutPerM: 4.2, ipSalt: "test-salt" },
+  env: { enabled: true, apiKey, model: "test-model", limits: { ipHourly: 10, previewIpHourly: 30, globalDaily: 100, dailyBudgetMicroUsd: 5_000_000 }, priceInPerM: 1.1, priceOutPerM: 4.2, ipSalt: "test-salt" },
   limiter: new MemoryChatLimiter(), requests: new MemoryRequestStore(),
   callModel: async () => ({ intent, promptTokens: 7, completionTokens: 2 }),
   finalists: async () => ({ dataSource: "sample", finalists: Array.from({ length: 12 }, (_, i) => ({ address: `source-${i}`, kind: "trader", score: 100 - i, flags: [], maxDrawdown: 0.1, annualisedVol: 0.5, cloneOf: false })) }),
@@ -99,11 +99,11 @@ test("reservation budget denial uses budget code", async () => {
   await check(await handleChat(request(), d), 429, "budget");
 });
 
-test.each(["timeout", "invalid_output", "refusal", "truncated"] as const)("model %s is sanitized and released", async (code) => {
+test.each(["timeout", "http", "invalid_output", "refusal", "truncated"] as const)("model %s is sanitized and released", async (code) => {
   const d = deps(); let settled: unknown;
   d.callModel = async () => { throw new ModelError(code); };
   d.limiter.settle = async (args) => { settled = args; };
-  const body = await check(await handleChat(request(), d), 502, code === "timeout" ? "model_unavailable" : "invalid_model_output");
+  const body = await check(await handleChat(request(), d), 502, (code === "timeout" || code === "http") ? "model_unavailable" : "invalid_model_output");
   expect(body.reply).not.toBe(intent.reply);
   expect(settled).toEqual({ id: expect.any(String), tokens: 0, costMicroUsd: 0 });
 });
@@ -180,4 +180,26 @@ test("preview disabled, invalid intent, insufficient sources and hourly bound", 
   const limited = deps(); limited.env.limits.previewIpHourly = 1;
   await check(await handlePreview(request({ intent }), limited), 200);
   await check(await handlePreview(request({ intent }), limited), 429, "rate_limited");
+});
+
+
+test.each([[1, 4, 3600, 15], [1.1, 4.2, 3880, 17], [0.1234, 0.5678, 474, 2]])(
+  "reserves worst-case and settles actual tokens at prices %s/%s", async (priceInPerM, priceOutPerM, reservedCost, actualCost) => {
+    const d = deps();
+    Object.assign(d.env, { priceInPerM, priceOutPerM });
+    let reserved: unknown; let settled: unknown;
+    d.limiter.reserve = async (args) => { reserved = args; return { ok: true, id: "r" }; };
+    d.limiter.settle = async (args) => { settled = args; };
+    await check(await handleChat(request(), d), 200);
+    expect(reserved).toMatchObject({ kind: "chat", reserveMicroUsd: reservedCost });
+    expect(settled).toEqual({ id: "r", tokens: 9, costMicroUsd: actualCost });
+  },
+);
+
+test("preview reserves zero and maps infeasible policy to 422", async () => {
+  const d = deps(); let reserved: unknown;
+  d.limiter.reserve = async (args) => { reserved = args; return { ok: true, id: "r" }; };
+  d.basePolicy = { ...d.basePolicy, maxSourceWeight: 0.001 };
+  await check(await handlePreview(request({ intent }), d), 422, "infeasible");
+  expect(reserved).toMatchObject({ kind: "preview", reserveMicroUsd: 0 });
 });

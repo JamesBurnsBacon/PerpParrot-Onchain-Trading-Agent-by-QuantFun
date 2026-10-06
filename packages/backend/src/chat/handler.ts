@@ -7,7 +7,7 @@ import { buildPreview, PreviewError } from "./preview";
 import { buildMessages, type HistoryTurn } from "./prompt";
 
 export type ChatEnv = {
-  enabled: boolean; apiKey: string | undefined; model: string; limits: LimitConfig; reserveMicroUsd: number;
+  enabled: boolean; apiKey: string | undefined; model: string; limits: LimitConfig;
   priceInPerM: number; priceOutPerM: number; ipSalt: string;
 };
 export type ChatDeps = {
@@ -47,7 +47,6 @@ const REPLIES = {
   budget: "Squawk, my daily chat budget needs a rest.",
   model_unavailable: "Squawk, I cannot read your message right now.",
   invalid_model_output: "Squawk, I could not understand that safely; please try again.",
-  http: "Squawk, I cannot read your message right now.",
   infeasible: "Squawk, that selection cannot fit the limits enforced by code.",
   too_few_sources: "Squawk, I need more eligible sources for that preview.",
   unavailable: "Squawk, I cannot prepare that selection right now.",
@@ -79,7 +78,7 @@ const readBody = async (req: Request): Promise<{ body: unknown; requestHash: str
 };
 const reserve = (req: Request, deps: ChatDeps, kind: Kind): Promise<Reservation> => {
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("x-real-ip")?.trim() || "unknown";
-  return deps.limiter.reserve({ ipHash: hashIp(ip, deps.env.ipSalt), kind, nowMs: deps.now(), reserveMicroUsd: kind === "chat" ? deps.env.reserveMicroUsd : 0, cfg: deps.env.limits });
+  return deps.limiter.reserve({ ipHash: hashIp(ip, deps.env.ipSalt), kind, nowMs: deps.now(), reserveMicroUsd: kind === "chat" ? Math.ceil(2000 * deps.env.priceInPerM + 400 * deps.env.priceOutPerM) : 0, cfg: deps.env.limits });
 };
 const denied = (reservation: Extract<Reservation, { ok: false }>): Response =>
   failure(429, reservation.reason === "daily_budget" ? "budget" : "rate_limited", reservation.retryAfterSec);
@@ -112,7 +111,7 @@ export const handleChat = async (req: Request, deps: ChatDeps): Promise<Response
     } catch (error) {
       await deps.limiter.settle({ id: reservation.id, tokens: 0, costMicroUsd: 0 });
       const code: FailureCode = error instanceof ModelError
-        ? error.code === "timeout" ? "model_unavailable" : error.code === "http" ? "http" : "invalid_model_output"
+        ? (error.code === "timeout" || error.code === "http") ? "model_unavailable" : "invalid_model_output"
         : "model_unavailable";
       audit(code);
       return failure(502, code);

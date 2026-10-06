@@ -31,6 +31,8 @@ test("exact OpenAI request and validated response", async () => {
 test.each([
   ["http", () => new Response(apiKey, { status: 500 })],
   ["http", () => new Response(apiKey, { status: 201 })],
+  ["http", () => Response.json({ error: { message: apiKey, code: "insufficient_quota" } }, { status: 429 })],
+  ["http", () => Response.json({ error: { message: apiKey, code: "billing_hard_limit_reached" } }, { status: 402 })],
   ["refusal", () => Response.json(result(apiKey, "stop", apiKey))],
   ["truncated", () => Response.json(result(JSON.stringify(intent), "length"))],
   ["invalid_output", () => Response.json(result(apiKey))],

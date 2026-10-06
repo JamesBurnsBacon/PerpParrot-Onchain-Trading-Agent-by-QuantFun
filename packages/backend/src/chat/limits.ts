@@ -1,3 +1,5 @@
+import type { SQL } from "bun";
+
 export type LimitConfig = { ipHourly: number; previewIpHourly: number; globalDaily: number; dailyBudgetMicroUsd: number };
 export type Kind = "chat" | "preview";
 export type Reservation = { ok: true; id: string } | { ok: false; reason: "ip_hourly" | "global_daily" | "daily_budget"; retryAfterSec: number };
@@ -29,11 +31,11 @@ export class MemoryChatLimiter implements ChatLimiter {
       return { ok: false, reason: "ip_hourly", retryAfterSec: retryAfter(oldest(hourly), nowMs, HOUR_MS) };
     }
     const chats = rows.filter((row) => row.kind === "chat");
-    if (chats.length >= cfg.globalDaily) {
+    if (kind === "chat" && chats.length >= cfg.globalDaily) {
       return { ok: false, reason: "global_daily", retryAfterSec: retryAfter(oldest(chats), nowMs, DAY_MS) };
     }
-    if (kind === "chat" && rows.reduce((sum, row) => sum + row.costMicroUsd, 0) + reserveMicroUsd > cfg.dailyBudgetMicroUsd) {
-      return { ok: false, reason: "daily_budget", retryAfterSec: retryAfter(oldest(rows), nowMs, DAY_MS) };
+    if (kind === "chat" && chats.reduce((sum, row) => sum + row.costMicroUsd, 0) + reserveMicroUsd > cfg.dailyBudgetMicroUsd) {
+      return { ok: false, reason: "daily_budget", retryAfterSec: retryAfter(oldest(chats), nowMs, DAY_MS) };
     }
     const id = String(++this.nextId);
     this.rows.set(id, { id, ipHash, kind, tsMs: nowMs, tokens: 0, costMicroUsd: kind === "preview" ? 0 : reserveMicroUsd });
@@ -46,5 +48,49 @@ export class MemoryChatLimiter implements ChatLimiter {
       row.tokens = tokens;
       row.costMicroUsd = row.kind === "preview" ? 0 : costMicroUsd;
     }
+  }
+}
+
+
+export class PostgresChatLimiter implements ChatLimiter {
+  constructor(private readonly sql: SQL) {}
+
+  async reserve({ ipHash, kind, nowMs, reserveMicroUsd, cfg }: Parameters<ChatLimiter["reserve"]>[0]): Promise<Reservation> {
+    return await this.sql.begin(async (tx): Promise<Reservation> => {
+      // Fixed bigint key 72478103621001 is reserved for all chat limiter instances.
+      // The transaction lock serializes reserves across processes and is pooler-safe.
+      // Counts MUST be a later statement: READ COMMITTED then sees the prior commit.
+      await tx`select pg_advisory_xact_lock(72478103621001::bigint)`;
+      const [counts] = await tx`
+        select
+          count(*) filter (where kind = ${kind} and ip_hash = ${ipHash} and ts_ms > ${nowMs - HOUR_MS}) as hourly_count,
+          min(ts_ms) filter (where kind = ${kind} and ip_hash = ${ipHash} and ts_ms > ${nowMs - HOUR_MS}) as hourly_oldest,
+          count(*) filter (where kind = 'chat') as daily_count,
+          min(ts_ms) filter (where kind = 'chat') as daily_oldest,
+          coalesce(sum(cost_micro_usd) filter (where kind = 'chat'), 0) as daily_cost
+        from public.chat_usage where ts_ms > ${nowMs - DAY_MS}`;
+      const oldest = (value: unknown) => value == null ? undefined : Number(value);
+      if (Number(counts.hourly_count) >= (kind === "chat" ? cfg.ipHourly : cfg.previewIpHourly)) {
+        return { ok: false, reason: "ip_hourly", retryAfterSec: retryAfter(oldest(counts.hourly_oldest), nowMs, HOUR_MS) };
+      }
+      if (kind === "chat" && Number(counts.daily_count) >= cfg.globalDaily) {
+        return { ok: false, reason: "global_daily", retryAfterSec: retryAfter(oldest(counts.daily_oldest), nowMs, DAY_MS) };
+      }
+      if (kind === "chat" && Number(counts.daily_cost) + reserveMicroUsd > cfg.dailyBudgetMicroUsd) {
+        return { ok: false, reason: "daily_budget", retryAfterSec: retryAfter(oldest(counts.daily_oldest), nowMs, DAY_MS) };
+      }
+      const [row] = await tx`
+        insert into public.chat_usage (kind, ts_ms, ip_hash, cost_micro_usd)
+        values (${kind}, ${nowMs}, ${ipHash}, ${kind === "preview" ? 0 : reserveMicroUsd})
+        returning id`;
+      return { ok: true, id: String(row.id) };
+    });
+  }
+
+  async settle({ id, tokens, costMicroUsd }: Parameters<ChatLimiter["settle"]>[0]): Promise<void> {
+    await this.sql`
+      update public.chat_usage
+      set tokens = ${tokens}, cost_micro_usd = case when kind = 'preview' then 0 else ${costMicroUsd} end
+      where id = ${id}`;
   }
 }
