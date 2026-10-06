@@ -217,6 +217,7 @@ export function measureAccountEvidence(args:MeasureAccountArgs) {
   if(!Number.isSafeInteger(asOfMs)||asOfMs<0)throw new Error('invalid evidence time');
   const fill=fillMetrics(fills,c,asOfMs),holdouts=temporalHoldouts(input,asOfMs,args.holdoutDays);
   const leverage=measureLeverage(args.leverageSamples??[],asOfMs),reasons=[...fill.reasons];
+  if(fill.observedFills>10000)reasons.push('OBSERVED_FILL_COUNT_EXCEEDS_SCHEMA_LIMIT');
   if(!leverage)reasons.push('HISTORICAL_AVERAGE_LEVERAGE_UNMEASURED');
   else reasons.push('LEVERAGE_ONLY_MEASURED_OVER_RECORDED_SAMPLE_INTERVAL');
   const validStates=validClearinghouse(c)&&c.asOfMs<=asOfMs&&asOfMs-c.asOfMs<=300_000;
@@ -239,9 +240,9 @@ export function measureAccountEvidence(args:MeasureAccountArgs) {
       ?Math.min(...c.positions.map(p=>p.liquidationDistance!)):null,btcBeta:null};
   return {address:input.address.toLowerCase(),scorePatch:{makerShare:fill.makerShare,timeInMarket:fill.timeInMarket,
     medianHoldHours:fill.medianHoldHours,avgLeverage:leverage?.average??null},metricPatch,positions,
-    patterns:{increasesAfterLoss:null,repeatedRoundTrips:null,observedFills:fill.observedFills},holdouts,
+    patterns:{increasesAfterLoss:null,repeatedRoundTrips:null,observedFills:fill.observedFills<=10000?fill.observedFills:null},holdouts,
     provenance:{schema:'measured-review-evidence.v1',asOfMs,fillWindow:{startMs:fills.startMs,endMs:fills.endMs,
-      complete:fill.complete,pages:fills.pages,ageAtFrameMs:asOfMs-fills.endMs,closedEpisodes:fill.closedEpisodes,
+      complete:fill.complete,pages:fills.pages,ageAtFrameMs:asOfMs-fills.endMs,observedPerpFills:fill.observedFills,closedEpisodes:fill.closedEpisodes,
       excludedCarryIn:fill.excludedCarryIn,openEpisodes:fill.openEpisodes},clearinghouse:{asOfMs:c.asOfMs,
       complete:validStates,rawSha256:c.rawSha256,instantaneousGrossLeverage:validStates&&c.accountValueUsd>0?gross/c.accountValueUsd:null},
       leverage,holdoutMethod:'FIXED_ADJACENT_WINDOWS; SCORE_DEPOSIT_ADJUSTED_INTERVALS; POSITIVE_WINDOW_FRACTION_STABILITY',

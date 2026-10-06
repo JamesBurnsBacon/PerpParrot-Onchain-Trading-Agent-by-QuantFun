@@ -1,6 +1,7 @@
 import {describe,expect,test} from 'bun:test';
 import {measureAccountEvidence,temporalHoldouts,currentExposureOverlap,fillIdentity,type MeasureAccountArgs,type NormalizedFill,type ClearinghouseEvidence} from '../review/measured-evidence';
 import type {ScoreInput} from '../src/score/types';
+import {validateEvidence} from '../../shared/src/review-evidence';
 
 const DAY=86_400_000,HOUR=3_600_000,NOW=1_791_300_000_000,HASH='a'.repeat(64),START=NOW-30*DAY;
 function input():ScoreInput{
@@ -163,5 +164,29 @@ describe('measured real-account review evidence',()=>{
     const r=measureAccountEvidence(args([first,second]));
     expect(r.scorePatch.medianHoldHours).toBe(1);expect(r.patterns.observedFills).toBe(2);
     expect(measureAccountEvidence(args([first,{...first,sz:'2'}])).reasons).toContain('CONFLICTING_DUPLICATE_FILL');
+  });
+  test('large retained partial histories preserve their exact count without inventing a capped model value',()=>{
+    for(const count of [10000,11595]){
+      const rows=Array.from({length:count},(_,i)=>fill(START+i,i%2,1,i%2?'A':'B',i));
+      // One pagination duplicate and one spot execution are not extra perp fills.
+      const a=args([...rows,rows[0]!,{...rows[0]!,coin:'@107'}],count%2);
+      a.fills.complete=false;a.fills.missingReasons=['UPSTREAM_10000_FILL_RETENTION'];
+      const r=measureAccountEvidence(a);
+      expect(r.provenance.fillWindow.observedPerpFills).toBe(count);
+      expect(r.provenance.fillWindow.complete).toBe(false);
+      expect(r.patterns.observedFills).toBe(count<=10000?count:null);
+      expect(r.scorePatch.makerShare).toBeNull();expect(r.scorePatch.medianHoldHours).toBeNull();
+      expect(r.reasons.includes('OBSERVED_FILL_COUNT_EXCEEDS_SCHEMA_LIMIT')).toBe(count>10000);
+      const evidence={asOfMs:NOW,finalists:[{candidate:0,kind:'TRADER',historyDays:90,
+        timeInMarket:r.metricPatch.timeInMarket,medianHoldMinutes:r.metricPatch.medianHoldMinutes,
+        makerShare:r.metricPatch.makerShare,maxDrawdown:r.metricPatch.oosMaxDrawdown,
+        equityCurve:a.input.month!.pnlHistory.slice(-26).map(([atMs,pnlUsd])=>({atMs,pnlUsd})),
+        positions:[],patterns:r.patterns}],pairs:[]};
+      expect(()=>validateEvidence(evidence)).not.toThrow();
+      if(count>10000){
+        expect(r.patterns.observedFills).not.toBe(10000);
+        expect(()=>validateEvidence({...evidence,finalists:[{...evidence.finalists[0],patterns:{...r.patterns,observedFills:count}}]})).toThrow();
+      }
+    }
   });
 });

@@ -8,7 +8,7 @@ import {enrichMeasuredReview,measuredFlags,measuredDecisionDiagnostics} from './
 import {candidateCompileFailures} from '../packages/backend/review/workflow.ts';
 import type {Row} from '../packages/shared/src/contracts.ts';
 
-test('measured patches preserve unknown values and rebind schema-valid flags, metrics and pair overlap',()=>{
+test('measured patches preserve unknown values and rebind schema-valid flags, metrics and pair overlap',async()=>{
  const args=setup(),built=buildReviewInput(args),originalHash=built.frame.snapshotHash;
  const states=new Map<string,ClearinghouseEvidence>(),measurements=new Map<string,ReturnType<typeof measureAccountEvidence>>(),executions=new Map<string,{executionCoverage:number;executionFit:number}>();
  for(const [id,address] of built.addresses){
@@ -18,7 +18,7 @@ test('measured patches preserve unknown values and rebind schema-valid flags, me
   measurements.set(address,measureAccountEvidence({input:args.inputs[id],asOfMs:NOW,clearinghouse:state,
    fills:{rows:[],startMs:NOW-30*DAY,endMs:NOW,complete:true,pages:[{requestStartMs:NOW-30*DAY,requestEndMs:NOW,rawSha256:'b'.repeat(64),count:0}]}}));
  }
- enrichMeasuredReview(built,args.policy,measurements,executions,states);
+ await enrichMeasuredReview(built,args.policy,measurements,executions,states);
  expect(built.frame.snapshotHash).not.toBe(originalHash);expect(verifyInputCommitments(built.frame,args.policy,built.addresses)).toBe(true);
  expect(bindCommitteeEvidence(built.frame,args.policy,built.addresses,built.evidence).evidenceHash).toBe(built.committee.evidenceHash);
  expect(built.frame.pairs[0].currentExposureOverlap).toBe(0);

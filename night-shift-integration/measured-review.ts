@@ -3,7 +3,7 @@
 import { PGlite } from '@electric-sql/pglite';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { parseArgs } from 'node:util';
+import { parseArgs, isDeepStrictEqual } from 'node:util';
 import { scoreCandidates, toFrameCandidates, parsePortfolio, type ScoreInput } from '../packages/backend/src/score/index.ts';
 import { buildReviewInput, type ReviewInput } from '../packages/backend/review/input.ts';
 import { measureAccountEvidence, currentExposureOverlap, type ClearinghouseEvidence } from '../packages/backend/review/measured-evidence.ts';
@@ -20,6 +20,7 @@ import type { CommitteeDependencies } from '../packages/backend/review/committee
 import type { FrozenConfiguration as ServiceConfiguration } from '../packages/shared/frozen.ts';
 import { buildMeasuredAssessment, runMeasuredService } from './measured-service.ts';
 import { verifyMeasuredArchive } from './verify-measured.ts';
+import { compactProviderEvidence } from './provider-request-preflight.ts';
 
 const read = <T=any>(p:string):T=>JSON.parse(readFileSync(p,'utf8'));
 const save=(p:string,v:unknown)=>writeFileSync(p,JSON.stringify(v,null,2)+'\n');
@@ -48,10 +49,10 @@ export function measuredFlags(original:string[],reasons:string[]):string[]{
 }
 
 /** Patch measured fields together, then recompute and validate the exact frame/evidence binding. */
-export function enrichMeasuredReview(built:ReviewInput,policy:Policy,
+export async function enrichMeasuredReview(built:ReviewInput,policy:Policy,
   measurements:ReadonlyMap<string,ReturnType<typeof measureAccountEvidence>>,
   executions:ReadonlyMap<string,{executionCoverage:number;executionFit:number}>,
-  states:ReadonlyMap<string,ClearinghouseEvidence>):ReviewInput {
+  states:ReadonlyMap<string,ClearinghouseEvidence>) {
   for(const c of built.frame.candidates){
     const address=built.addresses.get(c.candidate)!,m=measurements.get(address),fit=executions.get(address);
     if(!m||!fit||!states.has(address))throw new Error('MISSING_MEASURED_FINALIST');
@@ -69,8 +70,9 @@ export function enrichMeasuredReview(built:ReviewInput,policy:Policy,
   }
   for(const p of built.frame.pairs)p.currentExposureOverlap=currentExposureOverlap(states.get(built.addresses.get(p.a)!)!,states.get(built.addresses.get(p.b)!)!);
   built.frame.snapshotHash=snapshotCommitment(built.frame,built.addresses);
-  built.committee=bindCommitteeEvidence(built.frame,policy,built.addresses,built.evidence);
-  return built;
+  const compacted=await compactProviderEvidence({frame:built.frame,policy,addresses:[...built.addresses],evidence:built.evidence});
+  built.evidence=compacted.evidence;built.committee=compacted.committee;
+  return Object.assign(built,{providerPreflight:compacted.preflight,providerPresentation:compacted.presentation});
 }
 
 /** Uses the exact production compile gates; no replacement score or permissive diagnostic path. */
@@ -88,12 +90,17 @@ export function measuredDecisionDiagnostics(built:ReviewInput,policy:Policy,role
     candidates,counts,mandatoryPassed:candidates.filter(c=>c.mandatoryPrerequisitesPassed).length};
 }
 
-export async function prepareMeasuredReview(directory:string) {
+export async function prepareMeasuredReview(directory:string,reuseExisting=false) {
   const archiveVerification=verifyMeasuredArchive(directory);
   const input=read(join(directory,'input.json'));
   const markets=read(join(directory,'markets.json'));
   const data=input.addresses.map((a:string)=>read(join(directory,a+'.json')));
-  const asOfMs=Date.now(),reads=data.map((d:any)=>d.reads.at(-1));
+  const previous=reuseExisting?read(join(directory,'review-input.json')):null;
+  if(previous&&(previous.asOfMs!==previous.frame?.asOfMs||Date.now()>=previous.frame.expiresAtMs
+    ||previous.asOfMs>Date.now()||Date.now()-previous.asOfMs>previous.policy.maxFrameAgeMs))throw new Error('MEASURED_BUNDLE_EXPIRED');
+  // Both rules consume the same captured frame. Recompute its binding without
+  // relabelling original source timestamps; Review still uses the real current clock.
+  const asOfMs=previous?.asOfMs??Date.now(),reads=data.map((d:any)=>d.reads.at(-1));
   const policy:Policy=read(new URL('../packages/backend/fixtures/frozen-configuration.json',import.meta.url).pathname).policy;
   const prepared=await buildMeasuredAssessment({sourceKind:'REAL_PUBLIC_API',sourceReads:reads,marketResponses:markets,asOfMs,maxReadAgeMs:600_000});
   const measurements=new Map<string,ReturnType<typeof measureAccountEvidence>>(),states=new Map<string,ClearinghouseEvidence>();
@@ -110,16 +117,18 @@ export async function prepareMeasuredReview(directory:string) {
     positions:new Map([...measurements].map(([a,m])=>[a,[...m.positions].sort((x,y)=>Math.abs(y.signedNotionalUsd)-Math.abs(x.signedNotionalUsd)||x.market.localeCompare(y.market))])),policy,asOfMs,ttlMs:policy.maxFrameAgeMs});
   const execution:Record<string,ReturnType<typeof prepared.measureSourceExecution>>={};
   for(const c of built.frame.candidates){const address=built.addresses.get(c.candidate)!;execution[address]=prepared.measureSourceExecution(reads.find((r:any)=>r.address===address),policy);}
-  enrichMeasuredReview(built,policy,measurements,new Map(Object.entries(execution)),states);
+  const providerPreparation=await enrichMeasuredReview(built,policy,measurements,new Map(Object.entries(execution)),states);
   const summary=built.frame.candidates.map(c=>({address:built.addresses.get(c.candidate),candidate:c.candidate,metrics:c.metrics,
     originalScoreFlags:score.candidates.find(s=>s.address===built.addresses.get(c.candidate))!.metrics!.flags,measurements:measurements.get(built.addresses.get(c.candidate)!)!.provenance,missing:measurements.get(built.addresses.get(c.candidate)!)!.reasons}));
   const bundle={schema:'measured-review-input.v1',sourceKind:'REAL_PUBLIC_API',economicAuthority:false,asOfMs,archiveVerification,
     sourceIngest:{artifactHash:input.artifactHash,runId:input.runId,asOfMs:input.inputAsOfMs},
     selectionScope:'measured finalists from the initial strict Top100; re-ranked within measured subset',
     policy,frame:built.frame,evidence:built.evidence,addresses:[...built.addresses],summary,execution,
+    providerPreflight:providerPreparation.providerPreflight,providerPresentation:providerPreparation.providerPresentation,
     sourceReads:reads,marketResponses:markets,provenance:prepared.provenance};
-  save(join(directory,'review-input.json'),bundle);
-  save(join(directory,'funnel.json'),{generatedAt:asOfMs,steps:[{stage:'acquired',label:'Initial Top100 collection',count:100},
+  if(previous&&!isDeepStrictEqual(previous,bundle))throw new Error('MEASURED_BUNDLE_CHANGED_AFTER_PREPARATION');
+  if(!previous)save(join(directory,'review-input.json'),bundle);
+  if(!previous)save(join(directory,'funnel.json'),{generatedAt:asOfMs,steps:[{stage:'acquired',label:'Initial Top100 collection',count:100},
     {stage:'measured',label:'Measured finalists',count:enriched.length},{stage:'strict',label:'Strict Score eligible',count:score.candidates.filter(c=>c.eligible).length},
     {stage:'finalists',label:'Review input',count:built.frame.candidates.length}],finalists:built.frame.candidates.map(c=>{
       const address=built.addresses.get(c.candidate)!;const s=score.candidates.find(s=>s.address===address)!;
@@ -127,8 +136,10 @@ export async function prepareMeasuredReview(directory:string) {
   return {bundle,built,score,prepared,measurements};
 }
 
+export const measuredSessionId=(algorithm:'return-first'|'drawdown-first',snapshotHash:string)=>commitment('perpparrot:measured-session:v1',{algorithm,snapshotHash}).slice(2);
+
 export async function runMeasuredReview(directory:string,algorithm:'return-first'|'drawdown-first') {
-  const {bundle,built,prepared,score}=await prepareMeasuredReview(directory);
+  const {bundle,built,prepared,score}=await prepareMeasuredReview(directory,true);
   const now=Date.now(),out=join(directory,algorithm+'-'+now);mkdirSync(out,{recursive:true});
   const db=new PGlite(join(out,'postgres'));
   try{
@@ -156,7 +167,7 @@ export async function runMeasuredReview(directory:string,algorithm:'return-first
       redTeam:async i=>[{...binding('redteam',i.evidence.evidenceHash),draftHash:i.draftHash,rebuildScore:0,portfolioRisk:50,
         penalties:i.sources.map(s=>({candidate:s.candidate,multiplier:1,excludeScore:0}))}],
       assess:prepared.assess,audit:committeeAudit(rpc,algorithm,prompts,Date.now)};
-    const store=new SupabasePaperStore(rpc),session='measured:'+algorithm+':'+bundle.frame.snapshotHash;
+    const store=new SupabasePaperStore(rpc),session=measuredSessionId(algorithm,bundle.frame.snapshotHash);
     const result=await reviewPaperSession({session,frame:built.frame,policy:bundle.policy,addresses:built.addresses,rich:built.evidence,nowMs:Date.now()},store,deps,async()=>{throw new Error('UNEXPECTED_MONITOR');});
     if(result.phase!=='REVIEW')throw new Error('EXPECTED_REVIEW');
     const receipt=result.receipt;

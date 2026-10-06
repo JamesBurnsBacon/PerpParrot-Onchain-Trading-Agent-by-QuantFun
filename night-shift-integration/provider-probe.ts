@@ -10,6 +10,7 @@ import {committeeAudit} from '../packages/backend/review/committee-audit.ts';
 import {reviewPaperSession,freezePaperSession} from '../packages/backend/review/paper/lifecycle.ts';
 import {SupabasePaperStore} from '../packages/backend/review/paper/store.ts';
 import {bindCommitteeEvidence} from '../packages/shared/src/committee-evidence.ts';
+import {commitment} from '../packages/shared/src/commitments.ts';
 import {ROLE_PROMPT,RISK_PROMPT,RED_TEAM_PROMPT,PROMPT_VERSION} from '../packages/shared/src/prompts.ts';
 import {validate} from '../packages/shared/src/validate.ts';
 import type {Frame,Policy} from '../packages/shared/src/contracts.ts';
@@ -53,6 +54,8 @@ function checkBundle(bundle:MeasuredBundle,now:number){
 }
 const safeFailure=(error:unknown)=>error instanceof Error&&/^INPUT_[A-Z_]+$/.test(error.message)?error.message:'VALIDATION_OR_SERVICE_FAILURE';
 
+export const providerSessionId=(model:Model,snapshotHash:string)=>commitment('perpparrot:provider-session:v1',{model,snapshotHash}).slice(2);
+
 export async function runProviderProbe(input:{bundle:MeasuredBundle;inputSha256:string;outPath:string;apiKey:string}){
  const bundle=structuredClone(input.bundle),startedAtMs=Date.now(),calls:ProviderCall[]=[];
  const output=resolve(input.outPath),privateDir=join(output,'private'),publicDir=join(output,'public');
@@ -89,7 +92,7 @@ export async function runProviderProbe(input:{bundle:MeasuredBundle;inputSha256:
     const persist=committeeAudit(rpc,model,prompts,Date.now);
     const deps=openAIPaperCommittee({apiKey:input.apiKey,model,fetcher:transport},{clock:Date.now,agentTimeoutMs:60_000,assess:prepared.assess,
      audit:async(stage,evidence,rows,draft)=>{const ids=await persist(stage,evidence,rows,draft);const call=calls.find(c=>c.model===model&&c.stage===stage);if(call)call.responseValidated=true;return ids;}});
-    const store=new SupabasePaperStore(rpc),session='provider:'+model+':'+bundle.frame.snapshotHash;
+    const store=new SupabasePaperStore(rpc),session=providerSessionId(model,bundle.frame.snapshotHash);
     result.stage='committee';
     const review=await reviewPaperSession({session,frame:bundle.frame,policy:bundle.policy,addresses:bound.addresses,rich:bundle.evidence,nowMs:Date.now()},store,deps,async()=>{throw Error('UNEXPECTED_MONITOR');});
     if(review.phase!=='REVIEW')throw Error('UNEXPECTED_PHASE');
