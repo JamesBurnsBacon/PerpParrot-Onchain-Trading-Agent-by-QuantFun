@@ -1,11 +1,11 @@
 // Freezes the live source set (docs/cre/RUNBOOK.md "Freeze"): validates the review core's
 // FrozenConfiguration, saves it where the snapshot service reads it, pins its hash in the
-// mirror's production config, and prints the Railway variables that must match.
+// mirror's production config, and prints the Vercel variables that must match.
 //
 //   bun run scripts/freeze.ts <frozen-configuration.json> --account 0x… [--write]
 //
 // Without --write it only checks and prints. Commit the two written files, then redeploy
-// the mirror (CRE deploy Action) and both Railway services.
+// the mirror (CRE deploy Action) and the Vercel project.
 import { checkFrozenConfiguration, type FrozenConfiguration } from "../../shared/frozen";
 import { keccakUtf8 } from "../src/snapshot";
 
@@ -38,8 +38,7 @@ if (write) {
 }
 
 console.log(`
-Set on Railway (both must match the mirror config):
-  snapshot service  CONFIGURATION_PATH=frozen/live.json  FROZEN_CONFIGURATION_HASH=${hash}
-  executor          FROZEN_CONFIGURATION_HASH=${hash}  HL_ACCOUNT=${configuration.account}
+Set on the Vercel project (one set for both services; must match the mirror config):
+  CONFIGURATION_PATH=frozen/live.json  FROZEN_CONFIGURATION_HASH=${hash}  HL_ACCOUNT=${configuration.account}
 Then commit, redeploy mirror (CRE deploy Action, production-settings) and both services.`);
 if (!write) console.log("\nCheck only; re-run with --write to save the files.");

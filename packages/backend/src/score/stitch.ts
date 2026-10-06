@@ -5,13 +5,14 @@ export const DAY_MS = 86_400_000;
 export type SeriesPoint = { ts: number; accountValue: number; pnl: number; fine: boolean };
 export type Series = { points: SeriesPoint[]; flags: string[] };
 
-// Matching, strictly increasing timestamps are required for scoring (SPEC "Series validation").
+// Matching, finite, strictly increasing timestamps are required for scoring (SPEC "Series validation").
 export const validateSeries = (w: WindowHistory | null): w is WindowHistory => {
   if (w === null || w.accountValueHistory.length < 2 || w.accountValueHistory.length !== w.pnlHistory.length) {
     return false;
   }
   return w.accountValueHistory.every(([timestamp], i) =>
-    timestamp === w.pnlHistory[i][0] && (i === 0 || timestamp > w.accountValueHistory[i - 1][0]),
+    Number.isFinite(timestamp) && timestamp === w.pnlHistory[i][0] &&
+    (i === 0 || timestamp > w.accountValueHistory[i - 1][0]),
   );
 };
 

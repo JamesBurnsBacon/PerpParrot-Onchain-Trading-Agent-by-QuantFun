@@ -1,6 +1,9 @@
-// Positions snapshot API for the mirror workflow (README §4.7). Runs on Railway;
-// locally: bun run dev (set CONFIGURATION_PATH and FROZEN_CONFIGURATION_HASH).
+// Positions snapshot API for the mirror workflow (README §4.7). Runs on Vercel as the
+// `backend` service under /api/backend (vercel.json); locally: bun run dev (set
+// CONFIGURATION_PATH and FROZEN_CONFIGURATION_HASH).
+import { resolve } from "node:path";
 import { SQL } from "bun";
+import { waitUntil } from "@vercel/functions";
 import { EligibilityTracker, MemoryEligibilityStore } from "./eligibility";
 import { FileConfigurationSource } from "./configuration-source";
 import { SnapshotError, SnapshotService } from "./service";
@@ -16,7 +19,10 @@ const required = (name: string) => {
 };
 
 // Supabase Postgres when DATABASE_URL is set (snapshots then survive restarts and
-// are shared between instances); in memory otherwise.
+// are shared between instances); in memory otherwise. On Vercel any request can land on
+// a fresh instance, so memory would lose snapshots and the paper books between requests.
+if (env.VERCEL && !env.DATABASE_URL) throw new Error("DATABASE_URL is required on Vercel");
+if (env.VERCEL && !env.CRON_SECRET) throw new Error("CRON_SECRET is required on Vercel (Vercel Cron sends it to /cron/snapshot)");
 const sql = env.DATABASE_URL ? new SQL(env.DATABASE_URL) : undefined;
 const store = sql ? new PostgresSnapshotStore(sql) : new MemorySnapshotStore();
 const log = (msg: string, extra: Record<string, unknown> = {}) =>
@@ -47,7 +53,8 @@ const paper = new PaperService({
 });
 
 const service = new SnapshotService({
-  configurations: new FileConfigurationSource(required("CONFIGURATION_PATH"), required("FROZEN_CONFIGURATION_HASH")),
+  // Relative to packages/backend, wherever the process starts (vercel.json bundles fixtures/ and frozen/).
+  configurations: new FileConfigurationSource(resolve(import.meta.dir, "..", required("CONFIGURATION_PATH")), required("FROZEN_CONFIGURATION_HASH")),
   eligibility: new EligibilityTracker(sql ? new PostgresEligibilityStore(sql) : new MemoryEligibilityStore(), undefined, (m) =>
     log("eligibility refused", { reason: m }),
   ),
@@ -55,13 +62,17 @@ const service = new SnapshotService({
   nowMs: Date.now,
   // Only `cre workflow simulate` needs more (it stamps the next :x0): set 600 locally.
   maxLeadSeconds: leadSeconds(env.SNAPSHOT_MAX_LEAD_SECONDS),
-  onBuilt: async (runAt, json) => {
-    try {
-      const points = await paper.step(runAt, json);
-      if (points.length) log("paper books stepped", { runAt, books: points.length });
-    } catch (e) {
-      log("paper books not stepped", { runAt, error: (e as Error).message });
-    }
+  onBuilt: (runAt, json) => {
+    const step = paper.step(runAt, json).then(
+      (points) => {
+        if (points.length) log("paper books stepped", { runAt, books: points.length });
+      },
+      (e) => log("paper books not stepped", { runAt, error: (e as Error).message }),
+    );
+    // The snapshot is served before the books step; on Vercel this keeps the function
+    // alive until they have (a no-op elsewhere).
+    waitUntil(step);
+    return step;
   },
 });
 
@@ -73,15 +84,32 @@ const readArtifact = sql
       return (await file.exists()) ? file.json() : undefined;
     };
 
+// Vercel Cron sends `Authorization: Bearer $CRON_SECRET` (open locally when unset).
+const cronAuthorized = (req: Request) => !env.CRON_SECRET || req.headers.get("authorization") === `Bearer ${env.CRON_SECRET}`;
+
 let exposuresCache: { runAt: number; exposures: { asset: string; fraction: number }[] } | undefined;
 
 const server = Bun.serve({
   port: Number(env.PORT ?? 8788),
   async fetch(req) {
-    const { pathname, searchParams } = new URL(req.url);
+    const { pathname: path, searchParams } = new URL(req.url);
+    // Public under /api/backend on Vercel; the bare paths serve local runs.
+    const pathname = path.replace(/^\/api\/backend(?=\/|$)/, "") || "/";
     // Pinned hash and store type, for the pre-deploy check (scripts/predeploy-check.ts).
     if (req.method === "GET" && pathname === "/health") {
       return Response.json({ ok: true, frozenConfigurationHash: env.FROZEN_CONFIGURATION_HASH, store: sql ? "postgres" : "memory" });
+    }
+    // Vercel Cron at :x9 (vercel.json): the timer below, for a server that doesn't stay up.
+    if (req.method === "GET" && pathname === "/cron/snapshot") {
+      if (!cronAuthorized(req)) return Response.json({ error: "unauthorized" }, { status: 401 });
+      try {
+        const runAt = await service.tick();
+        if (runAt) log("snapshot ready", { runAt });
+        return Response.json({ runAt: runAt ?? null });
+      } catch (e) {
+        log("scheduled snapshot failed", { error: (e as Error).message });
+        return Response.json({ error: (e as Error).message }, { status: 502 });
+      }
     }
     // Public, for the dashboard.
     const cors = { "Access-Control-Allow-Origin": "*" };
@@ -123,12 +151,15 @@ const server = Bun.serve({
   },
 });
 
-// Check every 15 s; tick() only builds inside the window before each :x0 run.
-setInterval(() => {
-  service
-    .tick()
-    .then((runAt) => runAt && log("snapshot ready", { runAt }))
-    .catch((e) => log("scheduled snapshot failed", { error: (e as Error).message }));
-}, 15_000);
+// Check every 15 s; tick() only builds inside the window before each :x0 run. Not on
+// Vercel, where instances stop between requests: /cron/snapshot runs it there.
+if (!env.VERCEL) {
+  setInterval(() => {
+    service
+      .tick()
+      .then((runAt) => runAt && log("snapshot ready", { runAt }))
+      .catch((e) => log("scheduled snapshot failed", { error: (e as Error).message }));
+  }, 15_000);
+}
 
 log("snapshot service listening", { port: server.port, store: env.DATABASE_URL ? "postgres" : "memory" });

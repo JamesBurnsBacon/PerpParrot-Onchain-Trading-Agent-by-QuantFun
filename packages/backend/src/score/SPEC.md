@@ -140,7 +140,7 @@ It does not check ordering or alignment; scoring does.
 
 ## Series validation
 A window history is valid only if `accountValueHistory` and `pnlHistory` have the same length (>= 2), the same
-timestamps at every index, and strictly increasing timestamps. This applies to `month`, `allTime` and `history`.
+timestamps at every index, and finite, strictly increasing timestamps. This applies to `month`, `allTime` and `history`.
 An invalid or missing `month` gives `metrics = null`, and the filters that need it (`stillActive`, `minMonthPoints`,
 `minCoverage`, `noRuin`) are `unknown`. Such a candidate is never ranked, even when `allowUnknown` makes it eligible.
 

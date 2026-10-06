@@ -2,8 +2,10 @@
 import { useEffect, useState } from "react";
 import type { BacktestArtifact, FunnelArtifact } from "../../shared/dashboard";
 
-export const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8788";
-export const EXECUTOR = process.env.NEXT_PUBLIC_EXECUTOR_URL ?? "http://localhost:8787";
+// Same origin by default: vercel.json routes these paths to the backend and executor
+// services (and next.config.ts proxies them to the local servers under `next dev`).
+export const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL ?? "/api/backend";
+export const EXECUTOR = process.env.NEXT_PUBLIC_EXECUTOR_URL ?? "/api/executor";
 
 export type PaperView = {
   lastRunAt: number | null;

@@ -1,0 +1,38 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "bunVersion": "1.4.x",
+  "services": {
+    "backend": {
+      "root": "packages/backend",
+      "framework": "bun",
+      "entrypoint": "src/server.ts",
+      "installCommand": "bun install --frozen-lockfile --production --omit=peer",
+      "devCommand": "bun run dev",
+      "functions": {
+        "src/server.ts": { "includeFiles": "packages/backend/{fixtures,frozen}/**" }
+      }
+    },
+    "executor": {
+      "root": "packages/executor",
+      "framework": "bun",
+      "entrypoint": "src/server.ts",
+      "installCommand": "bun install --frozen-lockfile --production --omit=peer",
+      "devCommand": "bun run dev"
+    },
+    "dashboard": {
+      "root": "packages/dashboard",
+      "framework": "nextjs",
+      "installCommand": "bun install --frozen-lockfile",
+      "buildCommand": "bun run build"
+    }
+  },
+  "rewrites": [
+    { "source": "/api/backend/(.*)", "destination": { "service": "backend" } },
+    { "source": "/api/executor/(.*)", "destination": { "service": "executor" } },
+    { "source": "/(.*)", "destination": { "service": "dashboard" } }
+  ],
+  "crons": [
+    { "path": "/api/backend/cron/snapshot", "schedule": "9,19,29,39,49,59 * * * *" },
+    { "path": "/api/executor/cron/watchdog", "schedule": "*/5 * * * *" }
+  ]
+}
