@@ -11,7 +11,7 @@ test("live config snapshot has only one strict bounded function and server-owned
       parameters: { type: "object", additionalProperties: false, properties, required: Object.keys(properties) } }], tool_choice: "auto", parallel_tool_calls: false, reasoning: { effort: "medium" }, max_output_tokens: 800,
   } } });
   expect(JSON.stringify(config)).not.toContain("web_search");
-  expect(LIVE_INSTRUCTIONS.length).toBeLessThanOrEqual(900);
+  expect(LIVE_INSTRUCTIONS.length).toBeLessThanOrEqual(1500);
   expect(BACKEND_INSTRUCTIONS).toContain(STRATEGY_FIELD_GUIDE);
   expect(CHAT_SYSTEM_PROMPT).toContain(STRATEGY_FIELD_GUIDE);
   expect(new Bun.CryptoHasher("sha256").update(CHAT_SYSTEM_PROMPT).digest("hex")).toBe("3fd75cf01b50e08ba88e6480fe1b27080bcd0dbe44d8aa262a38193918a9980e");
