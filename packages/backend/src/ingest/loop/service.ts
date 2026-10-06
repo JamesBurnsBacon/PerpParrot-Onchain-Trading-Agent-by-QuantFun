@@ -61,6 +61,7 @@ export class LoopService {
       if (run.status === "complete") return run;
       if (run.attempts >= 3) return { runId: run.id, status: "retry-limit" };
       if (this.now() - run.bucket > INTERVAL_MS * 2) throw new Error("Run too old to resume");
+      this.store.interruptUnfinishedRequests(run.id, owner, this.now());
       run = { ...run, status: "running", startedAt: run.startedAt ?? this.now(), attempts: run.attempts + 1, error: null };
       this.store.saveRun(run);
       const saved = this.store.records<Collected>(run.id), collected: Collected[] = [];
@@ -104,8 +105,10 @@ export class LoopService {
         requestAttempts: this.store.requestAttempts(run.id),
         historyWarnings: collected.flatMap(r => r.historyWarnings.map(warning => ({ address: r.account.input.address, warning }))),
         durationSeconds: (this.now() - started) / 1000,
+        runElapsedSeconds: (completedAt - (run.startedAt ?? started)) / 1000,
         upstream: counters && this.collector.client ? { requests: this.collector.client.requests - counters.requests,
-          retries: this.collector.client.retries - counters.retries, rateLimited: this.collector.client.rateLimited - counters.rateLimited } : null,
+          retries: this.collector.client.retries - counters.retries, rateLimited: this.collector.client.rateLimited - counters.rateLimited,
+          scope: "current-worker-attempt", fullRunRequestAttempts: this.store.requestAttempts(run.id).length } : null,
       };
       const hash = this.store.publish(run, accounts, artifact, next, owner, completedAt);
       return { runId: run.id, status: "complete", count: TARGET_COUNT, artifactHash: hash,

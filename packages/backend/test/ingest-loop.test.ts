@@ -150,6 +150,16 @@ describe("durable Top 100 cycle", () => {
     expect(store.run(run.id)!.status).toBe("failed"); expect(store.state("latest")).toBeNull();
     expect(store.claim(start)).toBeString(); expect(() => service.trigger()).toThrow("stopping");
   });
+  test("recovery labels unfinished upstream attempts instead of counting them as observations", async () => {
+    const { store, selected } = setup();
+    const service = new LoopService(store, { async collect(account) { return { account, historyWarnings: [] }; } }, async () => selected, () => start);
+    const run = service.trigger();
+    store.requestAttempt("lost-request", run.id, { status: "started", startedAt: start - 1000 });
+    await service.start(run);
+    expect(store.requestAttempts(run.id)).toEqual([{ status: "interrupted", startedAt: start - 1000,
+      finishedAt: start, error: "previous worker ended before recording an outcome" }]);
+    expect(store.records(run.id).size).toBe(100);
+  });
 });
 
 describe("persistent upstream budget and recovery", () => {

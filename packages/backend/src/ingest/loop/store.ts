@@ -67,6 +67,14 @@ export class LoopStore {
   requestAttempts(runId: string): unknown[] {
     return this.db.query<{ body: string }, [string]>("SELECT body FROM request_attempts WHERE run_id=? ORDER BY rowid").all(runId).map(r => JSON.parse(r.body));
   }
+  interruptUnfinishedRequests(runId: string, owner: string, now: number) {
+    this.db.transaction(() => {
+      this.assertOwner(owner, now);
+      this.db.query(`UPDATE request_attempts SET body=json_set(body,'$.status','interrupted','$.finishedAt',?,
+        '$.error','previous worker ended before recording an outcome')
+        WHERE run_id=? AND json_extract(body,'$.status')='started'`).run(now, runId);
+    })();
+  }
   accounts(): Account[] {
     return this.db.query<{ body: string }, []>("SELECT body FROM accounts ORDER BY address").all().map(r => JSON.parse(r.body));
   }
