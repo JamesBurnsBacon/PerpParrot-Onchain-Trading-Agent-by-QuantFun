@@ -30,6 +30,8 @@ jobs:
         working-directory: packages/cre-workflows
     env:
       CRE_API_KEY: ${{ secrets.CRE_API_KEY }}
+      # Read by `cre workflow simulate` via secrets.yaml; deployed workflows use the Vault DON.
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
     steps:
       - uses: actions/checkout@v4
 

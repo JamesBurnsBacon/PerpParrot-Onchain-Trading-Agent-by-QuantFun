@@ -159,7 +159,8 @@ A dedicated workstream, integrated into the CRE flow.
   - plus the correlation matrix
   - **Budget:** ≈ 25 × ≤ 4 KB, under CRE's 120 KB request limit.
 - **Models:** two (≥ 1 from OpenAI; ❓ which). The backtest winner selects the live set, and the loser is **shadow-tracked on paper**. Output is structured JSON. API keys are CRE secrets.
-- **Consensus:** default is **every DON node calls the model, with per-field consensus**. ❓ *Still open vs. a single cached call (`cacheSettings`).*
+- **Calling the model: Confidential HTTP.** The call runs **once, inside an enclave**, not on every node, so there is one answer and no per-field consensus. The API key is injected from the Vault DON through a `{{.openaiApiKey}}` header template, so nodes never see it. Limits: 125 KB request, 500 KB response, 90 s timeout (the simulator's production limits).
+  - **Spike status:** `review/` sends a fixture of 3 finalists to OpenAI Chat Completions (`gpt-5-mini`, strict JSON schema) and validates the picks: known IDs only, every finalist classified, weights sum to 1. It simulates up to the API call; it needs `OPENAI_API_KEY` to finish.
 - **Output format:** ❓ *a weight grid (0–3 units), continuous weights with median consensus, or a ranking plus a formula.*
 - **Logging:** full prompts and outputs go to Supabase with their hashes.
 - **First deliverable:** a CRE `review` spike proving an LLM call plus consensus works in `cre workflow simulate`. Then schemas in `packages/shared`, a prompt + offline eval, and the point-in-time backtest harness.
@@ -257,7 +258,10 @@ That is ≤ 13 HTTP calls, under CRE's limit of 15.
 - **Deploys: GitHub Actions** (`.github/workflows/cre-deploy.yml`, run manually), so any teammate with write access to the repo can deploy. It runs the tests, simulates, then `cre workflow deploy <workflow> --target production-settings --yes --non-interactive`.
   - Secret: `CRE_API_KEY` (CRE platform → Organization → APIs → **+ Organization API**), in the GitHub `production` environment.
   - Updates keep the workflow name; the workflow ID changes.
-- **CRE secrets** (LLM API keys): org-owned (`CRE_CLI_SECRETS_ORG_OWNED=true`) with `--secrets-auth=browser`, so any member can rotate them. ❓ *Confirm with the sponsor.* Simulation reads secrets from `.env`.
+- **CRE secrets** (`openaiApiKey` in `secrets.yaml`, from env var `OPENAI_API_KEY`):
+  - **Local simulation:** `packages/cre-workflows/.env` (gitignored). A 1Password reference (`op://vault/item/field`) works in place of the raw key.
+  - **CI simulation:** GitHub Actions secret `OPENAI_API_KEY`.
+  - **Deployed:** Vault DON, org-owned: `CRE_CLI_SECRETS_ORG_OWNED=true cre secrets create secrets.yaml --target production-settings --secrets-auth=browser`, so any member can rotate them. The workflow's `secretsOwner` config is `""` in simulation and the org ID in production. ❓ *Confirm with the sponsor.*
 - **Project:** `packages/cre-workflows/` holds `project.yaml`, `secrets.yaml`, and the `mirror/` and `review/` workflows, each with a `workflow.yaml` and `config.{staging,production}.json`.
   - Targets: `staging-settings` (simulate) and `production-settings` (deploy).
   - RPC: `hyperliquid-mainnet` (`https://rpc.hyperliquid.xyz/evm`). Forwarder `0x9eF6468C5f37b976E57d52054c693269479A784d`, mock forwarder (simulation) `0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1`.
@@ -312,7 +316,6 @@ Budget ~1 h of testing per 2 h of features. Integrate only tested modules.
 
 ## 8. Open questions
 - [ ] ❓ Which two models (≥ 1 OpenAI)
-- [ ] ❓ LLM in CRE: every node + per-field consensus (default) vs. a single cached call
 - [ ] ❓ Agent output format: weight grid, continuous weights, or ranking
 - [ ] ❓ Maker share: a plus or an exclusion?
 - [ ] ❓ Balanced multiplier `m` (from the backtest)

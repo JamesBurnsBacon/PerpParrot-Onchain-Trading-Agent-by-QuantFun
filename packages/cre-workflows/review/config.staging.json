@@ -1,3 +1,8 @@
 {
-  "schedule": "0 0 * * * *"
+  "schedule": "0 0 * * * *",
+  "openaiUrl": "https://api.openai.com/v1/chat/completions",
+  "model": "gpt-5-mini",
+  "reasoningEffort": "low",
+  "timeoutSeconds": 60,
+  "secretsOwner": ""
 }
