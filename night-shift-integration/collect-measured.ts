@@ -69,15 +69,18 @@ export function enrichFillCoverage(previous:FillCoverage,readRaw:(hash:string)=>
     return pageEvidence(rows,page.requestStartMs,page.requestEndMs,page.rawSha256);
   });
   const merged=mergeRows(allRows),reasons=[...(previous.missingReasons??[])];
+  const repairedTerminalPage=!merged.conflict&&!previous.complete&&reasons.length===1
+    &&reasons[0]==='CONFLICTING_DUPLICATE_FILL'&&pages.length===1&&pages[0]!.count<2000
+    &&pages[0]!.requestStartMs<=previous.startMs&&pages[0]!.requestEndMs>=previous.endMs;
   // Re-normalize retained bytes after fixing exchange IDs such as repeated tid=0.
   // A prematurely stopped fetch remains incomplete; repairing IDs cannot fill a gap.
   if(!merged.conflict&&reasons.includes('CONFLICTING_DUPLICATE_FILL')){
     reasons.splice(reasons.indexOf('CONFLICTING_DUPLICATE_FILL'),1);
-    reasons.push('INCOMPLETE_AFTER_FILL_IDENTITY_REPAIR');
+    if(!repairedTerminalPage)reasons.push('INCOMPLETE_AFTER_FILL_IDENTITY_REPAIR');
   }
   if(merged.conflict&&!reasons.includes('CONFLICTING_DUPLICATE_FILL'))reasons.push('CONFLICTING_DUPLICATE_FILL');
   return {...previous,pages,rows:merged.rows.filter(r=>r.time>=previous.startMs&&r.time<=previous.endMs),
-    complete:previous.complete&&!merged.conflict&&reasons.length===0,missingReasons:reasons};
+    complete:(previous.complete||repairedTerminalPage)&&!merged.conflict&&reasons.length===0,missingReasons:reasons};
 }
 
 /** The old missing interval cannot be healed by observing only a new suffix. */

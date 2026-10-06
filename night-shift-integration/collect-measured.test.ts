@@ -48,8 +48,12 @@ describe('bounded measured-fill collection helpers',()=>{
     expect(result.complete).toBe(true);expect(result.rows).toEqual(rows);
     const old=coverage(rows);old.rows=[rows[0]!];old.complete=false;old.missingReasons=['CONFLICTING_DUPLICATE_FILL'];
     const repaired=enrichFillCoverage(old,()=>JSON.stringify(rows));
-    expect(repaired.rows).toEqual(rows);expect(repaired.complete).toBe(false);
-    expect(repaired.missingReasons).toEqual(['INCOMPLETE_AFTER_FILL_IDENTITY_REPAIR']);
+    expect(repaired.rows).toEqual(rows);expect(repaired.complete).toBe(true);
+    expect(repaired.missingReasons).toEqual([]);
+    const full=Array.from({length:2000},(_,i)=>({...fill(START+i,0),coin:'@334',oid:i}));
+    const stopped=coverage(full);stopped.complete=false;stopped.missingReasons=['CONFLICTING_DUPLICATE_FILL'];
+    const partial=enrichFillCoverage(stopped,()=>JSON.stringify(full));
+    expect(partial.complete).toBe(false);expect(partial.missingReasons).toEqual(['INCOMPLETE_AFTER_FILL_IDENTITY_REPAIR']);
   });
   test('extends the exact inclusive endpoint and preserves raw page proof while rolling to thirty days',()=>{
     const boundary=fill(END,2),old=coverage([fill(START,0),fill(START+2*DAY,1),boundary]);
