@@ -19,11 +19,14 @@ export default function ParrotPage() {
   const [step, setStep] = useState<Step>(0);
   const [previewError, setPreviewError] = useState<Failure | null>(null);
   const [busy, setBusy] = useState(false);
+  const [stale, setStale] = useState(false);
   const [revision, setRevision] = useState(0);
   const request = useRef<AbortController | null>(null);
   const live = useLiveTalk(result => {
-    setChat(result); setDemo(null); setPreview(null); setPreviewError(null); setStep(0);
+    setStale(false); setChat(result); setDemo(null); setPreview(null); setPreviewError(null); setStep(0);
     setRevision(value => value + 1);
+  }, () => {
+    setChat(null); setPreview(null); setDemo(null); setPreviewError(null); setStep(0); setStale(true);
   });
 
   useEffect(() => () => request.current?.abort(), []);
@@ -31,7 +34,7 @@ export default function ParrotPage() {
   function playDemo() {
     if (request.current || live.active || !canDemo(live.view.failure)) return;
     const preset = PARROT_PRESETS[0];
-    setDemo(preset); setChat(preset.chat); setPreview(null); setPreviewError(null); setStep(0);
+    setStale(false); setDemo(preset); setChat(preset.chat); setPreview(null); setPreviewError(null); setStep(0);
     setRevision(value => value + 1);
   }
 
@@ -60,6 +63,7 @@ export default function ParrotPage() {
         <section className="parrot-stage min-w-0" aria-label="Talk with PerpParrot">
           <div className="parrot-scene"><ParrotAvatar state={state} /></div>
           <LiveTalk live={live} disabled={busy} />
+          {stale && <p className="parrot-live-status" role="status">Our last change did not finish, so I cleared the plan. Talk live again to redo it.</p>}
           {!live.active && !demo && canDemo(live.view.failure) && <button type="button" className="parrot-button mt-3" onClick={playDemo}>Play the cached demo</button>}
           {demo && <div className="mt-4"><Badge kind="CACHED DEMO" /></div>}
         </section>

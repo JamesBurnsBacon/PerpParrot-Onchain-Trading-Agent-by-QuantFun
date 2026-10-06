@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { functionResultMessages, initialLiveEvents, isLiveSession, isLiveStrategy, liveAsChat, reduceLiveEvent } from "../../dashboard/lib/parrot-live";
+import { functionResultMessages, hasUnfinishedLiveStrategy, initialLiveEvents, isLiveSession, isLiveStrategy, liveAsChat, pendingLiveCalls, reduceLiveEvent } from "../../dashboard/lib/parrot-live";
+import recorded from "./fixtures/live-events.recorded.json";
 import { PARROT_PRESETS } from "../../dashboard/lib/parrot-presets";
 
 const event = (state: ReturnType<typeof initialLiveEvents>, data: unknown) => reduceLiveEvent(state, JSON.stringify(data));
@@ -101,4 +102,68 @@ test("live response validators reject unsafe shapes and bridge to existing page 
   expect(isLiveStrategy({ ...result, facts: "x".repeat(1201) })).toBe(false);
   expect(isLiveStrategy({ ...result, intent: { ...intent, maxSources: 1000 } })).toBe(false);
   expect(liveAsChat(result)).toMatchObject({ intent, policy, shortlist, reply: intent.reply, clarify: null });
+});
+
+
+test.each([false, true])("live recorded calls drain exactly once with completion first=%s", completionFirst => {
+  // Drain after every event, including the empty completion before a late call.
+  const events = [...recorded];
+  const itemIndex = events.findIndex(e => e.event?.type === "response.output_item.done" && e.event.item?.type === "function_call");
+  expect(itemIndex).toBeGreaterThan(-1);
+  const completionIndex = events.findIndex((e, i) => i > itemIndex && e.event?.type === "response.completed");
+  expect(completionIndex).toBeGreaterThan(itemIndex);
+  if (completionFirst) [events[itemIndex], events[completionIndex]] = [events[completionIndex], events[itemIndex]];
+  let state = initialLiveEvents();
+  const processed = new Set<string>();
+  const handled: string[] = [];
+  const drain = () => {
+    for (const call of pendingLiveCalls(state, processed)) {
+      handled.push(call.callId);
+      processed.add(call.callId);
+    }
+  };
+  for (const entry of events) {
+    if (entry.type === "session.closed") break;
+    state = event(state, entry);
+    drain();
+    // Replayed provider events must not trigger another POST.
+    state = event(state, entry);
+    drain();
+  }
+  expect(handled).toEqual(["call_lUJIVgvPRO0gf81mioAqhUEi"]);
+  expect(pendingLiveCalls(state, processed)).toEqual([]);
+});
+
+test("live drain picks up another call after the same response was handled", () => {
+  let state = event(event(ready(), tool()), envelope({ type: "response.completed", response: { id: "response_1" } }));
+  const processed = new Set<string>();
+  expect(pendingLiveCalls(state, processed).map(c => c.callId)).toEqual(["call_1"]);
+  processed.add("call_1");
+  state = event(state, tool("{}", "set_strategy", "call_2"));
+  expect(pendingLiveCalls(state, processed).map(c => c.callId)).toEqual(["call_2"]);
+  processed.add("call_2");
+  expect(pendingLiveCalls(state, processed)).toEqual([]);
+  // A completion with no calls is quiescent (no recursive drain loop).
+  expect(pendingLiveCalls(event(ready(), envelope({ type: "response.completed", response: { id: "response_1" } })), processed)).toEqual([]);
+});
+
+
+test("live ending with an unprocessed or in-flight strategy makes the previous plan stale", () => {
+  const processed = new Set<string>();
+  expect(hasUnfinishedLiveStrategy(ready(), processed)).toBe(false);
+  let state = event(ready(), tool());
+  // Before completion there is no POST yet, but the change must still invalidate the plan.
+  expect(pendingLiveCalls(state, processed)).toEqual([]);
+  expect(hasUnfinishedLiveStrategy(state, processed)).toBe(true);
+  state = event(state, envelope({ type: "response.completed", response: { id: "response_1" } }));
+  const [inFlight] = pendingLiveCalls(state, processed);
+  expect(hasUnfinishedLiveStrategy(state, processed)).toBe(true);
+  // All terminal paths must retain the unfinished-call evidence.
+  for (const terminal of [{ type: "session.closed" }, { type: "error" }]) {
+    expect(hasUnfinishedLiveStrategy(event(state, terminal), processed)).toBe(true);
+  }
+  processed.add(inFlight.callId); // Only after applying the POST result.
+  expect(hasUnfinishedLiveStrategy(state, processed)).toBe(false);
+  state = event(state, tool("{}", "set_strategy", "call_2"));
+  expect(hasUnfinishedLiveStrategy(state, processed)).toBe(true);
 });

@@ -102,7 +102,7 @@ test("live hourly and global limits are independent of chat counts", async () =>
   expect(global.retryAfterSec).toBe(86400);
 });
 
-test.each([400, 401, 429, 500, 503])("live upstream %s never leaks body or headers and releases cost", async status => {
+test.each([400, 401, 429, 500, 502, 503])("live upstream %s stays private and releases cost only for 4xx", async status => {
   const d = deps(); const logs: unknown[] = []; let settled: unknown;
   d.log = (msg, extra) => logs.push({ msg, extra });
   d.limiter.settle = async a => { settled = a; };
@@ -112,7 +112,7 @@ test.each([400, 401, 429, 500, 503])("live upstream %s never leaks body or heade
   const body = await check(response, 502, "model_unavailable");
   expect(JSON.stringify(body)).not.toContain("UPSTREAM_PRIVATE");
   expect(logs).toEqual([{ msg: "live upstream", extra: { status } }]);
-  expect(settled).toEqual({ id: expect.any(String), tokens: 0, costMicroUsd: 0 });
+  expect(settled).toEqual({ id: expect.any(String), tokens: 0, costMicroUsd: status >= 400 && status < 500 ? 0 : liveReservationMicroUsd(d.env) });
 });
 
 test("live timeout is bounded even for a non-cooperative fetch and retains reservation", async () => {
@@ -123,10 +123,23 @@ test("live timeout is bounded even for a non-cooperative fetch and retains reser
   expect(settled).toEqual({ id: expect.any(String), tokens: 0, costMicroUsd: liveReservationMicroUsd(d.env) });
 });
 
+test.each(["network", "invalid_json"])("live ambiguous %s failure retains the full reservation", async kind => {
+  const d = deps(); let settled: unknown;
+  d.limiter.settle = async a => { settled = a; };
+  d.fetchImpl = (async (_url: string | URL | Request, _init?: RequestInit) => {
+    if (kind === "network") throw new Error(key);
+    return new Response("{", { status: 201 });
+  }) as typeof fetch;
+  await check(await handleLiveSession(request(), d), 502, "model_unavailable");
+  expect(settled).toEqual({ id: expect.any(String), tokens: 0, costMicroUsd: liveReservationMicroUsd(d.env) });
+});
+
 test("live malformed success, secret echoes and thrown errors stay private", async () => {
   for (const upstream of [{ session: { id: key }, transport: { sdp: "v=0" } }, { session: { id: "live_x" }, transport: { sdp: `v=0 ${key}` } }, {}]) {
     const d = deps(); d.fetchImpl = (async (_url: string | URL | Request, _init?: RequestInit) => Response.json(upstream)) as typeof fetch;
+    let settled: unknown; d.limiter.settle = async a => { settled = a; };
     await check(await handleLiveSession(request(), d), 502, "model_unavailable");
+    expect(settled).toMatchObject({ tokens: 0, costMicroUsd: liveReservationMicroUsd(d.env) });
   }
   const d = deps(); const logs: unknown[] = []; d.log = (...a) => logs.push(a);
   d.fetchImpl = (async (_url: string | URL | Request, _init?: RequestInit) => { throw new Error(key); }) as unknown as typeof fetch;

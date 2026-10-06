@@ -22,6 +22,14 @@ export type LiveEvents = {
 };
 export const initialLiveEvents = (): LiveEvents => ({ started: false, closed: false, error: false, user: "", parrot: "",
   transcripts: [], delegations: [], calls: [], seenCalls: [], readyResponses: [] });
+// Track handled call IDs, not completed responses: more calls may arrive after completion.
+export const pendingLiveCalls = (state: LiveEvents, processedCalls: ReadonlySet<string>) =>
+  state.calls.filter(call => state.readyResponses.includes(call.responseId) && !processedCalls.has(call.callId));
+
+// A POST remains unfinished until drain handles its result and records the call ID.
+export const hasUnfinishedLiveStrategy = (state: LiveEvents, processedCalls: ReadonlySet<string>) =>
+  state.calls.some(call => !processedCalls.has(call.callId));
+
 const invalidCall = "Strategy could not be checked: invalid tool arguments.";
 
 export function reduceLiveEvent(state: LiveEvents, raw: unknown): LiveEvents {

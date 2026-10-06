@@ -58,7 +58,7 @@ export const handleLiveSession = async (req: Request, deps: LiveDeps): Promise<R
           body: JSON.stringify({ session: buildLiveConfig(deps.env), transport: { type: "webrtc", sdp: body.sdp } }), signal,
         });
         if (!response.ok) {
-          rejected = true;
+          rejected = response.status >= 400 && response.status < 500;
           deps.log("live upstream", { status: response.status });
           throw new Error("upstream");
         }
@@ -73,7 +73,7 @@ export const handleLiveSession = async (req: Request, deps: LiveDeps): Promise<R
       // Keep the reservation: browser-reported usage is not an authoritative billing record.
       return json({ ok: true, session: { id: result.id }, transport: { sdp: result.sdp }, maxSessionSeconds: deps.env.maxSessionSeconds }, 201);
     } catch {
-      // As in chat, only a definite HTTP rejection releases the reservation.
+      // Only a definite client rejection releases cost; 5xx may follow a billed session.
       await deps.limiter.settle({ id: reservation.id, tokens: 0, costMicroUsd: rejected ? 0 : cost });
       return failure(502, "model_unavailable");
     } finally { signal.removeEventListener("abort", onAbort); }

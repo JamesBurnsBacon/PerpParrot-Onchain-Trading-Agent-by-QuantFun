@@ -1,23 +1,31 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { describeError, type ChatResponse } from "../../lib/parrot";
-import { functionResultMessages, initialLiveEvents, isLiveSession, isLiveStrategy, liveAsChat, reduceLiveEvent, type LiveEvents } from "../../lib/parrot-live";
+import { functionResultMessages, hasUnfinishedLiveStrategy, initialLiveEvents, isLiveSession, isLiveStrategy, liveAsChat, pendingLiveCalls, reduceLiveEvent, type LiveEvents } from "../../lib/parrot-live";
 import { post, type Failure } from "./api";
 
 type Phase = "idle" | "connecting" | "live" | "closing";
 type Runtime = {
   controller: AbortController; peer?: RTCPeerConnection; channel?: RTCDataChannel; mic?: MediaStream;
   timers: Set<ReturnType<typeof setTimeout>>; events: LiveEvents; closing: boolean; draining: boolean;
-  processed: Set<string>; deadline?: number;
+  processedCalls: Set<string>; staleNotified?: boolean; deadline?: number;
 };
 export type LiveView = { phase: Phase; user: string; parrot: string; avatar: "listening" | "speaking" | "thinking"; remaining: number; status: string; failure: Failure | null; playbackBlocked: boolean };
 const idle: LiveView = { phase: "idle", user: "", parrot: "", avatar: "listening", remaining: 0, status: "", failure: null, playbackBlocked: false };
 
-export function useLiveTalk(onStrategy: (chat: ChatResponse) => void) {
+export function useLiveTalk(onStrategy: (chat: ChatResponse) => void, onStale: () => void) {
   const [view, setView] = useState<LiveView>(idle);
   const audio = useRef<HTMLAudioElement | null>(null);
   const active = useRef<Runtime | null>(null);
   const callback = useRef(onStrategy);
-  useEffect(() => { callback.current = onStrategy; }, [onStrategy]);
+  const staleCallback = useRef(onStale);
+  useEffect(() => { callback.current = onStrategy; staleCallback.current = onStale; }, [onStrategy, onStale]);
+
+  const notifyStale = useCallback((run: Runtime) => {
+    if (!run.staleNotified && hasUnfinishedLiveStrategy(run.events, run.processedCalls)) {
+      run.staleNotified = true;
+      staleCallback.current();
+    }
+  }, []);
 
   const cleanup = useCallback((run: Runtime, status?: string, failure: Failure | null = null) => {
     if (active.current !== run) return;
@@ -27,20 +35,24 @@ export function useLiveTalk(onStrategy: (chat: ChatResponse) => void) {
     run.mic?.getTracks().forEach(track => track.stop());
     run.channel?.close(); run.peer?.close();
     if (audio.current) { audio.current.pause(); audio.current.srcObject = null; }
-    if (status !== undefined) setView(v => ({ ...v, phase: "idle", status, failure, playbackBlocked: false }));
-  }, []);
+    if (status !== undefined) {
+      notifyStale(run); // Unmount cleanup deliberately has no page callback.
+      setView(v => ({ ...v, phase: "idle", status, failure, playbackBlocked: false }));
+    }
+  }, [notifyStale]);
 
   const end = useCallback(() => {
     const run = active.current;
     if (!run || run.closing) return;
     if (!run.events.started || run.channel?.readyState !== "open") { cleanup(run, "Conversation canceled."); return; }
     run.closing = true;
-    run.mic?.getTracks().forEach(track => { track.enabled = false; });
+    run.mic?.getTracks().forEach(track => track.stop());
+    notifyStale(run);
     setView(v => ({ ...v, phase: "closing", status: "Finishing our conversation…" }));
     try { run.channel.send(JSON.stringify({ type: "session.close" })); }
     catch { cleanup(run, "Conversation ended; final usage was not confirmed."); return; }
     run.timers.add(setTimeout(() => cleanup(run, "Conversation ended; final usage was not confirmed."), 15_000));
-  }, [cleanup]);
+  }, [cleanup, notifyStale]);
 
   useEffect(() => {
     const hide = () => {
@@ -64,7 +76,7 @@ export function useLiveTalk(onStrategy: (chat: ChatResponse) => void) {
 
   async function start() {
     if (active.current) return;
-    const run: Runtime = { controller: new AbortController(), timers: new Set(), events: initialLiveEvents(), closing: false, draining: false, processed: new Set() };
+    const run: Runtime = { controller: new AbortController(), timers: new Set(), events: initialLiveEvents(), closing: false, draining: false, processedCalls: new Set() };
     active.current = run;
     setView({ ...idle, phase: "connecting", avatar: "thinking", status: "Warming up my voice…" });
     const current = () => active.current === run && !run.controller.signal.aborted;
@@ -82,9 +94,7 @@ export function useLiveTalk(onStrategy: (chat: ChatResponse) => void) {
       run.draining = true;
       try {
         for (const responseId of run.events.readyResponses) {
-          if (run.processed.has(responseId)) continue;
-          run.processed.add(responseId);
-          const calls = run.events.calls.filter(c => c.responseId === responseId);
+          const calls = pendingLiveCalls(run.events, run.processedCalls).filter(c => c.responseId === responseId);
           if (!calls.length) continue;
           const results: { callId: string; output: string }[] = [];
           for (const call of calls) {
@@ -98,6 +108,7 @@ export function useLiveTalk(onStrategy: (chat: ChatResponse) => void) {
                 output = result.data.facts;
               }
             }
+            run.processedCalls.add(call.callId);
             results.push({ callId: call.callId, output });
           }
           if (current() && !run.closing && run.channel?.readyState === "open") {
@@ -106,7 +117,7 @@ export function useLiveTalk(onStrategy: (chat: ChatResponse) => void) {
         }
       } catch { if (current()) fail(describeError("model_unavailable"), { code: "model_unavailable" }); }
       finally { run.draining = false; }
-      if (current() && !run.closing && run.events.readyResponses.some(id => !run.processed.has(id))) void drain();
+      if (current() && !run.closing && pendingLiveCalls(run.events, run.processedCalls).length) void drain();
     };
     try {
       if (!navigator.mediaDevices?.getUserMedia || typeof RTCPeerConnection === "undefined") throw new Error("unsupported");
@@ -141,7 +152,7 @@ export function useLiveTalk(onStrategy: (chat: ChatResponse) => void) {
         }
         const speaking = previous.parrot !== run.events.parrot;
         const thinking = run.events.delegations.some(d => d.running) || run.draining ||
-          run.events.calls.some(c => !run.processed.has(c.responseId));
+          run.events.calls.some(c => !run.processedCalls.has(c.callId));
         setView(v => ({ ...v, user: run.events.user, parrot: run.events.parrot, avatar: speaking ? "speaking" : thinking ? "thinking" : "listening" }));
         if (speaking) {
           if (speakingTimer) { clearTimeout(speakingTimer); run.timers.delete(speakingTimer); }
