@@ -442,7 +442,7 @@ Funnel on the sample (synthetic `closed`/`tradeCount` overlay, default config): 
 - Arithmetic that overflows to a non-finite number becomes `null`.
 - The thresholds default to the README numbers ($10,000, 30 days, 10 trades, 25 points, top 25).
 - A non-finite `accountValue` gives `unknown`. `allTime` with no point above 0 gives `fail` for active days.
-- A candidate with `eligible: true` can still be unranked when its month series is invalid (`allowUnknown` only).
+- A candidate with `eligible: true` can still be unranked when its month series is invalid (`allowUnknown` only) or when its compounded curve overflows (`overflow`).
 - Ranking is by exact integer numerators; the order of the input never matters.
 - Addresses are compared case-insensitively, and two inputs that differ only by case throw `duplicate address`.
 - The funnel counts candidates that passed each filter and all earlier ones.
