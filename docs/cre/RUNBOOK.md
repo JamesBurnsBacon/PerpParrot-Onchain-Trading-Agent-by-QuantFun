@@ -114,6 +114,9 @@ To deploy everything before CRE deploy access and the freeze, follow
    `packages/shared`). Config file: `packages/backend/railway.json` and
    `packages/executor/railway.json` (Dockerfile build, `/health` check, one replica each).
    Keep the executor at **one replica**: it owns the HL nonce sequence and the run queue.
+   With `DATABASE_URL` set, runs also take a Postgres advisory lock, so two executor processes
+   (e.g. old and new during a deploy) never run at the same time; one that can't get the lock
+   within `RUN_TIMEOUT_SECONDS` records the run as failed and alerts.
 3. **Executor:** set the variables above with `DRY_RUN` unset (dry run). Check `GET /status`.
 4. **`mirror`:** create the `mirrorSamplingKey` secret (above), put the two Railway URLs and the configuration hash in
    `packages/cre-workflows/mirror/config.production.json`, merge, then run the **CRE deploy**

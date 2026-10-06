@@ -3,6 +3,7 @@ import type { Alert } from "./alerts";
 import type { Exchange } from "./exchange";
 import { loadAccount, loadMarkets, type InfoFn } from "./hyperliquid";
 import { planFlatten, planOrders, type Market, type Plan, type PlanConfig } from "./planner";
+import { noLock, type RunLock } from "./lock";
 import type { ExecutorStore, RunRecord } from "./store";
 import type { VerifiedReport } from "./verify";
 
@@ -22,6 +23,8 @@ export type RunnerDeps = {
   alert: Alert;
   now: () => number;
   config: RunnerConfig;
+  // Serializes runs across processes (Postgres advisory lock); none needed for one process.
+  lock?: RunLock;
 };
 
 // Deterministic per report and asset, so a retried submission can't double-fill.
@@ -100,7 +103,10 @@ export class Runner {
   ): Promise<RunRecord> {
     const { store, exchange, info, alert, now, config } = this.deps;
     const record: RunRecord = { id, runId, kind, status: "executed", dryRun: exchange.dryRun, startedAt: now(), finishedAt: 0, envelope };
+    let release: (() => Promise<void>) | undefined;
     try {
+      // Another process may be mid-run (e.g. during a deploy): wait for it, up to the run timeout.
+      release = await (this.deps.lock ?? noLock).acquire(config.runTimeoutMs);
       const controls = await store.getControls();
       if (kind === "report" && controls.paused) {
         record.status = "skipped_paused";
@@ -148,7 +154,11 @@ export class Runner {
       await alert(`${runId} failed: ${record.error}`);
     } finally {
       record.finishedAt = now();
-      await store.saveRun(record);
+      try {
+        await store.saveRun(record);
+      } finally {
+        await release?.().catch(() => undefined);
+      }
     }
     return record;
   }
