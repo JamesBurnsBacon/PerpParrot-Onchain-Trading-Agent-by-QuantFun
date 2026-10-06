@@ -39,21 +39,32 @@ export type FramePair = { a: number; b: number; correlation: number | null; link
 
 const finiteRatio = (value: Ratio): number | null => value === "+inf" ? null : value;
 
-// Map Score finalists to frame candidates and pairs, indexed by finalist position (SPEC "Frame adapter").
-export const toFrameCandidates = (result: ScoreResult): { candidates: FrameCandidate[]; pairs: FramePair[] } => {
-  const position = new Map(result.finalists.map((address, i) => [address, i]));
-  const candidates = result.finalists.map((address, i): FrameCandidate => {
+// Map finalists with known history to kept positions and report omissions (SPEC "Frame adapter").
+export const toFrameCandidates = (result: ScoreResult): {
+  candidates: FrameCandidate[];
+  pairs: FramePair[];
+  skipped: { address: string; reason: "unknown-history" }[];
+} => {
+  const position = new Map<string, number>();
+  const candidates: FrameCandidate[] = [];
+  const skipped: { address: string; reason: "unknown-history" }[] = [];
+  for (const address of result.finalists) {
     const candidate = result.candidates.find((c) => c.address === address);
     if (candidate === undefined || candidate.metrics === null || candidate.metrics.maxDrawdown === null) {
       throw new Error(`frame: finalist without metrics: ${address}`);
     }
+    if (candidate.activeDays === null) {
+      skipped.push({ address, reason: "unknown-history" });
+      continue;
+    }
     const { metrics, passthrough } = candidate;
-    return {
-      candidate: i,
+    position.set(address, candidates.length);
+    candidates.push({
+      candidate: candidates.length,
       kind: FRAME_KIND[candidate.kind],
       clones: candidate.clones,
       metrics: {
-        historyDays: candidate.activeDays ?? 0,
+        historyDays: Math.floor(candidate.activeDays),
         maxDrawdown: metrics.maxDrawdown!,
         pnlConsistency: metrics.consistency ?? 0,
         averageLeverage: passthrough.avgLeverage,
@@ -71,13 +82,14 @@ export const toFrameCandidates = (result: ScoreResult): { candidates: FrameCandi
         oosMaxDrawdown: null,
         crossWindowStability: null,
       },
-    };
-  });
-  const pairs = result.correlations.map(({ a, b, rho, linked }): FramePair => ({
-    a: position.get(a)!,
-    b: position.get(b)!,
-    correlation: rho,
-    linkedSource: linked,
-  }));
-  return { candidates, pairs };
+    });
+  }
+  const pairs = result.correlations.filter(({ a, b }) => position.has(a) && position.has(b))
+    .map(({ a, b, rho, linked }): FramePair => ({
+      a: position.get(a)!,
+      b: position.get(b)!,
+      correlation: rho,
+      linkedSource: linked,
+    }));
+  return { candidates, pairs, skipped };
 };

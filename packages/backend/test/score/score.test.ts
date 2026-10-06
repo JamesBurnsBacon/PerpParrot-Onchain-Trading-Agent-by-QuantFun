@@ -38,7 +38,7 @@ describe("scoreCandidates fixtures (SPEC Output)", () => {
       const ranked = result.candidates.filter(({ rank }) => rank !== null);
       const representatives = ranked.filter(({ cloneOf }) => cloneOf === null);
       expect(result.funnel.slice(-3)).toEqual([
-        { stage: "eligible", count: ranked.length },
+        { stage: "ranked", count: ranked.length },
         { stage: "distinct", count: representatives.length },
         { stage: "finalists", count: result.finalists.length },
       ]);
@@ -129,6 +129,36 @@ describe("scoreCandidates behaviour", () => {
     expect(result.candidates[0].metrics).toBeNull();
     expect(result.candidates[0].rank).toBeNull();
     expect(result.funnel.slice(-3).map(({ count }) => count)).toEqual([0, 0, 0]);
+  });
+
+  test("an overflowing curve stays eligible but is never ranked (SPEC Ranking)", () => {
+    const day = 86_400_000;
+    const result = scoreCandidates([{
+      address: "overflow", kind: "trader", accountValue: 10_000, closed: false, tradeCount: 10,
+      history: null, allTime: null,
+      month: {
+        accountValueHistory: [[0, 1], [day, 1], [2 * day, 1]],
+        pnlHistory: [[0, 0], [day, 1e200], [2 * day, 2e200]],
+      },
+    }], { minMonthPoints: 2, allowUnknown: ["minActiveDays"] });
+    const [candidate] = result.candidates;
+    expect(candidate.metrics!.maxDrawdown).toBeNull();
+    expect(candidate.metrics!.flags).toContain("overflow");
+    expect(candidate.metrics!.flags).toEqual([...new Set(candidate.metrics!.flags)].sort());
+    expect(candidate.eligible).toBe(true);
+    expect(candidate.rank).toBeNull();
+    expect(candidate.score).toBeNull();
+    expect(candidate.scoreNumerator).toBeNull();
+    expect(candidate.percentiles).toBeNull();
+    expect(candidate.finalist).toBe(false);
+    expect(result.finalists).toEqual([]);
+    expect(result.funnel.slice(0, 9).map(({ count }) => count)).toEqual(Array(9).fill(1));
+    expect(result.funnel.slice(-3)).toEqual([
+      { stage: "ranked", count: 0 },
+      { stage: "distinct", count: 0 },
+      { stage: "finalists", count: 0 },
+    ]);
+    expectFinite(result);
   });
 
   test("preserves supplied passthrough values, including zero and null", () => {

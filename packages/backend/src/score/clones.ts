@@ -2,6 +2,34 @@ import { type Analysis, curveAt } from "./metrics";
 import { DAY_MS } from "./stitch";
 import type { ScoreInput } from "./types";
 
+// Connected components include unranked inputs; unknown addresses add no edge (SPEC "Clone grouping").
+export const linkGroups = (inputs: ScoreInput[]): Map<string, string> => {
+  const edges = new Map(inputs.map(({ address }) => [address.toLowerCase(), new Set<string>()]));
+  for (const input of inputs) {
+    const from = input.address.toLowerCase();
+    for (const address of input.links ?? []) {
+      const to = address.toLowerCase();
+      if (!edges.has(to)) continue;
+      edges.get(from)!.add(to);
+      edges.get(to)!.add(from);
+    }
+  }
+  const groups = new Map<string, string>();
+  for (const address of edges.keys()) {
+    if (groups.has(address)) continue;
+    groups.set(address, address);
+    const pending = [address];
+    while (pending.length > 0) {
+      for (const neighbor of edges.get(pending.pop()!)!) {
+        if (groups.has(neighbor)) continue;
+        groups.set(neighbor, address);
+        pending.push(neighbor);
+      }
+    }
+  }
+  return groups;
+};
+
 // Log returns between consecutive UTC midnights of the fine span, keyed by the later midnight
 // (SPEC "Clone grouping").
 export const dailyReturns = ({ curve, fineStart, lastTs }: Analysis): Map<number, number> => {

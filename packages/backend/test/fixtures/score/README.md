@@ -46,6 +46,17 @@ reproduces these files byte for byte.
   `(inputs, { minOverlapDays: 25 })`. Covers a cross-pool near-copy, a link-based clone, a correlation chain and a pair
   that groups only at 0.8; the realised correlations are in `note`.
 
+- `links.json`: `{ note, cases: [{ name, note, links, expected }] }`. Inputs are the 24 sample accounts built exactly
+  as for `portfolio-sample.expected.json`, with `input.links` from the `address -> address[]` map, using default config.
+  The compared projection is `{ finalists, funnel, candidates: [{ address, rank, scoreNumerator, cloneOf, clones, finalist }] }`,
+  with only ranked candidates, in output order. Expected values come from the independent Python reference for the
+  link-component rule. Cases cover no links, transitive chains in both directions, an unranked bridge, a whole unit
+  joining an earlier correlation representative, and a link to an unknown address.
+
+The funnel stage formerly named `eligible` is now `ranked` in `clones.json`, `ranking-set.json`, and
+`portfolio-sample.expected.json`, and is also `ranked` in `links.json`. It counts ranked candidates, which can be fewer
+than the candidates remaining after `noRuin`; the candidate's `eligible` boolean still describes filter eligibility.
+
 ## Comparison rule
 - Numbers match within `1e-9 * max(1, |expected|)`.
 - `null`, `"+inf"`, booleans, strings, `flags` and every ordering (candidates, finalists, correlations, funnel,

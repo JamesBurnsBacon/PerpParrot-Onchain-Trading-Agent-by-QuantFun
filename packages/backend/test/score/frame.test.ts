@@ -17,7 +17,7 @@ describe("toFrameCandidates (SPEC Frame adapter)", () => {
       expect(entry.kind).toBe("TRADER");
       expect(entry.clones).toEqual(source.clones);
       expect(entry.metrics).toMatchObject({
-        historyDays: source.activeDays!,
+        historyDays: Math.floor(source.activeDays!),
         maxDrawdown: metrics.maxDrawdown!,
         pnlConsistency: metrics.consistency ?? 0,
         isSharpe: metrics.sharpe === "+inf" ? null : metrics.sharpe,
@@ -44,6 +44,55 @@ describe("toFrameCandidates (SPEC Frame adapter)", () => {
       expect(pair.correlation).toBe(source.rho);
       expect(pair.linkedSource).toBe(source.linked);
     });
+  });
+
+  test("reports unknown-history finalists in order, drops their pairs and renumbers kept positions", () => {
+    const omitted = [result.finalists[0], result.finalists[2]];
+    const patched = {
+      ...result,
+      candidates: result.candidates.map((c) => omitted.includes(c.address) ? { ...c, activeDays: null } : c),
+    };
+    const actual = toFrameCandidates(patched);
+    const kept = result.finalists.filter((address) => !omitted.includes(address));
+    expect(actual.skipped).toEqual(omitted.map((address) => ({ address, reason: "unknown-history" })));
+    expect(actual.candidates).toEqual(frame.candidates
+      .filter((_, i) => !omitted.includes(result.finalists[i]))
+      .map((candidate, i) => ({ ...candidate, candidate: i })));
+    expect(actual.pairs).toEqual(result.correlations
+      .filter(({ a, b }) => !omitted.includes(a) && !omitted.includes(b))
+      .map(({ a, b, rho, linked }) => ({ a: kept.indexOf(a), b: kept.indexOf(b), correlation: rho, linkedSource: linked })));
+  });
+
+  test("all finalists with unknown history leave no candidates or pairs", () => {
+    const actual = toFrameCandidates({
+      ...result,
+      candidates: result.candidates.map((c) => ({ ...c, activeDays: null })),
+    });
+    expect(actual.candidates).toEqual([]);
+    expect(actual.pairs).toEqual([]);
+    expect(actual.skipped).toEqual(result.finalists.map((address) => ({ address, reason: "unknown-history" })));
+  });
+
+  for (const [activeDays, historyDays] of [[726.32, 726], [726.9, 726], [30, 30]]) {
+    test(`historyDays floors ${activeDays} to ${historyDays}`, () => {
+      const actual = toFrameCandidates({
+        ...result,
+        candidates: result.candidates.map((c) => ({ ...c, activeDays })),
+      });
+      expect(actual.candidates.map(({ metrics }) => metrics.historyDays)).toEqual(result.finalists.map(() => historyDays));
+      expect(actual.skipped).toEqual([]);
+    });
+  }
+
+  test("a hand-built finalist with null maxDrawdown fails closed", () => {
+    const [finalist] = result.finalists;
+    const patched = {
+      ...result,
+      candidates: result.candidates.map((c) => c.address !== finalist ? c : {
+        ...c, metrics: { ...c.metrics!, maxDrawdown: null },
+      }),
+    };
+    expect(() => toFrameCandidates(patched)).toThrow(`frame: finalist without metrics: ${finalist}`);
   });
 
   test("hold time converts to minutes and +inf ratios become null", () => {

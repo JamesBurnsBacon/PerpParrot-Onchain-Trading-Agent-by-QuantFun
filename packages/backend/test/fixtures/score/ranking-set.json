@@ -5335,7 +5335,7 @@
      "count": 8
     },
     {
-     "stage": "eligible",
+     "stage": "ranked",
      "count": 8
     },
     {
@@ -5504,7 +5504,7 @@
      "count": 1
     },
     {
-     "stage": "eligible",
+     "stage": "ranked",
      "count": 1
     },
     {
@@ -6146,7 +6146,7 @@
      "count": 8
     },
     {
-     "stage": "eligible",
+     "stage": "ranked",
      "count": 8
     },
     {

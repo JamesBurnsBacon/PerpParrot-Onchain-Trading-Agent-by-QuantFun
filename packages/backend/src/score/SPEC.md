@@ -79,18 +79,18 @@ export type Candidate = {
   activeDays: number | null;         // see "Filters"; null without activeStart
   filters: Record<FilterName, FilterStatus>;
   eligible: boolean;
-  metrics: Metrics | null;           // null only when the month series is missing or invalid
+  metrics: Metrics | null;           // null only when month is missing or invalid; overflow metrics remain reported
   percentiles: Percentiles | null;   // within the pool; null unless ranked
   scoreNumerator: number | null;     // integer; null unless ranked
   score: number | null;              // 0..1; null unless ranked
   rank: number | null;               // 1-based within the pool; null unless ranked
-  cloneOf: { address: string; correlation: number | null } | null; // set on a clone; correlation null = linked
+  cloneOf: { address: string; correlation: number | null } | null; // null correlation = non-head link-group member
   clones: string[];                  // on a representative: the addresses grouped under it, in cross-pool order
   finalist: boolean;
   passthrough: { avgLeverage: number | null; timeInMarket: number | null; medianHoldHours: number | null; makerShare: number | null };
 };
 
-export type FunnelStage = "universe" | FilterName | "eligible" | "distinct" | "finalists";
+export type FunnelStage = "universe" | FilterName | "ranked" | "distinct" | "finalists";
 export type FunnelStep = { stage: FunnelStage; count: number };
 export type FilterCounts = Record<FilterName, { pass: number; fail: number; unknown: number }>;
 
@@ -136,6 +136,7 @@ where each history is `[[tsMs, "decimal string"], ...]`. Use only the windows na
 Throw an `Error` whose message starts with `portfolio:` for anything malformed: not an array, a bad entry, a non-finite
 number, a non-integer timestamp, a string that is not a plain decimal (optional sign, digits with an optional decimal
 point such as `5.` or `.5`, no exponent), or **a window name that appears twice** (`portfolio: duplicate window month`).
+Windows other than `month` and `allTime` are checked only for entry shape and duplicate names; their contents are not validated.
 It does not check ordering or alignment; scoring does.
 
 ## Series validation
@@ -222,6 +223,8 @@ With `mu = sum(r) / T` (mean return per day):
   `allTime` interval is used (dust-guard and ruin flags from this pass are not added to `flags`).
 
 Every number in `Metrics` is finite or `null`; a repeated flag appears once; flags are sorted.
+On the main metrics path, a non-finite `maxDrawdown` becomes `null` and adds `overflow` (an overflowing compounded
+curve). Such metrics remain reported, but the candidate is never ranked. The `no-intervals` path does not add `overflow`.
 
 ## Filters (each returns pass / fail / unknown), in funnel order
 - `minAccountValue`: `accountValue >= minAccountValue` (non-finite value: `unknown`).
@@ -242,8 +245,9 @@ overridden. The default `allowUnknown` is `[]`. Real data has no trade counts un
 that sets `allowUnknown: ["minTrades"]`, and ingest fetches fills only for addresses that pass the other filters.
 
 ## Ranking
-A candidate is **ranked** if it is eligible and has non-null `metrics` without `no-intervals`. Ranked candidates are
-split into pools by `pool`; each pool of size N is ranked on its own.
+A candidate is **ranked** if it is eligible and has non-null `metrics` with neither `no-intervals` nor `overflow`.
+An otherwise eligible candidate with `overflow` keeps `eligible: true`, but has null percentiles, score numerator,
+score and rank, and `finalist: false`. Ranked candidates are split into pools by `pool`; each pool of size N is ranked on its own.
 
 Five terms, each "higher is better", with integer weights:
 
@@ -287,13 +291,22 @@ in common, or either side has zero variance, the pair has no correlation (`null`
 Otherwise `rho = sum((x - mean_x)(y - mean_y)) / sqrt(sum((x - mean_x)^2) * sum((y - mean_y)^2))` over the common
 days (zero variance means a sum of squared deviations exactly 0). The same `rho` is reported in `correlations`.
 
-**Greedy grouping** (deterministic). Walk the ranked candidates in cross-pool order. A candidate becomes a **clone**
-of the first earlier **representative** (in cross-pool order) that it is linked to (either side lists the other in
-`links`, compared lower-cased) or with which `rho >= cloneCorrelation`; a link is recorded with `correlation: null`
-even when `rho` is also high. Otherwise it becomes a representative. Comparisons are only
-against representatives, never against clones, so groups cannot chain. A clone gets
-`cloneOf = { address, correlation }` (`correlation: null` for a link); its representative lists it in `clones`.
-Clones keep their percentiles, score and rank (they describe the account), but they are never finalists.
+**Link groups** (deterministic). Build an undirected graph over **all inputs**, ranked or not. Two addresses share
+an edge when either lists the other in `links` (lower-case comparison); a link to an address not among the inputs is
+ignored. Connected components are link groups. Unranked accounts can bridge ranked ones. The **unit** of a ranked
+candidate is the ranked members of its link group in cross-pool order; its **head** is the first (best-ranked) member.
+
+Walk ranked candidates in cross-pool order, handling each unit once at its head. Compare the head only with earlier
+**representatives**, never clones. If `rho >= cloneCorrelation` with the first such representative, the whole unit
+becomes its clones: the head gets `cloneOf = { address: representative.address, correlation: rho }` and every other
+member gets `{ address: representative.address, correlation: null }`. Otherwise the head becomes a representative
+and the other members become its clones with `correlation: null`. A singleton is a unit of one.
+Each representative's `clones` lists all its clones in cross-pool order, not discovery order. Clones keep their
+percentiles, score and rank (they describe the account), but they are never finalists.
+
+A correlation clone of a link-clone is not grouped through that clone, because comparisons are only against
+representatives. In the sample chain case, `addr-24` correlates 0.949 with `addr-18`, which is now a clone of
+`addr-21`, so `addr-24` stays its own representative. `links.json` checks these link-group cases against the independent reference.
 
 On the 24-account sample (16 ranked), the default 0.9 gives 10 distinct strategies: `addr-06` (rho 0.991), `addr-09`
 (0.964) and `addr-02` (0.944) -> `addr-04`; `addr-24` (0.949) -> `addr-18`; `addr-19` (0.976) -> `addr-23`; `addr-17`
@@ -318,11 +331,14 @@ If `R_trader + R_vault <= F`, every representative is a finalist. Otherwise each
 `candidates`: ranked candidates in cross-pool order, then all others sorted by address. `finalists`: finalist
 addresses in cross-pool order. `correlations`: one entry per pair of finalists `(a, b)` with `a` before `b` in
 `finalists`, in that order (by `a`, then `b`); `rho` as in "Clone grouping", `linked` when either lists the other in
-`links`. Addresses are compared case-insensitively; two inputs with the same lower-cased address
+`links` (the direct-link test is retained; it is always false for finalists because linked accounts share a group).
+Addresses are compared case-insensitively; two inputs with the same lower-cased address
 make `scoreCandidates` throw `Error("duplicate address: ...")`.
 `funnel`, in order: `universe` (all inputs); after each filter in funnel order, the number of candidates that pass that
-filter and all earlier ones (`unknown` counts as passed only for filters in `allowUnknown`); `eligible` (ranked
-candidates); `distinct` (representatives after clone grouping); `finalists`. Counts never increase along the funnel.
+filter and all earlier ones (`unknown` counts as passed only for filters in `allowUnknown`); `ranked` (ranked
+candidates); `distinct` (representatives after clone grouping); `finalists`. Thus the order is `universe` -> the eight
+filters in order -> `ranked` -> `distinct` -> `finalists`. `ranked` can be lower than the count after the last filter
+(`noRuin`); `Candidate.eligible` still means all filters pass or are allowed unknown. Counts never increase along the funnel.
 `filterCounts`: for each filter on its own, how many candidates are `pass`, `fail` and `unknown` (shows which filter
 does the work, independent of funnel order).
 Empty input returns empty `candidates` and `finalists`, a `universe` count of 0, zero counts after it and zero
@@ -347,13 +363,13 @@ tracked address.
 The review workflow consumes `packages/shared/schemas/candidate-curation-frame.schema.json`. Its `oos*` and
 `crossWindowStability` fields mean **out-of-sample** (from the backtest). Score's metrics are in-sample and must not be
 put there. The adapter (`src/score/frame.ts`, `toFrameCandidates`) fills only the fields Score owns; other modules fill
-the rest. This needs schema version `1.1.0` with seven new fields:
+the rest. This needs schema version `1.1.0` with six new fields (the `pairs` fields already exist in schema `1.0.0`):
 
 | Frame field | From Score |
 |---|---|
-| `candidate` | position in `finalists` (0-based) |
+| `candidate` | position among kept finalists (0-based) |
 | `kind` | `trader` -> `TRADER`, `hypercore-vault` -> `HYPERCORE_VAULT`, `erc4626-vault` -> `ERC4626_HYPERCORE` |
-| `historyDays` | `activeDays` |
+| `historyDays` | `floor(activeDays)`; a finalist without `activeDays` is left out and reported in `skipped` |
 | `maxDrawdown` | `metrics.maxDrawdown` |
 | `pnlConsistency` | `metrics.consistency` (`null` -> 0) |
 | `averageLeverage`, `timeInMarket`, `makerShare` | passthrough |
@@ -362,8 +378,15 @@ the rest. This needs schema version `1.1.0` with seven new fields:
 | **new** `lookbackDays` | `metrics.lookbackDays` |
 | **new** `scoreFlags` | `metrics.flags` |
 | **new** `clones` | `clones` (addresses grouped under this finalist), so the agent sees what was merged |
-| `pairs[].correlation`, `pairs[].linkedSource` | `correlations[].rho` and `.linked`, with `a`/`b` as finalist positions |
+| `pairs[].correlation`, `pairs[].linkedSource` | `correlations[].rho` and `.linked`, with `a`/`b` as kept-finalist positions |
 | `oosWindows`, `oosSharpe`, `oosSortino`, `oosMaxDrawdown`, `crossWindowStability` | not from Score: `0` / `null` until the backtest supplies them |
+
+`toFrameCandidates(result)` returns
+`{ candidates: FrameCandidate[], pairs: FramePair[], skipped: { address: string; reason: "unknown-history" }[] }`.
+`skipped` lists finalists with `activeDays === null` in finalist order; the pure adapter returns this list instead of
+logging, and the caller logs it. Candidate positions count only kept finalists. Pairs touching a skipped finalist are
+dropped; remaining pairs are remapped to the kept positions. A finalist with missing metrics or
+`maxDrawdown === null` still throws as a fail-closed guard; scoring should never produce one.
 
 Consequence: `review/workflow.ts` rejects a candidate with `oosSharpe === null`, so no candidate passes the review
 gate until the backtest supplies out-of-sample values. This is intended.
@@ -393,7 +416,7 @@ the implementation and checked against the independent Python reference.
 
 | # | Revision 1 | Revision 2 | Why |
 |---|---|---|---|
-| 1 | 4 equal terms: Sortino, Calmar, -MDD, positive-day share | 3 equal blocks: (Sharpe, Sortino), (Calmar, -MDD), consistency | README groups "Calmar / -max drawdown" as one item; 4 equal terms gave drawdown ~1/2 of the weight. Sharpe is defined where Sortino is not, but Sharpe and Sortino rank 22 accounts almost identically (Spearman 0.988), so they share a block. Calmar vs -MDD: 0.265, so both are kept. |
+| 1 | 4 equal terms: Sortino, Calmar, -MDD, positive-day share | 3 equal blocks: (Sharpe, Sortino), (Calmar, -MDD), consistency | README groups "Calmar / -max drawdown" as one item; 4 equal terms gave drawdown ~1/2 of the weight. Sharpe stays finite where Sortino is `+inf` (no losing interval), so it still separates those accounts (on the 30-day `month` window alone `addr-21` has no losing interval: Sortino `+inf`, Sharpe about 7.3), but Sharpe and Sortino rank the sample accounts almost identically (Spearman 0.950 over the 22 sample accounts without `addr-08` and `addr-10`, 90-day lookback), so they share a block. Calmar vs -MDD: 0.576 on the same accounts, so both are kept. |
 | 2 | Share of UTC days with positive PnL | Equity-curve R² (0 if the trend is down) | The day share is a hit rate that ignores size, so martingale-like accounts score high; on the fixtures it spans only 0.35-0.65. |
 | 3 | allTime span >= 30 days | Same, plus `stillActive` (PnL change in the last 7 days) | Dormant accounts were eligible (`addr-10`: no PnL change all month). |
 | 4 | `r = dpnl / equity at start` | `capital = start + max(flow, 0)`, dust guard against the series peak | `addr-08` started an interval with $0.09 and deposited $121k: r = 23,479x, Sortino 46,407, ranked #6 in revision 1. Modified Dietz was rejected: `addr-14` (made $1,134 on $1,173, withdrew $2,300) gives +4,885% in one interval. The dust reference is the peak, not the median: `addr-08` sat at ~$0.08 for 75 of 90 days, so its median is dust. |
@@ -409,17 +432,17 @@ the implementation and checked against the independent Python reference.
 | - | Cumulative funnel only | Plus `filterCounts` per filter | Shows which filter does the work. |
 | - | One ranking | Percentiles within pool (traders, vaults) | HyperCore vaults (legacy, profit share, lockups) have different return profiles. |
 | - | Duplicate window: last wins | Throws | A duplicated window is a malformed response. |
-| - | (none) | Clone grouping before the finalist cut: rho >= 0.9 on daily returns, or a known link | `addr-04`, `-06`, `-09`, `-02` are ranks 2-5 of the 16 ranked accounts, with daily-return rho 0.94-0.99 against `addr-04` (`addr-04`/`-06`: 0.991 and the same account value). Duplicates concentrate the copy portfolio in one strategy's idiosyncratic risk; widening the finalist set would only spend more slots on them. |
+| - | (none) | Clone grouping before the finalist cut: link components form units; heads join earlier representatives at rho >= 0.9; other unit members follow the head | `addr-04`, `-06`, `-09`, `-02` are ranks 2-5 of the 16 ranked accounts, with daily-return rho 0.94-0.99 against `addr-04` (`addr-04`/`-06`: 0.991 and the same account value). Duplicates concentrate the copy portfolio in one strategy's idiosyncratic risk; widening the finalist set would only spend more slots on them. |
 
 Funnel on the sample (synthetic `closed`/`tradeCount` overlay, default config): 24 -> 23 (account value) -> 23 -> 22
 (still active) -> 17 (trades) -> 17 -> 17 -> 16 (coverage: `addr-08`) -> 16 ranked -> 10 distinct -> 10 finalists.
 
-## Other decisions made without a README basis (unchanged from revision 1)
+## Other decisions made without a README basis
 - Sortino uses a minimum acceptable return of 0 and per-day normalisation by elapsed time.
 - Arithmetic that overflows to a non-finite number becomes `null`.
 - The thresholds default to the README numbers ($10,000, 30 days, 10 trades, 25 points, top 25).
 - A non-finite `accountValue` gives `unknown`. `allTime` with no point above 0 gives `fail` for active days.
-- A candidate with `eligible: true` can still be unranked when its month series is invalid (`allowUnknown` only).
+- A candidate with `eligible: true` can still be unranked when its month series is invalid (`allowUnknown` only) or when its compounded curve overflows (`overflow`).
 - Ranking is by exact integer numerators; the order of the input never matters.
 - Addresses are compared case-insensitively, and two inputs that differ only by case throw `duplicate address`.
 - The funnel counts candidates that passed each filter and all earlier ones.
@@ -427,3 +450,7 @@ Funnel on the sample (synthetic `closed`/`tradeCount` overlay, default config): 
 - Fill-derived values (`tradeCount`, `avgLeverage`, `timeInMarket`, `medianHoldHours`, `makerShare`) are inputs that a
   future ingest supplies. Score only passes them through.
 - Fixture addresses are replaced by `addr-NN`. `closed` and `tradeCount` in `portfolio-sample.json` are synthetic.
+- **[interpretation of this task]** Link groups are built over all inputs, so an unranked account can bridge two ranked ones.
+- **[interpretation of this task]** A unit moves as a whole when its head is a correlation clone.
+- **[interpretation of this task]** The flag for a non-finite main-path drawdown is named `overflow`.
+- **[interpretation of this task]** `toFrameCandidates` returns `skipped` instead of logging.

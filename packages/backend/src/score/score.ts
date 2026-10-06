@@ -1,4 +1,4 @@
-import { correlation, dailyReturns, linked } from "./clones";
+import { correlation, dailyReturns, linked, linkGroups } from "./clones";
 import { DEFAULT_CONFIG, FILTER_ORDER, validateConfig } from "./config";
 import { activeDays, computeFilters, isEligible } from "./filters";
 import { type Analysis, analyse } from "./metrics";
@@ -148,7 +148,7 @@ export const scoreCandidates = (inputs: ScoreInput[], overrides: Partial<ScoreCo
   });
 
   const rankable = candidates.filter((c): c is Candidate & { metrics: Metrics } =>
-    c.eligible && c.metrics !== null && !c.metrics.flags.includes("no-intervals"));
+    c.eligible && c.metrics !== null && !c.metrics.flags.includes("no-intervals") && !c.metrics.flags.includes("overflow"));
   const ranked: Ranked[] = [];
   for (const pool of ["trader", "vault"] as const) {
     const members = rankable.filter((c) => c.pool === pool);
@@ -159,26 +159,35 @@ export const scoreCandidates = (inputs: ScoreInput[], overrides: Partial<ScoreCo
   }
   ranked.sort(compareCrossPool);
 
-  // Greedy clone grouping against earlier representatives only, so groups cannot chain (SPEC "Clone grouping").
+  // Link units are visited at their heads, in cross-pool order (SPEC "Clone grouping").
+  const groups = linkGroups(inputs);
+  const units = new Map<string, Ranked[]>();
+  for (const candidate of ranked) {
+    const group = groups.get(candidate.address.toLowerCase())!;
+    const unit = units.get(group);
+    if (unit === undefined) units.set(group, [candidate]);
+    else unit.push(candidate);
+  }
   const returns = new Map(ranked.map((c) => [c.address, dailyReturns(analyses.get(c.address)!)]));
   const rho = (a: string, b: string) => correlation(returns.get(a)!, returns.get(b)!, config.minOverlapDays);
   const representatives: Ranked[] = [];
-  for (const candidate of ranked) {
+  for (const [head, ...members] of units.values()) {
     for (const representative of representatives) {
-      if (linked(inputOf(candidate.address), inputOf(representative.address))) {
-        candidate.cloneOf = { address: representative.address, correlation: null };
-      } else {
-        const value = rho(candidate.address, representative.address);
-        if (value !== null && value >= config.cloneCorrelation) {
-          candidate.cloneOf = { address: representative.address, correlation: value };
-        }
-      }
-      if (candidate.cloneOf !== null) {
-        representative.clones.push(candidate.address);
+      const value = rho(head.address, representative.address);
+      if (value !== null && value >= config.cloneCorrelation) {
+        head.cloneOf = { address: representative.address, correlation: value };
         break;
       }
     }
-    if (candidate.cloneOf === null) representatives.push(candidate);
+    if (head.cloneOf === null) representatives.push(head);
+    for (const member of members) {
+      member.cloneOf = { address: head.cloneOf?.address ?? head.address, correlation: null };
+    }
+  }
+  // Unit members can be discovered early; clone lists still follow cross-pool order (SPEC "Clone grouping").
+  const representativeByAddress = new Map(representatives.map((c) => [c.address, c]));
+  for (const candidate of ranked) {
+    if (candidate.cloneOf !== null) representativeByAddress.get(candidate.cloneOf.address)!.clones.push(candidate.address);
   }
 
   const count = (pool: Pool) => representatives.filter((c) => c.pool === pool).length;
@@ -215,7 +224,7 @@ export const scoreCandidates = (inputs: ScoreInput[], overrides: Partial<ScoreCo
     funnel.push({ stage, count: remaining.length });
   }
   funnel.push(
-    { stage: "eligible", count: ranked.length },
+    { stage: "ranked", count: ranked.length },
     { stage: "distinct", count: representatives.length },
     { stage: "finalists", count: finalists.length },
   );

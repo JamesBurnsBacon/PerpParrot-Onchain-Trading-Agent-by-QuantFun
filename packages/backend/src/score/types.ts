@@ -71,7 +71,7 @@ export type Candidate = {
   };
 };
 
-export type FunnelStage = "universe" | FilterName | "eligible" | "distinct" | "finalists";
+export type FunnelStage = "universe" | FilterName | "ranked" | "distinct" | "finalists";
 export type FunnelStep = { stage: FunnelStage; count: number };
 export type FilterCounts = Record<FilterName, { pass: number; fail: number; unknown: number }>;
 export type Correlation = { a: string; b: string; rho: number | null; linked: boolean };

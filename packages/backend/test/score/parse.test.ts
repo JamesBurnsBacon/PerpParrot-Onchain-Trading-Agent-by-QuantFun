@@ -55,6 +55,14 @@ describe("parsePortfolio", () => {
     expect(parsePortfolio(names.map((name) => [name, {}]))).toEqual({ month: null, allTime: null });
   });
 
+  test("ignored contents are not validated, but shape and duplicates are (SPEC parsePortfolio)", () => {
+    const invalid = { ...history, pnlHistory: [[0, "1e2"]] };
+    expect(parsePortfolio([["day", invalid]])).toEqual({ month: null, allTime: null });
+    expect(() => parsePortfolio([["day", invalid, 0]])).toThrow("portfolio: invalid window entry");
+    expect(() => parsePortfolio([["day", null]])).toThrow("portfolio: invalid window entry");
+    expect(() => parsePortfolio([["day", invalid], ["day", invalid]])).toThrow("portfolio: duplicate window day");
+  });
+
   test("leaves ordering and alignment to series validation (SPEC parsePortfolio)", () => {
     expect(parsePortfolio([["month", {
       accountValueHistory: [[2, "1"], [1, "2"]],

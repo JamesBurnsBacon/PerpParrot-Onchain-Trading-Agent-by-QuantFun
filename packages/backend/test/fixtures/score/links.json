@@ -1,0 +1,1407 @@
+{
+ "note": "Expected values come from an independent Python re-implementation of the link-component rule (see the PR); inputs are the 24 accounts of portfolio-sample.json with the listed `links` added (link lists are lower-case compared).",
+ "cases": [
+  {
+   "name": "no-links",
+   "note": "No links: the baseline the other cases are compared with (6 correlation clones, 10 distinct).",
+   "links": {},
+   "expected": {
+    "finalists": [
+     "addr-21",
+     "addr-04",
+     "addr-18",
+     "addr-22",
+     "addr-13",
+     "addr-07",
+     "addr-23",
+     "addr-16",
+     "addr-11",
+     "addr-14"
+    ],
+    "funnel": [
+     {
+      "stage": "universe",
+      "count": 24
+     },
+     {
+      "stage": "minAccountValue",
+      "count": 23
+     },
+     {
+      "stage": "minActiveDays",
+      "count": 23
+     },
+     {
+      "stage": "stillActive",
+      "count": 22
+     },
+     {
+      "stage": "minTrades",
+      "count": 17
+     },
+     {
+      "stage": "notClosed",
+      "count": 17
+     },
+     {
+      "stage": "minMonthPoints",
+      "count": 17
+     },
+     {
+      "stage": "minCoverage",
+      "count": 16
+     },
+     {
+      "stage": "noRuin",
+      "count": 16
+     },
+     {
+      "stage": "ranked",
+      "count": 16
+     },
+     {
+      "stage": "distinct",
+      "count": 10
+     },
+     {
+      "stage": "finalists",
+      "count": 10
+     }
+    ],
+    "candidates": [
+     {
+      "address": "addr-21",
+      "rank": 1,
+      "scoreNumerator": 178,
+      "cloneOf": null,
+      "clones": [],
+      "finalist": true
+     },
+     {
+      "address": "addr-04",
+      "rank": 2,
+      "scoreNumerator": 147,
+      "cloneOf": null,
+      "clones": [
+       "addr-06",
+       "addr-09",
+       "addr-02"
+      ],
+      "finalist": true
+     },
+     {
+      "address": "addr-06",
+      "rank": 3,
+      "scoreNumerator": 141,
+      "cloneOf": {
+       "address": "addr-04",
+       "correlation": 0.9907175889823339
+      },
+      "clones": [],
+      "finalist": false
+     },
+     {
+      "address": "addr-09",
+      "rank": 4,
+      "scoreNumerator": 132,
+      "cloneOf": {
+       "address": "addr-04",
+       "correlation": 0.9641844347339362
+      },
+      "clones": [],
+      "finalist": false
+     },
+     {
+      "address": "addr-02",
+      "rank": 5,
+      "scoreNumerator": 132,
+      "cloneOf": {
+       "address": "addr-04",
+       "correlation": 0.9441653144341693
+      },
+      "clones": [],
+      "finalist": false
+     },
+     {
+      "address": "addr-18",
+      "rank": 6,
+      "scoreNumerator": 114,
+      "cloneOf": null,
+      "clones": [
+       "addr-24"
+      ],
+      "finalist": true
+     },
+     {
+      "address": "addr-22",
+      "rank": 7,
+      "scoreNumerator": 110,
+      "cloneOf": null,
+      "clones": [],
+      "finalist": true
+     },
+     {
+      "address": "addr-13",
+      "rank": 8,
+      "scoreNumerator": 110,
+      "cloneOf": null,
+      "clones": [],
+      "finalist": true
+     },
+     {
+      "address": "addr-07",
+      "rank": 9,
+      "scoreNumerator": 96,
+      "cloneOf": null,
+      "clones": [],
+      "finalist": true
+     },
+     {
+      "address": "addr-24",
+      "rank": 10,
+      "scoreNumerator": 60,
+      "cloneOf": {
+       "address": "addr-18",
+       "correlation": 0.949439444201087
+      },
+      "clones": [],
+      "finalist": false
+     },
+     {
+      "address": "addr-23",
+      "rank": 11,
+      "scoreNumerator": 58,
+      "cloneOf": null,
+      "clones": [
+       "addr-19"
+      ],
+      "finalist": true
+     },
+     {
+      "address": "addr-16",
+      "rank": 12,
+      "scoreNumerator": 48,
+      "cloneOf": null,
+      "clones": [
+       "addr-17"
+      ],
+      "finalist": true
+     },
+     {
+      "address": "addr-11",
+      "rank": 13,
+      "scoreNumerator": 46,
+      "cloneOf": null,
+      "clones": [],
+      "finalist": true
+     },
+     {
+      "address": "addr-19",
+      "rank": 14,
+      "scoreNumerator": 42,
+      "cloneOf": {
+       "address": "addr-23",
+       "correlation": 0.9759277477039585
+      },
+      "clones": [],
+      "finalist": false
+     },
+     {
+      "address": "addr-17",
+      "rank": 15,
+      "scoreNumerator": 26,
+      "cloneOf": {
+       "address": "addr-16",
+       "correlation": 0.9128761183824236
+      },
+      "clones": [],
+      "finalist": false
+     },
+     {
+      "address": "addr-14",
+      "rank": 16,
+      "scoreNumerator": 0,
+      "cloneOf": null,
+      "clones": [],
+      "finalist": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "chain-21-18-13",
+   "note": "addr-21 links addr-18 and addr-18 links addr-13: one operator, one group under the best-ranked member addr-21, although addr-13 and addr-21 are not linked directly.",
+   "links": {
+    "addr-21": [
+     "addr-18"
+    ],
+    "addr-18": [
+     "addr-13"
+    ]
+   },
+   "expected": {
+    "finalists": [
+     "addr-21",
+     "addr-04",
+     "addr-22",
+     "addr-07",
+     "addr-24",
+     "addr-23",
+     "addr-16",
+     "addr-11",
+     "addr-14"
+    ],
+    "funnel": [
+     {
+      "stage": "universe",
+      "count": 24
+     },
+     {
+      "stage": "minAccountValue",
+      "count": 23
+     },
+     {
+      "stage": "minActiveDays",
+      "count": 23
+     },
+     {
+      "stage": "stillActive",
+      "count": 22
+     },
+     {
+      "stage": "minTrades",
+      "count": 17
+     },
+     {
+      "stage": "notClosed",
+      "count": 17
+     },
+     {
+      "stage": "minMonthPoints",
+      "count": 17
+     },
+     {
+      "stage": "minCoverage",
+      "count": 16
+     },
+     {
+      "stage": "noRuin",
+      "count": 16
+     },
+     {
+      "stage": "ranked",
+      "count": 16
+     },
+     {
+      "stage": "distinct",
+      "count": 9
+     },
+     {
+      "stage": "finalists",
+      "count": 9
+     }
+    ],
+    "candidates": [
+     {
+      "address": "addr-21",
+      "rank": 1,
+      "scoreNumerator": 178,
+      "cloneOf": null,
+      "clones": [
+       "addr-18",
+       "addr-13"
+      ],
+      "finalist": true
+     },
+     {
+      "address": "addr-04",
+      "rank": 2,
+      "scoreNumerator": 147,
+      "cloneOf": null,
+      "clones": [
+       "addr-06",
+       "addr-09",
+       "addr-02"
+      ],
+      "finalist": true
+     },
+     {
+      "address": "addr-06",
+      "rank": 3,
+      "scoreNumerator": 141,
+      "cloneOf": {
+       "address": "addr-04",
+       "correlation": 0.9907175889823339
+      },
+      "clones": [],
+      "finalist": false
+     },
+     {
+      "address": "addr-09",
+      "rank": 4,
+      "scoreNumerator": 132,
+      "cloneOf": {
+       "address": "addr-04",
+       "correlation": 0.9641844347339362
+      },
+      "clones": [],
+      "finalist": false
+     },
+     {
+      "address": "addr-02",
+      "rank": 5,
+      "scoreNumerator": 132,
+      "cloneOf": {
+       "address": "addr-04",
+       "correlation": 0.9441653144341693
+      },
+      "clones": [],
+      "finalist": false
+     },
+     {
+      "address": "addr-18",
+      "rank": 6,
+      "scoreNumerator": 114,
+      "cloneOf": {
+       "address": "addr-21",
+       "correlation": null
+      },
+      "clones": [],
+      "finalist": false
+     },
+     {
+      "address": "addr-22",
+      "rank": 7,
+      "scoreNumerator": 110,
+      "cloneOf": null,
+      "clones": [],
+      "finalist": true
+     },
+     {
+      "address": "addr-13",
+      "rank": 8,
+      "scoreNumerator": 110,
+      "cloneOf": {
+       "address": "addr-21",
+       "correlation": null
+      },
+      "clones": [],
+      "finalist": false
+     },
+     {
+      "address": "addr-07",
+      "rank": 9,
+      "scoreNumerator": 96,
+      "cloneOf": null,
+      "clones": [],
+      "finalist": true
+     },
+     {
+      "address": "addr-24",
+      "rank": 10,
+      "scoreNumerator": 60,
+      "cloneOf": null,
+      "clones": [],
+      "finalist": true
+     },
+     {
+      "address": "addr-23",
+      "rank": 11,
+      "scoreNumerator": 58,
+      "cloneOf": null,
+      "clones": [
+       "addr-19"
+      ],
+      "finalist": true
+     },
+     {
+      "address": "addr-16",
+      "rank": 12,
+      "scoreNumerator": 48,
+      "cloneOf": null,
+      "clones": [
+       "addr-17"
+      ],
+      "finalist": true
+     },
+     {
+      "address": "addr-11",
+      "rank": 13,
+      "scoreNumerator": 46,
+      "cloneOf": null,
+      "clones": [],
+      "finalist": true
+     },
+     {
+      "address": "addr-19",
+      "rank": 14,
+      "scoreNumerator": 42,
+      "cloneOf": {
+       "address": "addr-23",
+       "correlation": 0.9759277477039585
+      },
+      "clones": [],
+      "finalist": false
+     },
+     {
+      "address": "addr-17",
+      "rank": 15,
+      "scoreNumerator": 26,
+      "cloneOf": {
+       "address": "addr-16",
+       "correlation": 0.9128761183824236
+      },
+      "clones": [],
+      "finalist": false
+     },
+     {
+      "address": "addr-14",
+      "rank": 16,
+      "scoreNumerator": 0,
+      "cloneOf": null,
+      "clones": [],
+      "finalist": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "chain-reverse-order",
+   "note": "The same chain written the other way round (addr-13 links addr-18, addr-18 links addr-21): the result must not depend on the direction or on who lists whom.",
+   "links": {
+    "addr-13": [
+     "addr-18"
+    ],
+    "addr-18": [
+     "addr-21"
+    ]
+   },
+   "expected": {
+    "finalists": [
+     "addr-21",
+     "addr-04",
+     "addr-22",
+     "addr-07",
+     "addr-24",
+     "addr-23",
+     "addr-16",
+     "addr-11",
+     "addr-14"
+    ],
+    "funnel": [
+     {
+      "stage": "universe",
+      "count": 24
+     },
+     {
+      "stage": "minAccountValue",
+      "count": 23
+     },
+     {
+      "stage": "minActiveDays",
+      "count": 23
+     },
+     {
+      "stage": "stillActive",
+      "count": 22
+     },
+     {
+      "stage": "minTrades",
+      "count": 17
+     },
+     {
+      "stage": "notClosed",
+      "count": 17
+     },
+     {
+      "stage": "minMonthPoints",
+      "count": 17
+     },
+     {
+      "stage": "minCoverage",
+      "count": 16
+     },
+     {
+      "stage": "noRuin",
+      "count": 16
+     },
+     {
+      "stage": "ranked",
+      "count": 16
+     },
+     {
+      "stage": "distinct",
+      "count": 9
+     },
+     {
+      "stage": "finalists",
+      "count": 9
+     }
+    ],
+    "candidates": [
+     {
+      "address": "addr-21",
+      "rank": 1,
+      "scoreNumerator": 178,
+      "cloneOf": null,
+      "clones": [
+       "addr-18",
+       "addr-13"
+      ],
+      "finalist": true
+     },
+     {
+      "address": "addr-04",
+      "rank": 2,
+      "scoreNumerator": 147,
+      "cloneOf": null,
+      "clones": [
+       "addr-06",
+       "addr-09",
+       "addr-02"
+      ],
+      "finalist": true
+     },
+     {
+      "address": "addr-06",
+      "rank": 3,
+      "scoreNumerator": 141,
+      "cloneOf": {
+       "address": "addr-04",
+       "correlation": 0.9907175889823339
+      },
+      "clones": [],
+      "finalist": false
+     },
+     {
+      "address": "addr-09",
+      "rank": 4,
+      "scoreNumerator": 132,
+      "cloneOf": {
+       "address": "addr-04",
+       "correlation": 0.9641844347339362
+      },
+      "clones": [],
+      "finalist": false
+     },
+     {
+      "address": "addr-02",
+      "rank": 5,
+      "scoreNumerator": 132,
+      "cloneOf": {
+       "address": "addr-04",
+       "correlation": 0.9441653144341693
+      },
+      "clones": [],
+      "finalist": false
+     },
+     {
+      "address": "addr-18",
+      "rank": 6,
+      "scoreNumerator": 114,
+      "cloneOf": {
+       "address": "addr-21",
+       "correlation": null
+      },
+      "clones": [],
+      "finalist": false
+     },
+     {
+      "address": "addr-22",
+      "rank": 7,
+      "scoreNumerator": 110,
+      "cloneOf": null,
+      "clones": [],
+      "finalist": true
+     },
+     {
+      "address": "addr-13",
+      "rank": 8,
+      "scoreNumerator": 110,
+      "cloneOf": {
+       "address": "addr-21",
+       "correlation": null
+      },
+      "clones": [],
+      "finalist": false
+     },
+     {
+      "address": "addr-07",
+      "rank": 9,
+      "scoreNumerator": 96,
+      "cloneOf": null,
+      "clones": [],
+      "finalist": true
+     },
+     {
+      "address": "addr-24",
+      "rank": 10,
+      "scoreNumerator": 60,
+      "cloneOf": null,
+      "clones": [],
+      "finalist": true
+     },
+     {
+      "address": "addr-23",
+      "rank": 11,
+      "scoreNumerator": 58,
+      "cloneOf": null,
+      "clones": [
+       "addr-19"
+      ],
+      "finalist": true
+     },
+     {
+      "address": "addr-16",
+      "rank": 12,
+      "scoreNumerator": 48,
+      "cloneOf": null,
+      "clones": [
+       "addr-17"
+      ],
+      "finalist": true
+     },
+     {
+      "address": "addr-11",
+      "rank": 13,
+      "scoreNumerator": 46,
+      "cloneOf": null,
+      "clones": [],
+      "finalist": true
+     },
+     {
+      "address": "addr-19",
+      "rank": 14,
+      "scoreNumerator": 42,
+      "cloneOf": {
+       "address": "addr-23",
+       "correlation": 0.9759277477039585
+      },
+      "clones": [],
+      "finalist": false
+     },
+     {
+      "address": "addr-17",
+      "rank": 15,
+      "scoreNumerator": 26,
+      "cloneOf": {
+       "address": "addr-16",
+       "correlation": 0.9128761183824236
+      },
+      "clones": [],
+      "finalist": false
+     },
+     {
+      "address": "addr-14",
+      "rank": 16,
+      "scoreNumerator": 0,
+      "cloneOf": null,
+      "clones": [],
+      "finalist": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "bridge-through-unranked",
+   "note": "addr-10 is not ranked (it fails stillActive) but links addr-21 and addr-13: they are still one operator, so addr-13 is a clone of addr-21.",
+   "links": {
+    "addr-10": [
+     "addr-21",
+     "addr-13"
+    ]
+   },
+   "expected": {
+    "finalists": [
+     "addr-21",
+     "addr-04",
+     "addr-18",
+     "addr-22",
+     "addr-07",
+     "addr-23",
+     "addr-16",
+     "addr-11",
+     "addr-14"
+    ],
+    "funnel": [
+     {
+      "stage": "universe",
+      "count": 24
+     },
+     {
+      "stage": "minAccountValue",
+      "count": 23
+     },
+     {
+      "stage": "minActiveDays",
+      "count": 23
+     },
+     {
+      "stage": "stillActive",
+      "count": 22
+     },
+     {
+      "stage": "minTrades",
+      "count": 17
+     },
+     {
+      "stage": "notClosed",
+      "count": 17
+     },
+     {
+      "stage": "minMonthPoints",
+      "count": 17
+     },
+     {
+      "stage": "minCoverage",
+      "count": 16
+     },
+     {
+      "stage": "noRuin",
+      "count": 16
+     },
+     {
+      "stage": "ranked",
+      "count": 16
+     },
+     {
+      "stage": "distinct",
+      "count": 9
+     },
+     {
+      "stage": "finalists",
+      "count": 9
+     }
+    ],
+    "candidates": [
+     {
+      "address": "addr-21",
+      "rank": 1,
+      "scoreNumerator": 178,
+      "cloneOf": null,
+      "clones": [
+       "addr-13"
+      ],
+      "finalist": true
+     },
+     {
+      "address": "addr-04",
+      "rank": 2,
+      "scoreNumerator": 147,
+      "cloneOf": null,
+      "clones": [
+       "addr-06",
+       "addr-09",
+       "addr-02"
+      ],
+      "finalist": true
+     },
+     {
+      "address": "addr-06",
+      "rank": 3,
+      "scoreNumerator": 141,
+      "cloneOf": {
+       "address": "addr-04",
+       "correlation": 0.9907175889823339
+      },
+      "clones": [],
+      "finalist": false
+     },
+     {
+      "address": "addr-09",
+      "rank": 4,
+      "scoreNumerator": 132,
+      "cloneOf": {
+       "address": "addr-04",
+       "correlation": 0.9641844347339362
+      },
+      "clones": [],
+      "finalist": false
+     },
+     {
+      "address": "addr-02",
+      "rank": 5,
+      "scoreNumerator": 132,
+      "cloneOf": {
+       "address": "addr-04",
+       "correlation": 0.9441653144341693
+      },
+      "clones": [],
+      "finalist": false
+     },
+     {
+      "address": "addr-18",
+      "rank": 6,
+      "scoreNumerator": 114,
+      "cloneOf": null,
+      "clones": [
+       "addr-24"
+      ],
+      "finalist": true
+     },
+     {
+      "address": "addr-22",
+      "rank": 7,
+      "scoreNumerator": 110,
+      "cloneOf": null,
+      "clones": [],
+      "finalist": true
+     },
+     {
+      "address": "addr-13",
+      "rank": 8,
+      "scoreNumerator": 110,
+      "cloneOf": {
+       "address": "addr-21",
+       "correlation": null
+      },
+      "clones": [],
+      "finalist": false
+     },
+     {
+      "address": "addr-07",
+      "rank": 9,
+      "scoreNumerator": 96,
+      "cloneOf": null,
+      "clones": [],
+      "finalist": true
+     },
+     {
+      "address": "addr-24",
+      "rank": 10,
+      "scoreNumerator": 60,
+      "cloneOf": {
+       "address": "addr-18",
+       "correlation": 0.949439444201087
+      },
+      "clones": [],
+      "finalist": false
+     },
+     {
+      "address": "addr-23",
+      "rank": 11,
+      "scoreNumerator": 58,
+      "cloneOf": null,
+      "clones": [
+       "addr-19"
+      ],
+      "finalist": true
+     },
+     {
+      "address": "addr-16",
+      "rank": 12,
+      "scoreNumerator": 48,
+      "cloneOf": null,
+      "clones": [
+       "addr-17"
+      ],
+      "finalist": true
+     },
+     {
+      "address": "addr-11",
+      "rank": 13,
+      "scoreNumerator": 46,
+      "cloneOf": null,
+      "clones": [],
+      "finalist": true
+     },
+     {
+      "address": "addr-19",
+      "rank": 14,
+      "scoreNumerator": 42,
+      "cloneOf": {
+       "address": "addr-23",
+       "correlation": 0.9759277477039585
+      },
+      "clones": [],
+      "finalist": false
+     },
+     {
+      "address": "addr-17",
+      "rank": 15,
+      "scoreNumerator": 26,
+      "cloneOf": {
+       "address": "addr-16",
+       "correlation": 0.9128761183824236
+      },
+      "clones": [],
+      "finalist": false
+     },
+     {
+      "address": "addr-14",
+      "rank": 16,
+      "scoreNumerator": 0,
+      "cloneOf": null,
+      "clones": [],
+      "finalist": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "group-clone-of-earlier-representative",
+   "note": "addr-06 (rho 0.991 with addr-04) links addr-13: the unit {addr-06, addr-13} is headed by addr-06, which correlates with the earlier representative addr-04, so both become clones of addr-04 (addr-13 with correlation null).",
+   "links": {
+    "addr-06": [
+     "addr-13"
+    ]
+   },
+   "expected": {
+    "finalists": [
+     "addr-21",
+     "addr-04",
+     "addr-18",
+     "addr-22",
+     "addr-07",
+     "addr-23",
+     "addr-16",
+     "addr-11",
+     "addr-14"
+    ],
+    "funnel": [
+     {
+      "stage": "universe",
+      "count": 24
+     },
+     {
+      "stage": "minAccountValue",
+      "count": 23
+     },
+     {
+      "stage": "minActiveDays",
+      "count": 23
+     },
+     {
+      "stage": "stillActive",
+      "count": 22
+     },
+     {
+      "stage": "minTrades",
+      "count": 17
+     },
+     {
+      "stage": "notClosed",
+      "count": 17
+     },
+     {
+      "stage": "minMonthPoints",
+      "count": 17
+     },
+     {
+      "stage": "minCoverage",
+      "count": 16
+     },
+     {
+      "stage": "noRuin",
+      "count": 16
+     },
+     {
+      "stage": "ranked",
+      "count": 16
+     },
+     {
+      "stage": "distinct",
+      "count": 9
+     },
+     {
+      "stage": "finalists",
+      "count": 9
+     }
+    ],
+    "candidates": [
+     {
+      "address": "addr-21",
+      "rank": 1,
+      "scoreNumerator": 178,
+      "cloneOf": null,
+      "clones": [],
+      "finalist": true
+     },
+     {
+      "address": "addr-04",
+      "rank": 2,
+      "scoreNumerator": 147,
+      "cloneOf": null,
+      "clones": [
+       "addr-06",
+       "addr-09",
+       "addr-02",
+       "addr-13"
+      ],
+      "finalist": true
+     },
+     {
+      "address": "addr-06",
+      "rank": 3,
+      "scoreNumerator": 141,
+      "cloneOf": {
+       "address": "addr-04",
+       "correlation": 0.9907175889823339
+      },
+      "clones": [],
+      "finalist": false
+     },
+     {
+      "address": "addr-09",
+      "rank": 4,
+      "scoreNumerator": 132,
+      "cloneOf": {
+       "address": "addr-04",
+       "correlation": 0.9641844347339362
+      },
+      "clones": [],
+      "finalist": false
+     },
+     {
+      "address": "addr-02",
+      "rank": 5,
+      "scoreNumerator": 132,
+      "cloneOf": {
+       "address": "addr-04",
+       "correlation": 0.9441653144341693
+      },
+      "clones": [],
+      "finalist": false
+     },
+     {
+      "address": "addr-18",
+      "rank": 6,
+      "scoreNumerator": 114,
+      "cloneOf": null,
+      "clones": [
+       "addr-24"
+      ],
+      "finalist": true
+     },
+     {
+      "address": "addr-22",
+      "rank": 7,
+      "scoreNumerator": 110,
+      "cloneOf": null,
+      "clones": [],
+      "finalist": true
+     },
+     {
+      "address": "addr-13",
+      "rank": 8,
+      "scoreNumerator": 110,
+      "cloneOf": {
+       "address": "addr-04",
+       "correlation": null
+      },
+      "clones": [],
+      "finalist": false
+     },
+     {
+      "address": "addr-07",
+      "rank": 9,
+      "scoreNumerator": 96,
+      "cloneOf": null,
+      "clones": [],
+      "finalist": true
+     },
+     {
+      "address": "addr-24",
+      "rank": 10,
+      "scoreNumerator": 60,
+      "cloneOf": {
+       "address": "addr-18",
+       "correlation": 0.949439444201087
+      },
+      "clones": [],
+      "finalist": false
+     },
+     {
+      "address": "addr-23",
+      "rank": 11,
+      "scoreNumerator": 58,
+      "cloneOf": null,
+      "clones": [
+       "addr-19"
+      ],
+      "finalist": true
+     },
+     {
+      "address": "addr-16",
+      "rank": 12,
+      "scoreNumerator": 48,
+      "cloneOf": null,
+      "clones": [
+       "addr-17"
+      ],
+      "finalist": true
+     },
+     {
+      "address": "addr-11",
+      "rank": 13,
+      "scoreNumerator": 46,
+      "cloneOf": null,
+      "clones": [],
+      "finalist": true
+     },
+     {
+      "address": "addr-19",
+      "rank": 14,
+      "scoreNumerator": 42,
+      "cloneOf": {
+       "address": "addr-23",
+       "correlation": 0.9759277477039585
+      },
+      "clones": [],
+      "finalist": false
+     },
+     {
+      "address": "addr-17",
+      "rank": 15,
+      "scoreNumerator": 26,
+      "cloneOf": {
+       "address": "addr-16",
+       "correlation": 0.9128761183824236
+      },
+      "clones": [],
+      "finalist": false
+     },
+     {
+      "address": "addr-14",
+      "rank": 16,
+      "scoreNumerator": 0,
+      "cloneOf": null,
+      "clones": [],
+      "finalist": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "link-to-unknown-address",
+   "note": "A link to an address that is not among the inputs is ignored.",
+   "links": {
+    "addr-21": [
+     "addr-99"
+    ]
+   },
+   "expected": {
+    "finalists": [
+     "addr-21",
+     "addr-04",
+     "addr-18",
+     "addr-22",
+     "addr-13",
+     "addr-07",
+     "addr-23",
+     "addr-16",
+     "addr-11",
+     "addr-14"
+    ],
+    "funnel": [
+     {
+      "stage": "universe",
+      "count": 24
+     },
+     {
+      "stage": "minAccountValue",
+      "count": 23
+     },
+     {
+      "stage": "minActiveDays",
+      "count": 23
+     },
+     {
+      "stage": "stillActive",
+      "count": 22
+     },
+     {
+      "stage": "minTrades",
+      "count": 17
+     },
+     {
+      "stage": "notClosed",
+      "count": 17
+     },
+     {
+      "stage": "minMonthPoints",
+      "count": 17
+     },
+     {
+      "stage": "minCoverage",
+      "count": 16
+     },
+     {
+      "stage": "noRuin",
+      "count": 16
+     },
+     {
+      "stage": "ranked",
+      "count": 16
+     },
+     {
+      "stage": "distinct",
+      "count": 10
+     },
+     {
+      "stage": "finalists",
+      "count": 10
+     }
+    ],
+    "candidates": [
+     {
+      "address": "addr-21",
+      "rank": 1,
+      "scoreNumerator": 178,
+      "cloneOf": null,
+      "clones": [],
+      "finalist": true
+     },
+     {
+      "address": "addr-04",
+      "rank": 2,
+      "scoreNumerator": 147,
+      "cloneOf": null,
+      "clones": [
+       "addr-06",
+       "addr-09",
+       "addr-02"
+      ],
+      "finalist": true
+     },
+     {
+      "address": "addr-06",
+      "rank": 3,
+      "scoreNumerator": 141,
+      "cloneOf": {
+       "address": "addr-04",
+       "correlation": 0.9907175889823339
+      },
+      "clones": [],
+      "finalist": false
+     },
+     {
+      "address": "addr-09",
+      "rank": 4,
+      "scoreNumerator": 132,
+      "cloneOf": {
+       "address": "addr-04",
+       "correlation": 0.9641844347339362
+      },
+      "clones": [],
+      "finalist": false
+     },
+     {
+      "address": "addr-02",
+      "rank": 5,
+      "scoreNumerator": 132,
+      "cloneOf": {
+       "address": "addr-04",
+       "correlation": 0.9441653144341693
+      },
+      "clones": [],
+      "finalist": false
+     },
+     {
+      "address": "addr-18",
+      "rank": 6,
+      "scoreNumerator": 114,
+      "cloneOf": null,
+      "clones": [
+       "addr-24"
+      ],
+      "finalist": true
+     },
+     {
+      "address": "addr-22",
+      "rank": 7,
+      "scoreNumerator": 110,
+      "cloneOf": null,
+      "clones": [],
+      "finalist": true
+     },
+     {
+      "address": "addr-13",
+      "rank": 8,
+      "scoreNumerator": 110,
+      "cloneOf": null,
+      "clones": [],
+      "finalist": true
+     },
+     {
+      "address": "addr-07",
+      "rank": 9,
+      "scoreNumerator": 96,
+      "cloneOf": null,
+      "clones": [],
+      "finalist": true
+     },
+     {
+      "address": "addr-24",
+      "rank": 10,
+      "scoreNumerator": 60,
+      "cloneOf": {
+       "address": "addr-18",
+       "correlation": 0.949439444201087
+      },
+      "clones": [],
+      "finalist": false
+     },
+     {
+      "address": "addr-23",
+      "rank": 11,
+      "scoreNumerator": 58,
+      "cloneOf": null,
+      "clones": [
+       "addr-19"
+      ],
+      "finalist": true
+     },
+     {
+      "address": "addr-16",
+      "rank": 12,
+      "scoreNumerator": 48,
+      "cloneOf": null,
+      "clones": [
+       "addr-17"
+      ],
+      "finalist": true
+     },
+     {
+      "address": "addr-11",
+      "rank": 13,
+      "scoreNumerator": 46,
+      "cloneOf": null,
+      "clones": [],
+      "finalist": true
+     },
+     {
+      "address": "addr-19",
+      "rank": 14,
+      "scoreNumerator": 42,
+      "cloneOf": {
+       "address": "addr-23",
+       "correlation": 0.9759277477039585
+      },
+      "clones": [],
+      "finalist": false
+     },
+     {
+      "address": "addr-17",
+      "rank": 15,
+      "scoreNumerator": 26,
+      "cloneOf": {
+       "address": "addr-16",
+       "correlation": 0.9128761183824236
+      },
+      "clones": [],
+      "finalist": false
+     },
+     {
+      "address": "addr-14",
+      "rank": 16,
+      "scoreNumerator": 0,
+      "cloneOf": null,
+      "clones": [],
+      "finalist": true
+     }
+    ]
+   }
+  }
+ ]
+}
