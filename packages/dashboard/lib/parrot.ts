@@ -44,6 +44,8 @@ const integer = (v: unknown): v is number => nonnegative(v) && Number.isSafeInte
 const strings = (v: unknown): v is string[] => Array.isArray(v) && v.every(str);
 const nullableString = (v: unknown): v is string | null => v === null || str(v);
 const address = (v: unknown): v is string => str(v) && /^0x[0-9a-fA-F]{40}$/.test(v);
+// Sample fixtures use ids like "addr-21"; live data uses 0x addresses. Rendered as text only.
+const walletId = (v: unknown): v is string => str(v) && /^[\w.:-]{1,66}$/.test(v);
 const oneOf = (v: unknown, choices: string[]) => str(v) && choices.includes(v);
 const scalar = (v: unknown) => str(v) || finite(v);
 
@@ -63,7 +65,7 @@ export function isChatResponse(v: unknown): v is ChatResponse {
   return typeof p.liveEligible === "boolean" && integer(p.effectiveMaxSources) && p.effectiveMaxSources >= 5 && p.effectiveMaxSources <= 25 &&
     Array.isArray(p.changes) && p.changes.every(c => record(c) && str(c.field) && scalar(c.from) && scalar(c.to)) &&
     Array.isArray(p.clamps) && p.clamps.every(c => record(c) && str(c.field) && finite(c.requested) && finite(c.applied)) &&
-    strings(p.notes) && Array.isArray(v.shortlist.addresses) && v.shortlist.addresses.every(address) &&
+    strings(p.notes) && Array.isArray(v.shortlist.addresses) && v.shortlist.addresses.every(walletId) &&
     oneOf(v.shortlist.dataSource, ["live", "sample"]);
 }
 
@@ -72,7 +74,7 @@ export function isPreviewResponse(v: unknown): v is PreviewResponse {
   const p = v.preview;
   return p.version === "1" && typeof p.liveEligible === "boolean" && typeof p.paperOnly === "boolean" &&
     str(p.weighting) && record(p.policy) && integer(p.cashUnits) && strings(p.notes) && str(p.previewHash) && p.previewHash.length > 0 &&
-    Array.isArray(p.sources) && p.sources.every(s => record(s) && address(s.address) && integer(s.weightUnits) && integer(s.ceilingUnits));
+    Array.isArray(p.sources) && p.sources.every(s => record(s) && walletId(s.address) && integer(s.weightUnits) && integer(s.ceilingUnits));
 }
 
 export function isApiError(v: unknown): v is ApiError {

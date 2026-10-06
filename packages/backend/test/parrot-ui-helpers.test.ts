@@ -93,15 +93,21 @@ describe("untrusted API results", () => {
       { policy: { ...chat.policy, clamps: [{ field: "x", requested: 100, applied: "3" }] } },
       { policy: { ...chat.policy, notes: [null] } }, { policy: { ...chat.policy, liveEligible: 1 } },
       { shortlist: { addresses: [42], dataSource: "sample" } },
-      { shortlist: { addresses: ["0x1234"], dataSource: "live" } },
+      { shortlist: { addresses: ["<img src=x>"], dataSource: "live" } },
+      { shortlist: { addresses: ["a".repeat(67)], dataSource: "live" } },
+      { shortlist: { addresses: [""], dataSource: "live" } },
       { shortlist: { addresses: [], dataSource: "cached" } },
     ]) expect(isChatResponse({ ...chat, ...patch })).toBe(false);
+  });
+  test("accepts sample-fixture wallet ids as well as 0x addresses (real-backend regression)", () => {
+    expect(isChatResponse({ ...chat, shortlist: { addresses: ["addr-21", "addr-04"], dataSource: "sample" } })).toBe(true);
+    expect(isPreviewResponse({ ...preview, preview: { ...preview.preview, sources: [{ address: "addr-21", weightUnits: 1, ceilingUnits: 2 }] } })).toBe(true);
   });
   test("validates every nested preview structure", () => {
     expect(isPreviewResponse({ ...preview, requestId: 1 })).toBe(false);
     for (const patch of [
       { version: "2" }, { paperOnly: "yes" }, { liveEligible: null }, { policy: [] }, { weighting: null },
-      { sources: [{ address: "0x1234", weightUnits: 1, ceilingUnits: 2 }] },
+      { sources: [{ address: "has space", weightUnits: 1, ceilingUnits: 2 }] },
       { sources: [{ ...preview.preview.sources[0], weightUnits: NaN }] },
       { sources: [{ ...preview.preview.sources[0], ceilingUnits: -1 }] },
       { cashUnits: -1 }, { notes: [42] }, { previewHash: "" },
