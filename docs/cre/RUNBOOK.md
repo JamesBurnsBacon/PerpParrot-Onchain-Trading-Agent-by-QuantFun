@@ -70,8 +70,11 @@ The production file holds placeholders until the services are deployed and the s
 
 ## Deploy
 
-1. **Supabase:** run `supabase/migrations/20261006120000_cre_mirror.sql` (SQL editor or
-   `supabase db push`). Use the service-role connection string as `DATABASE_URL`.
+1. **Supabase:** project `PerpParrot` (ref `clheeepphmomkymawsfq`, linked to this repo with working
+   directory `.`, automatic deploys off; see `docs/supabase` on its branch). Run
+   `supabase/migrations/20261006120000_cre_mirror.sql` (SQL editor, or `supabase link
+   --project-ref clheeepphmomkymawsfq && supabase db push`). Use the service-role connection
+   string as `DATABASE_URL` for both services.
 2. **Railway:** two services from this repo, **root directory = repository root** (both import
    `packages/shared`). Config file: `packages/backend/railway.json` and
    `packages/executor/railway.json` (Dockerfile build, `/health` check, one replica each).
