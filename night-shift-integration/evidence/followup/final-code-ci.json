@@ -1,0 +1,47 @@
+{
+  "head": "4b75b59c1dc31ba85828abbf870b52f64a008504",
+  "checks": [
+    {
+      "name": "Vercel Preview Comments",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://vercel.com/github"
+    },
+    {
+      "name": "test (executor)",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/JamesBurnsBacon/PerpParrot-Onchain-Trading-Agent-by-QuantFun/actions/runs/37525528869/job/112481443240"
+    },
+    {
+      "name": "test (backend)",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/JamesBurnsBacon/PerpParrot-Onchain-Trading-Agent-by-QuantFun/actions/runs/37525528869/job/112481442966"
+    },
+    {
+      "name": "verify",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/JamesBurnsBacon/PerpParrot-Onchain-Trading-Agent-by-QuantFun/actions/runs/37525528807/job/112481442843"
+    },
+    {
+      "name": "dashboard",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/JamesBurnsBacon/PerpParrot-Onchain-Trading-Agent-by-QuantFun/actions/runs/37525528869/job/112481442766"
+    },
+    {
+      "name": "offline-proof",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/JamesBurnsBacon/PerpParrot-Onchain-Trading-Agent-by-QuantFun/actions/runs/37525528838/job/112481442502"
+    },
+    {
+      "name": "Supabase Preview",
+      "status": "completed",
+      "conclusion": "skipped",
+      "url": "https://supabase.com/dashboard/project/clheeepphmomkymawsfq/branches"
+    }
+  ]
+}

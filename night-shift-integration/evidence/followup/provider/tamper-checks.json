@@ -1,0 +1,32 @@
+{
+  "schema": "provider-verifier-tamper-checks.v1",
+  "source": "temporary copies of actual downloaded provider artifacts",
+  "externalCalls": 0,
+  "checks": [
+    {
+      "case": "changed-numeric-output",
+      "rejected": true,
+      "reason": "VERIFY_PROVIDER:AUDIT_OUTPUT_HASH"
+    },
+    {
+      "case": "changed-record-time",
+      "rejected": true,
+      "reason": "VERIFY_PROVIDER:AUDIT_RECORD_HASH_OR_DUPLICATE"
+    },
+    {
+      "case": "missing-receipt-audit-id",
+      "rejected": true,
+      "reason": "VERIFY_PROVIDER:RECEIPT_AUDIT_SET"
+    },
+    {
+      "case": "changed-input-bytes",
+      "rejected": true,
+      "reason": "VERIFY_PROVIDER:INPUT_SHA256_OR_SUMMARY_SCHEMA"
+    },
+    {
+      "case": "private-header-field",
+      "rejected": true,
+      "reason": "VERIFY_PROVIDER:AUDIT_FIELDS_OR_PRIVATE_HEADERS"
+    }
+  ]
+}

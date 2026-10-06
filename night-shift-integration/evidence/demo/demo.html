@@ -1,6 +1,6 @@
 <!doctype html><html lang="en"><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PerpParrot — integration evidence</title><style>
 body{font-family:system-ui,sans-serif;margin:0;background:#0b1421;color:#e7eef8}main{max-width:1100px;margin:auto;padding:40px 24px}h1{font-size:36px;margin-bottom:8px}p{line-height:1.65;color:#b9c9dd}.tag{display:inline-block;padding:7px 12px;border-radius:6px;background:#254538;color:#aff0cc;margin:4px 8px 4px 0}.scope{border-left:4px solid #e9b863;background:#252433;padding:16px}.flow{display:flex;gap:9px;flex-wrap:wrap;margin:26px 0}.flow span{border:1px solid #39506a;padding:15px;border-radius:8px}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}.card{background:#142338;padding:22px;border-radius:12px}table{width:100%;border-collapse:collapse}td,th{padding:10px;text-align:left;border-bottom:1px solid #314258}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;background:#09111d;padding:16px;border-radius:8px}summary{cursor:pointer;padding:16px 0}small{color:#9aacbe}a{color:#a9d0ff}.hash{overflow-wrap:anywhere}h2{font-size:22px;margin:12px 0}</style><main>
-<small>PerpParrot · Night handoff · 2026-10-06T18:46:26.514Z</small><h1>One pipeline. Inspectable evidence.</h1>
+<small>PerpParrot · Night handoff · 2026-10-06T20:18:31.312Z</small><h1>One pipeline. Inspectable evidence.</h1>
 <p>James’s backend / executor interfaces, Masa’s Score and the team’s Review / freeze modules, exercised together.</p>
 <div class="scope"><strong>Controlled integration demonstration</strong><br>Inputs and model decisions below are synthetic and deterministic. Real team modules, HTTP transport, SQL migrations and dry-run execution are used. This verifies integration and recovery; it is not a live trading result or a two-LLM performance comparison.</div>
 <div class="flow"><span>Score</span> → <span>Review + audit</span> → <span>Freeze + restart</span> → <span>Snapshot → HTTP targets</span> → <span>Executor dry run</span> → <span>Stored run → dashboard read</span></div>
@@ -495,7 +495,7 @@ body{font-family:system-ui,sans-serif;margin:0;background:#0b1421;color:#e7eef8}
   &quot;initialMarginUsd&quot;: 753.24005
 }</pre></details></section></div>
 <h2>Reproduce and verify</h2><p>Run <code>bun --no-env-file night-shift-integration/demo.ts</code> after installing pinned repository dependencies. Repeat: committed stages are reused. The adjacent <code>evidence.json</code> contains the full machine-readable result. GitHub’s handoff contains the separate real-data ingestion and historical replay results.</p>
-<p class="hash"><small>Code digest: fad9d893d42057b72efc294b54a4ef45252560dbb3294ef8374d1efbb485f974<br>Artifact chain: 6a52b45b13d2e926bfbbc5665e42fb68cc951d3bc3c45868fa850555f88484e5<br>Logical replay time: 2026-10-06T15:40:00.000Z</small></p><details><summary>Full provenance and receipt</summary><pre>{
+<p class="hash"><small>Code digest: 3a1abe27072cacfebcef58d6aee0ad91dc8ae17dd7a36766fef9591bd7cc3b74<br>Artifact chain: 6a52b45b13d2e926bfbbc5665e42fb68cc951d3bc3c45868fa850555f88484e5<br>Logical replay time: 2026-10-06T15:40:00.000Z</small></p><details><summary>Full provenance and receipt</summary><pre>{
   &quot;scope&quot;: &quot;Offline controlled scenario; real team modules and SQL migrations; deterministic model adapters; exchange dry run; no real orders.&quot;,
   &quot;event&quot;: {
     &quot;schemaVersion&quot;: &quot;night-pipeline.v2&quot;,
@@ -503,24 +503,24 @@ body{font-family:system-ui,sans-serif;margin:0;background:#0b1421;color:#e7eef8}
     &quot;bucketMs&quot;: 1791301200000,
     &quot;sourceAsOfMs&quot;: 1791301200000,
     &quot;sourceHash&quot;: &quot;811a4beb571faa5968f6acaa80beae003f77aea60ba73b7b9fd2d32651e0c229&quot;,
-    &quot;codeHash&quot;: &quot;fad9d893d42057b72efc294b54a4ef45252560dbb3294ef8374d1efbb485f974&quot;,
+    &quot;codeHash&quot;: &quot;3a1abe27072cacfebcef58d6aee0ad91dc8ae17dd7a36766fef9591bd7cc3b74&quot;,
     &quot;sourceKind&quot;: &quot;SYNTHETIC_FIXTURE&quot;
   },
   &quot;receipt&quot;: {
     &quot;schemaVersion&quot;: &quot;night-receipt.v1&quot;,
-    &quot;runId&quot;: &quot;night-pipeline.v2-1791301200000-8fbfcf0405fabe48&quot;,
+    &quot;runId&quot;: &quot;night-pipeline.v2-1791301200000-f7be923b0b277431&quot;,
     &quot;status&quot;: &quot;SUCCEEDED&quot;,
     &quot;economicAuthority&quot;: false,
     &quot;steps&quot;: [
       {
         &quot;stage&quot;: &quot;return-first&quot;,
         &quot;bodyHash&quot;: &quot;9bf10a2aaec437234bdf56766e4fccb129e6ded59aff2698d881a92943fe4bcb&quot;,
-        &quot;reused&quot;: true
+        &quot;reused&quot;: false
       },
       {
         &quot;stage&quot;: &quot;drawdown-first&quot;,
         &quot;bodyHash&quot;: &quot;1c0720080afaceb40d8ec60fce6cf7be3317b5e0188e2e9accf291c390dfe2fb&quot;,
-        &quot;reused&quot;: true
+        &quot;reused&quot;: false
       }
     ],
     &quot;artifactChainHash&quot;: &quot;6a52b45b13d2e926bfbbc5665e42fb68cc951d3bc3c45868fa850555f88484e5&quot;

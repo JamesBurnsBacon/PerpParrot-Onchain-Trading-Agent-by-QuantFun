@@ -1,0 +1,200 @@
+{
+  "checkedAt": "2026-10-06T20:18:25.351629+00:00",
+  "pullRequests": [
+    {
+      "number": 33,
+      "title": "Deliver Top 100 ingest, service-loop demo and recovery evidence",
+      "state": "open",
+      "head": "4a328f349ae917669e4bbd2e174452fd04a79bbc",
+      "base": "chore/remove-cre",
+      "author": "Bradley-Lyu",
+      "updatedAt": "2026-10-06T20:07:55Z",
+      "mergedAt": null
+    },
+    {
+      "number": 32,
+      "title": "Remove Chainlink CRE: read \u2192 process \u2192 AI \u2192 trade \u2192 record on our own services",
+      "state": "open",
+      "head": "af7e85749fb35527b41b5a5dbf308514e0d877cf",
+      "base": "main",
+      "author": "JamesBurnsBacon",
+      "updatedAt": "2026-10-06T16:56:58Z",
+      "mergedAt": null
+    },
+    {
+      "number": 31,
+      "title": "Ingest strict Score Top 100 every ten minutes with CRE simulation",
+      "state": "open",
+      "head": "afc8358b57d69fdd12dcdde19358fb2f497fcd40",
+      "base": "codex/ingest-snapshots",
+      "author": "Bradley-Lyu",
+      "updatedAt": "2026-10-06T16:59:06Z",
+      "mergedAt": null
+    },
+    {
+      "number": 30,
+      "title": "feat(parrot): Talk to the Parrot (GPT-Live voice, flock of wallet birds, bounded simulation preview)",
+      "state": "open",
+      "head": "5a4f0fd3fdd753e89af0ac0c8720a0071272a1f5",
+      "base": "main",
+      "author": "Masashi-Ono0611",
+      "updatedAt": "2026-10-06T16:59:11Z",
+      "mergedAt": null
+    },
+    {
+      "number": 29,
+      "title": "Maker share research; score: zero or near-zero maker volume is a slight negative",
+      "state": "closed",
+      "head": "c314f3b1c4c22714a3e87734dab6a6aee57cbcc5",
+      "base": "main",
+      "author": "JamesBurnsBacon",
+      "updatedAt": "2026-10-06T15:07:44Z",
+      "mergedAt": "2026-10-06T15:07:44Z"
+    },
+    {
+      "number": 28,
+      "title": "Executor fixes for #27: one waiting run lock, safe leverage refusals, recovery and journal fixes",
+      "state": "closed",
+      "head": "e6c856ee2acb10ce76fb1da1cb8af46fd0fe09fc",
+      "base": "ai-agent-workflow",
+      "author": "JamesBurnsBacon",
+      "updatedAt": "2026-10-06T14:49:46Z",
+      "mergedAt": "2026-10-06T14:49:46Z"
+    },
+    {
+      "number": 27,
+      "title": "Harden agent workflow integration and executor crash recovery",
+      "state": "closed",
+      "head": "ee50672500a29370acee3b6d32dc6021f3dfe0de",
+      "base": "main",
+      "author": "badjiallan053-boop",
+      "updatedAt": "2026-10-06T15:07:02Z",
+      "mergedAt": "2026-10-06T15:07:02Z"
+    },
+    {
+      "number": 26,
+      "title": "docs: explain research screening rules and unusual return calculations",
+      "state": "open",
+      "head": "eaaa5f498f502577ad4f30ec4c6b05c6b52a1cb5",
+      "base": "main",
+      "author": "Bradley-Lyu",
+      "updatedAt": "2026-10-06T14:44:19Z",
+      "mergedAt": null
+    }
+  ],
+  "newManualComments": [],
+  "branches": [
+    {
+      "name": "ai-agent-workflow",
+      "sha": "ee50672500a29370acee3b6d32dc6021f3dfe0de"
+    },
+    {
+      "name": "chore/remove-cre",
+      "sha": "af7e85749fb35527b41b5a5dbf308514e0d877cf"
+    },
+    {
+      "name": "codex/docs-screening-methodology",
+      "sha": "eaaa5f498f502577ad4f30ec4c6b05c6b52a1cb5"
+    },
+    {
+      "name": "codex/ingest-snapshots",
+      "sha": "9dbd2ca026ab365fc00da526d42f01a8f11e04c8"
+    },
+    {
+      "name": "codex/ingest-top100-loop",
+      "sha": "afc8358b57d69fdd12dcdde19358fb2f497fcd40"
+    },
+    {
+      "name": "codex/night-service-integration",
+      "sha": "4a328f349ae917669e4bbd2e174452fd04a79bbc"
+    },
+    {
+      "name": "cre-scaffold",
+      "sha": "c728eeb3e954d66da3c11ea704181c79e55e3218"
+    },
+    {
+      "name": "deploy/vercel-services",
+      "sha": "fba26ef12ba478f03fcab74007e2aef328adc971"
+    },
+    {
+      "name": "docs/rehearsal-migrations",
+      "sha": "758cbf15e7d0cb03ec267d92914ad1c0e8842c3a"
+    },
+    {
+      "name": "docs/supabase",
+      "sha": "9b004db958a6874c7cdd72814e527d9b7f10d80f"
+    },
+    {
+      "name": "docs/verifiability",
+      "sha": "b384bc9ac3e8a42876bef1407982defd53c8c0a6"
+    },
+    {
+      "name": "feat/dashboard-paper-table",
+      "sha": "ab677bfd4dda4487a1f9b032ff1f646c759625e9"
+    },
+    {
+      "name": "feat/dashboard-targets",
+      "sha": "6260bb71742a6d04af29163a8176b143ffadc291"
+    },
+    {
+      "name": "feat/executor-run-lock",
+      "sha": "b1960b4fc215ef97c2428195cea6dd9c73f4a0d3"
+    },
+    {
+      "name": "feat/paper-books",
+      "sha": "dc88f64180b591dc2080d815516fac120b994f93"
+    },
+    {
+      "name": "feat/parrot-intent",
+      "sha": "169ba59f9c79bbdee020e286685b13fdac13b82c"
+    },
+    {
+      "name": "feat/parrot-live",
+      "sha": "5a4f0fd3fdd753e89af0ac0c8720a0071272a1f5"
+    },
+    {
+      "name": "feat/review-frame-1.1",
+      "sha": "9e42e27bca8eb1f0b9d328ea6dca9793797e25a8"
+    },
+    {
+      "name": "fix/executor-27",
+      "sha": "e6c856ee2acb10ce76fb1da1cb8af46fd0fe09fc"
+    },
+    {
+      "name": "fix/review-2",
+      "sha": "8bb0b4821e276b208ab5617d908636433894dee2"
+    },
+    {
+      "name": "fix/vercel-bundle-noble",
+      "sha": "56f8bfd45d9439d554f5c82a41723473df5712ad"
+    },
+    {
+      "name": "integrate/cre-and-review",
+      "sha": "5a3373da6b779d1f080141164ff67f387da5071b"
+    },
+    {
+      "name": "main",
+      "sha": "35051296914c686799244b2ccc49bec7f18ed66d"
+    },
+    {
+      "name": "research/maker-share",
+      "sha": "c314f3b1c4c22714a3e87734dab6a6aee57cbcc5"
+    },
+    {
+      "name": "scripts/publish-artifact",
+      "sha": "8705b5f310feef0ebbc200d3f98bb4a678a3fd5f"
+    },
+    {
+      "name": "scripts/soak-production-timing",
+      "sha": "f67b7e55f800e136cf58aca54673ec58d53a7a26"
+    },
+    {
+      "name": "scripts/soak-wait-last-run",
+      "sha": "dbaba1be4376fb6a93da5375019679bde2310103"
+    },
+    {
+      "name": "spec/score-quant-redesign",
+      "sha": "91a125c32c9fb316d7fe533d93c91592e38c24fa"
+    }
+  ]
+}

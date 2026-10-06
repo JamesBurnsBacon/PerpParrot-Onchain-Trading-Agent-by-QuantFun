@@ -1,0 +1,72 @@
+{
+  "recordedAt": "2026-10-07T04:05:40.285052+08:00",
+  "scope": "Follow-up implementation and bounded validation",
+  "implementationCommit": "701000e",
+  "localTests": {
+    "nightIntegration": {
+      "pass": 37,
+      "fail": 0,
+      "assertions": 325
+    },
+    "ingest": {
+      "pass": 53,
+      "fail": 0,
+      "assertions": 292
+    },
+    "measuredEvidence": {
+      "pass": 18,
+      "fail": 0,
+      "assertions": 96
+    }
+  },
+  "typechecks": [
+    "root",
+    "night-shift-integration",
+    "backend"
+  ],
+  "ci": [
+    {
+      "conclusion": "success",
+      "details_url": "https://vercel.com/github",
+      "name": "Vercel Preview Comments",
+      "status": "completed"
+    },
+    {
+      "conclusion": "success",
+      "details_url": "https://github.com/JamesBurnsBacon/PerpParrot-Onchain-Trading-Agent-by-QuantFun/actions/runs/37523346065/job/112474029254",
+      "name": "offline-proof",
+      "status": "completed"
+    },
+    {
+      "conclusion": "success",
+      "details_url": "https://github.com/JamesBurnsBacon/PerpParrot-Onchain-Trading-Agent-by-QuantFun/actions/runs/37523345975/job/112474028175",
+      "name": "dashboard",
+      "status": "completed"
+    },
+    {
+      "conclusion": "success",
+      "details_url": "https://github.com/JamesBurnsBacon/PerpParrot-Onchain-Trading-Agent-by-QuantFun/actions/runs/37523345975/job/112474027956",
+      "name": "test (backend)",
+      "status": "completed"
+    },
+    {
+      "conclusion": "success",
+      "details_url": "https://github.com/JamesBurnsBacon/PerpParrot-Onchain-Trading-Agent-by-QuantFun/actions/runs/37523345975/job/112474027544",
+      "name": "test (executor)",
+      "status": "completed"
+    },
+    {
+      "conclusion": "success",
+      "details_url": "https://github.com/JamesBurnsBacon/PerpParrot-Onchain-Trading-Agent-by-QuantFun/actions/runs/37523345954/job/112474027470",
+      "name": "verify",
+      "status": "completed"
+    },
+    {
+      "conclusion": "skipped",
+      "details_url": "https://supabase.com/dashboard/project/clheeepphmomkymawsfq/branches",
+      "name": "Supabase Preview",
+      "status": "completed"
+    }
+  ],
+  "liveOrdersSubmitted": 0
+}

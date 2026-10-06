@@ -1,0 +1,61 @@
+{
+  "scope": "Production request construction over the supplied evidence. Local dummy HTTP503 responses only. Red-Team uses a synthetic maximum-candidate draft solely to test request capacity; it is not a selected portfolio.",
+  "schema": "provider-request-preflight.v1",
+  "frameHash": "0x892decadf5a438f3c0dfa0b3cda7f78638f1d1d49c9e0a78904413bc5249636e",
+  "evidenceHash": "0x151291843d37e86ddfc75428e6318859f6b1e19fb1c633ea7b4d268a8ab5a3db",
+  "finalists": 25,
+  "requests": [
+    {
+      "model": "gpt-4.1-mini-2025-04-14",
+      "stage": "paper_role",
+      "bytes": 111189,
+      "modelInputAnonymous": true
+    },
+    {
+      "model": "gpt-4.1-mini-2025-04-14",
+      "stage": "paper_risk",
+      "bytes": 110650,
+      "modelInputAnonymous": true
+    },
+    {
+      "model": "gpt-4.1-mini-2025-04-14",
+      "stage": "paper_redteam",
+      "bytes": 112918,
+      "modelInputAnonymous": true
+    },
+    {
+      "model": "gpt-4.1-2025-04-14",
+      "stage": "paper_role",
+      "bytes": 111184,
+      "modelInputAnonymous": true
+    },
+    {
+      "model": "gpt-4.1-2025-04-14",
+      "stage": "paper_risk",
+      "bytes": 110645,
+      "modelInputAnonymous": true
+    },
+    {
+      "model": "gpt-4.1-2025-04-14",
+      "stage": "paper_redteam",
+      "bytes": 112913,
+      "modelInputAnonymous": true
+    }
+  ],
+  "externalProviderCalls": 0,
+  "reviewReceiptsProduced": 0,
+  "economicAuthority": false,
+  "presentation": {
+    "method": "Evenly thin displayed curves, retaining both endpoints and >=26 points; then remove smallest displayed positions. Metrics, policy and raw measurements unchanged.",
+    "requestBudgetBytes": 115000,
+    "reservedDraftBytes": 2048,
+    "before": {
+      "curvePoints": 1139,
+      "positions": 42
+    },
+    "after": {
+      "curvePoints": 999,
+      "positions": 42
+    }
+  }
+}

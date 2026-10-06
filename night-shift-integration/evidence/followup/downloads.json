@@ -1,0 +1,21 @@
+{
+  "schema": "followup-downloads.v1",
+  "assets": [
+    {
+      "name": "measured-data-20261006T200556Z.zip",
+      "bytes": 11793349,
+      "sha256": "8030d46233569de5834146aa39e1c93c0d872fc0037fa0af38ecd652ff0e7859",
+      "url": "https://github.com/JamesBurnsBacon/PerpParrot-Onchain-Trading-Agent-by-QuantFun/releases/download/night-integration-2026-10-07/measured-data-20261006T200556Z.zip"
+    },
+    {
+      "name": "measured-review-input-20261006T200556Z.json",
+      "bytes": 2932363,
+      "sha256": "b2cee57d93db11bda4f6cd9c7a171aac2e18cbc087f50f19b2c84a6347813729",
+      "url": "https://github.com/JamesBurnsBacon/PerpParrot-Onchain-Trading-Agent-by-QuantFun/releases/download/night-integration-2026-10-07/measured-review-input-20261006T200556Z.json"
+    }
+  ],
+  "providerRun": "https://github.com/JamesBurnsBacon/PerpParrot-Onchain-Trading-Agent-by-QuantFun/actions/runs/37524055099",
+  "providerCodeCommit": "4a328f349ae917669e4bbd2e174452fd04a79bbc",
+  "verifierCodeCommit": "4b75b59",
+  "scope": "Public research account data and sanitized audit; no exchange orders."
+}

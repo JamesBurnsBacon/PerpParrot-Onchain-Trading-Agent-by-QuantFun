@@ -2,7 +2,7 @@
 
 Downloadable evidence is also checked into [evidence/](evidence/); its verifier recomputes the full chain.
 
-Start with **[HANDOFF_CN.md](HANDOFF_CN.md)** (Chinese), **[INTERFACES.md](INTERFACES.md)** (replaceable contracts), and **[DELIVERY_REPORT.md](DELIVERY_REPORT.md)** (executed evidence).
+Start with **[HANDOFF_CN.md](HANDOFF_CN.md)** (Chinese), **[FOLLOWUP_REPORT.md](FOLLOWUP_REPORT.md)** (latest results), **[INTERFACES.md](INTERFACES.md)** (replaceable contracts), and **[DELIVERY_REPORT.md](DELIVERY_REPORT.md)** (initial evidence). [TEAM_SYNC.md](TEAM_SYNC.md) records the teammate revisions used.
 
 Based on James's PR #32, `af7e857`: no Chainlink dependency. Reuses Masa's current Score, the team's Review/audit/freeze modules, backend snapshots, target exposure math, executor and SQL stores. Two tiny deterministic rule adapters are deliberately unchanged: A ranks positive trailing return; B ranks lower sampled drawdown. They are not two LLMs.
 
@@ -45,7 +45,7 @@ Tests separately SIGKILL a child after a committed checkpoint. The framework is 
 2. **Historical evaluation:** the existing 10,934-input archive is validated and replayed over 14 / 30 / 42 / 90-day windows with A, B and BTC. The research universe was selected retrospectively, so this is an integration baseline with survivorship bias, not a point-in-time strategy validation.
 3. **Live-data service smoke:** `scripts/e2e-mirror.sh all` starts actual backend/executor processes and uses public Hyperliquid reads. It stays dry-run. Its checked-in fixture configuration is independent of the synthetic Review demonstration.
 
-The deliverable does not claim the real Top 100 passed Review: the archived accounts still lack some required execution and OOS evidence. No fabricated values are inserted into real accounts. The complete Review-to-executor path is demonstrated using a controlled scenario.
+The measured rehearsal additionally feeds 25 strict Score finalists from one real Top 100 artifact through Review and SQL audit. See [MEASURED_PIPELINE.md](MEASURED_PIPELINE.md) for units and contracts, and the latest report for actual acceptance/rejection and provider results. The complete Review-to-executor success scenario uses explicitly controlled inputs; the real cohort must satisfy the existing gates to freeze.
 
 For full historical replay, download the existing published archive:
 
@@ -62,9 +62,9 @@ The benchmark command caches one public API response. The replay then works offl
 ## What to replace tomorrow
 
 - A/B rule logic: `algorithms.ts::allocate`; keep `night-allocation.v1`, fractional weights and deterministic ties.
-- Model adapters: replace deterministic providers with the existing OpenAI-compatible adapter; keep evidence hashes, schemas, timeouts and audit.
-- Synthetic fields: replace with measured real-account evidence; missing values must stay unknown until measured.
+- Model adapters: keep the existing OpenAI-compatible adapter, evidence hashes, schemas, timeouts and audit; use provider receipts to distinguish actual calls from rule adapters.
+- Measured fields: `measured-evidence.ts` supplies raw-bound measurements and explicit coverage; use candidate diagnostics to prioritize remaining gaps.
 - Runtime: invoke the ordinary ingestion job from one supervised worker; use Vercel Cron only if runtime fits. Frozen mirror runs use James's backend/executor cron interfaces.
 - Database: apply the reviewed migrations to the intended environment before deploying renamed tables. Local PGlite proof does not apply them to Supabase.
 
-Existing live ingestion was left on its original branch. This delivery does not deploy services, change the real frozen configuration or send exchange orders. Funded canary, hosted soak and real model runs remain separate operator work.
+Existing live ingestion remains on its original branch. This delivery does not change the real frozen configuration or send exchange orders. Hosted runtime verification and any funded canary remain operator work; the latest report records model-call outcomes separately.

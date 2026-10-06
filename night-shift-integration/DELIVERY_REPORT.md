@@ -1,5 +1,8 @@
 # Delivery evidence — 2026-10-07
 
+This is the initial 02:47 delivery. See [FOLLOWUP_REPORT.md](FOLLOWUP_REPORT.md) for
+the subsequent measured-data work, recovery fixes and time-boxed validation.
+
 This branch integrates the new service interfaces from James's PR #32 (`af7e857`),
 Bradley's ordinary Top 100 ingest from PR #31, Masa's current Score, and the team's
 Review / audit / freeze modules. The algorithms remain two simple deterministic rules.

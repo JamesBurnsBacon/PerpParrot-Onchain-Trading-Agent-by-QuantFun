@@ -1,0 +1,20 @@
+{
+  "checkedAt": "2026-10-06T19:35:50.733612+00:00",
+  "base": "https://perpparrot-git-codex-night-service-int-58fc79-coin-worth-vaults.vercel.app",
+  "requests": [
+    {
+      "path": "/api/backend/health",
+      "httpStatus": 200,
+      "contentType": "text/html; charset=utf-8",
+      "json": null
+    },
+    {
+      "path": "/api/executor/health",
+      "httpStatus": 200,
+      "contentType": "text/html; charset=utf-8",
+      "json": null
+    }
+  ],
+  "runtimeVerified": false,
+  "limitation": "Requests redirected to vercel.com authentication and returned HTML, not service JSON. Preview build success does not verify deployed backend/executor."
+}

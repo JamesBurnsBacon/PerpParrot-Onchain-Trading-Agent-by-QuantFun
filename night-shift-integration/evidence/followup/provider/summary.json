@@ -1,0 +1,1059 @@
+{
+  "schemaVersion": "measured-provider-probe.v1",
+  "sourceKind": "REAL_PUBLIC_API",
+  "economicAuthority": false,
+  "startedAtMs": 1791317262100,
+  "inputSha256": "b2cee57d93db11bda4f6cd9c7a171aac2e18cbc087f50f19b2c84a6347813729",
+  "sourceIngest": {
+    "artifactHash": "ed32fb87d7d345c214048db7814954d24b1a75f86db9658ec5669da924a5aef0",
+    "runId": "ingest-1791311400",
+    "asOfMs": 1791311842604
+  },
+  "promptVersion": "1.1.0",
+  "models": [
+    {
+      "model": "gpt-4.1-mini-2025-04-14",
+      "startedAtMs": 1791317262201,
+      "reviewStatus": "INVALID_BUCKET",
+      "reason": "INSUFFICIENT_EVIDENCE",
+      "sourceCount": 0,
+      "service": null,
+      "stage": "complete",
+      "receiptHash": "0x2016583cbfe7c83a0caad807a9c9504163351b9afd550eb50f0daec91e11fa8c",
+      "auditRows": 2,
+      "serviceBlocked": "INSUFFICIENT_EVIDENCE",
+      "completedAtMs": 1791317278012
+    },
+    {
+      "model": "gpt-4.1-2025-04-14",
+      "startedAtMs": 1791317278017,
+      "reviewStatus": "INVALID_BUCKET",
+      "reason": "INSUFFICIENT_EVIDENCE",
+      "sourceCount": 0,
+      "service": null,
+      "stage": "complete",
+      "receiptHash": "0xed6847b8dad95a9465b3d58336ddd91f59f452ac96045470a50c2b4f10b61e8b",
+      "auditRows": 2,
+      "serviceBlocked": "INSUFFICIENT_EVIDENCE",
+      "completedAtMs": 1791317290118
+    }
+  ],
+  "calls": [
+    {
+      "model": "gpt-4.1-mini-2025-04-14",
+      "stage": "role",
+      "startedAtMs": 1791317263331,
+      "transport": "HTTP_RESPONSE",
+      "responseValidated": true,
+      "httpStatus": 200,
+      "completedAtMs": 1791317277954
+    },
+    {
+      "model": "gpt-4.1-mini-2025-04-14",
+      "stage": "risk",
+      "startedAtMs": 1791317263342,
+      "transport": "HTTP_RESPONSE",
+      "responseValidated": true,
+      "httpStatus": 200,
+      "completedAtMs": 1791317274578
+    },
+    {
+      "model": "gpt-4.1-2025-04-14",
+      "stage": "role",
+      "startedAtMs": 1791317278789,
+      "transport": "HTTP_RESPONSE",
+      "responseValidated": true,
+      "httpStatus": 200,
+      "completedAtMs": 1791317290065
+    },
+    {
+      "model": "gpt-4.1-2025-04-14",
+      "stage": "risk",
+      "startedAtMs": 1791317278798,
+      "transport": "HTTP_RESPONSE",
+      "responseValidated": true,
+      "httpStatus": 200,
+      "completedAtMs": 1791317290016
+    }
+  ],
+  "callsAllowed": 6,
+  "retries": 0,
+  "liveOrdersSubmitted": 0,
+  "clock": "real Date.now for provider review and expiry checks",
+  "scope": "Two model committee runs on one current cohort; not four-window model-selection performance validation.",
+  "preflightStage": "complete",
+  "frameHash": "0x21037b290b294d130e3d8e3f23bf943d0ac29b4f0b962e9ffff846d6221a075d",
+  "evidenceHash": "0x912a6e4877f83853decd829c7706e3829dadc1066a431ad5c8fd599fb6049d83",
+  "measurementProvenance": {
+    "schemaVersion": "measured-upstream-cache.v1",
+    "sourceKind": "REAL_PUBLIC_API",
+    "dataKind": "measured-public-api-responses",
+    "asOfMs": 1791317262142,
+    "maxReadAgeMs": 3600000,
+    "sourceReads": [
+      {
+        "address": "0x06b786a0d3dbc3e9f71e42a365800361f8006980",
+        "startedAtMs": 1791316765736,
+        "completedAtMs": 1791316768194,
+        "portfolioObjectSha256": "5e04f876b001d9af9c85c893d59e2202ac285ab9f823b06cfdabeb531bf1f012",
+        "coreStateObjectSha256": "9b16c53cd9bb206aac232141b31aa84125067343ab460417aeb002a23535e762",
+        "xyzStateObjectSha256": "62cb32c3bb1366e5d023a957ec03e909c9ad5d88efde176aed874403771cf584",
+        "allDexStatesObjectSha256": "211eb811ceea78b045f3c4ac57bf4e3e73016c664a2d3a1bb261f24a3786b46c",
+        "stateCoverage": {
+          "declaredDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "requestedDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "complete": true
+        }
+      },
+      {
+        "address": "0x1081e214bd6f0137234b92432d9b6033b88965b7",
+        "startedAtMs": 1791316705956,
+        "completedAtMs": 1791316707483,
+        "portfolioObjectSha256": "4b9a47028b6d4f5d6dc2b2e0b0999966a523d7084920b2ab43ed5ffdaa7f07ec",
+        "coreStateObjectSha256": "073a87563b4286338692bd7811dee78fbc93ec073cca8ff50cb7d6a4bdd2be9f",
+        "xyzStateObjectSha256": "5b7708eef81ebfcc9730ffd3369ae6b2a268db8c12e24dc0d4e82dd25615cc18",
+        "allDexStatesObjectSha256": "077f7d638011b453d1fe8a514df3988d15337ff223a2edc6cf2f1641d870c345",
+        "stateCoverage": {
+          "declaredDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "requestedDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "complete": true
+        }
+      },
+      {
+        "address": "0x10d11287eba086fd52ae41821fdb8d7e612eafdc",
+        "startedAtMs": 1791317125777,
+        "completedAtMs": 1791317128327,
+        "portfolioObjectSha256": "93a8e9cfd4f6db8afc49fa4c840d984f0a296e3bf0817b3de4bc60a73b57d8c8",
+        "coreStateObjectSha256": "ab0d5ad0245380fbc3514aa6e71d78f645d159adee03ce9ebdec3b5317a06537",
+        "xyzStateObjectSha256": "7d3af1a5512ba7a0c7ed5dee97fceecf04df5d95eb6f36d9b5ac1e2768bf4963",
+        "allDexStatesObjectSha256": "219d4aff828112dbb3eaa140cbe297520ff99c9b11bcf2512ccf5aee3d187bca",
+        "stateCoverage": {
+          "declaredDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "requestedDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "complete": true
+        }
+      },
+      {
+        "address": "0x1914c8829e50f716e4f81222dceb41490839103f",
+        "startedAtMs": 1791317071188,
+        "completedAtMs": 1791317074063,
+        "portfolioObjectSha256": "8bc9ce5d11bef736af53e12e954df24416a3b10ef53d8b83c0dcd6265edfc57b",
+        "coreStateObjectSha256": "3444cb34514c9365c2c7309c6a3ea0e3d0a37123c6adcf7b454325978d00aa45",
+        "xyzStateObjectSha256": "aa22bbb15588672392927e11179fec3a3ae983ed1d1c5b907cfaeb6e0b5596de",
+        "allDexStatesObjectSha256": "7ed582a781f6b9381bfbef40fc0883e44b648e7737a037c169606e8b0cd7e0a4",
+        "stateCoverage": {
+          "declaredDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "requestedDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "complete": true
+        }
+      },
+      {
+        "address": "0x21c4dbc1ba2c5973bc7036764e37b6cc396dbd57",
+        "startedAtMs": 1791317128635,
+        "completedAtMs": 1791317130951,
+        "portfolioObjectSha256": "a5c3e438c01b09b6d3b4bd942bc50f048988511ef687a86036ff43c79e96b362",
+        "coreStateObjectSha256": "7e17a575eb69b77e1f04f4e1814fa7560199e7d8be4f1d4b20363246102a73c6",
+        "xyzStateObjectSha256": "3ee9ab57525a2363c439a6a25c6fa7650da731f1603e82510e81770f59edc3ae",
+        "allDexStatesObjectSha256": "36f2f95978bcb86078fd26512a3663e35da13302ce416f5c380ad5b0667f994d",
+        "stateCoverage": {
+          "declaredDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "requestedDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "complete": true
+        }
+      },
+      {
+        "address": "0x308c9d7a676f82aff1f5e40f0f82ca0e336bf674",
+        "startedAtMs": 1791316948616,
+        "completedAtMs": 1791316950908,
+        "portfolioObjectSha256": "f8987ae5f9b9757eb22e046755d3908ef1092a0fb9c8810fd0b9f71514fa3ef1",
+        "coreStateObjectSha256": "c7b4d2c0812f22591ced92d8115fb3f005198d2556d10d42176346fdb132af08",
+        "xyzStateObjectSha256": "9df4b4b117076e16092476f99c1eebcf346a08d8674f1c621c5331b783905092",
+        "allDexStatesObjectSha256": "e57d62cfd38e8229005a5be155c110145d0da20d0054c8eda0ae3bcba87e642c",
+        "stateCoverage": {
+          "declaredDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "requestedDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "complete": true
+        }
+      },
+      {
+        "address": "0x3e7c16408c6691e0218167cee78bec7ebad03909",
+        "startedAtMs": 1791316707632,
+        "completedAtMs": 1791316708866,
+        "portfolioObjectSha256": "4665216689ada748dde57888f9f82ef14741ef207853d2461855ed96c105e5c6",
+        "coreStateObjectSha256": "c42eb084ef9a19a962c41dc7338014b040b6f07fba50294151c93a9e07c30dd4",
+        "xyzStateObjectSha256": "2890be7d5ac55e5e34c6c9200514d105485606f0b77f864de83b8ec982b68ea6",
+        "allDexStatesObjectSha256": "13a682f048a3816959f0b6d9f1a65e640cde263aedabf66ac234532773774075",
+        "stateCoverage": {
+          "declaredDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "requestedDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "complete": true
+        }
+      },
+      {
+        "address": "0x5478ba5548ad58006cfab51b51efb3c65bc08f42",
+        "startedAtMs": 1791316647886,
+        "completedAtMs": 1791316649615,
+        "portfolioObjectSha256": "46fce6d645e4b4eefda7f2f88e6a0258a360875ac2ee6b4bb68699a515a47b27",
+        "coreStateObjectSha256": "eed2c162d996ee8936bfb23bcd334b92f709286210b2c7a2bce6b68a53f8f717",
+        "xyzStateObjectSha256": "b068dc63953ea9c2e0cc9714b7739cfc5e825273851760f8aa733bc6b85bccf4",
+        "allDexStatesObjectSha256": "92b9a79e2a990245234412c1e8274d43eddd9bdf244757bfb24611af4f9669a9",
+        "stateCoverage": {
+          "declaredDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "requestedDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "complete": true
+        }
+      },
+      {
+        "address": "0x5e7348aa9ab8ddbc44e22f90a402ba4d996befdb",
+        "startedAtMs": 1791317011091,
+        "completedAtMs": 1791317012366,
+        "portfolioObjectSha256": "605c9b5541e35e5b5d7c8cf51be25890d5c658998ad1788e1b0d5ef3a566a3b3",
+        "coreStateObjectSha256": "abb9e547284a720072fc9d4fd64dfea611097f0cd82e1eba0677f87899f6cb5a",
+        "xyzStateObjectSha256": "2ff20921c1fcb604a4f30b2e52198d3e07c4d836ea4a96506e251fdd74262ac3",
+        "allDexStatesObjectSha256": "de99a72368e18f4305b98e8f4f77f8d4feb5981876c8bd5e4363b3ae48626ff9",
+        "stateCoverage": {
+          "declaredDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "requestedDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "complete": true
+        }
+      },
+      {
+        "address": "0x6db7204f8783dfddf80b957ba5e40e24251e304d",
+        "startedAtMs": 1791316825807,
+        "completedAtMs": 1791316827671,
+        "portfolioObjectSha256": "6a0b2832c4a84ab889b480f4433a8cfe11444e77fee334cf394aaa66c7b50420",
+        "coreStateObjectSha256": "75f80f1b1838b7c972661025793a378290ad6b799d13c64ad15b600fa8c988da",
+        "xyzStateObjectSha256": "d2670e201e268c495993164baa6f771d0d7ffcac2894839bbb4c3d8d40495ee8",
+        "allDexStatesObjectSha256": "703b7146473e1573bbf6727c937a7e803a905f2a881e9a9a7c6c69a199ab61e4",
+        "stateCoverage": {
+          "declaredDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "requestedDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "complete": true
+        }
+      },
+      {
+        "address": "0x79914208fc06eabb0a94e595c9a5f9da0551e3a2",
+        "startedAtMs": 1791316945755,
+        "completedAtMs": 1791316948409,
+        "portfolioObjectSha256": "00c3d59942ed64a38109aebbb313d73183303e313e0da118522f85e4c236aeef",
+        "coreStateObjectSha256": "af9b72a37797cb5870386dc300f6a04736dd7a682ffe18dff18ed59ffc62d5ed",
+        "xyzStateObjectSha256": "8284b04de524251c4dd5f125a2966668d52002dd85e511e6627dace8a4cd0a89",
+        "allDexStatesObjectSha256": "2f9e29283bead665a6a8789712190699ebc215bf7e07008bcd7e78bfc9d285bf",
+        "stateCoverage": {
+          "declaredDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "requestedDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "complete": true
+        }
+      },
+      {
+        "address": "0x820e36d85d524c55e2d838b9128bfa885bc5fe2e",
+        "startedAtMs": 1791316646158,
+        "completedAtMs": 1791316647739,
+        "portfolioObjectSha256": "e675c3dcb47711ca355509e87555d8c57c57f721afc592c8fc2983b30a830e86",
+        "coreStateObjectSha256": "e8378d6abe94c72f91e360d04a96e55f611b153d4b3edbde0dd23311f00d5ebe",
+        "xyzStateObjectSha256": "99fc777348c8dae85ceb3127116778b27409f8814e6044bd6925a0aac9963a44",
+        "allDexStatesObjectSha256": "18409d9222a352d7a463f7a13ece83907caa4eafee4c6c6396bdc358854b1459",
+        "stateCoverage": {
+          "declaredDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "requestedDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "complete": true
+        }
+      },
+      {
+        "address": "0x8f308355ce0604dd4fd872309d5761167655b07c",
+        "startedAtMs": 1791317065765,
+        "completedAtMs": 1791317068423,
+        "portfolioObjectSha256": "f7380aec160f09a7d292b69886aea97afe7972db5d9e5a03a9793de5e32edb2f",
+        "coreStateObjectSha256": "22857a85083e314aeb6971f6cc5954fa1159b568198c1bff184e5d5560fd7ba2",
+        "xyzStateObjectSha256": "c35e20b2720f8fd7d16359d9909f36e49f32366ecbd695703f1b99bf243c1db0",
+        "allDexStatesObjectSha256": "d62352c6e4832c5021afac1ce593421069f9f63a690e9425c1e32beaf9152ac7",
+        "stateCoverage": {
+          "declaredDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "requestedDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "complete": true
+        }
+      },
+      {
+        "address": "0x98eadc9dc42156f68cbf7d007d084bbf142bc0e3",
+        "startedAtMs": 1791316828315,
+        "completedAtMs": 1791316829752,
+        "portfolioObjectSha256": "15956b5df6bbe0dc96e163b7591d6e45c76ca4981396783fb867d1580e6fcf9b",
+        "coreStateObjectSha256": "46b055fe2fe9859b363afa274750bcb9420502be4df74ef438fe540552a59bce",
+        "xyzStateObjectSha256": "a1f907db8ce93c2cfdb5b7a27222a159feb9c46c18f2a4fcfcd203de67a2c2e7",
+        "allDexStatesObjectSha256": "71b99dbe07a7983bf0082adc8efe5ca84a062abc1a1e3c2caa5ec9d986217f09",
+        "stateCoverage": {
+          "declaredDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "requestedDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "complete": true
+        }
+      },
+      {
+        "address": "0x994ca87d1da1824a2d2f1a8e4b6ddb70ae48e7f5",
+        "startedAtMs": 1791316708996,
+        "completedAtMs": 1791316710438,
+        "portfolioObjectSha256": "857e7f28248759c2b1521786b6559eb908a73bf1619ac45ea32700c316b03be8",
+        "coreStateObjectSha256": "a26797858553e86de17dca8148819fe3132ee3419e32d40df12667c412cc2b88",
+        "xyzStateObjectSha256": "b0aa37ce7255265674cc4a94165e453d48d63c64de182dc97614c4123e6f0e06",
+        "allDexStatesObjectSha256": "a1265c4e61e81b66a291a540c832ca12c21f95f55a1fc8528ed9e9089640dce9",
+        "stateCoverage": {
+          "declaredDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "requestedDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "complete": true
+        }
+      },
+      {
+        "address": "0xa046c1c83a3b295ca99bb9efdd19836b12409373",
+        "startedAtMs": 1791316830432,
+        "completedAtMs": 1791316832140,
+        "portfolioObjectSha256": "60705674473c3a17a567928c65bd65847656a1f262d59121b98d449b34d7b86f",
+        "coreStateObjectSha256": "efc85f4ce801c7692a8aa75ec767fd7a05ffefc5e79f530482e4b7400247c4e1",
+        "xyzStateObjectSha256": "f4f96aee6f0dc2bf999922e1a98c6c23f9aa3313a29aed8da8d81eb9b35d5310",
+        "allDexStatesObjectSha256": "58b1a5d70b63526c18699604d3bae86cdad93bb24e65ce209bf89b362b7318eb",
+        "stateCoverage": {
+          "declaredDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "requestedDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "complete": true
+        }
+      },
+      {
+        "address": "0xa52507fc8e3f14c686b965e6b660267e86a6e1bd",
+        "startedAtMs": 1791316890488,
+        "completedAtMs": 1791316891964,
+        "portfolioObjectSha256": "9aa7587616280c82b50c1f0e8b43b670e3d262bc8b12296a38d6b7afae4e869d",
+        "coreStateObjectSha256": "b669e66d4d7d8d9bc3dfc63d789144b46a6e8fe7b5658ac97e6fd682b2209443",
+        "xyzStateObjectSha256": "93ad37afb498b81503b334fca095bb80d07d33917dbef6ddc758c8b21f9fec08",
+        "allDexStatesObjectSha256": "f64447b8b159ca105e961294cd5171aecceeecab5a9303469d4499bfdd3ee2e5",
+        "stateCoverage": {
+          "declaredDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "requestedDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "complete": true
+        }
+      },
+      {
+        "address": "0xa8b9b8c770d11c20b50aa228755c658a188f6098",
+        "startedAtMs": 1791316888412,
+        "completedAtMs": 1791316889957,
+        "portfolioObjectSha256": "9c16caa814123912513146da635fc161c64a5b6ffb57b6e11b29d58538150ebb",
+        "coreStateObjectSha256": "7ddfb5dd70a545ea24f949d58cb97fb74fec313d193079d5100adfe775163731",
+        "xyzStateObjectSha256": "47e4d3208187eb831d3595cfd47c749add710fc46ef54355259f6eba786bf1c9",
+        "allDexStatesObjectSha256": "3fc0081f79a33eddb90040a97a1b4cf8ffa8c9c8f5bd8d0e0a35215b0d5fad9a",
+        "stateCoverage": {
+          "declaredDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "requestedDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "complete": true
+        }
+      },
+      {
+        "address": "0xa9904bca2ccd1fe83011561823a4ca18e20d09ad",
+        "startedAtMs": 1791316770466,
+        "completedAtMs": 1791316771993,
+        "portfolioObjectSha256": "1241cf4a0b535a7f72dc2d9542710f3f626123d793fd09ef7236b70d1639720b",
+        "coreStateObjectSha256": "0c071f229c67d66b047c782b6eee95e747c49767b811bccd3bc04df98598b064",
+        "xyzStateObjectSha256": "a08dddf49b815564add53bd52fca384c7962adaddee285e3e9b26ac4aaf2ddbf",
+        "allDexStatesObjectSha256": "32191d5f75e38aec1a80720cd5061be3ad0402dd89524e5636cccdaa2b9e32fd",
+        "stateCoverage": {
+          "declaredDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "requestedDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "complete": true
+        }
+      },
+      {
+        "address": "0xad09b906938de88f3e0edc414b1850123d0e9443",
+        "startedAtMs": 1791317068833,
+        "completedAtMs": 1791317070979,
+        "portfolioObjectSha256": "f58a1aebe54fb6f4cd7ae20f947c2ac44c1e28b66bdb8a33647b4551758810e7",
+        "coreStateObjectSha256": "2dcbf32004b88f193b8367e6c218ee2a057f199b3ef1fcd81984192058b1bc91",
+        "xyzStateObjectSha256": "fc26a6817c7c8c4b5a23552f526f17dc3b7561a6a19d2c22b202bf9d1a8307e8",
+        "allDexStatesObjectSha256": "c9c3a912b25e8944fb9392161cb7b7925cfdbc8795aae5b458a5bea202b95387",
+        "stateCoverage": {
+          "declaredDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "requestedDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "complete": true
+        }
+      },
+      {
+        "address": "0xae8022eb8574711c09e266ff739092e58b98d5c1",
+        "startedAtMs": 1791317008621,
+        "completedAtMs": 1791317010880,
+        "portfolioObjectSha256": "f7b93c7374518ffef7e69883f435bb9d4a3f372ff316cb58b517ab6f39023ee6",
+        "coreStateObjectSha256": "592393ed49d0fcf512e30ca7ad3d37997cc02e7cf7ab8d6f17eb831b8166e7c9",
+        "xyzStateObjectSha256": "95a140e32ef0b7b2b5967a2d9bddde8b9b5133abdbdf8a2133b1475eb4b99a02",
+        "allDexStatesObjectSha256": "5dc8821d56dc755a6c93b7d5b06238dd201d07527d3d49a46995b4ce428c11b6",
+        "stateCoverage": {
+          "declaredDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "requestedDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "complete": true
+        }
+      },
+      {
+        "address": "0xb1472948ebf7fd5e142c55943516ccee716b105a",
+        "startedAtMs": 1791317005759,
+        "completedAtMs": 1791317008416,
+        "portfolioObjectSha256": "1f114c46d194824a070f3000f3204b01d793255d6481fe1cae0f5f7e9423a225",
+        "coreStateObjectSha256": "6e38dada49ac5e69cdf00a878a65703e2d44b722c4ab4101c30193f494a9eaac",
+        "xyzStateObjectSha256": "f856e571c96a8f0c99cbd9eef4c89e3e1a565a43ec81338647dfb2bf9bf1b870",
+        "allDexStatesObjectSha256": "beb8b260209822df0002a4bdfda9abfeefcc8efc63e548d03be9dcdce41054d7",
+        "stateCoverage": {
+          "declaredDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "requestedDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "complete": true
+        }
+      },
+      {
+        "address": "0xbcd4071d023bf2aae484d724c130b5af6f0ca0d2",
+        "startedAtMs": 1791316768396,
+        "completedAtMs": 1791316770306,
+        "portfolioObjectSha256": "6f23f654713f143585e806caef9b131c3fb8c92fbddfdac97ee577b4e9b4367a",
+        "coreStateObjectSha256": "ddb309cae7ae7afded8a31c3619222de52329d49cf035b5e3aa086c9d1f2671b",
+        "xyzStateObjectSha256": "3e7d3cde7659d982b8657f26d709652dd4b96d9641b42f4fc84b635ec2d2e9a0",
+        "allDexStatesObjectSha256": "39db82a9a0db232972bf23d2d9db45bcea79af6fd8396115b3513b969ffdca24",
+        "stateCoverage": {
+          "declaredDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "requestedDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "complete": true
+        }
+      },
+      {
+        "address": "0xc783f4470f065ff4d0a493af08ae64ba990c4011",
+        "startedAtMs": 1791316885753,
+        "completedAtMs": 1791316887997,
+        "portfolioObjectSha256": "b50bd3315c88c102327988d46a83bf3ce06db06b89c861e68511154563f9ae5c",
+        "coreStateObjectSha256": "59e92199315d638375be3d708c769344497dd48015b9714b5b124864418f80fa",
+        "xyzStateObjectSha256": "f9c11ab02a610867ca8aceeae419877c372136651d80c4a4e1259776d97c2f12",
+        "allDexStatesObjectSha256": "9d623afff3457adcda90d4347d8ffa4a8a925f0c1a0182ccf151212940cc0044",
+        "stateCoverage": {
+          "declaredDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "requestedDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "complete": true
+        }
+      },
+      {
+        "address": "0xf8140ab162e8c8f5b1df11f894828fe91395da1e",
+        "startedAtMs": 1791316951071,
+        "completedAtMs": 1791316952690,
+        "portfolioObjectSha256": "116d6719c37b95be34f3c226a4b0bf41ef9cf26d0ff3303e0322e0e177bedf99",
+        "coreStateObjectSha256": "0e0c840aeda335cdc26ea6a50a6e4744c8bfe72d0a1545ff94c471e76813be94",
+        "xyzStateObjectSha256": "f0c0f33a94e9c6e38865d006420a259397feb6d37826b39747f9a684df5f7315",
+        "allDexStatesObjectSha256": "62afba329d30955ad284c3014a5dc47eec8ede43e43a443a2e0ad7da9e31e3ac",
+        "stateCoverage": {
+          "declaredDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "requestedDexes": [
+            "",
+            "xyz",
+            "flx",
+            "vntl",
+            "hyna",
+            "km",
+            "abcd",
+            "cash",
+            "para",
+            "mkts",
+            "io"
+          ],
+          "complete": true
+        }
+      }
+    ],
+    "markets": {
+      "startedAtMs": 1791316645550,
+      "completedAtMs": 1791316646003,
+      "perpDexsObjectSha256": "4d2205f000c33a85bd6faccf7bba55a83261be9d43235ed7b9eaba5543470081",
+      "coreObjectSha256": "162dd94b26f72245802ef98232f41f5c8e20b8e16401f30c7e6c378c809219cf",
+      "xyzObjectSha256": "470e078ac063041b51d895155c0e785d2f5abb9fa27199199dd51948e8bd423a"
+    },
+    "convention": "SHA-256 of canonical parsed JSON, not original HTTP response bytes; original timestamps retained."
+  },
+  "completedAtMs": 1791317290124,
+  "transportAndSchemaValidated": true,
+  "totalCalls": 4,
+  "billableCallsMayIncludeFailedResponses": true,
+  "auditScope": "Original bound prompt and validated numeric output persisted in private PGlite. Export contains output and commitments, not raw provider requests or credentials."
+}

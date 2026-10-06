@@ -1,0 +1,53 @@
+{
+  "schema": "provider-verification.v1",
+  "verified": true,
+  "inputSha256": "b2cee57d93db11bda4f6cd9c7a171aac2e18cbc087f50f19b2c84a6347813729",
+  "frameHash": "0x21037b290b294d130e3d8e3f23bf943d0ac29b4f0b962e9ffff846d6221a075d",
+  "evidenceHash": "0x912a6e4877f83853decd829c7706e3829dadc1066a431ad5c8fd599fb6049d83",
+  "promptVersion": "1.1.0",
+  "models": [
+    {
+      "model": "gpt-4.1-mini-2025-04-14",
+      "stages": [
+        "risk",
+        "role"
+      ],
+      "auditRecords": 2,
+      "status": "INVALID_BUCKET",
+      "reason": "INSUFFICIENT_EVIDENCE",
+      "receiptHash": "0x2016583cbfe7c83a0caad807a9c9504163351b9afd550eb50f0daec91e11fa8c",
+      "recordIds": [
+        "0x9c0829094f97a2d10b679442fba7d27949c6af538c0a3270e53eafacd1671e51",
+        "0xa812c19359e5ee1f2a33b2a5dfc7ef1460039748147131735298c09229ee9f73"
+      ]
+    },
+    {
+      "model": "gpt-4.1-2025-04-14",
+      "stages": [
+        "risk",
+        "role"
+      ],
+      "auditRecords": 2,
+      "status": "INVALID_BUCKET",
+      "reason": "INSUFFICIENT_EVIDENCE",
+      "receiptHash": "0xed6847b8dad95a9465b3d58336ddd91f59f452ac96045470a50c2b4f10b61e8b",
+      "recordIds": [
+        "0x12c0c5dbd88a58c77b9dbea0656bba90ecafa3f7bcf87aa8856ee6ce0267f777",
+        "0xb3c92dccc73c2818e893526d5aa97bbee6e7ca0944e1e6ebcffc365ba489ad35"
+      ]
+    }
+  ],
+  "verifiedAuditRecords": 4,
+  "recordedProviderCalls": 4,
+  "verifiedStages": [
+    "role",
+    "risk"
+  ],
+  "redTeamExecuted": false,
+  "freezeExecuted": false,
+  "serviceExecuted": false,
+  "externalCallsDuringVerification": 0,
+  "liveOrdersSubmitted": 0,
+  "privacy": "Verifier reconstructs prompts in memory; it exports only hashes and statuses, never raw requests or headers.",
+  "scope": "Offline input SHA-256, frame/evidence binding, versioned prompts, model configuration, numeric output schemas, audit prompt/output/record hashes and exact receipt audit membership. HTTP200/call count are runner metadata, not provider-signed attestations."
+}

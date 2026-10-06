@@ -1,8 +1,9 @@
 # Running and integrating the review core
 
 The mirror path (frozen configuration → snapshot → target exposures → executor) is in
-the README and [docs/ops](../ops/RUNBOOK.md). A real-provider review run and a review
-schedule remain integration gates.
+the README and [docs/ops](../ops/RUNBOOK.md). A bounded real-provider rehearsal is
+recorded in [the follow-up report](../../night-shift-integration/FOLLOWUP_REPORT.md).
+A valid real-account freeze and a hosted review schedule remain integration gates.
 
 This repository has a server-side TypeScript review implementation, independent of
 exchange submission. Requires Node 24+ and pnpm. Run `pnpm install

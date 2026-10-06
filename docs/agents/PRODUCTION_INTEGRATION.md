@@ -6,6 +6,13 @@ in `packages/backend/review`.
 [Runbook](../ops/RUNBOOK.md) and [deploy guide](../ops/DEPLOY.md) cover operations.
 Nothing here authorizes real trades.
 
+Follow-up, 2026-10-07: [PR #33's measured rehearsal](../../night-shift-integration/FOLLOWUP_REPORT.md)
+fed 25 real public accounts through the production Review and SQL audit. GPT-4.1 mini
+and GPT-4.1 each completed Role and Risk (four HTTP 200 responses, four validated audit
+rows, zero retries). Both reviews returned `INVALID_BUCKET / INSUFFICIENT_EVIDENCE`:
+no real-data freeze, Red-Team call or executor run followed. Evidence is isolated
+paper/PGlite and GitHub Actions, not the production database or a hosted review schedule.
+
 The [evidence-bound paper review integration](PAPER_LIFECYCLE.md) now connects rich
 specialist inputs, per-node audit, persistent paper freeze and monitoring-only
 reviews. A dry-run integration test follows the merged snapshot/targets/executor
@@ -16,10 +23,10 @@ path; the removed parallel preview lane is not restored.
 | Component | Ownership and verified behavior |
 | --- | --- |
 | Anonymous rich review evidence | `shared/src/committee-evidence.ts` binds the summary frame, full curve/positions/patterns and matrix, rejects contradictions, and bounds the combined finalist at 4 KB. It does not turn the spike's scores into specialist judgments. |
-| Audit persistence | `backend/review/audit.ts` persists bound prompt/evidence and strictly validated committee output through a service-only idempotent RPC (`persist_review_audit`, `supabase/migrations/20261006130000_review_audit.sql`). Real provider output has not been persisted yet. |
+| Audit persistence | `backend/review/audit.ts` persists bound prompt/evidence and strictly validated committee output through a service-only idempotent RPC (`persist_review_audit`, `supabase/migrations/20261006130000_review_audit.sql`). The measured rehearsal persisted four real-provider rows in isolated PGlite; intended Supabase persistence still needs deployment validation. |
 | Review core | `backend/review/workflow.ts` (`runReview`) and `backend/review/committee/`: Role/Risk/Red-Team over the bound evidence, per-node structured output, per-field median aggregation when there are several observations. |
 | Review input from Score | `backend/review/input.ts` (`buildReviewInput`, run by `backend/scripts/review-input.ts`): Score finalists -> a candidate-curation-frame **1.1.0** (adds `isSharpe`, `isSortino`, `isCalmar`, `lookbackDays`, `scoreFlags`, `cloneCount`; clone addresses stay at candidate level for audit) and the anonymous evidence (month PnL curve, up to 12 live positions, fill patterns `null` until fills are ingested). Fields no module supplies yet are `null` = unknown, and `compile` rejects candidates without OOS and execution evidence, so no candidate can pass yet. |
-| Server-side model provider | `backend/review/models/openai-paper.ts` (`openAIPaperCommittee`): Role, Risk and Red-Team over the bound committee evidence, one honest provider node (quorum 1), strict output schemas, the evidence's contract version on every output. Prompts default to `shared/src/prompts.ts` (byte-identical to `SYSTEM_PROMPTS.md` v1.1.0); `endpoint` takes any OpenAI-compatible URL. `backend/scripts/review-run.ts` runs it through `runCommitteeReview` with an append-only local audit file. Not yet: a real-provider run, or a schedule for reviews. |
+| Server-side model provider | `backend/review/models/openai-paper.ts` (`openAIPaperCommittee`): Role, Risk and Red-Team over the bound committee evidence, one honest provider node (quorum 1), strict output schemas, the evidence's contract version on every output. Prompts default to `shared/src/prompts.ts` (byte-identical to `SYSTEM_PROMPTS.md` v1.1.0); `endpoint` takes any OpenAI-compatible URL. `backend/scripts/review-run.ts` runs it through `runCommitteeReview` with an append-only local audit file. The measured rehearsal completed real Role/Risk calls; a hosted review schedule is not yet configured. |
 | Frozen configuration | `shared/src/frozen.ts` (`proposeFreeze`): the review's output that becomes the mirror's only execution authority. LIVE is **Aggressive** only (README §4.3). |
 
 ## Mirror path
@@ -39,9 +46,10 @@ HyperEVM freeze consumer and preview tables that were here were replaced by the 
 
 ## Remaining gates for the review core
 
-1. Run the committee against a real provider. Rich evidence, server provider
-   requests, per-node audit and paper monitoring-only behavior have integration
-   tests; no billable model run has been made or persisted.
+1. Extend the measured real-provider rehearsal to a cohort that satisfies the
+   existing Review gates, then verify Red-Team, freeze and monitoring with that
+   cohort. Role/Risk transport, structured output and persisted audit now have
+   actual two-model evidence; the tested cohort was rejected before a draft.
 2. Run the two-model point-in-time evaluation, select the winner and persist the full
    sanitized prompt/output audit with verified hashes and paper shadow state.
 3. Decide whether and where reviews run on a schedule (Vercel Cron or AWS) and store

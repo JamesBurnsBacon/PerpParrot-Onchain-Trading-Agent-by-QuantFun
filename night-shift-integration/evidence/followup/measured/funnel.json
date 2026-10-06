@@ -1,0 +1,202 @@
+{
+  "generatedAt": 1791317156126,
+  "steps": [
+    {
+      "stage": "acquired",
+      "label": "Initial Top100 collection",
+      "count": 100
+    },
+    {
+      "stage": "measured",
+      "label": "Measured finalists",
+      "count": 25
+    },
+    {
+      "stage": "strict",
+      "label": "Strict Score eligible",
+      "count": 25
+    },
+    {
+      "stage": "finalists",
+      "label": "Review input",
+      "count": 25
+    }
+  ],
+  "finalists": [
+    {
+      "address": "0x820e36d85d524c55e2d838b9128bfa885bc5fe2e",
+      "kind": "trader",
+      "score": 0.8263888888888888,
+      "picked": false,
+      "rationale": "Real public data; research/Review input, not frozen."
+    },
+    {
+      "address": "0x1081e214bd6f0137234b92432d9b6033b88965b7",
+      "kind": "trader",
+      "score": 0.7916666666666666,
+      "picked": false,
+      "rationale": "Real public data; research/Review input, not frozen."
+    },
+    {
+      "address": "0x5478ba5548ad58006cfab51b51efb3c65bc08f42",
+      "kind": "trader",
+      "score": 0.7916666666666666,
+      "picked": false,
+      "rationale": "Real public data; research/Review input, not frozen."
+    },
+    {
+      "address": "0x3e7c16408c6691e0218167cee78bec7ebad03909",
+      "kind": "trader",
+      "score": 0.7569444444444444,
+      "picked": false,
+      "rationale": "Real public data; research/Review input, not frozen."
+    },
+    {
+      "address": "0x6db7204f8783dfddf80b957ba5e40e24251e304d",
+      "kind": "trader",
+      "score": 0.7222222222222222,
+      "picked": false,
+      "rationale": "Real public data; research/Review input, not frozen."
+    },
+    {
+      "address": "0xbcd4071d023bf2aae484d724c130b5af6f0ca0d2",
+      "kind": "trader",
+      "score": 0.7152777777777778,
+      "picked": false,
+      "rationale": "Real public data; research/Review input, not frozen."
+    },
+    {
+      "address": "0x994ca87d1da1824a2d2f1a8e4b6ddb70ae48e7f5",
+      "kind": "trader",
+      "score": 0.6597222222222222,
+      "picked": false,
+      "rationale": "Real public data; research/Review input, not frozen."
+    },
+    {
+      "address": "0xa9904bca2ccd1fe83011561823a4ca18e20d09ad",
+      "kind": "trader",
+      "score": 0.5138888888888888,
+      "picked": false,
+      "rationale": "Real public data; research/Review input, not frozen."
+    },
+    {
+      "address": "0xa52507fc8e3f14c686b965e6b660267e86a6e1bd",
+      "kind": "trader",
+      "score": 0.5138888888888888,
+      "picked": false,
+      "rationale": "Real public data; research/Review input, not frozen."
+    },
+    {
+      "address": "0x06b786a0d3dbc3e9f71e42a365800361f8006980",
+      "kind": "trader",
+      "score": 0.5,
+      "picked": false,
+      "rationale": "Real public data; research/Review input, not frozen."
+    },
+    {
+      "address": "0x98eadc9dc42156f68cbf7d007d084bbf142bc0e3",
+      "kind": "trader",
+      "score": 0.4930555555555556,
+      "picked": false,
+      "rationale": "Real public data; research/Review input, not frozen."
+    },
+    {
+      "address": "0xc783f4470f065ff4d0a493af08ae64ba990c4011",
+      "kind": "trader",
+      "score": 0.4861111111111111,
+      "picked": false,
+      "rationale": "Real public data; research/Review input, not frozen."
+    },
+    {
+      "address": "0xf8140ab162e8c8f5b1df11f894828fe91395da1e",
+      "kind": "trader",
+      "score": 0.4513888888888889,
+      "picked": false,
+      "rationale": "Real public data; research/Review input, not frozen."
+    },
+    {
+      "address": "0x79914208fc06eabb0a94e595c9a5f9da0551e3a2",
+      "kind": "trader",
+      "score": 0.4097222222222222,
+      "picked": false,
+      "rationale": "Real public data; research/Review input, not frozen."
+    },
+    {
+      "address": "0xa046c1c83a3b295ca99bb9efdd19836b12409373",
+      "kind": "trader",
+      "score": 0.4027777777777778,
+      "picked": false,
+      "rationale": "Real public data; research/Review input, not frozen."
+    },
+    {
+      "address": "0xae8022eb8574711c09e266ff739092e58b98d5c1",
+      "kind": "trader",
+      "score": 0.3958333333333333,
+      "picked": false,
+      "rationale": "Real public data; research/Review input, not frozen."
+    },
+    {
+      "address": "0xad09b906938de88f3e0edc414b1850123d0e9443",
+      "kind": "trader",
+      "score": 0.3888888888888889,
+      "picked": false,
+      "rationale": "Real public data; research/Review input, not frozen."
+    },
+    {
+      "address": "0xa8b9b8c770d11c20b50aa228755c658a188f6098",
+      "kind": "trader",
+      "score": 0.3680555555555556,
+      "picked": false,
+      "rationale": "Real public data; research/Review input, not frozen."
+    },
+    {
+      "address": "0x8f308355ce0604dd4fd872309d5761167655b07c",
+      "kind": "trader",
+      "score": 0.3680555555555556,
+      "picked": false,
+      "rationale": "Real public data; research/Review input, not frozen."
+    },
+    {
+      "address": "0x10d11287eba086fd52ae41821fdb8d7e612eafdc",
+      "kind": "trader",
+      "score": 0.3541666666666667,
+      "picked": false,
+      "rationale": "Real public data; research/Review input, not frozen."
+    },
+    {
+      "address": "0xb1472948ebf7fd5e142c55943516ccee716b105a",
+      "kind": "trader",
+      "score": 0.3541666666666667,
+      "picked": false,
+      "rationale": "Real public data; research/Review input, not frozen."
+    },
+    {
+      "address": "0x21c4dbc1ba2c5973bc7036764e37b6cc396dbd57",
+      "kind": "trader",
+      "score": 0.3402777777777778,
+      "picked": false,
+      "rationale": "Real public data; research/Review input, not frozen."
+    },
+    {
+      "address": "0x5e7348aa9ab8ddbc44e22f90a402ba4d996befdb",
+      "kind": "trader",
+      "score": 0.3263888888888889,
+      "picked": false,
+      "rationale": "Real public data; research/Review input, not frozen."
+    },
+    {
+      "address": "0x308c9d7a676f82aff1f5e40f0f82ca0e336bf674",
+      "kind": "trader",
+      "score": 0.3055555555555556,
+      "picked": false,
+      "rationale": "Real public data; research/Review input, not frozen."
+    },
+    {
+      "address": "0x1914c8829e50f716e4f81222dceb41490839103f",
+      "kind": "trader",
+      "score": 0.2638888888888889,
+      "picked": false,
+      "rationale": "Real public data; research/Review input, not frozen."
+    }
+  ]
+}

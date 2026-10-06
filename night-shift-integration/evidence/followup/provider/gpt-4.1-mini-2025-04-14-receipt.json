@@ -1,0 +1,47 @@
+{
+  "schemaVersion": "1.0.0",
+  "mode": "PAPER",
+  "economicAuthority": false,
+  "evidenceHash": "0x912a6e4877f83853decd829c7706e3829dadc1066a431ad5c8fd599fb6049d83",
+  "modelConfigHash": "0x1a6fc40c3102896f43605ced3fadabb8f5fbf70929096b0b781e92b001750b5a",
+  "manifest": {
+    "schemaVersion": "1.1.0",
+    "snapshotHash": "0x21037b290b294d130e3d8e3f23bf943d0ac29b4f0b962e9ffff846d6221a075d",
+    "policyHash": "0xaf8d29121bb2f14e087a7d44db24ee4b6dc33479123be2c4fea9fabfff21aad2",
+    "createdAtMs": 1791317278008,
+    "expiresAtMs": 1791320756126,
+    "bucket": "AGGRESSIVE",
+    "mode": "LIVE",
+    "status": "INVALID_BUCKET",
+    "rebuildCount": 0,
+    "policy": {
+      "bucket": "AGGRESSIVE",
+      "mode": "LIVE",
+      "capitalUsd": 470,
+      "minOrderUsd": 10,
+      "minExecutableTargets": 3,
+      "maxSourceWeight": 0.3,
+      "maxGrossLeverage": 3,
+      "cashBuffer": 0.1,
+      "maxPairCorrelation": 0.8,
+      "maxExposureOverlap": 0.5,
+      "minHistoryDays": 30,
+      "maxFrameAgeMs": 3600000,
+      "minExecutionFit": 50,
+      "riskRejectThreshold": 80,
+      "riskWatchThreshold": 60,
+      "minConfidence": 60,
+      "redTeamRebuildThreshold": 70,
+      "redTeamExcludeThreshold": 85
+    },
+    "sources": [],
+    "cashWeight": 1,
+    "reason": "INSUFFICIENT_EVIDENCE",
+    "manifestHash": "0xa1e13a73596d37b5aecdae3ed0628e0ad025fc0b0457ecb608fa9852959fb4dd"
+  },
+  "auditIds": [
+    "0x9c0829094f97a2d10b679442fba7d27949c6af538c0a3270e53eafacd1671e51",
+    "0xa812c19359e5ee1f2a33b2a5dfc7ef1460039748147131735298c09229ee9f73"
+  ],
+  "receiptHash": "0x2016583cbfe7c83a0caad807a9c9504163351b9afd550eb50f0daec91e11fa8c"
+}

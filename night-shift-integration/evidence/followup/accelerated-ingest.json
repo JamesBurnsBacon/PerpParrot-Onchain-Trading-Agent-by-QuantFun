@@ -1,0 +1,277 @@
+{
+  "schema": "accelerated-ingest-rehearsal.v1",
+  "status": "VERIFIED",
+  "recordedAt": "2026-10-06T20:18:37.380Z",
+  "sourceKind": "SYNTHETIC_FIXTURE",
+  "clock": "ACCELERATED_LOGICAL_TIME_WITH_EXPLICIT_15S_LEASE_TICKS",
+  "economicAuthority": false,
+  "networkRequestsToExternalHosts": 0,
+  "actualElapsedMs": 6011,
+  "scope": "Production loop, strict Score, background rotation, HTTP handlers, request-budget client and SQLite; synthetic portfolio/classification/order-count fixture; mocked official-info responses. Not live API reliability or 24-hour uptime evidence.",
+  "modules": [
+    "LoopService",
+    "LoopStore",
+    "scoreCandidates",
+    "rankAsync",
+    "BudgetClient",
+    "backgroundRefresh",
+    "loopHandler"
+  ],
+  "code": {
+    "sha256": "a4929b695ad29382bfa44ff7a59846251d718ec9a865dbbe235b5f12ba58e99b",
+    "files": [
+      {
+        "path": "night-shift-integration/accelerated-ingest.ts",
+        "sha256": "bff24011d42883e58b2a3a68c925ff5ddd5f7b423102e86342b04348233068e1"
+      },
+      {
+        "path": "packages/backend/src/ingest/loop/background.ts",
+        "sha256": "e6e2defa8d0c3bccd9ce1610279ee2a5fc97c627ebfc939cf5ad30dc6e2ea5ac"
+      },
+      {
+        "path": "packages/backend/src/ingest/loop/checks.ts",
+        "sha256": "7c820f2f6f51c75600da2f0c20b4f031c0d01a57a561636fe5176f181c6d1491"
+      },
+      {
+        "path": "packages/backend/src/ingest/loop/client.ts",
+        "sha256": "4dad2c6aaaf17e55671452fee1d14c664d5871292d718d0d28b00e32f4fbb150"
+      },
+      {
+        "path": "packages/backend/src/ingest/loop/collect.ts",
+        "sha256": "dd64778e27f76088ea3dccd3ebfe2743d5b563e216cecd44326ee4952da74847"
+      },
+      {
+        "path": "packages/backend/src/ingest/loop/export-data.ts",
+        "sha256": "a8c1866043217b0cced34e0ceda496cadca89066c9a366fbcb9050aa742e2630"
+      },
+      {
+        "path": "packages/backend/src/ingest/loop/http.ts",
+        "sha256": "0604dfe80d7dd0c875954c3d52efb2fa305d64cd63f1a4db7cb26b3fd7e6dc84"
+      },
+      {
+        "path": "packages/backend/src/ingest/loop/import-registry.ts",
+        "sha256": "9c2fc523970e2e0cf18d9ebd25112827fbc78ca1e4105944c9b8b6e19f66a0b0"
+      },
+      {
+        "path": "packages/backend/src/ingest/loop/import-release.ts",
+        "sha256": "584a9c4067ccc9ac2f41173a77258c9211cbeacd62b2dc399c594cdd5cf05803"
+      },
+      {
+        "path": "packages/backend/src/ingest/loop/load-data.ts",
+        "sha256": "a1f734dc1f0f5920dc5abe7cc46bdfa50de3199623025afa978f902136c6bf06"
+      },
+      {
+        "path": "packages/backend/src/ingest/loop/once.ts",
+        "sha256": "d99a008ba30f83ae8f267e4f68e4a1c87bf0ceaaa5d5e95ea4190105bd22b108"
+      },
+      {
+        "path": "packages/backend/src/ingest/loop/rank-worker.ts",
+        "sha256": "ab99983e0e87035fbe4257e2af30184a88f795a01180327844453bd8994e5832"
+      },
+      {
+        "path": "packages/backend/src/ingest/loop/rank.ts",
+        "sha256": "24d7fcb8f9b16ac025344a2e5341692d677ef73af08c7e105340081e99ae84e9"
+      },
+      {
+        "path": "packages/backend/src/ingest/loop/ranking.ts",
+        "sha256": "c672c40859249c4f21f367601dd37cba772f573a71da960fbf9682c9bb418c3c"
+      },
+      {
+        "path": "packages/backend/src/ingest/loop/refresh-registry.ts",
+        "sha256": "639fdc71e3058b469a1b466a87baa789df70dfb1a3d74d473de4fc96e9def83f"
+      },
+      {
+        "path": "packages/backend/src/ingest/loop/server.ts",
+        "sha256": "f443dee0d06b161df3fa655aba1cf50aaffd4bdb0da05c8775edeefa69935d8c"
+      },
+      {
+        "path": "packages/backend/src/ingest/loop/service.ts",
+        "sha256": "b02431d8aac1c73c64ed8a71a46e8bd0699b3cd74203289fe9d6b0cc0c2a1217"
+      },
+      {
+        "path": "packages/backend/src/ingest/loop/store.ts",
+        "sha256": "219614263134d9cffc40a0836dc3e2f2c85361f38fc88fae041034ed479ed26a"
+      },
+      {
+        "path": "packages/backend/src/score/clones.ts",
+        "sha256": "859c2d8da74bd5056880163f0f36c0032acbfca7606375b8bd66198caef53698"
+      },
+      {
+        "path": "packages/backend/src/score/config.ts",
+        "sha256": "7b31e9866212c6a749556c305c86c3340d28d451b7d8237707be7bd43c19f08f"
+      },
+      {
+        "path": "packages/backend/src/score/filters.ts",
+        "sha256": "c3af66ab47ad6b47d21c64875361f79359b3d0b7fb4debdd431de6dfeacfaeb9"
+      },
+      {
+        "path": "packages/backend/src/score/frame.ts",
+        "sha256": "93a41e9d856ca2f4e1e0df239cc6967f87894f200a66099892f3088cf1af88eb"
+      },
+      {
+        "path": "packages/backend/src/score/index.ts",
+        "sha256": "4a4dd965b0b203512ad7bc96fd8d4700e8d084b338fbd2c00822a4cc0464d263"
+      },
+      {
+        "path": "packages/backend/src/score/metrics.ts",
+        "sha256": "096af7d558472b9b0eff0cfef7a829b02c5bdf93ff1036cfc4106185df1c8423"
+      },
+      {
+        "path": "packages/backend/src/score/parse.ts",
+        "sha256": "a8589865e80cc169afb4d344cf637eb9bf9c6d0e100b50f3e8694f9842927bd5"
+      },
+      {
+        "path": "packages/backend/src/score/returns.ts",
+        "sha256": "3b5219cd1d60c60f9f6f8692d198d5bfdadfdd9a2a1f220c1a4801ec8f361739"
+      },
+      {
+        "path": "packages/backend/src/score/score.ts",
+        "sha256": "28c3acf51d3fc0115d6e73c4284e31c6ffe8d122ead907a23b45e3f033e424dc"
+      },
+      {
+        "path": "packages/backend/src/score/stitch.ts",
+        "sha256": "5958d07fa6dba3ea7a5520e916d6438ef335cf2932e68420cab54e067080352d"
+      },
+      {
+        "path": "packages/backend/src/score/types.ts",
+        "sha256": "89e1619bce4d8584594f835c2d4b144c84b18ec70f44be0d75660aecd5ba880c"
+      }
+    ]
+  },
+  "checks": [
+    {
+      "id": "expired-unselected-candidate-initially-excluded",
+      "passed": true,
+      "details": {
+        "ageHours": 25
+      }
+    },
+    {
+      "id": "partial-fault-does-not-publish",
+      "passed": true,
+      "details": {
+        "durableRecords": 10
+      }
+    },
+    {
+      "id": "replacement-committed-before-next-request",
+      "passed": true,
+      "details": {
+        "substitutions": 1
+      }
+    },
+    {
+      "id": "bad-account-quarantined",
+      "passed": true,
+      "details": {
+        "consecutiveFailures": 2,
+        "cooldownMs": 1800000
+      }
+    },
+    {
+      "id": "separate-process-restart-resumes-only-missing-records",
+      "passed": true,
+      "details": {
+        "originalPid": 29466,
+        "resumePid": 29491,
+        "resumedCollections": 90
+      }
+    },
+    {
+      "id": "published-effective-top100-strict-and-unique",
+      "passed": true,
+      "details": {
+        "count": 100,
+        "strictEligible": 100
+      }
+    },
+    {
+      "id": "original-selection-and-substitution-history-preserved",
+      "passed": true,
+      "details": {}
+    },
+    {
+      "id": "duplicate-replay-makes-zero-upstream-calls",
+      "passed": true,
+      "details": {
+        "newCalls": 0
+      }
+    },
+    {
+      "id": "second-ten-minute-bucket-publishes",
+      "passed": true,
+      "details": {
+        "firstBucket": 1791331200000,
+        "secondBucket": 1791331800000,
+        "logicalDifferenceMs": 600000
+      }
+    },
+    {
+      "id": "historical-bucket-http-remains-immutable",
+      "passed": true,
+      "details": {}
+    },
+    {
+      "id": "quarantined-account-excluded-from-next-ranking",
+      "passed": true,
+      "details": {}
+    },
+    {
+      "id": "background-oldest-first-candidate-refreshed",
+      "passed": true,
+      "details": {
+        "refreshed": 1,
+        "newCollections": 1
+      }
+    },
+    {
+      "id": "expired-candidate-can-reenter-top100",
+      "passed": true,
+      "details": {}
+    },
+    {
+      "id": "background-and-foreground-share-durable-budget",
+      "passed": true,
+      "details": {
+        "resumedServiceRequests": 101
+      }
+    },
+    {
+      "id": "cooldown-expiry-alone-does-not-promote-bad-cache",
+      "passed": true,
+      "details": {}
+    },
+    {
+      "id": "stale-latest-http-fails-closed",
+      "passed": true,
+      "details": {}
+    },
+    {
+      "id": "committed-old-artifact-remains-readable",
+      "passed": true,
+      "details": {}
+    },
+    {
+      "id": "background-progress-survives-second-reopen",
+      "passed": true,
+      "details": {}
+    },
+    {
+      "id": "sqlite-integrity-check",
+      "passed": true,
+      "details": {}
+    },
+    {
+      "id": "implementation-stable-during-rehearsal",
+      "passed": true,
+      "details": {}
+    }
+  ],
+  "artifactHashes": {
+    "first": "deb3b284cd7efca457e9a9cc6e16186f74186fd4e2d34af75678a7b92b4795de",
+    "second": "8e403c5728925c869a51eaedaef975d3d744c5ba216c956fce77336ca79202b6"
+  },
+  "reportDirectory": "night-shift-integration/out/accelerated-ingest/run-1791317911369",
+  "databaseValidation": "quick_check=ok",
+  "processRestart": true
+}

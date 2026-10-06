@@ -1,0 +1,13 @@
+{
+  "schema": "measured-archive-verification.v1",
+  "accounts": 25,
+  "reads": 76,
+  "completeAllDexReads": 73,
+  "legacyIncompleteReads": 3,
+  "fillPages": 96,
+  "rawFiles": 936,
+  "sourceIngestSha256": "ed32fb87d7d345c214048db7814954d24b1a75f86db9658ec5669da924a5aef0",
+  "scoreFinalistPrefixVerified": true,
+  "requestIdentity": "SQLITE_REQUEST_RESPONSE_VERIFIED",
+  "boundRequests": 984
+}

@@ -1,30 +1,30 @@
 {
   "schemaVersion": "night-demo.v2",
-  "recordedAt": "2026-10-06T18:46:26.514Z",
+  "recordedAt": "2026-10-06T20:18:31.312Z",
   "event": {
     "schemaVersion": "night-pipeline.v2",
     "trigger": "REPLAY",
     "bucketMs": 1791301200000,
     "sourceAsOfMs": 1791301200000,
     "sourceHash": "811a4beb571faa5968f6acaa80beae003f77aea60ba73b7b9fd2d32651e0c229",
-    "codeHash": "fad9d893d42057b72efc294b54a4ef45252560dbb3294ef8374d1efbb485f974",
+    "codeHash": "3a1abe27072cacfebcef58d6aee0ad91dc8ae17dd7a36766fef9591bd7cc3b74",
     "sourceKind": "SYNTHETIC_FIXTURE"
   },
   "receipt": {
     "schemaVersion": "night-receipt.v1",
-    "runId": "night-pipeline.v2-1791301200000-8fbfcf0405fabe48",
+    "runId": "night-pipeline.v2-1791301200000-f7be923b0b277431",
     "status": "SUCCEEDED",
     "economicAuthority": false,
     "steps": [
       {
         "stage": "return-first",
         "bodyHash": "9bf10a2aaec437234bdf56766e4fccb129e6ded59aff2698d881a92943fe4bcb",
-        "reused": true
+        "reused": false
       },
       {
         "stage": "drawdown-first",
         "bodyHash": "1c0720080afaceb40d8ec60fce6cf7be3317b5e0188e2e9accf291c390dfe2fb",
-        "reused": true
+        "reused": false
       }
     ],
     "artifactChainHash": "6a52b45b13d2e926bfbbc5665e42fb68cc951d3bc3c45868fa850555f88484e5"
