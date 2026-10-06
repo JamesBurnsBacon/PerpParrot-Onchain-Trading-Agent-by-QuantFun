@@ -56,14 +56,17 @@ export const createApp = (deps: AppDeps) => async (req: Request): Promise<Respon
     return json(await (summary ? deps.store.recentRunSummaries(limit) : deps.store.recentRuns(limit)), 200, PUBLIC);
   }
 
-  // The live account's equity at every executed run since the start, at most 1,500 points
-  // (evenly thinned, first and last kept). Cached for a minute: it changes once per run.
+  // The live account's equity at every executed run that traded (not dry runs: before go-live
+  // the account is unfunded, and a near-zero first point would be the curve's base), at most
+  // 1,500 points (evenly thinned, first and last kept), and the count of all executed runs.
+  // Cached for a minute: it changes once per run.
   if (req.method === "GET" && pathname === "/equity") {
     const now = Date.now();
     let cached = equityCaches.get(deps);
     if (!cached || now - cached.at > 60_000) {
       const all = await deps.store.equityCurve();
-      cached = { at: now, body: { runs: all.length, points: thin(all, 1500) } };
+      const live = all.filter((p) => !p.dryRun).map((p): [number, number] => [p.t, p.equityUsd]);
+      cached = { at: now, body: { runs: all.length, points: thin(live, 1500) } };
       equityCaches.set(deps, cached);
     }
     return json(cached.body, 200, PUBLIC);

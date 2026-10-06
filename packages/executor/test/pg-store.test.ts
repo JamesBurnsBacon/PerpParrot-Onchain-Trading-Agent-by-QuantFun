@@ -46,9 +46,9 @@ describe.skipIf(!url)("PostgresStore", async () => {
     const [summary] = await store.recentRunSummaries(1);
     expect(summary).toEqual(summarize(run(`b-${unique}`, base + 1000)));
     // runId mirror-<startedAt> here, so the curve's time is startedAt × 1000.
-    expect((await store.equityCurve()).filter(([t]) => t >= base * 1000)).toEqual([
-      [base * 1000, 470.12],
-      [(base + 1000) * 1000, 470.12],
+    expect((await store.equityCurve()).filter((p) => p.t >= base * 1000)).toEqual([
+      { t: base * 1000, equityUsd: 470.12, dryRun: true },
+      { t: (base + 1000) * 1000, equityUsd: 470.12, dryRun: true },
     ]);
   });
 

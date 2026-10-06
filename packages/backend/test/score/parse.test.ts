@@ -43,12 +43,19 @@ describe("parsePortfolio", () => {
     expect(parsePortfolio([["allTime", history]]).month).toBeNull();
   });
 
+  test("rejects a window that appears twice, whichever window it is (SPEC parsePortfolio)", () => {
+    for (const name of ["month", "allTime", "day"]) {
+      expect(() => parsePortfolio([[name, history], ["week", history], [name, history]]))
+        .toThrow(`portfolio: duplicate window ${name}`);
+    }
+  });
+
   test("ignores other window names", () => {
     const names = ["day", "week", "perpMonth", "perpAllTime", "perpDay", "Month", "alltime"];
     expect(parsePortfolio(names.map((name) => [name, {}]))).toEqual({ month: null, allTime: null });
   });
 
-  test("leaves ordering and alignment to series validation (README §4.2)", () => {
+  test("leaves ordering and alignment to series validation (SPEC parsePortfolio)", () => {
     expect(parsePortfolio([["month", {
       accountValueHistory: [[2, "1"], [1, "2"]],
       pnlHistory: [[3, "0"]],

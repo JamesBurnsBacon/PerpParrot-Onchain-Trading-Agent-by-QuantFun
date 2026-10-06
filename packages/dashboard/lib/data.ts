@@ -15,6 +15,7 @@ export type PaperView = {
     equityUsd: number;
     returnPct: number;
     feesUsd: number;
+    fundingUsd?: number; // net paid; negative = received
     trades: number;
     openPositions: number;
     curve: [number, number][];
@@ -32,7 +33,11 @@ export type Run = {
   equityUsd?: number;
   error?: string;
   orders?: number; // summaries only
-  plan?: { orders: { asset: string; isBuy: boolean; notionalUsd: number }[]; skipped: unknown[] };
+  plan?: {
+    orders: { asset: string; isBuy: boolean; notionalUsd: number; targetUsd: number; currentUsd: number }[];
+    skipped: { asset: string; reason: string; targetUsd: number; currentUsd: number }[];
+    marginScale?: number;
+  };
   results?: { status: string }[];
   envelope?: { report: string; context: string; signatures: string[] };
 };
@@ -103,9 +108,9 @@ export type Series = {
   points: [tMs: number, value: number][];
 };
 
-// % return against `base` (default: the first point).
+// % return against `base` (default: the first point); nothing without a positive base.
 const toReturns = (points: [number, number][], base = points[0]?.[1]): [number, number][] =>
-  base ? points.map(([t, v]) => [t, (v / base - 1) * 100]) : [];
+  base !== undefined && base > 0 ? points.map(([t, v]) => [t, (v / base - 1) * 100]) : [];
 
 // A run's scheduled time (runId "mirror-<runAt>"), the same clock as the paper books.
 export const runTime = (r: Run) => {

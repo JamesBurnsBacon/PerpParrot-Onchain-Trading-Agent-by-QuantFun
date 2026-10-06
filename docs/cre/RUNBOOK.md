@@ -157,9 +157,10 @@ bun run scripts/freeze.ts path/to/frozen-configuration.json --account 0xOUR_ACCO
 `--write` saves it as `packages/backend/frozen/live.json` and pins its hash in
 `mirror/config.production.json`; the script prints the Railway variables to set
 (`CONFIGURATION_PATH=frozen/live.json` and `FROZEN_CONFIGURATION_HASH` on the snapshot service,
-`FROZEN_CONFIGURATION_HASH` and `HL_ACCOUNT` on the executor). Commit, then redeploy `mirror`
-(CRE deploy Action) and both services. Until all three agree, runs fail closed: the backend
-won't serve, the mirror rejects the snapshot, or the executor rejects the report.
+`FROZEN_CONFIGURATION_HASH` and `HL_ACCOUNT` on the executor). Commit, redeploy **both services
+first**, then `mirror` (CRE deploy Action): the Action checks that the services already pin the
+new hash and stops otherwise. Until all three agree, runs fail closed: the backend won't serve,
+the mirror rejects the snapshot, or the executor rejects the report.
 
 ## Stop
 
@@ -192,6 +193,15 @@ CRE UI or with `cre workflow pause`.
 
 The backtest and the score/ingest jobs publish one JSON document each to `dashboard_artifacts`
 (service role); the dashboard picks it up within a minute. Shapes: `packages/shared/dashboard.ts`.
+Publish with the checker, which refuses anything that would render wrong (seconds instead of
+milliseconds, a series not indexed to 1.0, no BTC benchmark, a funnel stage growing):
+
+```sh
+bun scripts/publish-artifact.ts backtest backtest.json                       # check only
+DATABASE_URL=<service role> bun scripts/publish-artifact.ts backtest backtest.json --write
+```
+
+The SQL it runs, for jobs that write directly:
 
 ```sql
 insert into dashboard_artifacts (name, body) values ('backtest', '{
