@@ -10,6 +10,11 @@ import { SnapshotError, SnapshotService } from "./service";
 import { exposuresFromSnapshot, MemoryPaperStore, PaperService, defaultBooks } from "./paper/service";
 import { PostgresEligibilityStore, PostgresPaperStore, PostgresSnapshotStore, readPostgresArtifact } from "./pg-store";
 import { MemorySnapshotStore } from "./snapshot";
+import { handleChat, handlePreview, MemoryRequestStore, PostgresRequestStore, type ChatDeps, type ChatEnv } from "./chat/handler";
+import { MemoryChatLimiter, PostgresChatLimiter } from "./chat/limits";
+import { callIntentModel } from "./chat/openai";
+import { loadFinalists } from "./chat/finalists";
+import { validateRuntimePolicy } from "../../shared/src/policy-runtime";
 
 const env = process.env;
 const required = (name: string) => {
@@ -55,9 +60,11 @@ const paper = new PaperService({
   cfg: { minOrderUsd: 10, driftFraction: 0.1, marginCap: 0.95, slippageBps: envNumber("PAPER_SLIPPAGE_BPS", 5, 0, 100) },
 });
 
+const configurations = new FileConfigurationSource(resolve(import.meta.dir, "..", required("CONFIGURATION_PATH")), required("FROZEN_CONFIGURATION_HASH"));
+
 const service = new SnapshotService({
   // Relative to packages/backend, wherever the process starts (vercel.json bundles fixtures/ and frozen/).
-  configurations: new FileConfigurationSource(resolve(import.meta.dir, "..", required("CONFIGURATION_PATH")), required("FROZEN_CONFIGURATION_HASH")),
+  configurations,
   eligibility: new EligibilityTracker(sql ? new PostgresEligibilityStore(sql) : new MemoryEligibilityStore(), undefined, (m) =>
     log("eligibility refused", { reason: m }),
   ),
@@ -79,6 +86,59 @@ const service = new SnapshotService({
   },
 });
 
+// Chat variables are optional; invalid values fall back without changing the
+// strict parsing of the existing service's environment variables.
+const chatNumber = (name: string, fallback: number, max = Number.MAX_SAFE_INTEGER, integer = false): number => {
+  try {
+    const value = envNumber(name, fallback, 0, max);
+    return integer && !Number.isSafeInteger(value) ? fallback : value;
+  } catch {
+    return fallback;
+  }
+};
+const chatEnv: ChatEnv = {
+  enabled: env.CHAT_ENABLED === "true",
+  apiKey: env.OPENAI_API_KEY || undefined,
+  model: env.CHAT_MODEL || "gpt-5.4-mini",
+  limits: {
+    ipHourly: chatNumber("CHAT_IP_HOURLY_LIMIT", 10, Number.MAX_SAFE_INTEGER, true),
+    previewIpHourly: chatNumber("CHAT_PREVIEW_IP_HOURLY_LIMIT", 30, Number.MAX_SAFE_INTEGER, true),
+    globalDaily: chatNumber("CHAT_GLOBAL_DAILY_LIMIT", 100, Number.MAX_SAFE_INTEGER, true),
+    dailyBudgetMicroUsd: Math.round(chatNumber("CHAT_DAILY_BUDGET_USD", 5, 100) * 1_000_000),
+  },
+  // Conservative ESTIMATES, USD per million tokens. Keep worst-case arithmetic
+  // within safe integer micro-USD even with misconfigured optional prices.
+  priceInPerM: chatNumber("CHAT_PRICE_IN_PER_M_USD", 1, Number.MAX_SAFE_INTEGER / 2400),
+  priceOutPerM: chatNumber("CHAT_PRICE_OUT_PER_M_USD", 4, Number.MAX_SAFE_INTEGER / 2400),
+  ipSalt: env.CHAT_IP_SALT ?? "perpparrot-chat-v1",
+};
+const chatStores = {
+  limiter: sql ? new PostgresChatLimiter(sql) : new MemoryChatLimiter(),
+  requests: sql ? new PostgresRequestStore(sql) : new MemoryRequestStore(),
+};
+let chatDeps: Promise<ChatDeps> | undefined;
+const loadChatDeps = (): Promise<ChatDeps> => chatDeps ??= configurations.load(Date.now()).then(
+  ({ policy }): ChatDeps => {
+    // The snapshot source types only the mirror's subset; chat needs the full policy.
+    validateRuntimePolicy(policy);
+    return { env: chatEnv, ...chatStores, callModel: callIntentModel, finalists: loadFinalists,
+      basePolicy: policy, now: Date.now, log, newId: () => crypto.randomUUID() };
+  },
+).catch((error: unknown) => {
+  // A temporary file failure disables this request; a later request may retry.
+  chatDeps = undefined;
+  throw error;
+});
+const chatCors = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "content-type",
+};
+const chatDisabled = () => Response.json(
+  { ok: false, code: "disabled", reply: "Squawk, chat is resting right now." },
+  { status: 503, headers: chatCors },
+);
+
 // Dashboard artifacts (shared/dashboard.ts): Supabase, or JSON files in ARTIFACTS_DIR locally.
 const readArtifact = sql
   ? readPostgresArtifact(sql)
@@ -98,6 +158,18 @@ const server = Bun.serve({
     const { pathname: path, searchParams } = new URL(req.url);
     // Public under /api/backend on Vercel; the bare paths serve local runs.
     const pathname = path.replace(/^\/api\/backend(?=\/|$)/, "") || "/";
+    if (pathname === "/chat" || pathname === "/chat/preview") {
+      if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: chatCors });
+      if (req.method === "POST") {
+        if (!chatEnv.enabled || (pathname === "/chat" && !chatEnv.apiKey)) return chatDisabled();
+        let deps: ChatDeps;
+        try { deps = await loadChatDeps(); }
+        catch { return chatDisabled(); }
+        const response = await (pathname === "/chat" ? handleChat(req, deps) : handlePreview(req, deps));
+        for (const [name, value] of Object.entries(chatCors)) response.headers.set(name, value);
+        return response;
+      }
+    }
     // Pinned hash and store type, for the pre-deploy check (scripts/predeploy-check.ts).
     if (req.method === "GET" && pathname === "/health") {
       return Response.json({ ok: true, frozenConfigurationHash: env.FROZEN_CONFIGURATION_HASH, store: sql ? "postgres" : "memory" });
