@@ -11,8 +11,7 @@ export const encodeReportBody = (r: MirrorReport): Hex =>
     r.account,
     r.asOf,
     r.expiresAt,
-    r.equityE6,
-    r.targets,
+    r.exposures,
   ]);
 
 type SignedReport = {

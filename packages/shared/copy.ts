@@ -75,9 +75,6 @@ export const capGrossExposure = (
   return exposures.map((e) => ({ asset: e.asset, exposureE9: (e.exposureE9 * maxGrossE9) / gross }));
 };
 
-// Target notional for our account: exposure × our equity.
-export const toTargetE6 = (exposureE9: bigint, equityE6: bigint): bigint => (exposureE9 * equityE6) / EXPOSURE_SCALE;
-
 // Spot-check deviation in basis points of live equity (README §4.7: reject > 5%):
 // the larger of Σ_c |snapshot − live notional| (long/short errors can't cancel)
 // and |snapshot − live equity|.

@@ -17,8 +17,8 @@ import {
   text,
 } from "@chainlink/cre-sdk";
 import { z } from "zod";
-import { portfolioEquityE6, readAccountState, type PerpState, type PortfolioResponse } from "../../shared/account";
-import { capGrossExposure, computeExposures, deviationBps, EXPOSURE_SCALE, toTargetE6 } from "../../shared/copy";
+import { readAccountState, type PerpState, type PortfolioResponse } from "../../shared/account";
+import { capGrossExposure, computeExposures, deviationBps, EXPOSURE_SCALE } from "../../shared/copy";
 import type { MirrorReport } from "../../shared/report";
 import { ELIGIBLE_DEXES } from "../../shared/snapshot";
 import { encodeReportBody, toEnvelope } from "./report";
@@ -32,10 +32,10 @@ const configSchema = z.object({
   backendUrl: z.string().startsWith("http"),
   executorUrl: z.string().startsWith("http"),
   // configurationHash of the frozen configuration (README §4.7 freeze commitment).
-  // It also fixes our HL account, whose equity sizes the targets.
+  // It also fixes our HL account.
   frozenConfigurationHash: z.string().regex(/^0x[0-9a-f]{64}$/),
   // 3 HTTP calls per source (core + xyz positions, portfolio equity). Budget:
-  // 1 snapshot + 1 own equity + 3 × spotCheckCount + 1 executor ≤ CRE's 15.
+  // 1 snapshot + 3 × spotCheckCount + 1 executor ≤ CRE's 15.
   spotCheckCount: z.number().int().min(1).max(4),
   maxDeviationBps: z.number().int().positive(),
   maxSnapshotAgeSeconds: z.number().int().positive(),
@@ -46,7 +46,7 @@ const configSchema = z.object({
 export type Config = z.infer<typeof configSchema>;
 
 // What each node observes. Fields derived from the immutable snapshot must be
-// identical across nodes; live HL reads differ slightly, so they take the median.
+// identical across nodes; the live spot-check differs slightly, so it takes the median.
 type Observation = {
   snapshotId: string;
   // From the frozen configuration.
@@ -56,7 +56,6 @@ type Observation = {
   // JSON [{asset, exposureE9}] — kept small for the 25 KB consensus limit.
   exposures: string;
   maxDeviationBps: number;
-  equityE6: bigint;
 };
 
 const observe = (nodeRuntime: NodeRuntime<Config>, runAt: number): Observation => {
@@ -108,8 +107,6 @@ const observe = (nodeRuntime: NodeRuntime<Config>, runAt: number): Observation =
     snapshotHash: keccakUtf8(raw),
     exposures: JSON.stringify(exposures.map((e) => ({ asset: e.asset, exposureE9: e.exposureE9.toString() }))),
     maxDeviationBps: maxDev,
-    // Only our equity is needed here; the executor reads our positions itself.
-    equityE6: portfolioEquityE6(portfolio(snapshot.configuration.account)),
   };
 };
 
@@ -122,12 +119,11 @@ export const buildMirrorReport = (config: Config, runAt: number, obs: Observatio
     account: obs.account as `0x${string}`,
     asOf: BigInt(runAt),
     expiresAt: BigInt(runAt + config.reportTtlSeconds),
-    equityE6: obs.equityE6,
-    targets: exposures.map((e) => ({ asset: e.asset, notionalE6: toTargetE6(BigInt(e.exposureE9), obs.equityE6) })),
+    exposures: exposures.map((e) => ({ asset: e.asset, exposureE9: BigInt(e.exposureE9) })),
   };
 };
 
-// README §4.7: snapshot → spot-check → targets → DON-signed report → executor.
+// README §4.7: snapshot → spot-check → exposures → DON-signed report → executor.
 // On any failure the run throws and the executor holds positions until the next run.
 export const onCronTrigger = (runtime: Runtime<Config>, payload: CronPayload): string => {
   const { config } = runtime;
@@ -142,12 +138,11 @@ export const onCronTrigger = (runtime: Runtime<Config>, payload: CronPayload): s
         snapshotHash: identical,
         exposures: identical,
         maxDeviationBps: median,
-        equityE6: median,
       }),
     )(runAt)
     .result();
 
-  runtime.log(`${obs.snapshotId}: spot-check max deviation ${obs.maxDeviationBps} bps, equity ${Number(obs.equityE6) / 1e6} USD`);
+  runtime.log(`${obs.snapshotId}: spot-check max deviation ${obs.maxDeviationBps} bps`);
   if (obs.maxDeviationBps > config.maxDeviationBps) {
     throw new Error(`spot-check failed: ${obs.maxDeviationBps} bps > ${config.maxDeviationBps} bps`);
   }
@@ -175,7 +170,7 @@ export const onCronTrigger = (runtime: Runtime<Config>, payload: CronPayload): s
     .result();
 
   if (status < 200 || status >= 300) throw new Error(`executor rejected the report: HTTP ${status}`);
-  runtime.log(`delivered ${mirrorReport.runId}: ${mirrorReport.targets.length} targets`);
+  runtime.log(`delivered ${mirrorReport.runId}: ${mirrorReport.exposures.length} exposures`);
   return mirrorReport.runId;
 };
 

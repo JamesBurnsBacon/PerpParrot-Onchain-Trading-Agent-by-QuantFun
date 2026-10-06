@@ -18,10 +18,10 @@ export const body = (overrides: Partial<MirrorReport> = {}): MirrorReport => ({
   account: ACCOUNT,
   asOf: BigInt(AS_OF),
   expiresAt: BigInt(AS_OF + 300),
-  equityE6: 470_000_000n,
-  targets: [
-    { asset: "BTC", notionalE6: 1_200_000_000n },
-    { asset: "ETH", notionalE6: -350_000_000n },
+  // At $400 equity: BTC +$1,200, ETH −$350.
+  exposures: [
+    { asset: "BTC", exposureE9: 3_000_000_000n },
+    { asset: "ETH", exposureE9: -875_000_000n },
   ],
   ...overrides,
 });
@@ -39,8 +39,7 @@ export const buildRawReport = (b: MirrorReport, owner: Hex = OWNER): Uint8Array 
     b.account,
     b.asOf,
     b.expiresAt,
-    b.equityE6,
-    b.targets,
+    b.exposures,
   ]);
   return concatBytes([header, hexToBytes(encoded)]);
 };

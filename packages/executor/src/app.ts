@@ -14,7 +14,7 @@ export type AppDeps = {
   log: (msg: string, extra?: Record<string, unknown>) => void;
 };
 
-// BigInts (report targets) don't serialize natively.
+// BigInts (report exposures) don't serialize natively.
 const json = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(body, (_, v) => (typeof v === "bigint" ? v.toString() : v)), {
     status,

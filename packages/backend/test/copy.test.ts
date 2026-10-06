@@ -5,7 +5,6 @@ import {
   computeExposures,
   decToE6,
   deviationBps,
-  toTargetE6,
   type WeightedSource,
 } from "../../shared/copy";
 
@@ -68,10 +67,6 @@ describe("computeExposures", () => {
 
   test("is empty when every source is flat", () => {
     expect(computeExposures([src("0xa", 1_000_000, "1000000000", [])])).toEqual([]);
-  });
-
-  test("toTargetE6 scales by our equity", () => {
-    expect(toTargetE6(1_250_000_000n, 470_000_000n)).toBe(587_500_000n);
   });
 });
 

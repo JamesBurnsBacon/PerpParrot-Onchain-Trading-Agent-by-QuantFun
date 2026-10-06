@@ -21,13 +21,13 @@ decide before merging. Written 2026-10-06 against `ai-agent-workflow` at `816032
    pinned in the deployed mirror config and checked by the backend, the mirror and the executor.
    *Proposal:* treat the pinned hash as the confirmation and drop the chain adapter gate.
 2. **Report shape.** The review core's `rebalance-report.schema.json` carries ≤ 10 **orders**
-   (asset ID, side, limit price, size, cloid). `cre-scaffold` reports **targets** and the executor
-   builds orders against the live account. *Proposal:* targets. Orders in the report need DON
-   consensus on live prices and our live positions, which differ per node; targets only need
-   consensus on deterministic exposures from an immutable snapshot plus a median equity.
+   (asset ID, side, limit price, size, cloid). `cre-scaffold` reports **exposures** (fractions of
+   our equity) and the executor builds targets and orders against the live account. *Proposal:*
+   exposures. Orders in the report need DON consensus on live prices, our equity and our live
+   positions, which differ per node; exposures are deterministic from an immutable snapshot.
 3. **Spot-check sample size.** The review core samples `min(10, sources)`. Each HL account needs
    3 calls (core + `xyz` positions, `portfolio` equity), so 10 sources would be 30 calls, over
-   CRE's 15. `cre-scaffold` samples 4 (1 snapshot + 1 own equity + 12 + 1 executor = 15).
+   CRE's 15. `cre-scaffold` samples 4 (1 snapshot + 12 + 1 executor = 14).
 4. **Equity.** Read from HL's `portfolio` request (live account value), not Σ per-dex
    `accountValue`, which understates equity for unified and portfolio-margin accounts (most
    leaderboard traders). Worth using the same definition in the review core's evidence.

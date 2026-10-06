@@ -171,13 +171,13 @@ Each node runs steps 1–3 (`runInNodeMode`); the DON agrees per field, then sig
    - Contents: the **frozen configuration** (below), the eligible-asset list, and per frozen source its equity and eligible positions (signed USD notional). Amounts are decimal strings × 1e6.
    - **Equity = HL's live account value** from the `portfolio` request (last point of the `day` window, live), not Σ per-dex `accountValue`. Most leaderboard traders use unified or portfolio-margin accounts (23 + 5 of 40 sampled), where per-dex `accountValue` is only the margin set aside on that dex; summing it understated equity, and so overstated leverage, by 2–10×. The portfolio value is also what the backtest's returns use.
    - The mirror rejects it if it's for another run, was taken > 120 s from `runAt`, contains an ineligible asset, doesn't cover exactly the frozen sources, or its configuration isn't the pinned one.
-2. **Spot-check 4 sources**: `clearinghouseState` on the core dex **and** `xyz` (HIP-3 positions only come back per dex) plus `portfolio` for equity, 3 calls each. Our own equity takes 1 more `portfolio` call. The sample is seeded by the snapshot ID, so every node checks the same sources. Deviation = the larger of Σ |snapshot − live notional| and |snapshot − live equity|, over live equity. **Reject the run if the worst source exceeds 5%.**
+2. **Spot-check 4 sources**: `clearinghouseState` on the core dex **and** `xyz` (HIP-3 positions only come back per dex) plus `portfolio` for equity, 3 calls each. The sample is seeded by the snapshot ID, so every node checks the same sources. Deviation = the larger of Σ |snapshot − live notional| and |snapshot − live equity|, over live equity. **Reject the run if the worst source exceeds 5%.**
 3. **Exposures:** `exposure_c = Σᵢ wᵢ' · nᵢ,c / Eᵢ` per asset in bigint math (`packages/shared/copy.ts`), so every node gets identical results.
    - Weights are the frozen `weightUnits`; cash stays cash. Flat sources' weight goes to active ones (`wᵢ' = wᵢ · W_all / W_active`), but **never past a source's frozen ceiling** (the run fails instead). Gross exposure is capped at the policy's `maxGrossLeverage`.
-   - **Consensus:** snapshot ID, snapshot hash, account and exposures are `identical`; max deviation and our equity are `median` (live reads differ slightly between nodes). Only ≤ 59 exposures go through consensus, not the snapshot, which stays under the 25 KB limit (a 25-source snapshot can be ~60 KB).
-4. **Targets** = exposure × our equity → `report()` → `sendReport()` POSTs it to the executor (§4.13). Orders, the drift rule (§4.4) and the 95% margin rule (§4.8) are the executor's job, against the live account.
+   - **Consensus:** snapshot ID, snapshot hash, account and exposures are `identical`; the spot-check's max deviation is `median` (live reads differ slightly between nodes). Only ≤ 59 exposures go through consensus, not the snapshot, which stays under the 25 KB limit (a 25-source snapshot can be ~60 KB).
+4. **Report the exposures** → `report()` → `sendReport()` POSTs it to the executor (§4.13). The executor turns them into targets with our live equity (target = exposure × equity), then orders; the drift rule (§4.4) and the 95% margin rule (§4.8) run there, against the live account.
 
-**HTTP calls: 15 of CRE's 15** (1 snapshot + 1 own equity + 12 spot-check + 1 executor), enforced by the simulator. No room for retries: a failed call fails the run, and the next run retries.
+**HTTP calls: 14 of CRE's 15** (1 snapshot + 12 spot-check + 1 executor), enforced by the simulator. A failed call fails the run, and the next run retries.
 - **Frozen configuration = execution authority.** The review core (branch `ai-agent-workflow`, `shared/src/frozen.ts`) turns a VALID/LIVE review into a `FrozenConfiguration`: sources with integer weight and ceiling units, cash units, **our account**, the policy, and a `configurationHash` (keccak over canonical JSON, domain `perpparrot:frozen:v1`). `packages/shared/frozen.ts` re-implements its checks without dependencies so they run in WASM; the fixture passes the review core's own validator.
 - **Freeze commitment:** the `configurationHash` is pinned in `mirror`'s production config, so it's part of the deployed workflow ID, and it's inside every DON-signed report. The executor rejects any other hash. **No onchain contract:** everything trades in our own HL account, and the signed reports (executor `/runs`, dashboard) are the verifiable record; anyone can check them against the Capability Registry. Freezing = set the hash in `config.production.json`, redeploy `mirror` via CI, set the executor's `FROZEN_CONFIGURATION_HASH`, load the configuration into the backend.
 - **On failure** (snapshot, consensus, spot-check, executor rejection, timeout): the run throws, the executor holds positions, and the next run retries. The executor alerts on Telegram after 25 min without a report (≈ 2 missed runs). There is no backend fallback.
@@ -188,11 +188,11 @@ Each node runs steps 1–3 (`runInNodeMode`); the DON agrees per field, then sig
 Code: `packages/executor`. One long-running Bun service (Railway, `Dockerfile` + `railway.json`), so there's one HL nonce sequence, an in-process run queue and no function timeout.
 - **Intake** (`POST /reports`): verify the report (≥ f+1 DON signatures, pinned workflow owner, §4.13), then check the configuration hash, our account and expiry, dedupe by report ID, **answer 200 at once** and execute in the background (DON nodes time out after 10 s). Runs are queued, never concurrent.
 - **Plan** against the live account (`src/planner.ts`):
-  - targets for every eligible asset; anything we hold that isn't targeted goes to 0
+  - target = reported exposure × our live equity (HL portfolio value) for every eligible asset; anything we hold that isn't targeted goes to 0
   - **margin rule:** if `Σ |N_c| / maxLev_c` would exceed **95% of equity**, scale **all** targets down pro-rata
   - **drift rule:** trade a leg only if the gap is ≥ $10 and ≥ 10% of the target; full closes are always allowed (reduce-only)
   - reductions first; reduce-only whenever an order only shrinks a position
-  - **sanity bounds:** reject the report if gross target > 50× equity, or if its equity is > 10% away from our live account value (the targets were sized with it)
+  - **sanity bound:** reject the report if gross exposure > 10× (the policy caps it at `maxGrossLeverage`, 3× in the fixture)
 - **Orders:** IOC limit at mark ± 50 bps, prices and sizes rounded to HL tick/lot rules, ≤ 20 orders per action, a deterministic `cloid` per report and asset. Remainders are retried on the next run.
 - **Leverage:** cross margin; each asset at its **max leverage** (`updateLeverage`, once per asset; many HIP-3 markets are 10x, BTC up to 40x).
 - **Dry run by default:** orders are built and signed through `@nktkas/hyperliquid` exactly as they'd be sent, then recorded instead of POSTed. `DRY_RUN=false` plus `HL_API_WALLET_KEY` goes live.
@@ -252,8 +252,8 @@ Code: `packages/executor`. One long-running Bun service (Railway, `Dockerfile` +
 
 ### 4.13 Mirror → executor report
 - **Transport:** `runtime.report()` (`evm` / `ecdsa` / `keccak256`), then `sendReport()` POSTs JSON `{report, context, signatures}` (hex, no `0x`) to the executor. **Every DON node POSTs its own copy.** `cacheSettings` only trims duplicates, because each node's signatures differ. The mirror reaches consensus on the executor's HTTP status, so it fails loudly on a rejection.
-- **Body** (ABI-encoded after the 109-byte header, `packages/shared/report.ts`): `string runId, bytes32 snapshotHash, bytes32 configurationHash, address account, uint64 asOf, uint64 expiresAt, int256 equityE6, (string asset, int256 notionalE6)[] targets`.
-  - **Targets, not orders.** The executor diffs targets against the live account when it runs, so price moves between report and execution don't matter, and nodes never have to agree on prices or our positions.
+- **Body** (ABI-encoded after the 109-byte header, `packages/shared/report.ts`): `string runId, bytes32 snapshotHash, bytes32 configurationHash, address account, uint64 asOf, uint64 expiresAt, (string asset, int256 exposureE9)[] exposures`.
+  - **Exposures, not orders or USD targets.** Exposure = target notional as a fraction of our equity. The executor multiplies by our live equity and diffs against the live account when it runs, so price and equity moves between report and execution don't matter, and nodes never have to agree on prices, our equity or our positions.
   - The review core's `rebalance-report.schema.json` (branch `ai-agent-workflow`) puts ≤ 10 **orders** in the report instead. ❓ *§8: reconcile before merging.*
 - **Report ID** = `keccak256(rawReport)`, identical across nodes. The first valid copy is accepted; later copies get `200 duplicate`.
 - **Verification** in the executor (`src/verify.ts`, `src/handler.ts`):
@@ -337,7 +337,7 @@ Budget ~1 h of testing per 2 h of features. Integrate only tested modules.
 - [ ] ❓ How to read sources' lending positions for Conservative
 - [ ] ❓ Per-tier type-B threshold N (production)
 - [ ] ❓ Org-owned CRE secrets on the private registry: confirm with the sponsor
-- [ ] ❓ Mirror → executor report: **targets** (§4.13, built and tested) or **≤ 10 orders** (review core's `rebalance-report.schema.json`)? Targets keep live prices and our positions out of DON consensus.
+- [ ] ❓ Mirror → executor report: **exposures** (§4.13, built and tested) or **≤ 10 orders** (review core's `rebalance-report.schema.json`)? Exposures keep live prices, our equity and our positions out of DON consensus.
 - [ ] ❓ Live bucket: README says Aggressive; the review core only allows **Balanced** live (`requireFrozenLiveManifest`, `validateFrozenConfiguration`)
 - [ ] ❓ Freeze confirmation: the review core's docs plan a HyperEVM freeze consumer; we dropped onchain contracts and pin the `configurationHash` in the mirror config instead (§4.7)
 - [ ] ❓ Our account mode: **unified** is simplest (one USDC balance margins core and `xyz`); standard mode needs USDC moved into each dex. Equity is read the same way either way

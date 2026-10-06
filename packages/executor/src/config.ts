@@ -15,7 +15,6 @@ export type ExecutorConfig = {
   driftFraction: number;
   marginCap: number;
   maxGrossLeverage: number;
-  equityTolerance: number;
   adminToken?: string;
   telegramBotToken?: string;
   telegramChatId?: string;
@@ -63,8 +62,7 @@ export const loadConfig = (env: Record<string, string | undefined>): ExecutorCon
     minOrderUsd: num(env, "MIN_ORDER_USD", 10),
     driftFraction: num(env, "DRIFT_FRACTION", 0.1),
     marginCap: num(env, "MARGIN_CAP", 0.95),
-    maxGrossLeverage: num(env, "MAX_GROSS_LEVERAGE", 50),
-    equityTolerance: num(env, "EQUITY_TOLERANCE", 0.1),
+    maxGrossLeverage: num(env, "MAX_GROSS_LEVERAGE", 10),
     adminToken: env.ADMIN_TOKEN || undefined,
     telegramBotToken: env.TELEGRAM_BOT_TOKEN || undefined,
     telegramChatId: env.TELEGRAM_CHAT_ID || undefined,

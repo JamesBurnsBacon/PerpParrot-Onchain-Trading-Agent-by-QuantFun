@@ -51,7 +51,6 @@ const setup = (info: InfoFn) => {
     config: {
       account: ACCOUNT,
       maxGrossLeverage: 50,
-      equityTolerance: 0.1,
       plan: { minOrderUsd: 10, driftFraction: 0.1, marginCap: 0.95, slippageBps: 50 },
     },
   });
@@ -62,11 +61,11 @@ const verified = async (b = body()) => verifyEnvelope(await envelope(keys.slice(
 
 describe("Runner.executeReport (dry run)", () => {
   test("plans against the live account and signs one IOC batch", async () => {
-    const { runner, exchange, store } = setup(fakeInfo({ equity: "470", core: [["ETH", "-0.05"]] }));
+    const { runner, exchange, store } = setup(fakeInfo({ equity: "400", core: [["ETH", "-0.05"]] }));
     const report = await verified();
     const run = await runner.executeReport(report, {});
 
-    expect(run).toMatchObject({ status: "executed", dryRun: true, equityUsd: 470 });
+    expect(run).toMatchObject({ status: "executed", dryRun: true, equityUsd: 400 });
     // BTC +$1200 from flat; ETH target −$350 vs −$200 held → sell $150 more.
     expect(run.plan?.orders.map((o) => [o.asset, o.isBuy, o.size])).toEqual([
       ["BTC", true, "0.012"],
@@ -102,35 +101,33 @@ describe("Runner.executeReport (dry run)", () => {
   });
 
   test("sets leverage once per asset across runs", async () => {
-    const { runner, exchange } = setup(fakeInfo({ equity: "470" }));
+    const { runner, exchange } = setup(fakeInfo({ equity: "400" }));
     await runner.executeReport(await verified(), {});
-    await runner.executeReport(await verified(body({ runId: "mirror-2", targets: [{ asset: "BTC", notionalE6: 2_400_000_000n }] })), {});
+    await runner.executeReport(await verified(body({ runId: "mirror-2", exposures: [{ asset: "BTC", exposureE9: 6_000_000_000n }] })), {});
     const types = exchange.recorded().map((r) => (r.payload as { action: { type: string } }).action.type);
     expect(types.filter((t) => t === "updateLeverage")).toHaveLength(2);
   });
 
   test("skips while paused", async () => {
-    const { runner, store, exchange } = setup(fakeInfo({ equity: "470" }));
+    const { runner, store, exchange } = setup(fakeInfo({ equity: "400" }));
     await store.setControls({ paused: true, updatedAt: 1, updatedBy: "test" });
     const run = await runner.executeReport(await verified(), {});
     expect(run.status).toBe("skipped_paused");
     expect(exchange.recorded()).toEqual([]);
   });
 
-  test("rejects a report whose equity is far from ours and alerts", async () => {
-    // The report was sized for $470; the account holds $600.
-    const { runner, alerts } = setup(fakeInfo({ equity: "600" }));
+  test("sizes targets with our live equity at execution time", async () => {
+    // Same report, account doubled to $800: BTC target $2,400.
+    const { runner } = setup(fakeInfo({ equity: "800" }));
     const run = await runner.executeReport(await verified(), {});
-    expect(run.status).toBe("failed");
-    expect(run.error).toContain("differs from live $600.00 by more than 10%");
-    expect(alerts).toHaveLength(1);
+    expect(run.plan?.orders.find((o) => o.asset === "BTC")?.size).toBe("0.024");
   });
 
-  test("rejects targets beyond the gross leverage bound and alerts", async () => {
-    const { runner, alerts } = setup(fakeInfo({ equity: "10" }));
-    const run = await runner.executeReport(await verified(body({ equityE6: 10_000_000n })), {});
+  test("rejects exposures beyond the gross leverage bound and alerts", async () => {
+    const { runner, alerts } = setup(fakeInfo({ equity: "400" }));
+    const run = await runner.executeReport(await verified(body({ exposures: [{ asset: "BTC", exposureE9: 60_000_000_000n }] })), {});
     expect(run.status).toBe("failed");
-    expect(run.error).toContain("exceeds 50× equity");
+    expect(run.error).toBe("gross exposure 60.00× exceeds 50×");
     expect(alerts).toHaveLength(1);
   });
 
@@ -145,7 +142,7 @@ describe("Runner.executeReport (dry run)", () => {
   test("runs one at a time", async () => {
     let active = 0;
     let maxActive = 0;
-    const base = fakeInfo({ equity: "470" });
+    const base = fakeInfo({ equity: "400" });
     const slow = (async (req: Record<string, unknown>) => {
       active++;
       maxActive = Math.max(maxActive, active);
@@ -165,7 +162,7 @@ describe("Runner.executeReport (dry run)", () => {
 
 describe("Runner.flatten", () => {
   test("closes every position reduce-only, even while paused", async () => {
-    const { runner, store } = setup(fakeInfo({ equity: "470", core: [["BTC", "0.002"]], xyz: [["xyz:MSFT", "-0.3"]] }));
+    const { runner, store } = setup(fakeInfo({ equity: "400", core: [["BTC", "0.002"]], xyz: [["xyz:MSFT", "-0.3"]] }));
     await store.setControls({ paused: true, updatedAt: 1, updatedBy: "test" });
     const run = await runner.flatten("test");
     expect(run.plan?.orders.map((o) => [o.asset, o.assetId, o.isBuy, o.reduceOnly])).toEqual([
@@ -177,7 +174,7 @@ describe("Runner.flatten", () => {
 
 describe("app routes", () => {
   const make = (adminToken?: string) => {
-    const s = setup(fakeInfo({ equity: "470", core: [["BTC", "0.002"]] }));
+    const s = setup(fakeInfo({ equity: "400", core: [["BTC", "0.002"]] }));
     const logs: string[] = [];
     const app = createApp({
       handler: { mode: registry, frozenConfigurationHash: CONFIGURATION, account: ACCOUNT, now: () => AS_OF + 10, maxLeadSeconds: 60 },

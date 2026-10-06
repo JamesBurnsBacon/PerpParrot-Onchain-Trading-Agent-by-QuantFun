@@ -103,7 +103,7 @@ describe("pickSample", () => {
 });
 
 describe("buildMirrorReport", () => {
-  test("sizes targets by our equity and round-trips through the shared ABI", () => {
+  test("carries the agreed exposures and round-trips through the shared ABI", () => {
     const report = buildMirrorReport(config, RUN_AT, {
       snapshotId: `snap-${RUN_AT}`,
       account: configuration.account,
@@ -113,9 +113,8 @@ describe("buildMirrorReport", () => {
         { asset: "ETH", exposureE9: "-500000000" },
       ]),
       maxDeviationBps: 3,
-      equityE6: 470_000_000n,
     });
-    const [runId, snapshotHash, configurationHash, account, asOf, expiresAt, equityE6, targets] = decodeAbiParameters(
+    const [runId, snapshotHash, configurationHash, account, asOf, expiresAt, exposures] = decodeAbiParameters(
       parseAbiParameters(REPORT_BODY_ABI),
       encodeReportBody(report),
     );
@@ -125,10 +124,9 @@ describe("buildMirrorReport", () => {
     expect(account.toLowerCase()).toBe(configuration.account);
     expect(asOf).toBe(BigInt(RUN_AT));
     expect(expiresAt).toBe(BigInt(RUN_AT + config.reportTtlSeconds));
-    expect(equityE6).toBe(470_000_000n);
-    expect(targets).toEqual([
-      { asset: "BTC", notionalE6: 587_500_000n },
-      { asset: "ETH", notionalE6: -235_000_000n },
+    expect(exposures).toEqual([
+      { asset: "BTC", exposureE9: 1_250_000_000n },
+      { asset: "ETH", exposureE9: -500_000_000n },
     ]);
   });
 });
