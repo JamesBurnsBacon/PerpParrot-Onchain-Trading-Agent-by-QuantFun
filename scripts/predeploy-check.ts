@@ -110,6 +110,7 @@ if (backend) {
     const ageMin = last ? (Date.now() / 1000 - last) / 60 : undefined;
     if (ageMin === undefined) warn("paper books have not stepped yet (they step on the first snapshot a run requests)");
     else if (ageMin > 25) warn(`paper books last stepped ${ageMin.toFixed(0)} min ago: look for "paper books not stepped" in the service log`);
+    else if (ageMin < 0) pass("paper books stepped for the upcoming run (a simulation stamps the next :x0)");
     else pass(`paper books stepped ${ageMin.toFixed(0)} min ago`);
   }
 }
