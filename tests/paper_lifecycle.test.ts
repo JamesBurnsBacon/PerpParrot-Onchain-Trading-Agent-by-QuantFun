@@ -23,7 +23,7 @@ test('rich review and paper freeze survive restart and enforce monitoring-only a
  assert.equal((await restarted.load(f.input.session)).configuration?.configurationHash,frozen.configurationHash);
  assert.equal((await reviewPaperSession(f.input,restarted,f.deps,async evidence=>({evidenceHash:evidence.evidenceHash,concerns:[]}))).phase,'MONITOR');assert.equal(f.modelCalls(),3);
  assert.equal((await reviewPaperSession(f.input,restarted,f.deps,async()=>{throw Error('cached monitor must not call model');})).phase,'MONITOR');
- const changed={...f.input,rich:structuredClone(f.input.rich)};changed.rich.finalists[0].patterns.observedFills++;
+ const changed={...f.input,rich:structuredClone(f.input.rich)};const patterns=changed.rich.finalists[0].patterns;patterns.observedFills=(patterns.observedFills??0)+1;
  await assert.rejects(()=>reviewPaperSession(changed,restarted,f.deps,async evidence=>({evidenceHash:evidence.evidenceHash,concerns:[],weights:[1]})));
  await assert.rejects(()=>restarted.review(f.input.session,result.receipt),/frozen/);
  const drafts=(await db.query<{prompt:{draft?:unknown}}>("select prompt from review_audit where output ? 'draftHash'")).rows;assert.equal(drafts.length,2);assert.ok(drafts.every(record=>record.prompt.draft));
