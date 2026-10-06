@@ -10,6 +10,11 @@ export type AppDeps = {
   runner: Runner;
   store: ExecutorStore;
   adminToken?: string;
+  // GET /cron/watchdog for Vercel Cron, which sends `Authorization: Bearer <cronSecret>`.
+  watchdog?: () => Promise<Record<string, unknown>>;
+  cronSecret?: string;
+  // Keeps a run going after its report is answered (Vercel's waitUntil).
+  background?: (work: Promise<unknown>) => void;
   status: () => Record<string, unknown>;
   log: (msg: string, extra?: Record<string, unknown>) => void;
 };
@@ -41,7 +46,9 @@ const thin = <T,>(points: T[], max: number): T[] => {
 const equityCaches = new WeakMap<AppDeps, { at: number; body: { runs: number; points: [number, number][] } }>();
 
 export const createApp = (deps: AppDeps) => async (req: Request): Promise<Response> => {
-  const { pathname, searchParams } = new URL(req.url);
+  const { pathname: path, searchParams } = new URL(req.url);
+  // Public under /api/executor on Vercel (vercel.json); the bare paths serve local runs.
+  const pathname = path.replace(/^\/api\/executor(?=\/|$)/, "") || "/";
 
   if (req.method === "GET" && pathname === "/health") return json({ ok: true });
   if (req.method === "GET" && pathname === "/status") {
@@ -83,14 +90,20 @@ export const createApp = (deps: AppDeps) => async (req: Request): Promise<Respon
       ...deps.handler,
       claim: (id) => deps.store.claimReport(id),
       accept: (report, envelope: ReportEnvelope) => {
-        deps.runner.executeReport(report, envelope).then(
+        const run = deps.runner.executeReport(report, envelope).then(
           (run) => deps.log("run finished", { runId: run.runId, status: run.status, orders: run.plan?.orders.length, error: run.error }),
           (e) => deps.log("run crashed", { runId: report.body.runId, error: (e as Error).message }),
         );
+        deps.background?.(run);
       },
     });
     deps.log("report", { status: result.status, ...result.body });
     return json(result.body, result.status);
+  }
+
+  if (req.method === "GET" && pathname === "/cron/watchdog" && deps.watchdog) {
+    if (!authorized(req, deps.cronSecret)) return json({ error: "unauthorized" }, 401);
+    return json(await deps.watchdog());
   }
 
   if (req.method === "POST" && pathname.startsWith("/admin/")) {

@@ -12,6 +12,7 @@
   "license": "UNLICENSED",
   "dependencies": {
     "@nktkas/hyperliquid": "^0.33.3",
+    "@vercel/functions": "^3.9.11",
     "viem": "^2.57.3"
   },
   "devDependencies": {
