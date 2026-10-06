@@ -33,7 +33,12 @@ const mode: VerifyMode = config.verifyReports
 
 // Supabase Postgres when DATABASE_URL is set: report dedupe, runs and the kill
 // switch then survive restarts. In memory otherwise (report expiry still bounds replays).
-const sql = process.env.DATABASE_URL ? new SQL(process.env.DATABASE_URL) : undefined;
+// On Vercel, a small pool that lets go quickly: Supabase's session pooler allows 15
+// connections across every instance of both services. 3, not fewer: a run holds one
+// for the run lock (lock.ts) while its queries need another.
+const sql = process.env.DATABASE_URL
+  ? new SQL(process.env.DATABASE_URL, config.vercel ? { max: 3, idleTimeout: 5 } : {})
+  : undefined;
 const store = sql ? new PostgresStore(sql) : new MemoryStore();
 if (config.production && !process.env.DATABASE_URL) {
   console.warn("DATABASE_URL not set: report dedupe, runs and the kill switch won't survive a restart");
