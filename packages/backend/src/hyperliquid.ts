@@ -24,7 +24,7 @@ export type PerpMeta = {
   collateralToken: number;
 };
 
-export type AssetCtx = { openInterest: string; markPx: string };
+export type AssetCtx = { openInterest: string; markPx: string; funding?: string };
 
 export const metaAndAssetCtxs = (dex: string) =>
   info<[PerpMeta, AssetCtx[]]>({ type: "metaAndAssetCtxs", ...(dex ? { dex } : {}) });

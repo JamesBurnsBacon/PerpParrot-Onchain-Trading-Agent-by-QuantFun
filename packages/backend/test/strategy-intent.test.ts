@@ -189,11 +189,12 @@ describe("deterministic finalist shortlist", () => {
 describe("integration with the actual Score output", () => {
   const scoreCandidate = (index: number, overrides: Partial<Candidate> = {}): Candidate => ({
     address: address(index), kind: "trader",
-    filters: { minAccountValue: "pass", minActiveDays: "pass", minTrades: "pass", notClosed: "pass", minMonthPoints: "pass" },
+    pool: "trader", activeDays: 90,
+    filters: { minAccountValue: "pass", minActiveDays: "pass", stillActive: "pass", minTrades: "pass", notClosed: "pass", minMonthPoints: "pass", minCoverage: "pass", noRuin: "pass" },
     eligible: true,
-    metrics: { sortino: 1, calmar: 0.5, maxDrawdown: index / 100, pnlConsistency: 0.6, realizedVol: index / 10, flags: [] },
-    percentiles: { sortino: 0.8, calmar: 0.7, negMaxDrawdown: 0.6, pnlConsistency: 0.5 },
-    score: index / 100, rank: index, finalist: true,
+    metrics: { sharpe: 1, sortino: 1, calmar: 0.5, maxDrawdown: index / 100, consistency: 0.6, periodReturn: 0.2, annualisedReturn: 0.2, annualisedVol: index / 10, realizedVol: index / 10, allTimeMaxDrawdown: index / 100, lookbackDays: 90, coveredDays: 90, skippedTimeShare: 0, fineTimeShare: 1, flags: [] },
+    percentiles: { sharpe: 0.8, sortino: 0.8, calmar: 0.7, negMaxDrawdown: 0.6, consistency: 0.5 },
+    scoreNumerator: index, cloneOf: null, clones: [], score: index / 100, rank: index, finalist: true,
     passthrough: { avgLeverage: 1, timeInMarket: 0.5, medianHoldHours: 2, makerShare: 0.2 },
     ...overrides,
   });

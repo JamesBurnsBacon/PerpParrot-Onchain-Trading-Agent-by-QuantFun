@@ -24,10 +24,14 @@ const parseHistory = (raw: unknown): TimePoint[] => {
 export const parsePortfolio = (raw: unknown): { month: WindowHistory | null; allTime: WindowHistory | null } => {
   if (!Array.isArray(raw)) throw new Error("portfolio: response must be an array");
   const result: { month: WindowHistory | null; allTime: WindowHistory | null } = { month: null, allTime: null };
+  const seen = new Set<string>();
   for (const entry of raw as unknown[]) {
     if (!Array.isArray(entry) || entry.length !== 2) throw new Error("portfolio: invalid window entry");
     const [name, history] = entry as unknown[];
     if (typeof name !== "string" || !isRecord(history)) throw new Error("portfolio: invalid window entry");
+    // A repeated window is a malformed response, whichever window it is (SPEC "parsePortfolio").
+    if (seen.has(name)) throw new Error(`portfolio: duplicate window ${name}`);
+    seen.add(name);
     if (name !== "month" && name !== "allTime") continue;
     result[name] = {
       accountValueHistory: parseHistory(history.accountValueHistory),

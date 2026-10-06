@@ -13,6 +13,7 @@
   },
   "license": "UNLICENSED",
   "dependencies": {
+    "@vercel/functions": "^3.9.11",
     "viem": "^2.57.3"
   },
   "devDependencies": {

@@ -7,10 +7,18 @@ CRE `mirror` workflow → executor. Design: README §4.7, §4.8, §4.13, §4.14.
 
 | Piece | Code | Runs on | Talks to |
 |---|---|---|---|
-| Snapshot service | `packages/backend` (`src/server.ts`) | Railway | HL Info API, Supabase |
+| Snapshot service | `packages/backend` (`src/server.ts`) | Vercel service `backend`, `/api/backend/*` | HL Info API, Supabase |
 | `mirror` workflow | `packages/cre-workflows/mirror` | Chainlink DON (private registry) | snapshot service, HL Info API, executor |
-| Executor | `packages/executor` (`src/server.ts`) | Railway | HL Info + Exchange API, Ethereum RPC (DON signers), Supabase, Telegram |
-| Tables | `supabase/migrations/20261006120000_cre_mirror.sql`, `20261006180000_executor_order_journal.sql` | Supabase | — |
+| Executor | `packages/executor` (`src/server.ts`) | Vercel service `executor`, `/api/executor/*` (dry run only) | HL Info + Exchange API, Ethereum RPC (DON signers), Supabase, Telegram |
+| Paper books | `packages/backend/src/paper` (inside the snapshot service) | Vercel service `backend` | HL Info API (marks), Supabase |
+| Dashboard | `packages/dashboard` (Next.js) | Vercel service `dashboard`, every other path | snapshot service, executor (browser fetches on the same origin, read-only) |
+
+All three deploy as one Vercel project from the root `vercel.json` (one domain, one deployment).
+On Vercel the two Bun services run as functions that stop between requests, so their timers are
+Vercel Cron jobs there: `/api/backend/cron/snapshot` at :x9 builds the coming run's snapshot, and
+`/api/executor/cron/watchdog` every 5 minutes alerts on missed runs. Both services also answer on
+their bare paths (`/health`, `/reports`, …), which is what local runs, Docker and the e2e scripts use.
+| Tables | `supabase/migrations/20261006120000_cre_mirror.sql` | Supabase | — |
 
 ## Run it locally
 
@@ -25,8 +33,20 @@ DATABASE_URL=postgres://… ./scripts/e2e-mirror.sh   # same, with both services
 The soak keeps the snapshot service and executor running and simulates the mirror repeatedly
 against live HL data, to catch flakiness, leaks and snapshot-age drift a single run can't
 (`ROUNDS`, `INTERVAL`, `DATABASE_URL` configurable). It stops early if the code changes under it.
-Reference results (2026-10-06): every round on a consistent setup passed; spot-check deviation
-0–30 bps for snapshots under 2 minutes old, ~50 bps at 8 minutes (limit 500).
+`TIMING=production ROUNDS=12 ./scripts/soak-mirror.sh` runs one round per 10-minute run at
+:x9:50 with the production lead limits, against the snapshot the service's scheduler prebuilt at
+~:x8:30: the spot-check deviation the DON will actually see. A failed round's full output is kept
+as `round-N.log` in the soak directory.
+
+Reference results (2026-10-06, live HL data, Postgres):
+
+| Timing | Rounds | Spot-check deviation | Failures |
+|---|---|---|---|
+| production (snapshot ~75 s old) | 8 | 5–52 bps, median ~22 | 1, in the CRE CLI's login check before the workflow ran (seen once in e2e too; transient) |
+| repeat (one snapshot re-checked up to 10 min) | 19 | 0–151 bps under 2 min, up to 635 bps at 8 min | 2: a source traded ~8 min after the snapshot, 611/635 bps > 500; the next run passed (fail-closed as designed) |
+
+A cold snapshot build (no prebuild: every DON node's request lands on it) took 0.1–0.9 s for
+7–25 sources (3 HL calls each, all in parallel), well inside CRE's 10 s HTTP timeout.
 
 Unit tests per package: `bun test` in `packages/backend`, `packages/executor`,
 `packages/cre-workflows/mirror`, `packages/cre-workflows/review`. Postgres integration tests run when
@@ -40,9 +60,13 @@ Unit tests per package: `bun test` in `packages/backend`, `packages/executor`,
 |---|---|---|
 | `CONFIGURATION_PATH` | yes | Frozen configuration JSON (the review core's freeze output) |
 | `FROZEN_CONFIGURATION_HASH` | yes | Its `configurationHash`; the service refuses any other |
-| `DATABASE_URL` | prod | Supabase Postgres (service role). Without it snapshots and the eligibility list live in memory |
+| `DATABASE_URL` | prod | Supabase Postgres (service role). Without it snapshots and the eligibility list live in memory. Required on Vercel |
+| `CRON_SECRET` | Vercel | Vercel Cron sends it to `/cron/snapshot`; required on Vercel (any random string, shared with the executor) |
 | `SNAPSHOT_MAX_LEAD_SECONDS` | no | How close to a run a snapshot may be built (default 120). `600` only for local simulation |
-| `PORT` | no | Railway sets it |
+| `PAPER_BALANCED_MULTIPLIER` | no | Balanced book = Aggressive weights × this (default 0.5) |
+| `PAPER_SLIPPAGE_BPS` | no | Paper fills at mark ± this (default 5) |
+| `ARTIFACTS_DIR` | no | Without `DATABASE_URL`: folder of `backtest.json` / `funnel.json` for the dashboard (default `artifacts`) |
+| `PORT` | no | Local and Docker only (default 8788) |
 
 ### Executor (`packages/executor`)
 
@@ -51,11 +75,12 @@ Unit tests per package: `bun test` in `packages/backend`, `packages/executor`,
 | `HL_ACCOUNT` | yes | — | Our HL master account (must equal the configuration's `account`) |
 | `FROZEN_CONFIGURATION_HASH` | yes | — | Same as the mirror's `frozenConfigurationHash` |
 | `WORKFLOW_OWNER` | yes | — | `0xc5feb3cf878c9ba42a776e9edf62a4558ab08b85` (org address, private registry) |
-| `NODE_ENV` | prod | — | `production` refuses `VERIFY_REPORTS=false` and requires `ADMIN_TOKEN` plus durable `DATABASE_URL` |
+| `NODE_ENV` | prod | — | `production` refuses `VERIFY_REPORTS=false` and requires `ADMIN_TOKEN`. Every Vercel deployment (previews too) counts as production |
+| `CRON_SECRET` | Vercel | — | Vercel Cron sends it to `/cron/watchdog`; required on Vercel |
 | `ADMIN_TOKEN` | prod | — | Bearer token for `/admin/*` |
 | `DRY_RUN` | no | `true` | Only the literal `false` sends orders |
 | `HL_API_WALLET_KEY` | live | — | API wallet (agent) key: trades, can't withdraw. Required when `DRY_RUN=false` |
-| `DATABASE_URL` | prod | — | Required in production. Supabase Postgres for report dedupe, runs and persistent kill switch |
+| `DATABASE_URL` | prod | — | Supabase Postgres. Without it dedupe, runs and the kill switch are in memory |
 | `ETH_MAINNET_RPC_URL` | no | publicnode | Reads DON signers from the Capability Registry |
 | `VERIFY_REPORTS` | no | `true` | `false` only for `cre workflow simulate` reports |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | no | — | Alerts; without them alerts are logged only |
@@ -68,6 +93,18 @@ Unit tests per package: `bun test` in `packages/backend`, `packages/executor`,
 | `WORKFLOW_NAME` | live | — | 10-byte hex from the first real report (`verify-run` prints it); pins the production workflow. Required for `DRY_RUN=false` in production |
 | `DON_ID` | live | — | Pins the DON (`verify-run` prints it). Required for `DRY_RUN=false` in production |
 | `MISSED_RUN_ALERT_MINUTES` | no | `25` | Alert after this long without a finished run |
+
+### Dashboard (`packages/dashboard`, Vercel)
+
+| Variable | Meaning |
+|---|---|
+| `NEXT_PUBLIC_BACKEND_URL` | Optional. Snapshot service URL (no trailing slash); default `/api/backend` (same origin) |
+| `NEXT_PUBLIC_EXECUTOR_URL` | Optional. Executor URL; default `/api/executor` |
+
+Leave both unset on Vercel. If set, they are baked in at build time: redeploy after changing them.
+Locally, `next dev` on its own proxies `/api/backend` and `/api/executor` to `localhost:8788` /
+`localhost:8787` (`bun run dev` in each package; `?theme=light|dark` pins a mode), and `vercel dev`
+at the repository root runs all three services behind one port.
 
 ### `mirror` workflow (`config.production.json`)
 
@@ -84,30 +121,52 @@ The production file holds placeholders until the services are deployed and the s
 
 ## Deploy
 
+Before and after each step, `bun scripts/predeploy-check.ts --backend https://… --executor https://…
+[--dashboard https://…]` (with `DATABASE_URL=…` to include Supabase) checks that the mirror config,
+`frozen/live.json`, both services and the tables agree. Read-only; exit 1 on any failure.
+To deploy everything before CRE deploy access and the freeze, follow
+[DEPLOY_REHEARSAL.md](DEPLOY_REHEARSAL.md) first.
+
 1. **Supabase:** project `PerpParrot` (ref `clheeepphmomkymawsfq`, linked to this repo with working
    directory `.`, automatic deploys off; see `docs/supabase` on its branch). Run
-   both `supabase/migrations/20261006120000_cre_mirror.sql` and
-   `supabase/migrations/20261006180000_executor_order_journal.sql` (SQL editor, or
-   `supabase link --project-ref clheeepphmomkymawsfq && supabase db push`). Use the service-role connection
+   both files in `supabase/migrations/` in order (SQL editor, or `supabase link
+   --project-ref clheeepphmomkymawsfq && supabase db push`). Use the service-role connection
    string as `DATABASE_URL` for both services.
-2. **Railway:** two services from this repo, **root directory = repository root** (both import
-   `packages/shared`). Config file: `packages/backend/railway.json` and
-   `packages/executor/railway.json` (Dockerfile build, `/health` check, one replica each).
-   Keep the executor at **one replica**: it owns the HL nonce sequence and the run queue.
-3. **Executor:** set the variables above with `DRY_RUN` unset (dry run). Check `GET /status`.
-4. **`mirror`:** create the `mirrorSamplingKey` secret (above), put the two Railway URLs and the configuration hash in
+2. **Vercel:** one project from this repo, **Root Directory = repository root** (the root
+   `vercel.json` defines the three services, their routes and the two crons). Set the variables
+   above for both services in the project (they share one set; `DATABASE_URL` and `CRON_SECRET`
+   serve both), with `DRY_RUN` unset. Use the Supabase **Session pooler** connection string: Bun's
+   driver prepares statements, which the transaction pooler (port 6543) doesn't support. Deploy to
+   production (crons only run on production deployments). Vercel may run several executor
+   instances; with `DATABASE_URL` set, each run takes a Postgres advisory lock, so two never run
+   at once (one that can't get it within `RUN_TIMEOUT_SECONDS` records the run as failed and
+   alerts). The same lock covers old and new processes during a Railway deploy for live trading.
+3. **Executor:** check `GET https://<domain>/api/executor/status` (dry run, `store: postgres`).
+4. **`mirror`:** create the `mirrorSamplingKey` secret (above), put `https://<domain>/api/backend`,
+   `https://<domain>/api/executor/reports` and the configuration hash in
    `packages/cre-workflows/mirror/config.production.json`, merge, then run the **CRE deploy**
    GitHub Action (`mirror`, `production-settings`). Needs deploy access and `CRE_API_KEY`.
-5. **Watch a dry-run cycle:** `GET {executor}/runs?limit=3` should show a run every 10 minutes
+5. **Dashboard:** deployed with the other two at `https://<domain>/`; open it: the header should
+   read "Dry run · Copying" and the heartbeat gains a cell every 10 minutes.
+6. **Watch a dry-run cycle:** `GET {executor}/runs?limit=3` should show a run every 10 minutes
    with `status: "executed"`, `dryRun: true` and a plan you agree with. Then run
    `bun run scripts/verify-run.ts --executor … --backend …` in `packages/executor` and set
    `WORKFLOW_NAME` and `DON_ID` on the executor from what it prints.
-6. **Go live:**
-   1. Fund the account (README §4.8 Capital): USDC in the account, no other transfers needed in
+   Vercel Preview also needs its Supabase Preview Branch and `CRON_SECRET`; confirm the preview
+   database applied all migrations, including `20261006180000_executor_order_journal.sql`.
+   An environment variable alone is not proof: verify `/status` reports `store: "postgres"`.
+   If Preview skips because no Supabase branch is associated, fix the Supabase GitHub integration
+   before treating deployment status as green.
+7. **Go live** (not part of the dry-run rehearsal):
+   1. Move the executor to one long-running process. It refuses `DRY_RUN=false` on Vercel:
+      Vercel may run several instances at once and stops them between requests, while live
+      trading needs one HL nonce sequence and one run queue (README §4.8). The Dockerfile and
+      `packages/executor/railway.json` still build that process; point `executorUrl` at it.
+   2. Fund the account (README §4.8 Capital): USDC in the account, no other transfers needed in
       unified mode.
-   2. Create the executor's API wallet key (a fresh key; its address is `GET /status` → `apiWallet`
+   3. Create the executor's API wallet key (a fresh key; its address is `GET /status` → `apiWallet`
       once `HL_API_WALLET_KEY` is set).
-   3. With the **master key**, on your own machine (never on Railway):
+   4. With the **master key**, on your own machine (never on a server):
       ```sh
       cd packages/executor
       HL_ACCOUNT=0x… HL_API_WALLET_ADDRESS=0x… bun run scripts/setup-account.ts            # status
@@ -115,8 +174,13 @@ The production file holds placeholders until the services are deployed and the s
       ```
       This switches the account to **unified** mode (one USDC balance margins core and `xyz`
       perps) and approves the API wallet (trade, no withdraw). It never moves funds.
-   4. Set `HL_API_WALLET_KEY` and `DRY_RUN=false` on the executor and redeploy. Watch the next
+   5. Set `HL_API_WALLET_KEY` and `DRY_RUN=false` on the executor and redeploy. Watch the next
       run's `results` in `/runs`.
+   6. **Crash recovery:** an unresolved entry in `GET /admin/order-batches` means an exchange
+      action may have reached Hyperliquid without a durable response. Keep the executor paused,
+      compare the recorded client order IDs and assets against live account/order state, then use
+      `POST /admin/reconcile-batch` with operator identity and a written evidence record. Resume
+      only after every unresolved action is settled or reconciled; never resubmit by assumption.
 
 ## Freeze (go-live set)
 
@@ -130,11 +194,12 @@ bun run scripts/freeze.ts path/to/frozen-configuration.json --account 0xOUR_ACCO
 ```
 
 `--write` saves it as `packages/backend/frozen/live.json` and pins its hash in
-`mirror/config.production.json`; the script prints the Railway variables to set
+`mirror/config.production.json`; the script prints the variables to set on Vercel
 (`CONFIGURATION_PATH=frozen/live.json` and `FROZEN_CONFIGURATION_HASH` on the snapshot service,
-`FROZEN_CONFIGURATION_HASH` and `HL_ACCOUNT` on the executor). Commit, then redeploy `mirror`
-(CRE deploy Action) and both services. Until all three agree, runs fail closed: the backend
-won't serve, the mirror rejects the snapshot, or the executor rejects the report.
+`FROZEN_CONFIGURATION_HASH` and `HL_ACCOUNT` on the executor). Commit, redeploy **both services
+first**, then `mirror` (CRE deploy Action): the Action checks that the services already pin the
+new hash and stops otherwise. Until all three agree, runs fail closed: the backend won't serve,
+the mirror rejects the snapshot, or the executor rejects the report.
 
 ## Stop
 
@@ -145,18 +210,58 @@ curl -X POST -H "Authorization: Bearer $ADMIN_TOKEN" -H "x-operator: $NAME" $EXE
 ```
 
 Flatten bypasses CRE and stays paused afterwards. It queues behind a run in progress; if a run is
-stuck (alert "still running after …"), restart the executor on Railway, then flatten. To stop CRE itself, pause the workflow in the
+stuck (alert "still running after …"), redeploy the executor (Vercel: Instant Rollback or a
+redeploy of the current deployment), then flatten. To stop CRE itself, pause the workflow in the
 CRE UI or with `cre workflow pause`.
 
 ## Data for the dashboard (README §4.11)
 
 | Source | What | Access |
 |---|---|---|
+| `GET {backend}/paper[?since=unix]` | paper books: equity, return, fees, funding, trades, open positions, equity curve (≤ 1,500 points, rebuilt once per run) | public, CORS `*` |
+| `GET {backend}/exposures` | the target exposures of the last run the paper books stepped (fraction of equity per asset) | public, CORS `*` |
+| `GET {backend}/artifacts/backtest`, `/artifacts/funnel` | what other jobs published to `dashboard_artifacts` (below); 404 until then | public, CORS `*` |
 | `GET {executor}/status` | dry run on/off, account, API wallet, pinned configuration hash, last report time, kill-switch state | public, CORS `*` |
+| `GET {executor}/runs?summary=1&limit=N` (≤ 500) | runs without plan, results and report: time, status, equity, order count | public, CORS `*` |
+| `GET {executor}/equity` | the live account's equity at every executed run since the start (≤ 1,500 points, cached 1 min) | public, CORS `*` |
 | `GET {executor}/runs?limit=N` (≤ 200) | per run: `runId`, `status`, `dryRun`, equity, `plan` (orders, skipped legs with reasons, margin scale), `results` (per-order fill/error), `envelope` (raw DON-signed report) | public, CORS `*` |
 | Supabase `executor_runs` | same rows as `/runs` | anon `select` |
 | Supabase `cre_snapshots` | each run's snapshot JSON (`body`, exact bytes) and its keccak hash | anon `select` |
 | Supabase `executor_controls` | kill-switch state | anon `select` |
+
+### Publishing the backtest, funnel and finalists
+
+The backtest and the score/ingest jobs publish one JSON document each to `dashboard_artifacts`
+(service role); the dashboard picks it up within a minute. Shapes: `packages/shared/dashboard.ts`.
+Publish with the checker, which refuses anything that would render wrong (seconds instead of
+milliseconds, a series not indexed to 1.0, no BTC benchmark, a funnel stage growing):
+
+```sh
+bun scripts/publish-artifact.ts backtest backtest.json                       # check only
+DATABASE_URL=<service role> bun scripts/publish-artifact.ts backtest backtest.json --write
+```
+
+The SQL it runs, for jobs that write directly:
+
+```sql
+insert into dashboard_artifacts (name, body) values ('backtest', '{
+  "generatedAt": 1791277800000, "window": "1 month",
+  "series": [
+    {"id": "algo",    "label": "Algo only",      "points": [[1788685800000, 1.0], [1788707400000, 1.004]]},
+    {"id": "model-a", "label": "Model A",        "points": [...]},
+    {"id": "model-b", "label": "Model B",        "points": [...]},
+    {"id": "btc",     "label": "BTC buy & hold", "points": [...]}
+  ]}'::jsonb)
+on conflict (name) do update set body = excluded.body, updated_at = now();
+```
+
+- `backtest`: points are `[unix ms, value]` with **1.0 = start of the window**; the series with
+  `id: "btc"` is drawn as the dashed benchmark.
+- `funnel`: `steps` in order (`{stage, label, count}`, e.g. 47k addresses → … → finalists → frozen
+  set) and optionally `finalists` (`{address, kind, score, picked, rationale?}`); `picked` marks the
+  frozen set. The finalists panel renders from this field.
+- Locally (no `DATABASE_URL`), drop `backtest.json` / `funnel.json` in the snapshot service's
+  `ARTIFACTS_DIR` instead.
 
 Re-verifying a run's report, independently of the executor:
 
@@ -184,123 +289,5 @@ the run ID is `keccak256(report)`, and that the stored snapshot hashes to the re
 | `HTTP 422` | Executor logs (`error` field) | Configuration hash, account or expiry mismatch |
 | Run `failed` in `/runs` | `error` on the run | HL unreachable, or the gross-leverage bound |
 | Orders with `status: "error"` | `results` on the run | HL rejection (min size, margin); the next run retries |
-
-### Unknown exchange outcomes and delayed actions
-
-The executor passes each report's expiry (Unix milliseconds) into the SDK's
-signed `expiresAfter` field for leverage updates and IOC order actions. It also
-rechecks durable pause controls, cancellation and expiry before each exchange
-action and between order batches. An already dispatched action cannot be recalled
-by a later local pause.
-
-A lost response is recorded as `unknown`, not as a confirmed exchange rejection.
-No later batch is sent, the run is marked `failed`, and the executor writes a
-persistent pause. Earlier returned fills remain in the run record. Explicit
-per-order rejections also mark the run failed, while preserving successful fills.
-
-Before clearing an unknown-outcome pause:
-
-1. Read the failed run's planned orders and derive each client order ID using
-   `cloidFor(run.id, asset)` in `packages/executor/src/runner.ts`.
-2. Query Hyperliquid order status by client order ID and compare the current
-   account positions and fills. An absent order response alone does not establish
-   that the action was never accepted.
-3. Record reconciliation evidence, then resume using the authenticated admin
-   controls. Do not replay the old signed report or assume repeated client order
-   IDs provide exchange idempotency; the next fresh report plans against live equity.
-
-The executor now writes a durable pre-dispatch journal and pauses on unresolved
-actions at startup and before later reports. Reconciliation is manual: the endpoint
-records an operator attestation but does not query Hyperliquid or verify that the
-originating process has stopped. Before clearing a `dispatching` row, stop/fence every
-executor instance and confirm no exchange request remains in flight. Then inspect
-Hyperliquid state, record evidence, and keep the executor paused until every unresolved
-batch has been reviewed and an operator explicitly resumes it. This reduces crash
-risk but does not make Hyperliquid and Postgres atomic. CRE/model credentials, deployed
-consensus, persistent-store recovery drills and deployment-level soak checks remain
-funded-launch gates. Local mocked transport tests do not prove real exchange execution.
-
-References: [Hyperliquid exchange endpoint](https://hyperliquid.gitbook.io/Hyperliquid-docs/for-developers/api/exchange-endpoint)
-and [order-status queries](https://hyperliquid.gitbook.io/Hyperliquid-docs/for-developers/api/info-endpoint).
-
-### Preparing synchronized freeze artifacts
-
-`scripts/freeze.ts` now validates the frozen authority and mirror settings before
-writing either file. The prepared pair binds the same configuration hash and
-prints executor `HL_ACCOUNT`, `MAX_REPORT_TTL_SECONDS` and `MAX_GROSS_LEVERAGE`
-from that pair. Set those values together with the snapshot hash/path so service
-limits agree with the reviewed policy and mirror report lifetime.
-
-Preparation enforces the ten-minute schedule, HTTPS endpoints without embedded
-credentials, at most four multi-DEX source spot checks (14 HTTP calls including
-snapshot and executor), and at most 500 bps deviation. This follows the current
-multi-DEX workflow; ten spot checks would exceed its request budget.
-
-If a normal write fails, the writer attempts to restore both previous artifacts,
-including removing a newly created live file. It aborts before writing if the
-mirror configuration changed after preparation. A rollback failure is explicit.
-This is an offline preparation tool: do not run simultaneous freeze writers or
-serve these files while changing them. Process death can interrupt the two-file
-write. Inspect both hashes before committing/deploying after any interruption.
-No hosted service or production workflow is updated by local preparation alone.
-
-### Order write-ahead journal and restart recovery
-
-Before every leverage update and every IOC order batch, the executor writes a
-`dispatching` record to `executor_order_batches`. It includes the report id, exact
-planned orders, deterministic client order IDs, and leverage details where
-applicable. Only after the exchange response is received does the executor mark the
-record settled. A lost response is marked uncertain when possible; if the process
-crashes first, the durable record remains dispatching.
-
-At startup, the executor checks unresolved records and persists a pause before
-opening its listener. It also checks before each report in case an action becomes
-uncertain while the process is already running. It pauses and reports the batch IDs.
-The authenticated operator endpoint `GET /admin/order-batches` lists those records
-and their client order IDs. For each order, query Hyperliquid's `orderStatus` by
-client order ID for `HL_ACCOUNT`; compare returned status with fills and current
-positions. A response `unknownOid` alone is not enough to conclude no fill. For a
-leverage record, inspect the account's current market leverage. Keep the executor
-paused while evidence is incomplete.
-
-After reviewing a batch, record the operator and evidence with
-`POST /admin/reconcile-batch` and JSON `{ "id": "<batch-id>", "evidence": "<what was checked>" }`.
-This records a human attestation; the service does not independently verify the
-exchange evidence. Reconciliation acquires the executor's shared execution lock, so
-it waits for a healthy active run to finish. Still stop/fence every executor instance
-and confirm the originating process cannot still be inside an exchange request before
-reconciling: a lost database connection can release its lock while that process is
-still alive. Clearing a live `dispatching` row could erase the recovery signal while
-the request is still in flight. Reconciliation keeps the executor paused. Only after every
-uncertain action has been reviewed should an operator explicitly call
-`POST /admin/resume`. Never replay the old report. The next fresh report sizes from
-the current account state.
-
-Apply `20261006180000_executor_order_journal.sql` before deploying this executor.
-Postgres tests must apply both mirror and journal migrations. The journal narrows
-the crash window to the durable write itself, but it cannot make Hyperliquid and
-Postgres one atomic transaction. Database outage during dispatch prevents sending
-before the journal exists; outage after dispatch leaves the durable row unresolved
-or a failed executor run, which requires operator review. A Postgres advisory lock serializes execution across service instances. If the
-lock cannot be acquired, the report is not dispatched; check the active instance
-and wait for the next fresh mirror report.
-
-### What the CRE tutorials establish
-
-The official CRE bootcamp video walks through a trigger/capability workflow and
-ends with a Sepolia testnet write. That is a useful integration pattern for the
-review and mirror workflows; it does not validate exchange-side crash recovery
-or funded trading. Chainlink's current CRE overview says trigger executions are
-independent and stateless, and local simulation can make real API and public EVM
-calls. We therefore keep trading idempotency and recovery in our durable executor
-store, and treat CRE simulation as an integration check that may touch live read
-endpoints—not as proof of DON deployment behavior or a substitute for a testnet
-soak.
-
-For the exchange side, Hyperliquid documents `orderStatus` lookups by client order
-ID and returns `unknownOid` when the ID is missing. Reconciliation must also check
-fills and current positions before an operator records evidence and resumes.
-
-References: [CRE Bootcamp Day 1 video](https://www.youtube.com/watch?v=pLAttM7-UTA),
-[CRE execution and simulation model](https://docs.chain.link/cre/overview),
-[Hyperliquid order-status API](https://hyperliquid.gitbook.io/Hyperliquid-docs/for-developers/api/info-endpoint).
+| Dashboard pills say "Executor offline" / panels empty | Browser console (CORS, mixed content) | `NEXT_PUBLIC_*` URLs wrong or not `https`; redeploy after fixing them |
+| Paper curves stop | Snapshot service log `paper books not stepped` (with the reason) | The run fails the mirror's checks (the books hold, like the executor), HL marks unavailable, or no snapshot was requested |

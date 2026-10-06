@@ -1,12 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import type { Hex } from "viem";
-import { createApp } from "../src/app";
+import { createApp, type AppDeps } from "../src/app";
 import { loadConfig } from "../src/config";
 import { createExchange } from "../src/exchange";
 import type { InfoFn } from "../src/hyperliquid";
 import { cloidFor, Runner } from "../src/runner";
-import { MemoryStore } from "../src/store";
+import { MemoryStore, type RunRecord } from "../src/store";
 import { verifyEnvelope } from "../src/verify";
+import { cronWatchdog } from "../src/watchdog";
 import { ACCOUNT, AS_OF, body, envelope, keys, CONFIGURATION, registry } from "./helpers";
 
 // Fake HL info: BTC/ETH on core, MSFT on xyz (dex index 1), and our account.
@@ -59,6 +60,35 @@ const setup = (info: InfoFn) => {
 };
 
 const verified = async (b = body()) => verifyEnvelope(await envelope(keys.slice(0, 2), { body: b }), registry);
+
+describe("Runner: cross-process run lock", () => {
+  test("a run that can't get the lock is recorded as failed and alerted", async () => {
+    const { runnerDeps, store, alerts } = setup(fakeInfo({ equity: "400", core: [] }));
+    const lock = { acquire: async () => Promise.reject(new Error("another executor process held the run lock for 1s")) };
+    const record = await new Runner({ ...runnerDeps, lock }).executeReport(await verified(), {});
+    expect(record).toMatchObject({ status: "failed", error: "another executor process held the run lock for 1s" });
+    expect((await store.recentRuns(1))[0].status).toBe("failed");
+    expect(alerts.join()).toContain("held the run lock");
+  });
+
+  test("holds the lock for the whole run, saving included, then releases it", async () => {
+    const { runnerDeps } = setup(fakeInfo({ equity: "400", core: [["ETH", "-0.05"]] }));
+    const events: string[] = [];
+    const store = runnerDeps.store;
+    const tracked = Object.assign(Object.create(Object.getPrototypeOf(store)), store, {
+      saveRun: async (r: RunRecord) => (events.push("save"), store.saveRun(r)),
+    });
+    const lock = {
+      acquire: async (timeoutMs: number) => {
+        events.push(`acquire ${timeoutMs}`);
+        return async () => void events.push("release");
+      },
+    };
+    const record = await new Runner({ ...runnerDeps, store: tracked, lock }).executeReport(await verified(), {});
+    expect(record.status).toBe("executed");
+    expect(events).toEqual(["acquire 1000", "save", "release"]);
+  });
+});
 
 describe("Runner.executeReport (dry run)", () => {
   test("plans against the live account and signs one IOC batch", async () => {
@@ -327,7 +357,7 @@ describe("Runner.flatten", () => {
 });
 
 describe("app routes", () => {
-  const make = (adminToken?: string) => {
+  const make = (adminToken?: string, extra: Partial<AppDeps> = {}) => {
     const s = setup(fakeInfo({ equity: "400", core: [["BTC", "0.002"]] }));
     const logs: string[] = [];
     const app = createApp({
@@ -344,6 +374,7 @@ describe("app routes", () => {
       adminToken,
       status: () => ({ dryRun: true }),
       log: (m) => void logs.push(m),
+      ...extra,
     });
     return { app, ...s, logs };
   };
@@ -359,6 +390,31 @@ describe("app routes", () => {
     expect(await dup.json()).toMatchObject({ status: "duplicate" });
     await Bun.sleep(20);
     expect((await store.recentRuns(5)).map((r) => r.status)).toEqual(["executed"]);
+  });
+
+  test("serves the same routes under /api/executor (vercel.json)", async () => {
+    const { app } = make();
+    expect((await app(new Request("http://x/api/executor/health"))).status).toBe(200);
+    expect((await app(new Request("http://x/api/executor/runs?limit=1"))).status).toBe(200);
+    expect((await app(new Request("http://x/api/executorx/health"))).status).toBe(404);
+  });
+
+  test("POST /reports hands the run to background (Vercel's waitUntil)", async () => {
+    const kept: Promise<unknown>[] = [];
+    const { app, store } = make(undefined, { background: (p) => void kept.push(p) });
+    await app(post("/api/executor/reports", { body: JSON.stringify(await envelope(keys.slice(0, 2))) }));
+    expect(kept).toHaveLength(1);
+    await kept[0];
+    expect((await store.recentRuns(5)).map((r) => r.status)).toEqual(["executed"]);
+  });
+
+  test("GET /cron/watchdog needs the cron secret", async () => {
+    const watchdog = async () => ({ alerted: false });
+    const get = (headers: Record<string, string> = {}) => new Request("http://x/api/executor/cron/watchdog", { headers });
+    expect((await make(undefined, { watchdog, cronSecret: "c" }).app(get())).status).toBe(401);
+    expect((await make(undefined, { watchdog }).app(get({ authorization: "Bearer " }))).status).toBe(401);
+    const ok = await make(undefined, { watchdog, cronSecret: "c" }).app(get({ authorization: "Bearer c" }));
+    expect(await ok.json()).toEqual({ alerted: false });
   });
 
   test("POST /reports rejects invalid JSON", async () => {
@@ -466,6 +522,52 @@ describe("app routes", () => {
     const runs = (await res.json()) as { runId: string }[];
     expect(runs[0].runId).toBe(`mirror-${AS_OF}`);
   });
+
+  test("GET /runs?summary=1 leaves out plans and reports", async () => {
+    const { app } = make();
+    await app(post("/reports", { body: JSON.stringify(await envelope(keys.slice(0, 2))) }));
+    await Bun.sleep(20);
+    const [run] = (await (await app(new Request("http://x/runs?summary=1&limit=1000"))).json()) as Record<string, unknown>[];
+    expect(run).toMatchObject({ runId: `mirror-${AS_OF}`, status: "executed", orders: expect.any(Number) });
+    expect(run).not.toHaveProperty("envelope");
+    expect(run).not.toHaveProperty("plan");
+  });
+
+  test("GET /equity: live runs only, on the run clock; every executed run counted", async () => {
+    const { app, store } = make();
+    await app(post("/reports", { body: JSON.stringify(await envelope(keys.slice(0, 2))) })); // a dry run
+    await Bun.sleep(20);
+    const live = AS_OF + 600;
+    await store.saveRun({ id: "live", runId: `mirror-${live}`, kind: "report", status: "executed", dryRun: false, startedAt: live * 1000 + 3000, finishedAt: live * 1000 + 4000, equityUsd: 470 });
+    const res = await app(new Request("http://x/equity"));
+    expect(res.headers.get("access-control-allow-origin")).toBe("*");
+    expect(await res.json()).toEqual({ runs: 2, points: [[live * 1000, 470]] });
+  });
+});
+
+describe("cronWatchdog", () => {
+  const MIN = 60_000;
+  const check = async (finishedAt: number[], now: number) => {
+    const alerts: string[] = [];
+    const store = new MemoryStore();
+    for (const [i, t] of finishedAt.entries()) {
+      await store.saveRun({ id: `r${i}`, runId: `mirror-${i}`, kind: "report", status: "executed", dryRun: true, startedAt: t - 1000, finishedAt: t });
+    }
+    const result = await cronWatchdog({ store, alert: async (m) => void alerts.push(m), now: () => now, afterMs: 25 * MIN, everyMs: 5 * MIN })();
+    return { result, alerts };
+  };
+
+  test("stays quiet before the first run and while runs finish", async () => {
+    expect((await check([], 100 * MIN)).alerts).toEqual([]);
+    expect((await check([0, 10 * MIN], 34 * MIN)).alerts).toEqual([]);
+  });
+
+  test("alerts once: on the first check past the threshold", async () => {
+    expect((await check([0], 24 * MIN)).alerts).toEqual([]);
+    expect((await check([0], 26 * MIN)).alerts).toEqual(["no finished run for 26 min (last: mirror-0)"]);
+    expect((await check([0], 30.5 * MIN)).alerts).toHaveLength(1); // cron jitter slack
+    expect((await check([0], 31.5 * MIN)).alerts).toEqual([]);
+  });
 });
 
 describe("loadConfig", () => {
@@ -512,6 +614,16 @@ describe("loadConfig", () => {
     expect(() => loadConfig({ ...base, DRY_RUN: "false" })).toThrow("HL_API_WALLET_KEY is required");
     const key = `0x${"22".repeat(32)}` as Hex;
     expect(loadConfig({ ...base, DRY_RUN: "false", HL_API_WALLET_KEY: key }).dryRun).toBe(false);
+  });
+
+  test("on Vercel: production rules, dry run only, Postgres and a cron secret", () => {
+    const vercel = { ...base, VERCEL: "1", ADMIN_TOKEN: "x", DATABASE_URL: "postgres://x", CRON_SECRET: "c" };
+    expect(loadConfig(vercel)).toMatchObject({ vercel: true, production: true, dryRun: true, cronSecret: "c" });
+    expect(() => loadConfig({ ...vercel, ADMIN_TOKEN: undefined })).toThrow("ADMIN_TOKEN is required");
+    expect(() => loadConfig({ ...vercel, DATABASE_URL: undefined })).toThrow("DATABASE_URL is required on Vercel");
+    expect(() => loadConfig({ ...vercel, CRON_SECRET: undefined })).toThrow("CRON_SECRET is required on Vercel");
+    const live = { ...vercel, DRY_RUN: "false", HL_API_WALLET_KEY: `0x${"22".repeat(32)}`, WORKFLOW_NAME: `0x${"ab".repeat(10)}`, DON_ID: "1" };
+    expect(() => loadConfig(live)).toThrow("DRY_RUN=false is not allowed on Vercel");
   });
 
   test("validates hex settings and numbers", () => {

@@ -1,6 +1,5 @@
-import { computeMetrics } from "../score/metrics";
-import { rankByMetrics } from "../score/score";
-import type { Metrics, TimePoint } from "../score/types";
+import { scoreCandidates } from "../score/score";
+import type { Candidate, Metrics, ScoreInput, TimePoint } from "../score/types";
 
 export type PortfolioWindow = { accountValueHistory: TimePoint[]; pnlHistory: TimePoint[] };
 export type BacktestSource = { address: string; month: PortfolioWindow };
@@ -83,22 +82,39 @@ export function runPointInTimeBacktest(
   }
   if (input.length < finalists + 2) throw new Error("cohort is too small for a meaningful rank comparison");
 
-  const train = input.map((source) => {
+  const train: ScoreInput[] = input.map((source) => {
     const indices = source.month.accountValueHistory.map(([ts], i) => ts <= cutoffMs ? i : -1).filter((i) => i >= 0);
     if (indices.length < minTrainIntervals + 1) throw new Error(`insufficient training observations for ${source.address}`);
     const last = indices.at(-1)! + 1;
     const history = windowFrom(source.month.accountValueHistory.slice(0, last), source.month.pnlHistory.slice(0, last));
-    const metrics = computeMetrics(history);
-    if (metrics.flags.includes("no-intervals") || metrics.sortino === null && metrics.calmar === null && metrics.pnlConsistency === null) {
-      throw new Error(`unrankable training history for ${source.address}`);
-    }
-    return { address: source.address, metrics };
+    return {
+      address: source.address,
+      kind: "trader",
+      accountValue: history.accountValueHistory.at(-1)![1],
+      closed: false,
+      month: history,
+      allTime: history,
+      history,
+      tradeCount: 0,
+    };
   });
-  const ranked = rankByMetrics(train, finalists);
+  // Use the current production scoring pipeline, with only source-quality gates
+  // whose inputs this compact artifact can support relaxed to zero. We do not
+  // invent trades, clone links, or extra windows that are absent from the input.
+  const score = scoreCandidates(train, {
+    finalists,
+    minAccountValue: 0,
+    minActiveDays: 0,
+    minTrades: 0,
+    minMonthPoints: 2,
+    minOverlapDays: 3,
+  });
+  const ranked = score.candidates.filter((candidate): candidate is Candidate & { rank: number; metrics: Metrics } => candidate.rank !== null && candidate.metrics !== null);
+  if (ranked.length !== train.length) throw new Error("training cohort contains ineligible or unrankable histories");
   const sourceByAddress = new Map(input.map((source) => [source.address.toLowerCase(), source]));
   const results = ranked.map((row) => ({
     address: row.address,
-    rank: row.rank,
+    rank: row.rank!,
     selected: row.finalist,
     trainMetrics: row.metrics,
     testReturn: compoundReturn(sourceByAddress.get(row.address.toLowerCase())!, cutoffMs, asOfMs),

@@ -23,6 +23,14 @@ export type RunRecord = {
   envelope?: unknown;
 };
 
+export type RunSummary = Omit<RunRecord, "plan" | "results" | "envelope"> & { orders: number };
+export const summarize = ({ plan, results: _results, envelope: _envelope, ...run }: RunRecord): RunSummary => ({ ...run, orders: plan?.orders.length ?? 0 });
+export const runAtMs = (run: Pick<RunRecord, "runId" | "startedAt">): number => {
+  const m = /-(\d+)$/.exec(run.runId);
+  return m ? Number(m[1]) * 1000 : run.startedAt;
+};
+export type EquityPoint = { t: number; equityUsd: number; dryRun: boolean };
+
 export type OrderBatch = {
   id: string;
   reportId: string;
@@ -46,6 +54,8 @@ export interface ExecutorStore {
   claimReport(id: string): Promise<boolean>;
   saveRun(run: RunRecord): Promise<void>;
   recentRuns(limit: number): Promise<RunRecord[]>;
+  recentRunSummaries(limit: number): Promise<RunSummary[]>;
+  equityCurve(): Promise<EquityPoint[]>;
   getControls(): Promise<Controls>;
   setControls(controls: Controls): Promise<void>;
 }
@@ -102,6 +112,13 @@ export class MemoryStore implements ExecutorStore {
 
   async recentRuns(limit: number) {
     return this.runs.slice(-limit).reverse();
+  }
+
+  async recentRunSummaries(limit: number) { return (await this.recentRuns(limit)).map(summarize); }
+
+  async equityCurve() {
+    return this.runs.filter((r) => r.kind === "report" && r.status === "executed" && r.equityUsd !== undefined)
+      .map((r): EquityPoint => ({ t: runAtMs(r), equityUsd: r.equityUsd!, dryRun: r.dryRun })).sort((a, b) => a.t - b.t);
   }
 
   async getControls() {

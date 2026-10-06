@@ -44,7 +44,7 @@
 
 ## 3. Architecture
 ```
- BACKEND (Railway)
+ BACKEND (Vercel)
  ┌──────────────────────────────┐
  │ leaderboard + vault list     │
  │ ingest → label → score       │──────┐
@@ -70,7 +70,7 @@
  └──┬───────────────────────────┘
     │ signed report
     v
- EXECUTOR (Railway)
+ EXECUTOR (Vercel)
  ┌──────────────────────────────┐
  │ verify DON signature         │
  │ dedupe report ID             │──> Hyperliquid (our account)
@@ -96,18 +96,30 @@
   - **ERC-4626 vault** if `eth_getCode` on HyperEVM returns code *and* `asset()` / `totalAssets()` succeed. This runs on the shortlist only.
   - Trader otherwise.
 - **History:** `portfolio` PnL history for the pre-filtered top few hundred.
+  - **Daily snapshots:** save each tracked address's `month` points (in the `allTime` PnL baseline). `allTime` is coarse (7–14 days between points for older accounts), so this is the only way to get ~16-hour resolution beyond 30 days.
+- **Fills** (trade count, leverage, holding times, maker share): only for addresses that pass the cheap filters.
 - Cache the leaderboard every few hours and save every snapshot.
 
 ### 4.2 Score (backend)
 - **Hard filters:**
   - ≥ $10k
   - ≥ 30 days active
-  - ≥ 10 trades (non-negative safe integer; malformed counts fail closed)
+  - ≥ 10 trades
   - not closed
   - **≥ 25 points in the `portfolio` `month` window**. History length varies a lot by address (issue #1), so "≥ 30 days active" alone doesn't guarantee enough points for Sortino/Calmar. Short-history addresses are **excluded**, with no fallback metric.
-- **Score = average percentile rank** of 30-day **Sortino**, **Calmar**, **−max drawdown**, and **PnL consistency**. For each adjacent PnL point, the return is `ΔPnL / prior account value` when that value is positive. Sortino uses mean return per elapsed day over downside deviation; the compounded curve supplies maximum drawdown and Calmar (`total compounded return / max drawdown`); consistency is positive UTC days / observed UTC days. Deposits and withdrawals do not enter as PnL returns. **Top ~25 → finalists.**
-- Percentiles use integer midranks across the eligible cohort; null metrics are strictly worst, the four terms have equal weight, and address order breaks exact score ties. This is a **relative screening rank**, not a forecast, follower PnL estimate, or proof of an edge. All-time eligibility filters and the later point-in-time out-of-sample backtest remain separate gates. Histories with invalid numeric observations or no usable positive-equity interval are not ranked.
+  - still active (a PnL change in the last 7 days)
+  - no ruin in the lookback, and ≤ 20% of it in near-zero-equity ("dust") intervals
+  - Missing data is **fail-closed**: an unknown filter fails unless that filter is explicitly allowed (e.g. trade counts before fills are ingested).
+- **Lookback: 90 days** (30 days is the minimum history, not the window). The last 30 days come from the `month` window, older days from `allTime`, joined exactly on their shared timestamps; daily snapshots (§4.1) replace the coarse part over time.
+- **Returns** are computed from PnL with flows backed out (`flow = Δaccount value − ΔPnL`), so deposits and withdrawals never count as returns. A deposit counts as capital for the whole interval, so a deposit into a near-empty account cannot create a huge return.
+- **Score = weighted average percentile rank, within pool** (traders, vaults), in three equal blocks:
+  - risk-adjusted return: **Sharpe** and **Sortino**
+  - drawdown: **Calmar** and **−max drawdown**
+  - **PnL consistency**: R² of the log equity curve against time (0 if it trends down)
+- **Clone grouping before the cut:** accounts whose daily returns correlate ≥ 0.9 (❓ *tuned*), or that are known to be linked (vault ↔ leader, sub-accounts), are grouped and only the best-scoring one can be a finalist. Duplicates would concentrate the portfolio in one strategy's idiosyncratic risk.
+- **Top ~25 distinct strategies → finalists**, with slots split between traders and vaults (❓ *split set in tuning*). Full definitions: `packages/backend/src/score/SPEC.md`.
 - **Also computed** for the agent:
+  - annualized return and volatility, all-time max drawdown (reported, not ranked)
   - realized volatility and average leverage
   - time in market and holding times
   - **maker/taker volume split** (from `crossed` on fills, or `userFees`; verify). A high maker share suggests sophistication, but market-maker inventory may not be copyable. ❓ *Plus or exclusion?*
@@ -147,9 +159,6 @@
 
 ### 4.6 AI layer: the agent in the CRE `review` workflow (hourly)
 
-The [evidence-bound AI review integration](docs/agents/PAPER_LIFECYCLE.md) includes full specialist inputs, per-node audit and persistent paper monitoring. `pnpm paper:lifecycle` checks that lifecycle; an executor integration test follows the merged snapshot/report/dry-run path. No live settings are changed.
-
-
 Status: the offline review core (`packages/cre-workflows/review/workflow.ts`, role/risk/red-team committee with DON-node quorum) and a real-SDK review spike (`review-spike`: per-node structured output, per-field median consensus) are built; see [CRE_SPIKE.md](docs/agents/CRE_SPIKE.md) and [production integration status](docs/agents/PRODUCTION_INTEGRATION.md). Its output, a frozen configuration, is the mirror's only execution authority (§4.7). Authenticated model runs and the two-model evaluation remain.
 
 A dedicated workstream, integrated into the CRE flow.
@@ -175,10 +184,10 @@ A dedicated workstream, integrated into the CRE flow.
 
 ### 4.7 Mirror (CRE workflow, every 10 min: `0 */10 * * * *`)
 Each node runs steps 1–3 (`runInNodeMode`); the DON agrees per field, then signs and sends in step 4. Code: `packages/cre-workflows/mirror`, `packages/shared`.
-1. **Fetch the positions snapshot** for this run: `GET {backendUrl}/snapshots/{runAt}` (1 call). The backend builds it at `:x9` and never changes it, so every node gets identical bytes (`packages/shared/snapshot.ts`). It records both the start and completion of its exchange-read window; CRE rejects a snapshot whose oldest reads or total collection window exceed the configured freshness bound.
+1. **Fetch the positions snapshot** for this run: `GET {backendUrl}/snapshots/{runAt}` (1 call). The backend builds it at `:x9` and never changes it, so every node gets identical bytes (`packages/shared/snapshot.ts`).
    - Contents: the **frozen configuration** (below), the eligible-asset list, and per frozen source its equity and eligible positions (signed USD notional). Amounts are decimal strings × 1e6.
    - **Equity = HL's live account value** from the `portfolio` request (last point of the `day` window, live), not Σ per-dex `accountValue`. Most leaderboard traders use unified or portfolio-margin accounts (23 + 5 of 40 sampled), where per-dex `accountValue` is only the margin set aside on that dex; summing it understated equity, and so overstated leverage, by 2–10×. The portfolio value is also what the backtest's returns use.
-   - The mirror rejects it if it's for another run, the oldest read starts > 120 s from `runAt`, the read window itself exceeds 120 s, contains an ineligible asset, doesn't cover exactly the frozen sources, or its configuration isn't the pinned one.
+   - The mirror rejects it if it's for another run, was taken > 120 s from `runAt`, contains an ineligible asset, doesn't cover exactly the frozen sources, or its configuration isn't the pinned one.
    - The backend only builds real run times (`:x0`) within 120 s of now, so nobody can pre-build a stale snapshot for a future run through the public endpoint.
 2. **Spot-check 4 sources**: `clearinghouseState` on the core dex **and** `xyz` (HIP-3 positions only come back per dex) plus `portfolio` for equity, 3 calls each. The sample is seeded with HMAC-SHA256 keyed by `mirrorSamplingKey`, a CRE secret the snapshot service never sees, over the run time and the snapshot hash (from the review core's mirror spike). Every node computes the same sample; the backend can't predict it. Deviation = the larger of Σ |snapshot − live notional| and |snapshot − live equity|, over live equity. **Reject the run if the worst source exceeds 5%.**
 3. **Exposures:** `exposure_c = Σᵢ wᵢ' · nᵢ,c / Eᵢ` per asset in bigint math (`packages/shared/copy.ts`), so every node gets identical results.
@@ -193,8 +202,8 @@ Each node runs steps 1–3 (`runInNodeMode`); the DON agrees per field, then sig
 - **Assets that lose eligibility:** the executor closes them (they're absent from the targets) rather than following sources' reductions (§4.4 reduce-only). Simpler, and HL allows reduce-only closes of any size; revisit if it costs too much.
 - **Status (2026-10-06):** `scripts/e2e-mirror.sh all` passes six scenarios in simulation on live HL data, with a frozen set covering every HL account mode (4 standard vaults, 2 unified and 1 portfolio-margin trader with HIP-3 positions): the happy path (configuration verified in WASM, report verified, planned and signed in dry run), a paused executor, backend down, executor down, a mismatched configuration (HTTP 422) and a tampered snapshot (spot-check fails). At full size (25 leaderboard traders, 201 positions, 18 holding HIP-3) the snapshot is 12.8 KB (limit 250 KB) and the report carries 46 exposures; soak runs every 90 s against long-running services show 0–30 bps spot-check deviation for production-age snapshots. Not exercised until deploy: real multi-node consensus and the registry signature check.
 
-### 4.8 Execute (executor service on Railway)
-Code: `packages/executor`. One long-running Bun service (Railway, `Dockerfile` + `railway.json`), so there's one HL nonce sequence, an in-process run queue and no function timeout.
+### 4.8 Execute (executor service)
+Code: `packages/executor`. A Bun service. Dry run deploys as the `executor` service of the Vercel project (root `vercel.json`, `/api/executor/*`). Live trading needs one long-running process (`Dockerfile` + `railway.json`) for one HL nonce sequence, an in-process run queue and no function timeout, so the executor refuses `DRY_RUN=false` on Vercel.
 - **Intake** (`POST /reports`): verify the report (≥ f+1 DON signatures, pinned workflow owner, optionally workflow name and DON, §4.13), then check the configuration hash, our account, expiry and lifetime (≤ 300 s), dedupe by report ID, **answer 200 at once** and execute in the background (DON nodes time out after 10 s). Runs are queued and never overlap, even when one is slow; expiry is re-checked when a run starts. A run still going after 60 s is alerted on and cancelled before its next leverage update or order batch (batches already sent can't be recalled), and database queries time out after 10 s.
 - **Plan** against the live account (`src/planner.ts`):
   - target = reported exposure × our live equity (HL portfolio value) for every eligible asset; anything we hold that isn't targeted goes to 0
@@ -211,7 +220,8 @@ Code: `packages/executor`. One long-running Bun service (Railway, `Dockerfile` +
 - **Kill switch:** manual, bearer-token admin routes (any team member with `ADMIN_TOKEN`; the dashboard calls them behind auth).
   - **Pause / resume:** stop or restart trading, keep positions.
   - **Flatten:** pause, then close everything reduce-only, bypassing CRE.
-- **Run log:** `GET /runs` (plans, order results, raw signed reports) and `GET /status`; stored in Supabase (`executor_runs`) when `DATABASE_URL` is set.
+- **Durable recovery:** report claims, runs, controls, and each exchange action's write-ahead intent/results are stored in Supabase. Before dispatch the executor journals the exact order batch and deterministic client IDs; an unknown response or restart with an unresolved batch pauses all new reports. Inspect `GET /admin/order-batches` with `ADMIN_TOKEN`; reconcile only after checking Hyperliquid order and position state, submit operator identity and evidence through `POST /admin/reconcile-batch`, then explicitly resume. Never retry an ambiguous order blindly. Apply `20261006180000_executor_order_journal.sql` before enabling the journaled executor.
+- **Run log:** `GET /runs` (plans, order results, raw signed reports), `GET /runs?summary=1`, `GET /equity` and `GET /status`; retained in Supabase when `DATABASE_URL` is set. Vercel dry-run mode requires Supabase and `CRON_SECRET`; live trading remains restricted to one long-running executor.
 - **Alerts:** Telegram bot (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`) for failed runs, failed orders and missed reports.
 - **Account mode: unified** (one USDC balance margins core and `xyz` perps; `scripts/setup-account.ts`). Equity and the margin rule use HL's account value, which is only all usable margin in unified mode.
 - **Capital:** 5 HYPE, currently on HyperEVM.
@@ -220,9 +230,6 @@ Code: `packages/executor`. One long-running Bun service (Railway, `Dockerfile` +
   - Swap it to **USDC on spot** (`@107`). Portfolio margin needs $10k, and we have just under $500.
 
 ### 4.9 Backtest (backend): the main value claim
-- **Implemented first real-data screening evaluation:** `pnpm --filter @perpparrot/backend backtest:public` takes a fixed-seed public leaderboard sample, fetches real `portfolio` histories, ranks using the existing formula before a shared cutoff, and measures later per-source returns. The first 12-account run had -3.70% median held-out return among the five selected versus -3.58% for the cohort (-11.8 bps). It is a small, biased source-ranking diagnostic and **not** a copy-trading backtest or evidence of an edge; see [`docs/agents/REAL_DATA_BACKTEST.md`](docs/agents/REAL_DATA_BACKTEST.md) and the raw artifact under `work/backtests/`.
-- **Public feature-discovery spike:** `pnpm --filter @perpparrot/backend backtest:explore:active` analyzes frozen cohort, backtest, and complete funding/ledger captures; the observed funding/return association is explicitly exploratory and is not fed into scoring. The source selection, tests, network caveats, and next evidence gates are in [`docs/agents/FEATURE_DISCOVERY.md`](docs/agents/FEATURE_DISCOVERY.md).
-- **Optional strategy-intent preview:** [`packages/shared/strategy-intent.ts`](packages/shared/strategy-intent.ts) defines a strict visitor-intent contract, monotonic policy preview, and deterministic finalist shortlist; [`packages/backend/src/strategy-intent-adapter.ts`](packages/backend/src/strategy-intent-adapter.ts) maps the current Score result into it without inventing clone status. It always emits simulation-only output and remains unwired; see [`docs/agents/STRATEGY_INTENT.md`](docs/agents/STRATEGY_INTENT.md).
 - **Return-based:**
   - Portfolio return ≈ `Σ wᵢ · rᵢ`, which follows from equity-ratio scaling.
   - Subtract a **turnover-based haircut** (HL taker fee + slippage bps per unit of turnover).
@@ -237,11 +244,15 @@ Code: `packages/executor`. One long-running Bun service (Railway, `Dockerfile` +
 - *Stretch:* fills-based replay with the 10-minute delay, the $10 minimum and netting.
 
 ### 4.10 Paper books (backend only)
+
+Status: built (`packages/backend/src/paper/`), stepped from every DON-agreed snapshot and served at `GET /paper`. Running now: Aggressive at $470 (live size), its $10k twin, Balanced at $470 (Aggressive's weights × 0.5, `PAPER_BALANCED_MULTIPLIER`) and BTC buy & hold. Books hold on runs the mirror's deterministic checks would refuse, and pay funding between runs at HL's current hourly rate. Conservative, the shadow model and the $10k Balanced book wait for the review core to emit their configurations; adding one is a `BookSpec` in `defaultBooks`.
 - **Books:** Balanced, Conservative, the shadow model, and a $10k twin of live Aggressive.
 - **Sizes:** each at **~$470 and $10k**, to show the strategy both with and without the minimum-order effect.
 - **Fills:** at HL mark price, plus the taker fee, plus the backtest slippage, with the $10 minimum applied.
 
 ### 4.11 Dashboard (Next.js + Tailwind on Vercel): public, read-only
+
+Status: built (`packages/dashboard`): live account vs paper books vs BTC, targets vs held with the executor's action per asset (last run), CRE heartbeat and run log (signed reports downloadable for `verify-run`), backtest vs BTC, funnel and finalists. Backtest, funnel and finalists render once their jobs publish to `dashboard_artifacts` (contract: `packages/shared/dashboard.ts`, RUNBOOK § Data for the dashboard). Not yet: per-source PnL, admin actions (Pause/Flatten stay on the executor's authenticated API).
 - **Landing:** the backtest vs. BTC (algo-only, model A, model B).
 - **Also:**
   - the funnel
@@ -265,15 +276,11 @@ Code: `packages/executor`. One long-running Bun service (Railway, `Dockerfile` +
 | `paper` | snapshot, buckets, mark prices | `paper_books` |
 | `dashboard` | all tables | — |
 
-These rows describe the target project workflow. As of this review, `packages/backend/src/score/` is a tested pure
-library; no backend runtime calls `scoreCandidates`, and no persisted point-in-time candidate table feeds the CRE
-review workflow. Automated finalist selection is therefore not yet connected end to end.
-
 ### 4.13 Mirror → executor report
 - **Transport:** `runtime.report()` (`evm` / `ecdsa` / `keccak256`), then `sendReport()` POSTs JSON `{report, context, signatures}` (hex, no `0x`) to the executor. **Every DON node POSTs its own copy.** `cacheSettings` only trims duplicates, because each node's signatures differ. The mirror reaches consensus on the executor's HTTP status, so it fails loudly on a rejection.
 - **Body** (ABI-encoded after the 109-byte header, `packages/shared/report.ts`): `string runId, bytes32 snapshotHash, bytes32 configurationHash, address account, uint64 asOf, uint64 expiresAt, (string asset, int256 exposureE9)[] exposures`.
   - **Exposures, not orders or USD targets.** Exposure = target notional as a fraction of our equity. The executor multiplies by our live equity and diffs against the live account when it runs, so price and equity moves between report and execution don't matter, and nodes never have to agree on prices, our equity or our positions.
-  - The review core's `rebalance-report.schema.json` (branch `ai-agent-workflow`) puts ≤ 10 **orders** in the report instead. ❓ *§8: reconcile before merging.*
+  - `packages/shared/schemas/rebalance-report.schema.json` is a review-core contract fixture, not the runtime mirror/executor transport. It is not accepted by the executor; only the exposure report described above is executable.
 - **Report ID** = `keccak256(rawReport)`, identical across nodes. The first valid copy is accepted; later copies get `200 duplicate`.
 - **Verification** in the executor (`src/verify.ts`, `src/handler.ts`):
   - ≥ f+1 signatures from the DON's signers, read from the Capability Registry `0x76c9cf548b4179F8901cda1f8623568b58215E62` on **Ethereum mainnet** (cached per DON ID; e.g. DON 1: f = 3, 10 signers). The executor needs an Ethereum mainnet RPC.
@@ -318,8 +325,8 @@ review workflow. Automated finalist selection is therefore not yet connected end
 | Prices | Hyperliquid oracle/mark prices via the Info API (`metaAndAssetCtxs`). BTC history from `candleSnapshot`. No Chainlink Data Feeds. |
 | Orchestration | Chainlink CRE (`@chainlink/cre-sdk`, `cre` CLI), DON access from the sponsor on-site. No onchain contract. Private registry; deploys from GitHub Actions with `CRE_API_KEY` (§4.14). |
 | AI | Two LLMs (≥ 1 OpenAI), structured JSON |
-| Storage / hosting | Supabase. Backend and executor on Railway (the leaderboard download is too slow for serverless; the executor needs one long-running process for nonces and run ordering). Dashboard on Vercel. |
-| Secrets | Railway/Vercel env vars plus CRE secrets. `.env.example` only in the repo. Runbook: `docs/cre/RUNBOOK.md`. |
+| Storage / hosting | Supabase. One Vercel project with three services (root `vercel.json`): dashboard at `/`, backend at `/api/backend`, executor at `/api/executor`, Vercel Cron for the snapshot pre-build and the missed-run watchdog. Live trading moves the executor to one long-running process (nonces and run ordering; `Dockerfile` + `railway.json`); the leaderboard download, once built, may need one too (too slow for a function). |
+| Secrets | Vercel env vars plus CRE secrets. `.env.example` only in the repo. Runbook: `docs/cre/RUNBOOK.md`. |
 | Testing | Fixtures, then $10–20 mainnet runs before the freeze. No testnet. |
 | Optional / unused | NOWNodes (HyperEVM RPC + an Info API copy) if it helps with rate limits; not a track. No AgentKit. |
 

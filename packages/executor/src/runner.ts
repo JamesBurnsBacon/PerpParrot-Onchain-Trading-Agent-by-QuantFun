@@ -5,6 +5,7 @@ import { loadAccount, loadMarkets, type InfoFn } from "./hyperliquid";
 import { planFlatten, planOrders, type Market, type Plan, type PlanConfig } from "./planner";
 import type { ExecutorStore, RunRecord } from "./store";
 import type { VerifiedReport } from "./verify";
+import { noLock, type RunLock } from "./lock";
 
 export type RunnerConfig = {
   account: Hex;
@@ -22,6 +23,7 @@ export type RunnerDeps = {
   alert: Alert;
   now: () => number;
   config: RunnerConfig;
+  lock?: RunLock;
 };
 
 // Stable per-report order identifiers for reconciliation. Do not assume that
@@ -105,7 +107,9 @@ export class Runner {
   ): Promise<RunRecord> {
     const { store, exchange, info, alert, now, config } = this.deps;
     const record: RunRecord = { id, runId, kind, status: "executed", dryRun: exchange.dryRun, startedAt: now(), finishedAt: 0, envelope };
+    let release: (() => Promise<void>) | undefined;
     try {
+      release = await (this.deps.lock ?? noLock).acquire(config.runTimeoutMs);
       const unresolved = await store.unresolvedOrderBatches();
       if (kind === "report" && unresolved.length > 0) {
         await store.setControls({ paused: true, updatedAt: now(), updatedBy: `unresolved-order-batch:${unresolved[0].id}` });
@@ -206,7 +210,7 @@ export class Runner {
       await alert(`${runId} failed: ${record.error}`);
     } finally {
       record.finishedAt = now();
-      await store.saveRun(record);
+      try { await store.saveRun(record); } finally { await release?.(); }
     }
     return record;
   }

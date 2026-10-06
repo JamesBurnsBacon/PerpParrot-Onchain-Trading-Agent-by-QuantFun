@@ -1,5 +1,6 @@
 // Executor service (README §4.8). Runs on Railway; locally: bun run dev.
 import { SQL } from "bun";
+import { waitUntil } from "@vercel/functions";
 import { createPublicClient, http } from "viem";
 import { mainnet } from "viem/chains";
 import { createAlert } from "./alerts";
@@ -9,9 +10,11 @@ import { createExchange } from "./exchange";
 import { httpInfo } from "./hyperliquid";
 import { Runner } from "./runner";
 import { registrySigners } from "./signers";
+import { noLock, postgresRunLock } from "./lock";
 import { PostgresStore } from "./pg-store";
 import { MemoryStore } from "./store";
 import type { VerifyMode } from "./verify";
+import { cronWatchdog } from "./watchdog";
 
 const config = loadConfig(process.env);
 const log = (msg: string, extra: Record<string, unknown> = {}) =>
@@ -29,7 +32,8 @@ const mode: VerifyMode = config.verifyReports
 
 // Supabase Postgres supplies durable report dedupe, runs, controls and action journals.
 // Production configuration rejects a missing DATABASE_URL.
-const store = process.env.DATABASE_URL ? new PostgresStore(new SQL(process.env.DATABASE_URL)) : new MemoryStore();
+const sql = process.env.DATABASE_URL ? new SQL(process.env.DATABASE_URL, config.vercel ? { max: 3, idleTimeout: 5 } : {}) : undefined;
+const store = sql ? new PostgresStore(sql) : new MemoryStore();
 const alert = createAlert({ botToken: config.telegramBotToken, chatId: config.telegramChatId, log: (m) => log(m) });
 // Recover write-ahead intents before exposing the listener. A crash can leave a
 // batch ambiguous even if the old process never persisted the pause control.
@@ -46,6 +50,7 @@ const runner = new Runner({
   info: httpInfo(),
   alert,
   now: Date.now,
+  lock: sql ? postgresRunLock(sql) : noLock,
   config: {
     account: config.account,
     maxGrossLeverage: config.maxGrossLeverage,
@@ -70,7 +75,11 @@ const app = createApp({
   },
   runner,
   store,
+  lock: sql ? postgresRunLock(sql) : noLock,
   adminToken: config.adminToken,
+  cronSecret: config.cronSecret,
+  watchdog: cronWatchdog({ store, alert, now: Date.now, afterMs: config.missedRunAlertMinutes * 60_000, everyMs: 5 * 60_000 }),
+  background: config.vercel ? waitUntil : undefined,
   log,
   status: () => ({
     dryRun: config.dryRun,
@@ -79,6 +88,8 @@ const app = createApp({
     apiWallet: exchange.signer,
     frozenConfigurationHash: config.frozenConfigurationHash,
     lastReportAt: runner.lastReportAt || null,
+    store: sql ? "postgres" : "memory",
+    pinned: { workflowName: config.workflowName ?? null, donId: config.donId ?? null },
   }),
 });
 
@@ -89,7 +100,7 @@ const server = Bun.serve({ port: config.port, fetch: app, maxRequestBodySize: 25
 // failing or a run is stuck (README §4.7: alert after 2 consecutive failures).
 const startedAt = Date.now();
 let alerted = false;
-setInterval(() => {
+if (!config.vercel) setInterval(() => {
   const since = Date.now() - (runner.lastFinishedAt || startedAt);
   if (since > config.missedRunAlertMinutes * 60_000) {
     if (!alerted) void alert(`no finished run for ${Math.round(since / 60_000)} min (last report accepted ${runner.lastReportAt ? new Date(runner.lastReportAt).toISOString() : "never"})`);

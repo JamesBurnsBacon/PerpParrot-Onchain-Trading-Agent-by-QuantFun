@@ -3,6 +3,7 @@ import type { Hex } from "viem";
 export type ExecutorConfig = {
   port: number;
   production: boolean;
+  vercel: boolean;
   verifyReports: boolean;
   workflowOwner: Hex;
   ethRpcUrl: string;
@@ -16,6 +17,7 @@ export type ExecutorConfig = {
   marginCap: number;
   maxGrossLeverage: number;
   adminToken?: string;
+  cronSecret?: string;
   telegramBotToken?: string;
   telegramChatId?: string;
   missedRunAlertMinutes: number;
@@ -46,7 +48,8 @@ const num = (env: Record<string, string | undefined>, name: string, fallback: nu
 export const loadConfig = (env: Record<string, string | undefined>): ExecutorConfig => requirePinsForLive(readConfig(env));
 
 const readConfig = (env: Record<string, string | undefined>): ExecutorConfig => {
-  const production = env.NODE_ENV === "production";
+  const vercel = env.VERCEL === "1";
+  const production = env.NODE_ENV === "production" || vercel;
   const verifyReports = env.VERIFY_REPORTS !== "false";
   if (production && !verifyReports) throw new Error("VERIFY_REPORTS=false is not allowed in production");
   const dryRun = env.DRY_RUN !== "false";
@@ -54,11 +57,16 @@ const readConfig = (env: Record<string, string | undefined>): ExecutorConfig => 
   const apiWalletKey = env.HL_API_WALLET_KEY ? hex("HL_API_WALLET_KEY", env.HL_API_WALLET_KEY, 32) : undefined;
   if (!dryRun && !apiWalletKey) throw new Error("HL_API_WALLET_KEY is required when DRY_RUN=false");
   if (production && !env.ADMIN_TOKEN) throw new Error("ADMIN_TOKEN is required in production");
+  if (vercel && !env.DATABASE_URL) throw new Error("DATABASE_URL is required on Vercel");
   if (production && !env.DATABASE_URL) throw new Error("DATABASE_URL is required in production for durable report dedupe and kill switch");
+  // Serverless instances cannot safely hold live execution state or a single order nonce sequence.
+  if (vercel && !dryRun) throw new Error("DRY_RUN=false is not allowed on Vercel: live trading needs one long-running executor");
+  if (vercel && !env.CRON_SECRET) throw new Error("CRON_SECRET is required on Vercel");
 
   return {
     port: num(env, "PORT", 8787),
     production,
+    vercel,
     verifyReports,
     workflowOwner: hex("WORKFLOW_OWNER", env.WORKFLOW_OWNER, 20),
     ethRpcUrl: env.ETH_MAINNET_RPC_URL || "https://ethereum-rpc.publicnode.com",
@@ -72,6 +80,7 @@ const readConfig = (env: Record<string, string | undefined>): ExecutorConfig => 
     marginCap: num(env, "MARGIN_CAP", 0.95),
     maxGrossLeverage: num(env, "MAX_GROSS_LEVERAGE", 10),
     adminToken: env.ADMIN_TOKEN || undefined,
+    cronSecret: env.CRON_SECRET || undefined,
     telegramBotToken: env.TELEGRAM_BOT_TOKEN || undefined,
     telegramChatId: env.TELEGRAM_CHAT_ID || undefined,
     missedRunAlertMinutes: num(env, "MISSED_RUN_ALERT_MINUTES", 25),

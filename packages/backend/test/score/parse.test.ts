@@ -43,12 +43,27 @@ describe("parsePortfolio", () => {
     expect(parsePortfolio([["allTime", history]]).month).toBeNull();
   });
 
+  test("rejects a window that appears twice, whichever window it is (SPEC parsePortfolio)", () => {
+    for (const name of ["month", "allTime", "day"]) {
+      expect(() => parsePortfolio([[name, history], ["week", history], [name, history]]))
+        .toThrow(`portfolio: duplicate window ${name}`);
+    }
+  });
+
   test("ignores other window names", () => {
     const names = ["day", "week", "perpMonth", "perpAllTime", "perpDay", "Month", "alltime"];
     expect(parsePortfolio(names.map((name) => [name, {}]))).toEqual({ month: null, allTime: null });
   });
 
-  test("leaves ordering and alignment to series validation (README §4.2)", () => {
+  test("ignored contents are not validated, but shape and duplicates are (SPEC parsePortfolio)", () => {
+    const invalid = { ...history, pnlHistory: [[0, "1e2"]] };
+    expect(parsePortfolio([["day", invalid]])).toEqual({ month: null, allTime: null });
+    expect(() => parsePortfolio([["day", invalid, 0]])).toThrow("portfolio: invalid window entry");
+    expect(() => parsePortfolio([["day", null]])).toThrow("portfolio: invalid window entry");
+    expect(() => parsePortfolio([["day", invalid], ["day", invalid]])).toThrow("portfolio: duplicate window day");
+  });
+
+  test("leaves ordering and alignment to series validation (SPEC parsePortfolio)", () => {
     expect(parsePortfolio([["month", {
       accountValueHistory: [[2, "1"], [1, "2"]],
       pnlHistory: [[3, "0"]],

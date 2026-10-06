@@ -1,38 +1,33 @@
-import type { WindowHistory } from "./types";
+import { DAY_MS } from "./stitch";
 
-const DAY_MS = 86_400_000;
+type Point = { ts: number; accountValue: number; pnl: number; fine?: boolean };
 
-// Finite observations and safe, matching, strictly increasing timestamps are required for scoring (README §4.2).
-export const validateSeries = (w: WindowHistory | null): boolean => {
-  if (w === null || w.accountValueHistory.length < 2 || w.accountValueHistory.length !== w.pnlHistory.length) {
-    return false;
-  }
-  return w.accountValueHistory.every(([timestamp, equity], i) =>
-    Number.isSafeInteger(timestamp) && Number.isFinite(equity) &&
-    Number.isSafeInteger(w.pnlHistory[i][0]) && Number.isFinite(w.pnlHistory[i][1]) &&
-    timestamp === w.pnlHistory[i][0] && (i === 0 || timestamp > w.accountValueHistory[i - 1][0]),
-  );
-};
+export type Interval = { start: number; end: number; dt: number; r: number; fine: boolean; used: boolean };
 
-type Interval = { dt: number; r: number; pnl: number; day: number };
-
-// Internal module helper: start-of-interval equity is the denominator (README §4.2).
-export const usedIntervals = (w: WindowHistory): { intervals: Interval[]; flags: string[] } => {
+// Flows are backed out of PnL; deposits count as capital for the whole interval and dust intervals are
+// skipped (SPEC "Returns").
+export const computeIntervals = (
+  points: Point[],
+  dustEquityFraction: number,
+): { intervals: Interval[]; flags: string[] } => {
+  const peak = points.reduce((max, { accountValue }) => Math.max(max, accountValue), -Infinity);
   const intervals: Interval[] = [];
   const flags: string[] = [];
-  for (let i = 1; i < w.accountValueHistory.length; i++) {
-    const [previousTimestamp, equity] = w.accountValueHistory[i - 1];
-    if (!(equity > 0)) {
-      if (!flags.includes("zero-equity-interval")) flags.push("zero-equity-interval");
-      continue;
-    }
-    const [timestamp, pnl] = w.pnlHistory[i];
-    const delta = pnl - w.pnlHistory[i - 1][1];
+  for (let i = 1; i < points.length; i++) {
+    const previous = points[i - 1];
+    const current = points[i];
+    const dpnl = current.pnl - previous.pnl;
+    const flow = (current.accountValue - previous.accountValue) - dpnl;
+    const capital = previous.accountValue + Math.max(flow, 0);
+    const used = capital > 0 && capital >= dustEquityFraction * peak;
+    if (!used) flags.push("dust-equity");
     intervals.push({
-      dt: (timestamp - previousTimestamp) / DAY_MS,
-      r: delta / equity,
-      pnl: delta,
-      day: Math.floor(timestamp / DAY_MS),
+      start: previous.ts,
+      end: current.ts,
+      dt: (current.ts - previous.ts) / DAY_MS,
+      r: used ? dpnl / capital : 0,
+      fine: previous.fine !== false && current.fine !== false,
+      used,
     });
   }
   return { intervals, flags };

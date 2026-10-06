@@ -2,455 +2,52 @@
  "strict": {
   "candidates": [
    {
-    "address": "addr-07",
-    "kind": "trader",
-    "filters": {
-     "minAccountValue": "pass",
-     "minActiveDays": "pass",
-     "minTrades": "pass",
-     "notClosed": "pass",
-     "minMonthPoints": "pass"
-    },
-    "eligible": true,
-    "metrics": {
-     "sortino": 0.436986051363086,
-     "calmar": 2.4676690309619618,
-     "maxDrawdown": 0.023412503387107722,
-     "pnlConsistency": 0.6451612903225806,
-     "realizedVol": 0.007676879945264047,
-     "flags": []
-    },
-    "percentiles": {
-     "sortino": 0.875,
-     "calmar": 0.9375,
-     "negMaxDrawdown": 0.875,
-     "pnlConsistency": 0.9375
-    },
-    "score": 0.90625,
-    "rank": 1,
-    "finalist": true,
-    "passthrough": {
-     "avgLeverage": null,
-     "timeInMarket": null,
-     "medianHoldHours": null,
-     "makerShare": null
-    }
-   },
-   {
-    "address": "addr-18",
-    "kind": "trader",
-    "filters": {
-     "minAccountValue": "pass",
-     "minActiveDays": "pass",
-     "minTrades": "pass",
-     "notClosed": "pass",
-     "minMonthPoints": "pass"
-    },
-    "eligible": true,
-    "metrics": {
-     "sortino": 0.3436003450064607,
-     "calmar": 2.210862524673416,
-     "maxDrawdown": 0.1190124264625108,
-     "pnlConsistency": 0.5161290322580645,
-     "realizedVol": 0.05707500654204713,
-     "flags": []
-    },
-    "percentiles": {
-     "sortino": 0.8125,
-     "calmar": 0.8125,
-     "negMaxDrawdown": 0.4375,
-     "pnlConsistency": 0.6875
-    },
-    "score": 0.6875,
-    "rank": 2,
-    "finalist": true,
-    "passthrough": {
-     "avgLeverage": null,
-     "timeInMarket": null,
-     "medianHoldHours": null,
-     "makerShare": null
-    }
-   },
-   {
-    "address": "addr-14",
-    "kind": "trader",
-    "filters": {
-     "minAccountValue": "pass",
-     "minActiveDays": "pass",
-     "minTrades": "pass",
-     "notClosed": "pass",
-     "minMonthPoints": "pass"
-    },
-    "eligible": true,
-    "metrics": {
-     "sortino": 0.6475712155201677,
-     "calmar": 2.309576945867831,
-     "maxDrawdown": 0.8094385527191436,
-     "pnlConsistency": 0.5806451612903226,
-     "realizedVol": 0.4871330321259742,
-     "flags": []
-    },
-    "percentiles": {
-     "sortino": 0.9375,
-     "calmar": 0.875,
-     "negMaxDrawdown": 0.0,
-     "pnlConsistency": 0.875
-    },
-    "score": 0.671875,
-    "rank": 3,
-    "finalist": true,
-    "passthrough": {
-     "avgLeverage": null,
-     "timeInMarket": null,
-     "medianHoldHours": null,
-     "makerShare": null
-    }
-   },
-   {
-    "address": "addr-11",
-    "kind": "trader",
-    "filters": {
-     "minAccountValue": "pass",
-     "minActiveDays": "pass",
-     "minTrades": "pass",
-     "notClosed": "pass",
-     "minMonthPoints": "pass"
-    },
-    "eligible": true,
-    "metrics": {
-     "sortino": 0.09924798578441632,
-     "calmar": 0.5177019821687627,
-     "maxDrawdown": 1.537309929773586e-07,
-     "pnlConsistency": 0.5483870967741935,
-     "realizedVol": 4.1725749473091104e-08,
-     "flags": []
-    },
-    "percentiles": {
-     "sortino": 0.3125,
-     "calmar": 0.4375,
-     "negMaxDrawdown": 0.9375,
-     "pnlConsistency": 0.8125
-    },
-    "score": 0.625,
-    "rank": 4,
-    "finalist": true,
-    "passthrough": {
-     "avgLeverage": null,
-     "timeInMarket": null,
-     "medianHoldHours": null,
-     "makerShare": null
-    }
-   },
-   {
-    "address": "addr-24",
-    "kind": "trader",
-    "filters": {
-     "minAccountValue": "pass",
-     "minActiveDays": "pass",
-     "minTrades": "pass",
-     "notClosed": "pass",
-     "minMonthPoints": "pass"
-    },
-    "eligible": true,
-    "metrics": {
-     "sortino": 0.2582458543743587,
-     "calmar": 1.114297504427846,
-     "maxDrawdown": 0.22847184088109007,
-     "pnlConsistency": 0.5161290322580645,
-     "realizedVol": 0.07348132394662583,
-     "flags": []
-    },
-    "percentiles": {
-     "sortino": 0.75,
-     "calmar": 0.75,
-     "negMaxDrawdown": 0.1875,
-     "pnlConsistency": 0.6875
-    },
-    "score": 0.59375,
-    "rank": 5,
-    "finalist": true,
-    "passthrough": {
-     "avgLeverage": null,
-     "timeInMarket": null,
-     "medianHoldHours": null,
-     "makerShare": null
-    }
-   },
-   {
-    "address": "addr-08",
-    "kind": "trader",
-    "filters": {
-     "minAccountValue": "pass",
-     "minActiveDays": "pass",
-     "minTrades": "pass",
-     "notClosed": "pass",
-     "minMonthPoints": "pass"
-    },
-    "eligible": true,
-    "metrics": {
-     "sortino": 46407.51592919626,
-     "calmar": 198396.09819342953,
-     "maxDrawdown": 0.12453404854986816,
-     "pnlConsistency": 0.3548387096774194,
-     "realizedVol": 4264.9332423750675,
-     "flags": []
-    },
-    "percentiles": {
-     "sortino": 1.0,
-     "calmar": 1.0,
-     "negMaxDrawdown": 0.3125,
-     "pnlConsistency": 0.03125
-    },
-    "score": 0.5859375,
-    "rank": 6,
-    "finalist": true,
-    "passthrough": {
-     "avgLeverage": null,
-     "timeInMarket": null,
-     "medianHoldHours": null,
-     "makerShare": null
-    }
-   },
-   {
-    "address": "addr-13",
-    "kind": "trader",
-    "filters": {
-     "minAccountValue": "pass",
-     "minActiveDays": "pass",
-     "minTrades": "pass",
-     "notClosed": "pass",
-     "minMonthPoints": "pass"
-    },
-    "eligible": true,
-    "metrics": {
-     "sortino": 0.15122852439020026,
-     "calmar": 0.97143001439245,
-     "maxDrawdown": 0.036152671792549385,
-     "pnlConsistency": 0.45161290322580644,
-     "realizedVol": 0.013784016516887206,
-     "flags": []
-    },
-    "percentiles": {
-     "sortino": 0.375,
-     "calmar": 0.6875,
-     "negMaxDrawdown": 0.8125,
-     "pnlConsistency": 0.28125
-    },
-    "score": 0.5390625,
-    "rank": 7,
-    "finalist": true,
-    "passthrough": {
-     "avgLeverage": null,
-     "timeInMarket": null,
-     "medianHoldHours": null,
-     "makerShare": null
-    }
-   },
-   {
-    "address": "addr-16",
-    "kind": "trader",
-    "filters": {
-     "minAccountValue": "pass",
-     "minActiveDays": "pass",
-     "minTrades": "pass",
-     "notClosed": "pass",
-     "minMonthPoints": "pass"
-    },
-    "eligible": true,
-    "metrics": {
-     "sortino": 0.22531835037547884,
-     "calmar": 0.8740438411458995,
-     "maxDrawdown": 0.12598012920502433,
-     "pnlConsistency": 0.4838709677419355,
-     "realizedVol": 0.03182369891443595,
-     "flags": []
-    },
-    "percentiles": {
-     "sortino": 0.6875,
-     "calmar": 0.625,
-     "negMaxDrawdown": 0.25,
-     "pnlConsistency": 0.5
-    },
-    "score": 0.515625,
-    "rank": 8,
-    "finalist": true,
-    "passthrough": {
-     "avgLeverage": null,
-     "timeInMarket": null,
-     "medianHoldHours": null,
-     "makerShare": null
-    }
-   },
-   {
     "address": "addr-21",
     "kind": "trader",
+    "pool": "trader",
+    "activeDays": 726.3215062731482,
     "filters": {
      "minAccountValue": "pass",
      "minActiveDays": "pass",
+     "stillActive": "pass",
      "minTrades": "pass",
      "notClosed": "pass",
-     "minMonthPoints": "pass"
+     "minMonthPoints": "pass",
+     "minCoverage": "pass",
+     "noRuin": "pass"
     },
     "eligible": true,
     "metrics": {
-     "sortino": null,
-     "calmar": null,
-     "maxDrawdown": 0.0,
-     "pnlConsistency": 1.0,
-     "realizedVol": 7.661321299817896e-05,
+     "sharpe": 0.43488738696008855,
+     "sortino": 5.772144557225459,
+     "calmar": 52.47418005366981,
+     "maxDrawdown": 8.37176998297009e-05,
+     "consistency": 0.9399688097870007,
+     "periodReturn": 0.004393017654542808,
+     "annualisedReturn": 0.019627023860778747,
+     "annualisedVol": 0.0023398378820036307,
+     "realizedVol": 0.0001224727122423518,
+     "allTimeMaxDrawdown": 0.4854006991267248,
+     "lookbackDays": 82.31456311342592,
+     "coveredDays": 82.31456311342593,
+     "skippedTimeShare": 0.0,
+     "fineTimeShare": 0.3684457658309997,
      "flags": [
-      "no-downside",
-      "no-drawdown"
+      "coarse-history"
      ]
     },
     "percentiles": {
-     "sortino": 0.0,
-     "calmar": 0.0,
-     "negMaxDrawdown": 1.0,
-     "pnlConsistency": 1.0
+     "sharpe": 1.0,
+     "sortino": 1.0,
+     "calmar": 1.0,
+     "negMaxDrawdown": 0.9333333333333333,
+     "consistency": 1.0
     },
-    "score": 0.5,
-    "rank": 9,
-    "finalist": true,
-    "passthrough": {
-     "avgLeverage": null,
-     "timeInMarket": null,
-     "medianHoldHours": null,
-     "makerShare": null
-    }
-   },
-   {
-    "address": "addr-19",
-    "kind": "trader",
-    "filters": {
-     "minAccountValue": "pass",
-     "minActiveDays": "pass",
-     "minTrades": "pass",
-     "notClosed": "pass",
-     "minMonthPoints": "pass"
-    },
-    "eligible": true,
-    "metrics": {
-     "sortino": 0.1660426743197037,
-     "calmar": 0.717147368640963,
-     "maxDrawdown": 0.11534143878050129,
-     "pnlConsistency": 0.45161290322580644,
-     "realizedVol": 0.0331645752138302,
-     "flags": []
-    },
-    "percentiles": {
-     "sortino": 0.5,
-     "calmar": 0.5,
-     "negMaxDrawdown": 0.5,
-     "pnlConsistency": 0.28125
-    },
-    "score": 0.4453125,
-    "rank": 10,
-    "finalist": true,
-    "passthrough": {
-     "avgLeverage": null,
-     "timeInMarket": null,
-     "medianHoldHours": null,
-     "makerShare": null
-    }
-   },
-   {
-    "address": "addr-06",
-    "kind": "trader",
-    "filters": {
-     "minAccountValue": "pass",
-     "minActiveDays": "pass",
-     "minTrades": "pass",
-     "notClosed": "pass",
-     "minMonthPoints": "pass"
-    },
-    "eligible": true,
-    "metrics": {
-     "sortino": 0.05660380586283151,
-     "calmar": 0.17190167292590916,
-     "maxDrawdown": 0.10678284328915932,
-     "pnlConsistency": 0.4838709677419355,
-     "realizedVol": 0.03350275217413152,
-     "flags": []
-    },
-    "percentiles": {
-     "sortino": 0.1875,
-     "calmar": 0.3125,
-     "negMaxDrawdown": 0.71875,
-     "pnlConsistency": 0.5
-    },
-    "score": 0.4296875,
-    "rank": 11,
-    "finalist": true,
-    "passthrough": {
-     "avgLeverage": null,
-     "timeInMarket": null,
-     "medianHoldHours": null,
-     "makerShare": null
-    }
-   },
-   {
-    "address": "addr-22",
-    "kind": "trader",
-    "filters": {
-     "minAccountValue": "pass",
-     "minActiveDays": "pass",
-     "minTrades": "pass",
-     "notClosed": "pass",
-     "minMonthPoints": "pass"
-    },
-    "eligible": true,
-    "metrics": {
-     "sortino": 0.15459989715452976,
-     "calmar": 0.31644613867748633,
-     "maxDrawdown": 0.3869601982089723,
-     "pnlConsistency": 0.5161290322580645,
-     "realizedVol": 0.14006383936312353,
-     "flags": []
-    },
-    "percentiles": {
-     "sortino": 0.4375,
-     "calmar": 0.375,
-     "negMaxDrawdown": 0.125,
-     "pnlConsistency": 0.6875
-    },
-    "score": 0.40625,
-    "rank": 12,
-    "finalist": true,
-    "passthrough": {
-     "avgLeverage": null,
-     "timeInMarket": null,
-     "medianHoldHours": null,
-     "makerShare": null
-    }
-   },
-   {
-    "address": "addr-23",
-    "kind": "trader",
-    "filters": {
-     "minAccountValue": "pass",
-     "minActiveDays": "pass",
-     "minTrades": "pass",
-     "notClosed": "pass",
-     "minMonthPoints": "pass"
-    },
-    "eligible": true,
-    "metrics": {
-     "sortino": 0.17928265229521545,
-     "calmar": 0.7623548036179836,
-     "maxDrawdown": 0.12014962287240634,
-     "pnlConsistency": 0.3548387096774194,
-     "realizedVol": 0.03440227536799754,
-     "flags": []
-    },
-    "percentiles": {
-     "sortino": 0.5625,
-     "calmar": 0.5625,
-     "negMaxDrawdown": 0.375,
-     "pnlConsistency": 0.03125
-    },
-    "score": 0.3828125,
-    "rank": 13,
+    "scoreNumerator": 178,
+    "score": 0.9888888888888889,
+    "rank": 1,
+    "cloneOf": null,
+    "clones": [],
     "finalist": true,
     "passthrough": {
      "avgLeverage": null,
@@ -462,30 +59,52 @@
    {
     "address": "addr-04",
     "kind": "trader",
+    "pool": "trader",
+    "activeDays": 250.27558555555555,
     "filters": {
      "minAccountValue": "pass",
      "minActiveDays": "pass",
+     "stillActive": "pass",
      "minTrades": "pass",
      "notClosed": "pass",
-     "minMonthPoints": "pass"
+     "minMonthPoints": "pass",
+     "minCoverage": "pass",
+     "noRuin": "pass"
     },
     "eligible": true,
     "metrics": {
-     "sortino": 0.05727921587381695,
-     "calmar": 0.171901672925905,
-     "maxDrawdown": 0.10678284328915932,
-     "pnlConsistency": 0.45161290322580644,
-     "realizedVol": 0.032962573045014265,
+     "sharpe": 0.2683965560831573,
+     "sortino": 0.5743262206221025,
+     "calmar": 6.908105856222988,
+     "maxDrawdown": 0.10678284328915946,
+     "consistency": 0.8812189284187264,
+     "periodReturn": 0.7376671850699841,
+     "annualisedReturn": 8.567304252474305,
+     "annualisedVol": 0.47197633363653846,
+     "realizedVol": 0.02470437039217844,
+     "allTimeMaxDrawdown": 0.3419838279497058,
+     "lookbackDays": 89.30336356481482,
+     "coveredDays": 89.30336356481479,
+     "skippedTimeShare": 0.0,
+     "fineTimeShare": 0.3394861206061961,
      "flags": []
     },
     "percentiles": {
-     "sortino": 0.25,
-     "calmar": 0.25,
-     "negMaxDrawdown": 0.71875,
-     "pnlConsistency": 0.28125
+     "sharpe": 0.8666666666666667,
+     "sortino": 0.7333333333333333,
+     "calmar": 0.7333333333333333,
+     "negMaxDrawdown": 0.7,
+     "consistency": 0.9333333333333333
     },
-    "score": 0.375,
-    "rank": 14,
+    "scoreNumerator": 147,
+    "score": 0.8166666666666667,
+    "rank": 2,
+    "cloneOf": null,
+    "clones": [
+     "addr-06",
+     "addr-09",
+     "addr-02"
+    ],
     "finalist": true,
     "passthrough": {
      "avgLeverage": null,
@@ -495,33 +114,54 @@
     }
    },
    {
-    "address": "addr-17",
+    "address": "addr-06",
     "kind": "trader",
+    "pool": "trader",
+    "activeDays": 236.27559692129628,
     "filters": {
      "minAccountValue": "pass",
      "minActiveDays": "pass",
+     "stillActive": "pass",
      "minTrades": "pass",
      "notClosed": "pass",
-     "minMonthPoints": "pass"
+     "minMonthPoints": "pass",
+     "minCoverage": "pass",
+     "noRuin": "pass"
     },
     "eligible": true,
     "metrics": {
-     "sortino": 0.18342650739935515,
-     "calmar": -0.05456223350642882,
-     "maxDrawdown": 0.6237114583993778,
-     "pnlConsistency": 0.4838709677419355,
-     "realizedVol": 0.2385667638083962,
+     "sharpe": 0.26635771261492835,
+     "sortino": 0.5591509846163364,
+     "calmar": 6.908105856223001,
+     "maxDrawdown": 0.10678284328915946,
+     "consistency": 0.8795743005998666,
+     "periodReturn": 0.7376671850699854,
+     "annualisedReturn": 8.567301541815858,
+     "annualisedVol": 0.4760303938037685,
+     "realizedVol": 0.024916569599693267,
+     "allTimeMaxDrawdown": 0.24585152838427962,
+     "lookbackDays": 89.30337476851852,
+     "coveredDays": 89.30337476851852,
+     "skippedTimeShare": 0.0,
+     "fineTimeShare": 0.33948620347206554,
      "flags": []
     },
     "percentiles": {
-     "sortino": 0.625,
-     "calmar": 0.0625,
-     "negMaxDrawdown": 0.0625,
-     "pnlConsistency": 0.5
+     "sharpe": 0.8,
+     "sortino": 0.6666666666666666,
+     "calmar": 0.8,
+     "negMaxDrawdown": 0.7,
+     "consistency": 0.8666666666666667
     },
-    "score": 0.3125,
-    "rank": 15,
-    "finalist": true,
+    "scoreNumerator": 141,
+    "score": 0.7833333333333333,
+    "rank": 3,
+    "cloneOf": {
+     "address": "addr-04",
+     "correlation": 0.9907175889823341
+    },
+    "clones": [],
+    "finalist": false,
     "passthrough": {
      "avgLeverage": null,
      "timeInMarket": null,
@@ -532,31 +172,52 @@
    {
     "address": "addr-09",
     "kind": "trader",
+    "pool": "trader",
+    "activeDays": 194.2992228125,
     "filters": {
      "minAccountValue": "pass",
      "minActiveDays": "pass",
+     "stillActive": "pass",
      "minTrades": "pass",
      "notClosed": "pass",
-     "minMonthPoints": "pass"
+     "minMonthPoints": "pass",
+     "minCoverage": "pass",
+     "noRuin": "pass"
     },
     "eligible": true,
     "metrics": {
-     "sortino": 0.04446779480970466,
-     "calmar": 0.09402390438246737,
-     "maxDrawdown": 0.11352123887401411,
-     "pnlConsistency": 0.45161290322580644,
-     "realizedVol": 0.031746584590327524,
+     "sharpe": 0.2791678889224462,
+     "sortino": 0.5958055826868883,
+     "calmar": 6.501387898922303,
+     "maxDrawdown": 0.11352123887401401,
+     "consistency": 0.8705234532297262,
+     "periodReturn": 0.7380456086861829,
+     "annualisedReturn": 8.573461669485944,
+     "annualisedVol": 0.4514818936470492,
+     "realizedVol": 0.02363164237511962,
+     "allTimeMaxDrawdown": 0.24436665937431654,
+     "lookbackDays": 89.31311288194445,
+     "coveredDays": 89.31311288194442,
+     "skippedTimeShare": 0.0,
+     "fineTimeShare": 0.3389361851478873,
      "flags": []
     },
     "percentiles": {
-     "sortino": 0.125,
-     "calmar": 0.1875,
-     "negMaxDrawdown": 0.5625,
-     "pnlConsistency": 0.28125
+     "sharpe": 0.9333333333333333,
+     "sortino": 0.8666666666666667,
+     "calmar": 0.6,
+     "negMaxDrawdown": 0.5333333333333333,
+     "consistency": 0.7333333333333333
     },
-    "score": 0.2890625,
-    "rank": 16,
-    "finalist": true,
+    "scoreNumerator": 132,
+    "score": 0.7333333333333333,
+    "rank": 4,
+    "cloneOf": {
+     "address": "addr-04",
+     "correlation": 0.964184434733936
+    },
+    "clones": [],
+    "finalist": false,
     "passthrough": {
      "avgLeverage": null,
      "timeInMarket": null,
@@ -567,30 +228,655 @@
    {
     "address": "addr-02",
     "kind": "trader",
+    "pool": "trader",
+    "activeDays": 117.30057592592593,
     "filters": {
      "minAccountValue": "pass",
      "minActiveDays": "pass",
+     "stillActive": "pass",
      "minTrades": "pass",
      "notClosed": "pass",
-     "minMonthPoints": "pass"
+     "minMonthPoints": "pass",
+     "minCoverage": "pass",
+     "noRuin": "pass"
     },
     "eligible": true,
     "metrics": {
-     "sortino": 0.0327470358484389,
-     "calmar": 0.030764248709239002,
-     "maxDrawdown": 0.11092750915923055,
-     "pnlConsistency": 0.41935483870967744,
-     "realizedVol": 0.03315481430616683,
+     "sharpe": 0.2656238497477021,
+     "sortino": 0.5745426029585541,
+     "calmar": 6.686621967662205,
+     "maxDrawdown": 0.11092750915923044,
+     "consistency": 0.8727208715374714,
+     "periodReturn": 0.7417303195621607,
+     "annualisedReturn": 8.66316145416035,
+     "annualisedVol": 0.47885209994645767,
+     "realizedVol": 0.025064264449453595,
+     "allTimeMaxDrawdown": 0.08626068336751753,
+     "lookbackDays": 89.28668700231482,
+     "coveredDays": 89.2866870023148,
+     "skippedTimeShare": 0.0,
+     "fineTimeShare": 0.33967386105939285,
      "flags": []
     },
     "percentiles": {
-     "sortino": 0.0625,
-     "calmar": 0.125,
-     "negMaxDrawdown": 0.625,
-     "pnlConsistency": 0.125
+     "sharpe": 0.7333333333333333,
+     "sortino": 0.8,
+     "calmar": 0.6666666666666666,
+     "negMaxDrawdown": 0.6,
+     "consistency": 0.8
     },
-    "score": 0.234375,
-    "rank": 17,
+    "scoreNumerator": 132,
+    "score": 0.7333333333333333,
+    "rank": 5,
+    "cloneOf": {
+     "address": "addr-04",
+     "correlation": 0.9441653144341694
+    },
+    "clones": [],
+    "finalist": false,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-18",
+    "kind": "trader",
+    "pool": "trader",
+    "activeDays": 509.2701021527778,
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "stillActive": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass",
+     "minCoverage": "pass",
+     "noRuin": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sharpe": 0.2078370915129886,
+     "sortino": 0.5352432315519613,
+     "calmar": 9.591099056257189,
+     "maxDrawdown": 0.12938913925565432,
+     "consistency": 0.8552083478882179,
+     "periodReturn": 1.240984051404836,
+     "annualisedReturn": 26.02834661553104,
+     "annualisedVol": 0.9491323728866949,
+     "realizedVol": 0.04967985896737113,
+     "allTimeMaxDrawdown": 0.635318683022932,
+     "lookbackDays": 89.33399168981481,
+     "coveredDays": 89.3339916898148,
+     "skippedTimeShare": 0.0,
+     "fineTimeShare": 0.3394016301508699,
+     "flags": []
+    },
+    "percentiles": {
+     "sharpe": 0.6666666666666666,
+     "sortino": 0.6,
+     "calmar": 0.8666666666666667,
+     "negMaxDrawdown": 0.4666666666666667,
+     "consistency": 0.6
+    },
+    "scoreNumerator": 114,
+    "score": 0.6333333333333333,
+    "rank": 6,
+    "cloneOf": null,
+    "clones": [
+     "addr-24"
+    ],
+    "finalist": true,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-22",
+    "kind": "trader",
+    "pool": "trader",
+    "activeDays": 124.32166834490741,
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "stillActive": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass",
+     "minCoverage": "pass",
+     "noRuin": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sharpe": 0.1752800208123576,
+     "sortino": 0.7225342876477974,
+     "calmar": 17.95615659793355,
+     "maxDrawdown": 0.3869601982089722,
+     "consistency": 0.8038223598598119,
+     "periodReturn": 6.948317916207711,
+     "annualisedReturn": 4788.396448996474,
+     "annualisedVol": 4.752210455265711,
+     "realizedVol": 0.2487420637469404,
+     "allTimeMaxDrawdown": 0.8759650220236036,
+     "lookbackDays": 89.28679026620371,
+     "coveredDays": 89.28679026620367,
+     "skippedTimeShare": 0.0,
+     "fineTimeShare": 0.339052404585751,
+     "flags": []
+    },
+    "percentiles": {
+     "sharpe": 0.6,
+     "sortino": 0.9333333333333333,
+     "calmar": 0.9333333333333333,
+     "negMaxDrawdown": 0.13333333333333333,
+     "consistency": 0.5333333333333333
+    },
+    "scoreNumerator": 110,
+    "score": 0.6111111111111112,
+    "rank": 7,
+    "cloneOf": null,
+    "clones": [],
+    "finalist": true,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-13",
+    "kind": "trader",
+    "pool": "trader",
+    "activeDays": 425.3520198611111,
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "stillActive": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass",
+     "minCoverage": "pass",
+     "noRuin": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sharpe": 0.14912849232127692,
+     "sortino": 0.3325121803984875,
+     "calmar": 4.651484309022531,
+     "maxDrawdown": 0.03615267179254963,
+     "consistency": 0.8569846009341084,
+     "periodReturn": 0.16816358557228606,
+     "annualisedReturn": 0.8873528803616673,
+     "annualisedVol": 0.23343714383256328,
+     "realizedVol": 0.01221865855030962,
+     "allTimeMaxDrawdown": 0.41975415366114976,
+     "lookbackDays": 89.31868689814814,
+     "coveredDays": 89.31868689814816,
+     "skippedTimeShare": 0.0,
+     "fineTimeShare": 0.3389774425635685,
+     "flags": []
+    },
+    "percentiles": {
+     "sharpe": 0.5333333333333333,
+     "sortino": 0.4666666666666667,
+     "calmar": 0.5333333333333333,
+     "negMaxDrawdown": 0.8,
+     "consistency": 0.6666666666666666
+    },
+    "scoreNumerator": 110,
+    "score": 0.6111111111111112,
+    "rank": 8,
+    "cloneOf": null,
+    "clones": [],
+    "finalist": true,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-07",
+    "kind": "trader",
+    "pool": "trader",
+    "activeDays": 817.2839348032408,
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "stillActive": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass",
+     "minCoverage": "pass",
+     "noRuin": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sharpe": 0.13623160741370102,
+     "sortino": 0.335538197324848,
+     "calmar": 4.128457003548835,
+     "maxDrawdown": 0.023412503387107608,
+     "consistency": 0.7868824907417075,
+     "periodReturn": 0.09665751357911523,
+     "annualisedReturn": 0.5057380271629621,
+     "annualisedVol": 0.1627488700399855,
+     "realizedVol": 0.008518665195345413,
+     "allTimeMaxDrawdown": 0.795585977168035,
+     "lookbackDays": 82.28393577546296,
+     "coveredDays": 82.28393577546296,
+     "skippedTimeShare": 0.0,
+     "fineTimeShare": 0.36821068775818244,
+     "flags": [
+      "coarse-history"
+     ]
+    },
+    "percentiles": {
+     "sharpe": 0.4,
+     "sortino": 0.5333333333333333,
+     "calmar": 0.4666666666666667,
+     "negMaxDrawdown": 0.8666666666666667,
+     "consistency": 0.4666666666666667
+    },
+    "scoreNumerator": 96,
+    "score": 0.5333333333333333,
+    "rank": 9,
+    "cloneOf": null,
+    "clones": [],
+    "finalist": true,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-24",
+    "kind": "trader",
+    "pool": "trader",
+    "activeDays": 635.347909988426,
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "stillActive": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass",
+     "minCoverage": "pass",
+     "noRuin": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sharpe": 0.14544905683461404,
+     "sortino": 0.3134583447602186,
+     "calmar": 3.0714759762714294,
+     "maxDrawdown": 0.22847184088108993,
+     "consistency": 0.7546437466897585,
+     "periodReturn": 0.7017457705207764,
+     "annualisedReturn": 7.782276174718843,
+     "annualisedVol": 0.9343293393146292,
+     "realizedVol": 0.048905032777518606,
+     "allTimeMaxDrawdown": 0.8411198826735135,
+     "lookbackDays": 89.31318876157407,
+     "coveredDays": 89.31318876157403,
+     "skippedTimeShare": 0.0,
+     "fineTimeShare": 0.33893674678137214,
+     "flags": []
+    },
+    "percentiles": {
+     "sharpe": 0.4666666666666667,
+     "sortino": 0.4,
+     "calmar": 0.4,
+     "negMaxDrawdown": 0.2,
+     "consistency": 0.26666666666666666
+    },
+    "scoreNumerator": 60,
+    "score": 0.3333333333333333,
+    "rank": 10,
+    "cloneOf": {
+     "address": "addr-18",
+     "correlation": 0.9494394442010873
+    },
+    "clones": [],
+    "finalist": false,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-23",
+    "kind": "trader",
+    "pool": "trader",
+    "activeDays": 635.2701286689814,
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "stillActive": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass",
+     "minCoverage": "pass",
+     "noRuin": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sharpe": 0.12175930276064469,
+     "sortino": 0.28179887631274025,
+     "calmar": 2.6145587430618686,
+     "maxDrawdown": 0.17005624231806482,
+     "consistency": 0.766037712939571,
+     "periodReturn": 0.44462203516494414,
+     "annualisedReturn": 3.496078002073129,
+     "annualisedVol": 0.7722837590510865,
+     "realizedVol": 0.04042317945152352,
+     "allTimeMaxDrawdown": 0.560334076826474,
+     "lookbackDays": 89.31874,
+     "coveredDays": 89.31874,
+     "skippedTimeShare": 0.0,
+     "fineTimeShare": 0.338977835555251,
+     "flags": []
+    },
+    "percentiles": {
+     "sharpe": 0.3333333333333333,
+     "sortino": 0.26666666666666666,
+     "calmar": 0.3333333333333333,
+     "negMaxDrawdown": 0.3333333333333333,
+     "consistency": 0.3333333333333333
+    },
+    "scoreNumerator": 58,
+    "score": 0.32222222222222224,
+    "rank": 11,
+    "cloneOf": null,
+    "clones": [
+     "addr-19"
+    ],
+    "finalist": true,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-16",
+    "kind": "trader",
+    "pool": "trader",
+    "activeDays": 1034.2791204166667,
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "stillActive": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass",
+     "minCoverage": "pass",
+     "noRuin": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sharpe": 0.11701870562947408,
+     "sortino": 0.21168813130039785,
+     "calmar": 2.0790190489671247,
+     "maxDrawdown": 0.19818417402602173,
+     "consistency": 0.7722826954241577,
+     "periodReturn": 0.4120286730039149,
+     "annualisedReturn": 3.6191393604028317,
+     "annualisedVol": 0.8394735162268353,
+     "realizedVol": 0.04394005207740496,
+     "allTimeMaxDrawdown": 0.8536816912169651,
+     "lookbackDays": 82.29925900462963,
+     "coveredDays": 82.2992590046296,
+     "skippedTimeShare": 0.0,
+     "fineTimeShare": 0.3678220354200914,
+     "flags": [
+      "coarse-history"
+     ]
+    },
+    "percentiles": {
+     "sharpe": 0.2,
+     "sortino": 0.13333333333333333,
+     "calmar": 0.2,
+     "negMaxDrawdown": 0.26666666666666666,
+     "consistency": 0.4
+    },
+    "scoreNumerator": 48,
+    "score": 0.26666666666666666,
+    "rank": 12,
+    "cloneOf": null,
+    "clones": [
+     "addr-17"
+    ],
+    "finalist": true,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-11",
+    "kind": "trader",
+    "pool": "trader",
+    "activeDays": 649.2690534375,
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "stillActive": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass",
+     "minCoverage": "pass",
+     "noRuin": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sharpe": 0.07084437707979875,
+     "sortino": 0.10890146439784991,
+     "calmar": 0.9772007588956775,
+     "maxDrawdown": 2.529981925764815e-07,
+     "consistency": 0.6247465606499907,
+     "periodReturn": 2.4723002578497244e-07,
+     "annualisedReturn": 1.0101592076150467e-06,
+     "annualisedVol": 7.463420507282384e-07,
+     "realizedVol": 3.906532837861988e-08,
+     "allTimeMaxDrawdown": 6.336576970339695e-07,
+     "lookbackDays": 89.3314570138889,
+     "coveredDays": 89.33145701388884,
+     "skippedTimeShare": 0.0,
+     "fineTimeShare": 0.33922428158752904,
+     "flags": []
+    },
+    "percentiles": {
+     "sharpe": 0.06666666666666667,
+     "sortino": 0.06666666666666667,
+     "calmar": 0.13333333333333333,
+     "negMaxDrawdown": 1.0,
+     "consistency": 0.13333333333333333
+    },
+    "scoreNumerator": 46,
+    "score": 0.25555555555555554,
+    "rank": 13,
+    "cloneOf": null,
+    "clones": [],
+    "finalist": true,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-19",
+    "kind": "trader",
+    "pool": "trader",
+    "activeDays": 537.3048285416667,
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "stillActive": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass",
+     "minCoverage": "pass",
+     "noRuin": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sharpe": 0.10630935821499916,
+     "sortino": 0.22376583538817163,
+     "calmar": 2.281818623340204,
+     "maxDrawdown": 0.14907322301468495,
+     "consistency": 0.7346310121095868,
+     "periodReturn": 0.34015805651625564,
+     "annualisedReturn": 2.309352058940336,
+     "annualisedVol": 0.7118977378842808,
+     "realizedVol": 0.03726243064464901,
+     "allTimeMaxDrawdown": 0.930622858812043,
+     "lookbackDays": 89.29788458333333,
+     "coveredDays": 89.29788458333333,
+     "skippedTimeShare": 0.0,
+     "fineTimeShare": 0.3392900614246488,
+     "flags": []
+    },
+    "percentiles": {
+     "sharpe": 0.13333333333333333,
+     "sortino": 0.2,
+     "calmar": 0.26666666666666666,
+     "negMaxDrawdown": 0.4,
+     "consistency": 0.2
+    },
+    "scoreNumerator": 42,
+    "score": 0.23333333333333334,
+    "rank": 14,
+    "cloneOf": {
+     "address": "addr-23",
+     "correlation": 0.9759277477039583
+    },
+    "clones": [],
+    "finalist": false,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-17",
+    "kind": "trader",
+    "pool": "trader",
+    "activeDays": 285.2841952199074,
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "stillActive": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass",
+     "minCoverage": "pass",
+     "noRuin": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sharpe": 0.12072242890391137,
+     "sortino": 0.2904303570040566,
+     "calmar": 0.8008159587820959,
+     "maxDrawdown": 0.7944393603988515,
+     "consistency": 0.41091461646038296,
+     "periodReturn": 0.6361997180920413,
+     "annualisedReturn": 6.475195824215882,
+     "annualisedVol": 5.148171184414814,
+     "realizedVol": 0.26946759555123084,
+     "allTimeMaxDrawdown": 0.9536792535049562,
+     "lookbackDays": 89.34093135416667,
+     "coveredDays": 89.34093135416663,
+     "skippedTimeShare": 0.0,
+     "fineTimeShare": 0.33883110461800137,
+     "flags": []
+    },
+    "percentiles": {
+     "sharpe": 0.26666666666666666,
+     "sortino": 0.3333333333333333,
+     "calmar": 0.06666666666666667,
+     "negMaxDrawdown": 0.06666666666666667,
+     "consistency": 0.06666666666666667
+    },
+    "scoreNumerator": 26,
+    "score": 0.14444444444444443,
+    "rank": 15,
+    "cloneOf": {
+     "address": "addr-16",
+     "correlation": 0.9128761183824236
+    },
+    "clones": [],
+    "finalist": false,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-14",
+    "kind": "trader",
+    "pool": "trader",
+    "activeDays": 565.2687197222223,
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "stillActive": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass",
+     "minCoverage": "pass",
+     "noRuin": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sharpe": 0.05471918894421774,
+     "sortino": 0.09574197724626984,
+     "calmar": -0.7856716045486837,
+     "maxDrawdown": 0.9477040276500781,
+     "consistency": 0.0,
+     "periodReturn": -0.744584144041087,
+     "annualisedReturn": -0.9976530569448746,
+     "annualisedVol": 4.958690300831129,
+     "realizedVol": 0.25954971281710765,
+     "allTimeMaxDrawdown": 0.9999999999864656,
+     "lookbackDays": 89.279803125,
+     "coveredDays": 82.2798034490741,
+     "skippedTimeShare": 0.07840518718578801,
+     "fineTimeShare": 0.33946738301216633,
+     "flags": [
+      "dust-equity"
+     ]
+    },
+    "percentiles": {
+     "sharpe": 0.0,
+     "sortino": 0.0,
+     "calmar": 0.0,
+     "negMaxDrawdown": 0.0,
+     "consistency": 0.0
+    },
+    "scoreNumerator": 0,
+    "score": 0.0,
+    "rank": 16,
+    "cloneOf": null,
+    "clones": [],
     "finalist": true,
     "passthrough": {
      "avgLeverage": null,
@@ -602,25 +888,42 @@
    {
     "address": "addr-01",
     "kind": "trader",
+    "pool": "trader",
+    "activeDays": 432.27973721064814,
     "filters": {
      "minAccountValue": "fail",
      "minActiveDays": "pass",
+     "stillActive": "pass",
      "minTrades": "pass",
      "notClosed": "pass",
-     "minMonthPoints": "pass"
+     "minMonthPoints": "pass",
+     "minCoverage": "pass",
+     "noRuin": "pass"
     },
     "eligible": false,
     "metrics": {
-     "sortino": 0.21386883479601979,
-     "calmar": 1.6690921136768908,
-     "maxDrawdown": 3.704200532976421e-05,
-     "pnlConsistency": 0.5483870967741935,
-     "realizedVol": 1.6171220483715634e-05,
+     "sharpe": 0.18631335871584873,
+     "sortino": 0.46625117481139616,
+     "calmar": 7.630785721321498,
+     "maxDrawdown": 3.7042005329920074e-05,
+     "consistency": 0.9132754130178644,
+     "periodReturn": 0.0002826596053606689,
+     "annualisedReturn": 0.001156004331005489,
+     "annualisedVol": 0.000324595020266449,
+     "realizedVol": 1.6990079876111467e-05,
+     "allTimeMaxDrawdown": 0.6555095379586925,
+     "lookbackDays": 89.28668158564815,
+     "coveredDays": 89.28668158564814,
+     "skippedTimeShare": 0.0,
+     "fineTimeShare": 0.33967382100004107,
      "flags": []
     },
     "percentiles": null,
+    "scoreNumerator": null,
     "score": null,
     "rank": null,
+    "cloneOf": null,
+    "clones": [],
     "finalist": false,
     "passthrough": {
      "avgLeverage": null,
@@ -632,25 +935,42 @@
    {
     "address": "addr-03",
     "kind": "trader",
+    "pool": "trader",
+    "activeDays": 257.3644696412037,
     "filters": {
      "minAccountValue": "pass",
      "minActiveDays": "pass",
+     "stillActive": "pass",
      "minTrades": "fail",
      "notClosed": "pass",
-     "minMonthPoints": "pass"
+     "minMonthPoints": "pass",
+     "minCoverage": "pass",
+     "noRuin": "pass"
     },
     "eligible": false,
     "metrics": {
-     "sortino": 0.04338361184926281,
-     "calmar": 0.0808378587894303,
+     "sharpe": 0.2565809099081418,
+     "sortino": 0.5593127808994023,
+     "calmar": 6.353140810840507,
      "maxDrawdown": 0.11645135061840683,
-     "pnlConsistency": 0.41935483870967744,
-     "realizedVol": 0.0344142852288095,
+     "consistency": 0.8743704269397263,
+     "periodReturn": 0.7398318280912974,
+     "annualisedReturn": 8.61475704432726,
+     "annualisedVol": 0.4972617482033904,
+     "realizedVol": 0.026027869479868578,
+     "allTimeMaxDrawdown": 0.47376473841147937,
+     "lookbackDays": 89.30891469907408,
+     "coveredDays": 89.30891469907407,
+     "skippedTimeShare": 0.0,
+     "fineTimeShare": 0.3390606287498338,
      "flags": []
     },
     "percentiles": null,
+    "scoreNumerator": null,
     "score": null,
     "rank": null,
+    "cloneOf": null,
+    "clones": [],
     "finalist": false,
     "passthrough": {
      "avgLeverage": null,
@@ -662,25 +982,92 @@
    {
     "address": "addr-05",
     "kind": "trader",
+    "pool": "trader",
+    "activeDays": 96.27559060185185,
     "filters": {
      "minAccountValue": "pass",
      "minActiveDays": "pass",
+     "stillActive": "pass",
      "minTrades": "unknown",
      "notClosed": "pass",
-     "minMonthPoints": "pass"
+     "minMonthPoints": "pass",
+     "minCoverage": "pass",
+     "noRuin": "pass"
     },
     "eligible": false,
     "metrics": {
-     "sortino": 0.24622404594240224,
-     "calmar": 1.231829702646091,
-     "maxDrawdown": 0.055669481838942186,
-     "pnlConsistency": 0.5161290322580645,
-     "realizedVol": 0.019855180688997626,
+     "sharpe": -0.17950706125233257,
+     "sortino": -0.15781944982694748,
+     "calmar": -0.971146250034474,
+     "maxDrawdown": 0.8937583384934825,
+     "consistency": 0.0,
+     "periodReturn": -0.8679700588649876,
+     "annualisedReturn": -0.9997459605001079,
+     "annualisedVol": 1.6040115383921556,
+     "realizedVol": 0.08395780113051853,
+     "allTimeMaxDrawdown": 0.8973573740493074,
+     "lookbackDays": 89.27559030092593,
+     "coveredDays": 89.27559030092588,
+     "skippedTimeShare": 0.0,
+     "fineTimeShare": 0.3395917877733749,
      "flags": []
     },
     "percentiles": null,
+    "scoreNumerator": null,
     "score": null,
     "rank": null,
+    "cloneOf": null,
+    "clones": [],
+    "finalist": false,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-08",
+    "kind": "trader",
+    "pool": "trader",
+    "activeDays": 460.34921862268516,
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "stillActive": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass",
+     "minCoverage": "fail",
+     "noRuin": "pass"
+    },
+    "eligible": false,
+    "metrics": {
+     "sharpe": -0.06677517334925594,
+     "sortino": -0.09089887894703737,
+     "calmar": -0.284021803422912,
+     "maxDrawdown": 0.02477477360062234,
+     "consistency": 0.0,
+     "periodReturn": -0.0070365758774431075,
+     "annualisedReturn": -0.1658903091421402,
+     "annualisedVol": 0.1349920517225385,
+     "realizedVol": 0.007065806923111212,
+     "allTimeMaxDrawdown": 0.024774750976623197,
+     "lookbackDays": 89.3353291550926,
+     "coveredDays": 14.20929416666667,
+     "skippedTimeShare": 0.8409442904497695,
+     "fineTimeShare": 0.3392560554033299,
+     "flags": [
+      "dust-equity",
+      "low-coverage"
+     ]
+    },
+    "percentiles": null,
+    "scoreNumerator": null,
+    "score": null,
+    "rank": null,
+    "cloneOf": null,
+    "clones": [],
     "finalist": false,
     "passthrough": {
      "avgLeverage": null,
@@ -692,28 +1079,42 @@
    {
     "address": "addr-10",
     "kind": "trader",
+    "pool": "trader",
+    "activeDays": 320.3145061574074,
     "filters": {
      "minAccountValue": "pass",
      "minActiveDays": "pass",
+     "stillActive": "fail",
      "minTrades": "unknown",
      "notClosed": "pass",
-     "minMonthPoints": "pass"
+     "minMonthPoints": "pass",
+     "minCoverage": "pass",
+     "noRuin": "pass"
     },
     "eligible": false,
     "metrics": {
+     "sharpe": null,
      "sortino": null,
      "calmar": null,
      "maxDrawdown": 0.0,
-     "pnlConsistency": 0.0,
+     "consistency": null,
+     "periodReturn": 0.0,
+     "annualisedReturn": 0.0,
+     "annualisedVol": 0.0,
      "realizedVol": 0.0,
-     "flags": [
-      "no-downside",
-      "no-drawdown"
-     ]
+     "allTimeMaxDrawdown": 0.6302766658955853,
+     "lookbackDays": 89.28672833333333,
+     "coveredDays": 89.28672833333333,
+     "skippedTimeShare": 0.0,
+     "fineTimeShare": 0.3396741667257823,
+     "flags": []
     },
     "percentiles": null,
+    "scoreNumerator": null,
     "score": null,
     "rank": null,
+    "cloneOf": null,
+    "clones": [],
     "finalist": false,
     "passthrough": {
      "avgLeverage": null,
@@ -725,25 +1126,42 @@
    {
     "address": "addr-12",
     "kind": "trader",
+    "pool": "trader",
+    "activeDays": 439.3242367824074,
     "filters": {
      "minAccountValue": "pass",
      "minActiveDays": "pass",
+     "stillActive": "pass",
      "minTrades": "fail",
      "notClosed": "pass",
-     "minMonthPoints": "pass"
+     "minMonthPoints": "pass",
+     "minCoverage": "pass",
+     "noRuin": "pass"
     },
     "eligible": false,
     "metrics": {
-     "sortino": 0.1787675631848747,
-     "calmar": 0.7132952371509614,
-     "maxDrawdown": 0.1268639173684079,
-     "pnlConsistency": 0.4838709677419355,
-     "realizedVol": 0.034233601914445945,
+     "sharpe": 0.10817847825590256,
+     "sortino": 0.23338807119041993,
+     "calmar": 2.3012886431570627,
+     "maxDrawdown": 0.16743635995506312,
+     "consistency": 0.7355023332718086,
+     "periodReturn": 0.38531939361614476,
+     "annualisedReturn": 2.789460793423641,
+     "annualisedVol": 0.79267377689935,
+     "realizedVol": 0.041490441763905775,
+     "allTimeMaxDrawdown": 0.6537911011380252,
+     "lookbackDays": 89.29784854166667,
+     "coveredDays": 89.29784854166665,
+     "skippedTimeShare": 0.0,
+     "fineTimeShare": 0.33928979475431176,
      "flags": []
     },
     "percentiles": null,
+    "scoreNumerator": null,
     "score": null,
     "rank": null,
+    "cloneOf": null,
+    "clones": [],
     "finalist": false,
     "passthrough": {
      "avgLeverage": null,
@@ -755,25 +1173,45 @@
    {
     "address": "addr-15",
     "kind": "trader",
+    "pool": "trader",
+    "activeDays": 82.2923086574074,
     "filters": {
      "minAccountValue": "pass",
      "minActiveDays": "pass",
+     "stillActive": "pass",
      "minTrades": "unknown",
      "notClosed": "pass",
-     "minMonthPoints": "pass"
+     "minMonthPoints": "pass",
+     "minCoverage": "pass",
+     "noRuin": "pass"
     },
     "eligible": false,
     "metrics": {
-     "sortino": -0.13721091769312774,
-     "calmar": -0.4837740792639242,
-     "maxDrawdown": 0.15559723412625248,
-     "pnlConsistency": 0.5806451612903226,
-     "realizedVol": 0.020756804483772828,
-     "flags": []
+     "sharpe": -0.14058183263995072,
+     "sortino": -0.1310992358761903,
+     "calmar": -0.9757213165060283,
+     "maxDrawdown": 0.689557933158541,
+     "consistency": 0.0,
+     "periodReturn": -0.6728163743486275,
+     "annualisedReturn": -0.9955884749424098,
+     "annualisedVol": 1.3323657911113571,
+     "realizedVol": 0.06973921287085198,
+     "allTimeMaxDrawdown": 0.7182602755187535,
+     "lookbackDays": 82.2923086574074,
+     "coveredDays": 75.18902712962965,
+     "skippedTimeShare": 0.0863176844065656,
+     "fineTimeShare": 0.3687812803712997,
+     "flags": [
+      "dust-equity",
+      "short-history"
+     ]
     },
     "percentiles": null,
+    "scoreNumerator": null,
     "score": null,
     "rank": null,
+    "cloneOf": null,
+    "clones": [],
     "finalist": false,
     "passthrough": {
      "avgLeverage": null,
@@ -785,25 +1223,42 @@
    {
     "address": "addr-20",
     "kind": "trader",
+    "pool": "trader",
+    "activeDays": 649.2881698726852,
     "filters": {
      "minAccountValue": "pass",
      "minActiveDays": "pass",
+     "stillActive": "pass",
      "minTrades": "unknown",
      "notClosed": "pass",
-     "minMonthPoints": "pass"
+     "minMonthPoints": "pass",
+     "minCoverage": "pass",
+     "noRuin": "pass"
     },
     "eligible": false,
     "metrics": {
-     "sortino": 0.1687494426541529,
-     "calmar": 0.7081438354746777,
-     "maxDrawdown": 0.1232765116728616,
-     "pnlConsistency": 0.41935483870967744,
-     "realizedVol": 0.035359407479687896,
+     "sharpe": 0.1097453180105035,
+     "sortino": 0.22736980685981506,
+     "calmar": 1.96780075318483,
+     "maxDrawdown": 0.19620052537085064,
+     "consistency": 0.7398037779491398,
+     "periodReturn": 0.38608354160001923,
+     "annualisedReturn": 2.797378993851936,
+     "annualisedVol": 0.7789184825172097,
+     "realizedVol": 0.04077045674971747,
+     "allTimeMaxDrawdown": 0.6143281925783018,
+     "lookbackDays": 89.30900333333334,
+     "coveredDays": 89.30900333333335,
+     "skippedTimeShare": 0.0,
+     "fineTimeShare": 0.33968333610813545,
      "flags": []
     },
     "percentiles": null,
+    "scoreNumerator": null,
     "score": null,
     "rank": null,
+    "cloneOf": null,
+    "clones": [],
     "finalist": false,
     "passthrough": {
      "avgLeverage": null,
@@ -814,23 +1269,288 @@
    }
   ],
   "finalists": [
-   "addr-07",
-   "addr-18",
-   "addr-14",
-   "addr-11",
-   "addr-24",
-   "addr-08",
-   "addr-13",
-   "addr-16",
    "addr-21",
-   "addr-19",
-   "addr-06",
-   "addr-22",
-   "addr-23",
    "addr-04",
-   "addr-17",
-   "addr-09",
-   "addr-02"
+   "addr-18",
+   "addr-22",
+   "addr-13",
+   "addr-07",
+   "addr-23",
+   "addr-16",
+   "addr-11",
+   "addr-14"
+  ],
+  "correlations": [
+   {
+    "a": "addr-21",
+    "b": "addr-04",
+    "rho": 0.13251861551290117,
+    "linked": false
+   },
+   {
+    "a": "addr-21",
+    "b": "addr-18",
+    "rho": -0.04155052194762408,
+    "linked": false
+   },
+   {
+    "a": "addr-21",
+    "b": "addr-22",
+    "rho": 0.10869921041237662,
+    "linked": false
+   },
+   {
+    "a": "addr-21",
+    "b": "addr-13",
+    "rho": 0.18004892329860378,
+    "linked": false
+   },
+   {
+    "a": "addr-21",
+    "b": "addr-07",
+    "rho": 0.05029336533885961,
+    "linked": false
+   },
+   {
+    "a": "addr-21",
+    "b": "addr-23",
+    "rho": 0.27388056421749996,
+    "linked": false
+   },
+   {
+    "a": "addr-21",
+    "b": "addr-16",
+    "rho": 0.1802834431170171,
+    "linked": false
+   },
+   {
+    "a": "addr-21",
+    "b": "addr-11",
+    "rho": 0.02295260343886477,
+    "linked": false
+   },
+   {
+    "a": "addr-21",
+    "b": "addr-14",
+    "rho": 0.20669349050703617,
+    "linked": false
+   },
+   {
+    "a": "addr-04",
+    "b": "addr-18",
+    "rho": 0.03346073795366173,
+    "linked": false
+   },
+   {
+    "a": "addr-04",
+    "b": "addr-22",
+    "rho": 0.44903045888306264,
+    "linked": false
+   },
+   {
+    "a": "addr-04",
+    "b": "addr-13",
+    "rho": 0.5803430877181049,
+    "linked": false
+   },
+   {
+    "a": "addr-04",
+    "b": "addr-07",
+    "rho": -0.04341254828149219,
+    "linked": false
+   },
+   {
+    "a": "addr-04",
+    "b": "addr-23",
+    "rho": 0.4545468825528919,
+    "linked": false
+   },
+   {
+    "a": "addr-04",
+    "b": "addr-16",
+    "rho": 0.5379238008327425,
+    "linked": false
+   },
+   {
+    "a": "addr-04",
+    "b": "addr-11",
+    "rho": 0.3827608419785561,
+    "linked": false
+   },
+   {
+    "a": "addr-04",
+    "b": "addr-14",
+    "rho": -0.05453738459243906,
+    "linked": false
+   },
+   {
+    "a": "addr-18",
+    "b": "addr-22",
+    "rho": 0.3208135051095007,
+    "linked": false
+   },
+   {
+    "a": "addr-18",
+    "b": "addr-13",
+    "rho": 0.28190494392086307,
+    "linked": false
+   },
+   {
+    "a": "addr-18",
+    "b": "addr-07",
+    "rho": 0.3923751252797,
+    "linked": false
+   },
+   {
+    "a": "addr-18",
+    "b": "addr-23",
+    "rho": 0.5160246567242787,
+    "linked": false
+   },
+   {
+    "a": "addr-18",
+    "b": "addr-16",
+    "rho": 0.6296781685256938,
+    "linked": false
+   },
+   {
+    "a": "addr-18",
+    "b": "addr-11",
+    "rho": 0.26721888889182915,
+    "linked": false
+   },
+   {
+    "a": "addr-18",
+    "b": "addr-14",
+    "rho": 0.16860014489919867,
+    "linked": false
+   },
+   {
+    "a": "addr-22",
+    "b": "addr-13",
+    "rho": 0.7195763294516951,
+    "linked": false
+   },
+   {
+    "a": "addr-22",
+    "b": "addr-07",
+    "rho": 0.21123745125547433,
+    "linked": false
+   },
+   {
+    "a": "addr-22",
+    "b": "addr-23",
+    "rho": 0.4613500559436899,
+    "linked": false
+   },
+   {
+    "a": "addr-22",
+    "b": "addr-16",
+    "rho": 0.6103634601665571,
+    "linked": false
+   },
+   {
+    "a": "addr-22",
+    "b": "addr-11",
+    "rho": 0.5022925050007343,
+    "linked": false
+   },
+   {
+    "a": "addr-22",
+    "b": "addr-14",
+    "rho": 0.11925837275150895,
+    "linked": false
+   },
+   {
+    "a": "addr-13",
+    "b": "addr-07",
+    "rho": 0.12264748462398481,
+    "linked": false
+   },
+   {
+    "a": "addr-13",
+    "b": "addr-23",
+    "rho": 0.7287593870956643,
+    "linked": false
+   },
+   {
+    "a": "addr-13",
+    "b": "addr-16",
+    "rho": 0.7148462422840092,
+    "linked": false
+   },
+   {
+    "a": "addr-13",
+    "b": "addr-11",
+    "rho": 0.7298564021089525,
+    "linked": false
+   },
+   {
+    "a": "addr-13",
+    "b": "addr-14",
+    "rho": 0.09832060620130159,
+    "linked": false
+   },
+   {
+    "a": "addr-07",
+    "b": "addr-23",
+    "rho": 0.4205057361571897,
+    "linked": false
+   },
+   {
+    "a": "addr-07",
+    "b": "addr-16",
+    "rho": 0.49690566115757046,
+    "linked": false
+   },
+   {
+    "a": "addr-07",
+    "b": "addr-11",
+    "rho": 0.18538123160688122,
+    "linked": false
+   },
+   {
+    "a": "addr-07",
+    "b": "addr-14",
+    "rho": 0.07289999546379017,
+    "linked": false
+   },
+   {
+    "a": "addr-23",
+    "b": "addr-16",
+    "rho": 0.8863583881736209,
+    "linked": false
+   },
+   {
+    "a": "addr-23",
+    "b": "addr-11",
+    "rho": 0.5413980045595824,
+    "linked": false
+   },
+   {
+    "a": "addr-23",
+    "b": "addr-14",
+    "rho": 0.10020455572440691,
+    "linked": false
+   },
+   {
+    "a": "addr-16",
+    "b": "addr-11",
+    "rho": 0.5523282835282729,
+    "linked": false
+   },
+   {
+    "a": "addr-16",
+    "b": "addr-14",
+    "rho": 0.28558417054052543,
+    "linked": false
+   },
+   {
+    "a": "addr-11",
+    "b": "addr-14",
+    "rho": 0.204367517092027,
+    "linked": false
+   }
   ],
   "funnel": [
    {
@@ -846,6 +1566,10 @@
     "count": 23
    },
    {
+    "stage": "stillActive",
+    "count": 22
+   },
+   {
     "stage": "minTrades",
     "count": 17
    },
@@ -858,511 +1582,135 @@
     "count": 17
    },
    {
-    "stage": "eligible",
-    "count": 17
+    "stage": "minCoverage",
+    "count": 16
+   },
+   {
+    "stage": "noRuin",
+    "count": 16
+   },
+   {
+    "stage": "ranked",
+    "count": 16
+   },
+   {
+    "stage": "distinct",
+    "count": 10
    },
    {
     "stage": "finalists",
-    "count": 17
+    "count": 10
    }
   ],
+  "filterCounts": {
+   "minAccountValue": {
+    "pass": 23,
+    "fail": 1,
+    "unknown": 0
+   },
+   "minActiveDays": {
+    "pass": 24,
+    "fail": 0,
+    "unknown": 0
+   },
+   "stillActive": {
+    "pass": 23,
+    "fail": 1,
+    "unknown": 0
+   },
+   "minTrades": {
+    "pass": 18,
+    "fail": 2,
+    "unknown": 4
+   },
+   "notClosed": {
+    "pass": 24,
+    "fail": 0,
+    "unknown": 0
+   },
+   "minMonthPoints": {
+    "pass": 24,
+    "fail": 0,
+    "unknown": 0
+   },
+   "minCoverage": {
+    "pass": 23,
+    "fail": 1,
+    "unknown": 0
+   },
+   "noRuin": {
+    "pass": 24,
+    "fail": 0,
+    "unknown": 0
+   }
+  },
   "config": {
    "minAccountValue": 10000,
    "minActiveDays": 30,
+   "stillActiveDays": 7,
    "minTrades": 10,
    "minMonthPoints": 25,
+   "lookbackDays": 90,
+   "coarseGridDays": 7,
+   "dustEquityFraction": 0.01,
+   "maxSkippedTimeShare": 0.2,
+   "cloneCorrelation": 0.9,
+   "minOverlapDays": 20,
    "finalists": 25,
-   "allowUnknown": false
+   "finalistSplit": "proportional",
+   "allowUnknown": []
   }
  },
  "permissive": {
   "candidates": [
    {
-    "address": "addr-07",
-    "kind": "trader",
-    "filters": {
-     "minAccountValue": "pass",
-     "minActiveDays": "pass",
-     "minTrades": "pass",
-     "notClosed": "pass",
-     "minMonthPoints": "pass"
-    },
-    "eligible": true,
-    "metrics": {
-     "sortino": 0.436986051363086,
-     "calmar": 2.4676690309619618,
-     "maxDrawdown": 0.023412503387107722,
-     "pnlConsistency": 0.6451612903225806,
-     "realizedVol": 0.007676879945264047,
-     "flags": []
-    },
-    "percentiles": {
-     "sortino": 0.9,
-     "calmar": 0.95,
-     "negMaxDrawdown": 0.85,
-     "pnlConsistency": 0.95
-    },
-    "score": 0.9125,
-    "rank": 1,
-    "finalist": true,
-    "passthrough": {
-     "avgLeverage": null,
-     "timeInMarket": null,
-     "medianHoldHours": null,
-     "makerShare": null
-    }
-   },
-   {
-    "address": "addr-05",
-    "kind": "trader",
-    "filters": {
-     "minAccountValue": "pass",
-     "minActiveDays": "pass",
-     "minTrades": "unknown",
-     "notClosed": "pass",
-     "minMonthPoints": "pass"
-    },
-    "eligible": true,
-    "metrics": {
-     "sortino": 0.24622404594240224,
-     "calmar": 1.231829702646091,
-     "maxDrawdown": 0.055669481838942186,
-     "pnlConsistency": 0.5161290322580645,
-     "realizedVol": 0.019855180688997626,
-     "flags": []
-    },
-    "percentiles": {
-     "sortino": 0.75,
-     "calmar": 0.8,
-     "negMaxDrawdown": 0.75,
-     "pnlConsistency": 0.675
-    },
-    "score": 0.74375,
-    "rank": 2,
-    "finalist": true,
-    "passthrough": {
-     "avgLeverage": null,
-     "timeInMarket": null,
-     "medianHoldHours": null,
-     "makerShare": null
-    }
-   },
-   {
-    "address": "addr-18",
-    "kind": "trader",
-    "filters": {
-     "minAccountValue": "pass",
-     "minActiveDays": "pass",
-     "minTrades": "pass",
-     "notClosed": "pass",
-     "minMonthPoints": "pass"
-    },
-    "eligible": true,
-    "metrics": {
-     "sortino": 0.3436003450064607,
-     "calmar": 2.210862524673416,
-     "maxDrawdown": 0.1190124264625108,
-     "pnlConsistency": 0.5161290322580645,
-     "realizedVol": 0.05707500654204713,
-     "flags": []
-    },
-    "percentiles": {
-     "sortino": 0.85,
-     "calmar": 0.85,
-     "negMaxDrawdown": 0.45,
-     "pnlConsistency": 0.675
-    },
-    "score": 0.70625,
-    "rank": 3,
-    "finalist": true,
-    "passthrough": {
-     "avgLeverage": null,
-     "timeInMarket": null,
-     "medianHoldHours": null,
-     "makerShare": null
-    }
-   },
-   {
-    "address": "addr-14",
-    "kind": "trader",
-    "filters": {
-     "minAccountValue": "pass",
-     "minActiveDays": "pass",
-     "minTrades": "pass",
-     "notClosed": "pass",
-     "minMonthPoints": "pass"
-    },
-    "eligible": true,
-    "metrics": {
-     "sortino": 0.6475712155201677,
-     "calmar": 2.309576945867831,
-     "maxDrawdown": 0.8094385527191436,
-     "pnlConsistency": 0.5806451612903226,
-     "realizedVol": 0.4871330321259742,
-     "flags": []
-    },
-    "percentiles": {
-     "sortino": 0.95,
-     "calmar": 0.9,
-     "negMaxDrawdown": 0.0,
-     "pnlConsistency": 0.875
-    },
-    "score": 0.68125,
-    "rank": 4,
-    "finalist": true,
-    "passthrough": {
-     "avgLeverage": null,
-     "timeInMarket": null,
-     "medianHoldHours": null,
-     "makerShare": null
-    }
-   },
-   {
-    "address": "addr-11",
-    "kind": "trader",
-    "filters": {
-     "minAccountValue": "pass",
-     "minActiveDays": "pass",
-     "minTrades": "pass",
-     "notClosed": "pass",
-     "minMonthPoints": "pass"
-    },
-    "eligible": true,
-    "metrics": {
-     "sortino": 0.09924798578441632,
-     "calmar": 0.5177019821687627,
-     "maxDrawdown": 1.537309929773586e-07,
-     "pnlConsistency": 0.5483870967741935,
-     "realizedVol": 4.1725749473091104e-08,
-     "flags": []
-    },
-    "percentiles": {
-     "sortino": 0.35,
-     "calmar": 0.45,
-     "negMaxDrawdown": 0.9,
-     "pnlConsistency": 0.8
-    },
-    "score": 0.625,
-    "rank": 5,
-    "finalist": true,
-    "passthrough": {
-     "avgLeverage": null,
-     "timeInMarket": null,
-     "medianHoldHours": null,
-     "makerShare": null
-    }
-   },
-   {
-    "address": "addr-08",
-    "kind": "trader",
-    "filters": {
-     "minAccountValue": "pass",
-     "minActiveDays": "pass",
-     "minTrades": "pass",
-     "notClosed": "pass",
-     "minMonthPoints": "pass"
-    },
-    "eligible": true,
-    "metrics": {
-     "sortino": 46407.51592919626,
-     "calmar": 198396.09819342953,
-     "maxDrawdown": 0.12453404854986816,
-     "pnlConsistency": 0.3548387096774194,
-     "realizedVol": 4264.9332423750675,
-     "flags": []
-    },
-    "percentiles": {
-     "sortino": 1.0,
-     "calmar": 1.0,
-     "negMaxDrawdown": 0.3,
-     "pnlConsistency": 0.075
-    },
-    "score": 0.59375,
-    "rank": 6,
-    "finalist": false,
-    "passthrough": {
-     "avgLeverage": null,
-     "timeInMarket": null,
-     "medianHoldHours": null,
-     "makerShare": null
-    }
-   },
-   {
-    "address": "addr-24",
-    "kind": "trader",
-    "filters": {
-     "minAccountValue": "pass",
-     "minActiveDays": "pass",
-     "minTrades": "pass",
-     "notClosed": "pass",
-     "minMonthPoints": "pass"
-    },
-    "eligible": true,
-    "metrics": {
-     "sortino": 0.2582458543743587,
-     "calmar": 1.114297504427846,
-     "maxDrawdown": 0.22847184088109007,
-     "pnlConsistency": 0.5161290322580645,
-     "realizedVol": 0.07348132394662583,
-     "flags": []
-    },
-    "percentiles": {
-     "sortino": 0.8,
-     "calmar": 0.75,
-     "negMaxDrawdown": 0.15,
-     "pnlConsistency": 0.675
-    },
-    "score": 0.59375,
-    "rank": 7,
-    "finalist": false,
-    "passthrough": {
-     "avgLeverage": null,
-     "timeInMarket": null,
-     "medianHoldHours": null,
-     "makerShare": null
-    }
-   },
-   {
-    "address": "addr-13",
-    "kind": "trader",
-    "filters": {
-     "minAccountValue": "pass",
-     "minActiveDays": "pass",
-     "minTrades": "pass",
-     "notClosed": "pass",
-     "minMonthPoints": "pass"
-    },
-    "eligible": true,
-    "metrics": {
-     "sortino": 0.15122852439020026,
-     "calmar": 0.97143001439245,
-     "maxDrawdown": 0.036152671792549385,
-     "pnlConsistency": 0.45161290322580644,
-     "realizedVol": 0.013784016516887206,
-     "flags": []
-    },
-    "percentiles": {
-     "sortino": 0.4,
-     "calmar": 0.7,
-     "negMaxDrawdown": 0.8,
-     "pnlConsistency": 0.325
-    },
-    "score": 0.55625,
-    "rank": 8,
-    "finalist": false,
-    "passthrough": {
-     "avgLeverage": null,
-     "timeInMarket": null,
-     "medianHoldHours": null,
-     "makerShare": null
-    }
-   },
-   {
-    "address": "addr-16",
-    "kind": "trader",
-    "filters": {
-     "minAccountValue": "pass",
-     "minActiveDays": "pass",
-     "minTrades": "pass",
-     "notClosed": "pass",
-     "minMonthPoints": "pass"
-    },
-    "eligible": true,
-    "metrics": {
-     "sortino": 0.22531835037547884,
-     "calmar": 0.8740438411458995,
-     "maxDrawdown": 0.12598012920502433,
-     "pnlConsistency": 0.4838709677419355,
-     "realizedVol": 0.03182369891443595,
-     "flags": []
-    },
-    "percentiles": {
-     "sortino": 0.7,
-     "calmar": 0.65,
-     "negMaxDrawdown": 0.25,
-     "pnlConsistency": 0.5
-    },
-    "score": 0.525,
-    "rank": 9,
-    "finalist": false,
-    "passthrough": {
-     "avgLeverage": null,
-     "timeInMarket": null,
-     "medianHoldHours": null,
-     "makerShare": null
-    }
-   },
-   {
     "address": "addr-21",
     "kind": "trader",
+    "pool": "trader",
+    "activeDays": 726.3215062731482,
     "filters": {
      "minAccountValue": "pass",
      "minActiveDays": "pass",
+     "stillActive": "pass",
      "minTrades": "pass",
      "notClosed": "pass",
-     "minMonthPoints": "pass"
+     "minMonthPoints": "pass",
+     "minCoverage": "pass",
+     "noRuin": "pass"
     },
     "eligible": true,
     "metrics": {
-     "sortino": null,
-     "calmar": null,
-     "maxDrawdown": 0.0,
-     "pnlConsistency": 1.0,
-     "realizedVol": 7.661321299817896e-05,
+     "sharpe": 0.43488738696008855,
+     "sortino": 5.772144557225459,
+     "calmar": 52.47418005366981,
+     "maxDrawdown": 8.37176998297009e-05,
+     "consistency": 0.9399688097870007,
+     "periodReturn": 0.004393017654542808,
+     "annualisedReturn": 0.019627023860778747,
+     "annualisedVol": 0.0023398378820036307,
+     "realizedVol": 0.0001224727122423518,
+     "allTimeMaxDrawdown": 0.4854006991267248,
+     "lookbackDays": 82.31456311342592,
+     "coveredDays": 82.31456311342593,
+     "skippedTimeShare": 0.0,
+     "fineTimeShare": 0.3684457658309997,
      "flags": [
-      "no-downside",
-      "no-drawdown"
+      "coarse-history"
      ]
     },
     "percentiles": {
-     "sortino": 0.025,
-     "calmar": 0.025,
-     "negMaxDrawdown": 0.975,
-     "pnlConsistency": 1.0
+     "sharpe": 1.0,
+     "sortino": 1.0,
+     "calmar": 1.0,
+     "negMaxDrawdown": 0.9444444444444444,
+     "consistency": 1.0
     },
-    "score": 0.50625,
-    "rank": 10,
-    "finalist": false,
-    "passthrough": {
-     "avgLeverage": null,
-     "timeInMarket": null,
-     "medianHoldHours": null,
-     "makerShare": null
-    }
-   },
-   {
-    "address": "addr-19",
-    "kind": "trader",
-    "filters": {
-     "minAccountValue": "pass",
-     "minActiveDays": "pass",
-     "minTrades": "pass",
-     "notClosed": "pass",
-     "minMonthPoints": "pass"
-    },
-    "eligible": true,
-    "metrics": {
-     "sortino": 0.1660426743197037,
-     "calmar": 0.717147368640963,
-     "maxDrawdown": 0.11534143878050129,
-     "pnlConsistency": 0.45161290322580644,
-     "realizedVol": 0.0331645752138302,
-     "flags": []
-    },
-    "percentiles": {
-     "sortino": 0.5,
-     "calmar": 0.55,
-     "negMaxDrawdown": 0.5,
-     "pnlConsistency": 0.325
-    },
-    "score": 0.46875,
-    "rank": 11,
-    "finalist": false,
-    "passthrough": {
-     "avgLeverage": null,
-     "timeInMarket": null,
-     "medianHoldHours": null,
-     "makerShare": null
-    }
-   },
-   {
-    "address": "addr-06",
-    "kind": "trader",
-    "filters": {
-     "minAccountValue": "pass",
-     "minActiveDays": "pass",
-     "minTrades": "pass",
-     "notClosed": "pass",
-     "minMonthPoints": "pass"
-    },
-    "eligible": true,
-    "metrics": {
-     "sortino": 0.05660380586283151,
-     "calmar": 0.17190167292590916,
-     "maxDrawdown": 0.10678284328915932,
-     "pnlConsistency": 0.4838709677419355,
-     "realizedVol": 0.03350275217413152,
-     "flags": []
-    },
-    "percentiles": {
-     "sortino": 0.25,
-     "calmar": 0.35,
-     "negMaxDrawdown": 0.675,
-     "pnlConsistency": 0.5
-    },
-    "score": 0.44375,
-    "rank": 12,
-    "finalist": false,
-    "passthrough": {
-     "avgLeverage": null,
-     "timeInMarket": null,
-     "medianHoldHours": null,
-     "makerShare": null
-    }
-   },
-   {
-    "address": "addr-23",
-    "kind": "trader",
-    "filters": {
-     "minAccountValue": "pass",
-     "minActiveDays": "pass",
-     "minTrades": "pass",
-     "notClosed": "pass",
-     "minMonthPoints": "pass"
-    },
-    "eligible": true,
-    "metrics": {
-     "sortino": 0.17928265229521545,
-     "calmar": 0.7623548036179836,
-     "maxDrawdown": 0.12014962287240634,
-     "pnlConsistency": 0.3548387096774194,
-     "realizedVol": 0.03440227536799754,
-     "flags": []
-    },
-    "percentiles": {
-     "sortino": 0.6,
-     "calmar": 0.6,
-     "negMaxDrawdown": 0.4,
-     "pnlConsistency": 0.075
-    },
-    "score": 0.41875,
-    "rank": 13,
-    "finalist": false,
-    "passthrough": {
-     "avgLeverage": null,
-     "timeInMarket": null,
-     "medianHoldHours": null,
-     "makerShare": null
-    }
-   },
-   {
-    "address": "addr-22",
-    "kind": "trader",
-    "filters": {
-     "minAccountValue": "pass",
-     "minActiveDays": "pass",
-     "minTrades": "pass",
-     "notClosed": "pass",
-     "minMonthPoints": "pass"
-    },
-    "eligible": true,
-    "metrics": {
-     "sortino": 0.15459989715452976,
-     "calmar": 0.31644613867748633,
-     "maxDrawdown": 0.3869601982089723,
-     "pnlConsistency": 0.5161290322580645,
-     "realizedVol": 0.14006383936312353,
-     "flags": []
-    },
-    "percentiles": {
-     "sortino": 0.45,
-     "calmar": 0.4,
-     "negMaxDrawdown": 0.1,
-     "pnlConsistency": 0.675
-    },
-    "score": 0.40625,
-    "rank": 14,
-    "finalist": false,
+    "scoreNumerator": 214,
+    "score": 0.9907407407407407,
+    "rank": 1,
+    "cloneOf": null,
+    "clones": [],
+    "finalist": true,
     "passthrough": {
      "avgLeverage": null,
      "timeInMarket": null,
@@ -1373,31 +1721,53 @@
    {
     "address": "addr-04",
     "kind": "trader",
+    "pool": "trader",
+    "activeDays": 250.27558555555555,
     "filters": {
      "minAccountValue": "pass",
      "minActiveDays": "pass",
+     "stillActive": "pass",
      "minTrades": "pass",
      "notClosed": "pass",
-     "minMonthPoints": "pass"
+     "minMonthPoints": "pass",
+     "minCoverage": "pass",
+     "noRuin": "pass"
     },
     "eligible": true,
     "metrics": {
-     "sortino": 0.05727921587381695,
-     "calmar": 0.171901672925905,
-     "maxDrawdown": 0.10678284328915932,
-     "pnlConsistency": 0.45161290322580644,
-     "realizedVol": 0.032962573045014265,
+     "sharpe": 0.2683965560831573,
+     "sortino": 0.5743262206221025,
+     "calmar": 6.908105856222988,
+     "maxDrawdown": 0.10678284328915946,
+     "consistency": 0.8812189284187264,
+     "periodReturn": 0.7376671850699841,
+     "annualisedReturn": 8.567304252474305,
+     "annualisedVol": 0.47197633363653846,
+     "realizedVol": 0.02470437039217844,
+     "allTimeMaxDrawdown": 0.3419838279497058,
+     "lookbackDays": 89.30336356481482,
+     "coveredDays": 89.30336356481479,
+     "skippedTimeShare": 0.0,
+     "fineTimeShare": 0.3394861206061961,
      "flags": []
     },
     "percentiles": {
-     "sortino": 0.3,
-     "calmar": 0.3,
-     "negMaxDrawdown": 0.675,
-     "pnlConsistency": 0.325
+     "sharpe": 0.8888888888888888,
+     "sortino": 0.7777777777777778,
+     "calmar": 0.7777777777777778,
+     "negMaxDrawdown": 0.75,
+     "consistency": 0.9444444444444444
     },
-    "score": 0.4,
-    "rank": 15,
-    "finalist": false,
+    "scoreNumerator": 183,
+    "score": 0.8472222222222222,
+    "rank": 2,
+    "cloneOf": null,
+    "clones": [
+     "addr-06",
+     "addr-09",
+     "addr-02"
+    ],
+    "finalist": true,
     "passthrough": {
      "avgLeverage": null,
      "timeInMarket": null,
@@ -1406,67 +1776,53 @@
     }
    },
    {
-    "address": "addr-20",
+    "address": "addr-06",
     "kind": "trader",
+    "pool": "trader",
+    "activeDays": 236.27559692129628,
     "filters": {
      "minAccountValue": "pass",
      "minActiveDays": "pass",
-     "minTrades": "unknown",
-     "notClosed": "pass",
-     "minMonthPoints": "pass"
-    },
-    "eligible": true,
-    "metrics": {
-     "sortino": 0.1687494426541529,
-     "calmar": 0.7081438354746777,
-     "maxDrawdown": 0.1232765116728616,
-     "pnlConsistency": 0.41935483870967744,
-     "realizedVol": 0.035359407479687896,
-     "flags": []
-    },
-    "percentiles": {
-     "sortino": 0.55,
-     "calmar": 0.5,
-     "negMaxDrawdown": 0.35,
-     "pnlConsistency": 0.175
-    },
-    "score": 0.39375,
-    "rank": 16,
-    "finalist": false,
-    "passthrough": {
-     "avgLeverage": null,
-     "timeInMarket": null,
-     "medianHoldHours": null,
-     "makerShare": null
-    }
-   },
-   {
-    "address": "addr-17",
-    "kind": "trader",
-    "filters": {
-     "minAccountValue": "pass",
-     "minActiveDays": "pass",
+     "stillActive": "pass",
      "minTrades": "pass",
      "notClosed": "pass",
-     "minMonthPoints": "pass"
+     "minMonthPoints": "pass",
+     "minCoverage": "pass",
+     "noRuin": "pass"
     },
     "eligible": true,
     "metrics": {
-     "sortino": 0.18342650739935515,
-     "calmar": -0.05456223350642882,
-     "maxDrawdown": 0.6237114583993778,
-     "pnlConsistency": 0.4838709677419355,
-     "realizedVol": 0.2385667638083962,
+     "sharpe": 0.26635771261492835,
+     "sortino": 0.5591509846163364,
+     "calmar": 6.908105856223001,
+     "maxDrawdown": 0.10678284328915946,
+     "consistency": 0.8795743005998666,
+     "periodReturn": 0.7376671850699854,
+     "annualisedReturn": 8.567301541815858,
+     "annualisedVol": 0.4760303938037685,
+     "realizedVol": 0.024916569599693267,
+     "allTimeMaxDrawdown": 0.24585152838427962,
+     "lookbackDays": 89.30337476851852,
+     "coveredDays": 89.30337476851852,
+     "skippedTimeShare": 0.0,
+     "fineTimeShare": 0.33948620347206554,
      "flags": []
     },
     "percentiles": {
-     "sortino": 0.65,
-     "calmar": 0.15,
-     "negMaxDrawdown": 0.05,
-     "pnlConsistency": 0.5
+     "sharpe": 0.8333333333333334,
+     "sortino": 0.7222222222222222,
+     "calmar": 0.8333333333333334,
+     "negMaxDrawdown": 0.75,
+     "consistency": 0.8888888888888888
     },
-    "score": 0.3375,
-    "rank": 17,
+    "scoreNumerator": 177,
+    "score": 0.8194444444444444,
+    "rank": 3,
+    "cloneOf": {
+     "address": "addr-04",
+     "correlation": 0.9907175889823341
+    },
+    "clones": [],
     "finalist": false,
     "passthrough": {
      "avgLeverage": null,
@@ -1478,65 +1834,51 @@
    {
     "address": "addr-09",
     "kind": "trader",
+    "pool": "trader",
+    "activeDays": 194.2992228125,
     "filters": {
      "minAccountValue": "pass",
      "minActiveDays": "pass",
+     "stillActive": "pass",
      "minTrades": "pass",
      "notClosed": "pass",
-     "minMonthPoints": "pass"
+     "minMonthPoints": "pass",
+     "minCoverage": "pass",
+     "noRuin": "pass"
     },
     "eligible": true,
     "metrics": {
-     "sortino": 0.04446779480970466,
-     "calmar": 0.09402390438246737,
-     "maxDrawdown": 0.11352123887401411,
-     "pnlConsistency": 0.45161290322580644,
-     "realizedVol": 0.031746584590327524,
+     "sharpe": 0.2791678889224462,
+     "sortino": 0.5958055826868883,
+     "calmar": 6.501387898922303,
+     "maxDrawdown": 0.11352123887401401,
+     "consistency": 0.8705234532297262,
+     "periodReturn": 0.7380456086861829,
+     "annualisedReturn": 8.573461669485944,
+     "annualisedVol": 0.4514818936470492,
+     "realizedVol": 0.02363164237511962,
+     "allTimeMaxDrawdown": 0.24436665937431654,
+     "lookbackDays": 89.31311288194445,
+     "coveredDays": 89.31311288194442,
+     "skippedTimeShare": 0.0,
+     "fineTimeShare": 0.3389361851478873,
      "flags": []
     },
     "percentiles": {
-     "sortino": 0.2,
-     "calmar": 0.25,
-     "negMaxDrawdown": 0.55,
-     "pnlConsistency": 0.325
+     "sharpe": 0.9444444444444444,
+     "sortino": 0.8888888888888888,
+     "calmar": 0.6666666666666666,
+     "negMaxDrawdown": 0.6111111111111112,
+     "consistency": 0.7777777777777778
     },
-    "score": 0.33125,
-    "rank": 18,
-    "finalist": false,
-    "passthrough": {
-     "avgLeverage": null,
-     "timeInMarket": null,
-     "medianHoldHours": null,
-     "makerShare": null
-    }
-   },
-   {
-    "address": "addr-15",
-    "kind": "trader",
-    "filters": {
-     "minAccountValue": "pass",
-     "minActiveDays": "pass",
-     "minTrades": "unknown",
-     "notClosed": "pass",
-     "minMonthPoints": "pass"
+    "scoreNumerator": 168,
+    "score": 0.7777777777777778,
+    "rank": 4,
+    "cloneOf": {
+     "address": "addr-04",
+     "correlation": 0.964184434733936
     },
-    "eligible": true,
-    "metrics": {
-     "sortino": -0.13721091769312774,
-     "calmar": -0.4837740792639242,
-     "maxDrawdown": 0.15559723412625248,
-     "pnlConsistency": 0.5806451612903226,
-     "realizedVol": 0.020756804483772828,
-     "flags": []
-    },
-    "percentiles": {
-     "sortino": 0.1,
-     "calmar": 0.1,
-     "negMaxDrawdown": 0.2,
-     "pnlConsistency": 0.875
-    },
-    "score": 0.31875,
-    "rank": 19,
+    "clones": [],
     "finalist": false,
     "passthrough": {
      "avgLeverage": null,
@@ -1548,30 +1890,51 @@
    {
     "address": "addr-02",
     "kind": "trader",
+    "pool": "trader",
+    "activeDays": 117.30057592592593,
     "filters": {
      "minAccountValue": "pass",
      "minActiveDays": "pass",
+     "stillActive": "pass",
      "minTrades": "pass",
      "notClosed": "pass",
-     "minMonthPoints": "pass"
+     "minMonthPoints": "pass",
+     "minCoverage": "pass",
+     "noRuin": "pass"
     },
     "eligible": true,
     "metrics": {
-     "sortino": 0.0327470358484389,
-     "calmar": 0.030764248709239002,
-     "maxDrawdown": 0.11092750915923055,
-     "pnlConsistency": 0.41935483870967744,
-     "realizedVol": 0.03315481430616683,
+     "sharpe": 0.2656238497477021,
+     "sortino": 0.5745426029585541,
+     "calmar": 6.686621967662205,
+     "maxDrawdown": 0.11092750915923044,
+     "consistency": 0.8727208715374714,
+     "periodReturn": 0.7417303195621607,
+     "annualisedReturn": 8.66316145416035,
+     "annualisedVol": 0.47885209994645767,
+     "realizedVol": 0.025064264449453595,
+     "allTimeMaxDrawdown": 0.08626068336751753,
+     "lookbackDays": 89.28668700231482,
+     "coveredDays": 89.2866870023148,
+     "skippedTimeShare": 0.0,
+     "fineTimeShare": 0.33967386105939285,
      "flags": []
     },
     "percentiles": {
-     "sortino": 0.15,
-     "calmar": 0.2,
-     "negMaxDrawdown": 0.6,
-     "pnlConsistency": 0.175
+     "sharpe": 0.7777777777777778,
+     "sortino": 0.8333333333333334,
+     "calmar": 0.7222222222222222,
+     "negMaxDrawdown": 0.6666666666666666,
+     "consistency": 0.8333333333333334
     },
-    "score": 0.28125,
-    "rank": 20,
+    "scoreNumerator": 168,
+    "score": 0.7777777777777778,
+    "rank": 5,
+    "cloneOf": {
+     "address": "addr-04",
+     "correlation": 0.9441653144341694
+    },
+    "clones": [],
     "finalist": false,
     "passthrough": {
      "avgLeverage": null,
@@ -1581,35 +1944,772 @@
     }
    },
    {
-    "address": "addr-10",
+    "address": "addr-18",
     "kind": "trader",
+    "pool": "trader",
+    "activeDays": 509.2701021527778,
     "filters": {
      "minAccountValue": "pass",
      "minActiveDays": "pass",
-     "minTrades": "unknown",
+     "stillActive": "pass",
+     "minTrades": "pass",
      "notClosed": "pass",
-     "minMonthPoints": "pass"
+     "minMonthPoints": "pass",
+     "minCoverage": "pass",
+     "noRuin": "pass"
     },
     "eligible": true,
     "metrics": {
-     "sortino": null,
-     "calmar": null,
-     "maxDrawdown": 0.0,
-     "pnlConsistency": 0.0,
-     "realizedVol": 0.0,
+     "sharpe": 0.2078370915129886,
+     "sortino": 0.5352432315519613,
+     "calmar": 9.591099056257189,
+     "maxDrawdown": 0.12938913925565432,
+     "consistency": 0.8552083478882179,
+     "periodReturn": 1.240984051404836,
+     "annualisedReturn": 26.02834661553104,
+     "annualisedVol": 0.9491323728866949,
+     "realizedVol": 0.04967985896737113,
+     "allTimeMaxDrawdown": 0.635318683022932,
+     "lookbackDays": 89.33399168981481,
+     "coveredDays": 89.3339916898148,
+     "skippedTimeShare": 0.0,
+     "fineTimeShare": 0.3394016301508699,
+     "flags": []
+    },
+    "percentiles": {
+     "sharpe": 0.7222222222222222,
+     "sortino": 0.6666666666666666,
+     "calmar": 0.8888888888888888,
+     "negMaxDrawdown": 0.5555555555555556,
+     "consistency": 0.6666666666666666
+    },
+    "scoreNumerator": 150,
+    "score": 0.6944444444444444,
+    "rank": 6,
+    "cloneOf": null,
+    "clones": [
+     "addr-24"
+    ],
+    "finalist": true,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-13",
+    "kind": "trader",
+    "pool": "trader",
+    "activeDays": 425.3520198611111,
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "stillActive": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass",
+     "minCoverage": "pass",
+     "noRuin": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sharpe": 0.14912849232127692,
+     "sortino": 0.3325121803984875,
+     "calmar": 4.651484309022531,
+     "maxDrawdown": 0.03615267179254963,
+     "consistency": 0.8569846009341084,
+     "periodReturn": 0.16816358557228606,
+     "annualisedReturn": 0.8873528803616673,
+     "annualisedVol": 0.23343714383256328,
+     "realizedVol": 0.01221865855030962,
+     "allTimeMaxDrawdown": 0.41975415366114976,
+     "lookbackDays": 89.31868689814814,
+     "coveredDays": 89.31868689814816,
+     "skippedTimeShare": 0.0,
+     "fineTimeShare": 0.3389774425635685,
+     "flags": []
+    },
+    "percentiles": {
+     "sharpe": 0.6111111111111112,
+     "sortino": 0.5555555555555556,
+     "calmar": 0.6111111111111112,
+     "negMaxDrawdown": 0.8333333333333334,
+     "consistency": 0.7222222222222222
+    },
+    "scoreNumerator": 146,
+    "score": 0.6759259259259259,
+    "rank": 7,
+    "cloneOf": null,
+    "clones": [
+     "addr-05"
+    ],
+    "finalist": true,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-22",
+    "kind": "trader",
+    "pool": "trader",
+    "activeDays": 124.32166834490741,
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "stillActive": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass",
+     "minCoverage": "pass",
+     "noRuin": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sharpe": 0.1752800208123576,
+     "sortino": 0.7225342876477974,
+     "calmar": 17.95615659793355,
+     "maxDrawdown": 0.3869601982089722,
+     "consistency": 0.8038223598598119,
+     "periodReturn": 6.948317916207711,
+     "annualisedReturn": 4788.396448996474,
+     "annualisedVol": 4.752210455265711,
+     "realizedVol": 0.2487420637469404,
+     "allTimeMaxDrawdown": 0.8759650220236036,
+     "lookbackDays": 89.28679026620371,
+     "coveredDays": 89.28679026620367,
+     "skippedTimeShare": 0.0,
+     "fineTimeShare": 0.339052404585751,
+     "flags": []
+    },
+    "percentiles": {
+     "sharpe": 0.6666666666666666,
+     "sortino": 0.9444444444444444,
+     "calmar": 0.9444444444444444,
+     "negMaxDrawdown": 0.2222222222222222,
+     "consistency": 0.6111111111111112
+    },
+    "scoreNumerator": 144,
+    "score": 0.6666666666666666,
+    "rank": 8,
+    "cloneOf": null,
+    "clones": [],
+    "finalist": true,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-07",
+    "kind": "trader",
+    "pool": "trader",
+    "activeDays": 817.2839348032408,
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "stillActive": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass",
+     "minCoverage": "pass",
+     "noRuin": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sharpe": 0.13623160741370102,
+     "sortino": 0.335538197324848,
+     "calmar": 4.128457003548835,
+     "maxDrawdown": 0.023412503387107608,
+     "consistency": 0.7868824907417075,
+     "periodReturn": 0.09665751357911523,
+     "annualisedReturn": 0.5057380271629621,
+     "annualisedVol": 0.1627488700399855,
+     "realizedVol": 0.008518665195345413,
+     "allTimeMaxDrawdown": 0.795585977168035,
+     "lookbackDays": 82.28393577546296,
+     "coveredDays": 82.28393577546296,
+     "skippedTimeShare": 0.0,
+     "fineTimeShare": 0.36821068775818244,
      "flags": [
-      "no-downside",
-      "no-drawdown"
+      "coarse-history"
      ]
     },
     "percentiles": {
-     "sortino": 0.025,
-     "calmar": 0.025,
-     "negMaxDrawdown": 0.975,
-     "pnlConsistency": 0.0
+     "sharpe": 0.5,
+     "sortino": 0.6111111111111112,
+     "calmar": 0.5555555555555556,
+     "negMaxDrawdown": 0.8888888888888888,
+     "consistency": 0.5555555555555556
     },
-    "score": 0.25625,
-    "rank": 21,
+    "scoreNumerator": 132,
+    "score": 0.6111111111111112,
+    "rank": 9,
+    "cloneOf": null,
+    "clones": [],
+    "finalist": false,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-24",
+    "kind": "trader",
+    "pool": "trader",
+    "activeDays": 635.347909988426,
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "stillActive": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass",
+     "minCoverage": "pass",
+     "noRuin": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sharpe": 0.14544905683461404,
+     "sortino": 0.3134583447602186,
+     "calmar": 3.0714759762714294,
+     "maxDrawdown": 0.22847184088108993,
+     "consistency": 0.7546437466897585,
+     "periodReturn": 0.7017457705207764,
+     "annualisedReturn": 7.782276174718843,
+     "annualisedVol": 0.9343293393146292,
+     "realizedVol": 0.048905032777518606,
+     "allTimeMaxDrawdown": 0.8411198826735135,
+     "lookbackDays": 89.31318876157407,
+     "coveredDays": 89.31318876157403,
+     "skippedTimeShare": 0.0,
+     "fineTimeShare": 0.33893674678137214,
+     "flags": []
+    },
+    "percentiles": {
+     "sharpe": 0.5555555555555556,
+     "sortino": 0.5,
+     "calmar": 0.5,
+     "negMaxDrawdown": 0.2777777777777778,
+     "consistency": 0.3888888888888889
+    },
+    "scoreNumerator": 94,
+    "score": 0.4351851851851852,
+    "rank": 10,
+    "cloneOf": {
+     "address": "addr-18",
+     "correlation": 0.9494394442010873
+    },
+    "clones": [],
+    "finalist": false,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-23",
+    "kind": "trader",
+    "pool": "trader",
+    "activeDays": 635.2701286689814,
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "stillActive": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass",
+     "minCoverage": "pass",
+     "noRuin": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sharpe": 0.12175930276064469,
+     "sortino": 0.28179887631274025,
+     "calmar": 2.6145587430618686,
+     "maxDrawdown": 0.17005624231806482,
+     "consistency": 0.766037712939571,
+     "periodReturn": 0.44462203516494414,
+     "annualisedReturn": 3.496078002073129,
+     "annualisedVol": 0.7722837590510865,
+     "realizedVol": 0.04042317945152352,
+     "allTimeMaxDrawdown": 0.560334076826474,
+     "lookbackDays": 89.31874,
+     "coveredDays": 89.31874,
+     "skippedTimeShare": 0.0,
+     "fineTimeShare": 0.338977835555251,
+     "flags": []
+    },
+    "percentiles": {
+     "sharpe": 0.4444444444444444,
+     "sortino": 0.3888888888888889,
+     "calmar": 0.4444444444444444,
+     "negMaxDrawdown": 0.4444444444444444,
+     "consistency": 0.4444444444444444
+    },
+    "scoreNumerator": 94,
+    "score": 0.4351851851851852,
+    "rank": 11,
+    "cloneOf": null,
+    "clones": [
+     "addr-19"
+    ],
+    "finalist": false,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-16",
+    "kind": "trader",
+    "pool": "trader",
+    "activeDays": 1034.2791204166667,
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "stillActive": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass",
+     "minCoverage": "pass",
+     "noRuin": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sharpe": 0.11701870562947408,
+     "sortino": 0.21168813130039785,
+     "calmar": 2.0790190489671247,
+     "maxDrawdown": 0.19818417402602173,
+     "consistency": 0.7722826954241577,
+     "periodReturn": 0.4120286730039149,
+     "annualisedReturn": 3.6191393604028317,
+     "annualisedVol": 0.8394735162268353,
+     "realizedVol": 0.04394005207740496,
+     "allTimeMaxDrawdown": 0.8536816912169651,
+     "lookbackDays": 82.29925900462963,
+     "coveredDays": 82.2992590046296,
+     "skippedTimeShare": 0.0,
+     "fineTimeShare": 0.3678220354200914,
+     "flags": [
+      "coarse-history"
+     ]
+    },
+    "percentiles": {
+     "sharpe": 0.3333333333333333,
+     "sortino": 0.2222222222222222,
+     "calmar": 0.3333333333333333,
+     "negMaxDrawdown": 0.3333333333333333,
+     "consistency": 0.5
+    },
+    "scoreNumerator": 80,
+    "score": 0.37037037037037035,
+    "rank": 12,
+    "cloneOf": null,
+    "clones": [
+     "addr-20",
+     "addr-17"
+    ],
+    "finalist": false,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-11",
+    "kind": "trader",
+    "pool": "trader",
+    "activeDays": 649.2690534375,
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "stillActive": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass",
+     "minCoverage": "pass",
+     "noRuin": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sharpe": 0.07084437707979875,
+     "sortino": 0.10890146439784991,
+     "calmar": 0.9772007588956775,
+     "maxDrawdown": 2.529981925764815e-07,
+     "consistency": 0.6247465606499907,
+     "periodReturn": 2.4723002578497244e-07,
+     "annualisedReturn": 1.0101592076150467e-06,
+     "annualisedVol": 7.463420507282384e-07,
+     "realizedVol": 3.906532837861988e-08,
+     "allTimeMaxDrawdown": 6.336576970339695e-07,
+     "lookbackDays": 89.3314570138889,
+     "coveredDays": 89.33145701388884,
+     "skippedTimeShare": 0.0,
+     "fineTimeShare": 0.33922428158752904,
+     "flags": []
+    },
+    "percentiles": {
+     "sharpe": 0.16666666666666666,
+     "sortino": 0.16666666666666666,
+     "calmar": 0.2222222222222222,
+     "negMaxDrawdown": 1.0,
+     "consistency": 0.2222222222222222
+    },
+    "scoreNumerator": 72,
+    "score": 0.3333333333333333,
+    "rank": 13,
+    "cloneOf": null,
+    "clones": [],
+    "finalist": false,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-20",
+    "kind": "trader",
+    "pool": "trader",
+    "activeDays": 649.2881698726852,
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "stillActive": "pass",
+     "minTrades": "unknown",
+     "notClosed": "pass",
+     "minMonthPoints": "pass",
+     "minCoverage": "pass",
+     "noRuin": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sharpe": 0.1097453180105035,
+     "sortino": 0.22736980685981506,
+     "calmar": 1.96780075318483,
+     "maxDrawdown": 0.19620052537085064,
+     "consistency": 0.7398037779491398,
+     "periodReturn": 0.38608354160001923,
+     "annualisedReturn": 2.797378993851936,
+     "annualisedVol": 0.7789184825172097,
+     "realizedVol": 0.04077045674971747,
+     "allTimeMaxDrawdown": 0.6143281925783018,
+     "lookbackDays": 89.30900333333334,
+     "coveredDays": 89.30900333333335,
+     "skippedTimeShare": 0.0,
+     "fineTimeShare": 0.33968333610813545,
+     "flags": []
+    },
+    "percentiles": {
+     "sharpe": 0.2777777777777778,
+     "sortino": 0.3333333333333333,
+     "calmar": 0.2777777777777778,
+     "negMaxDrawdown": 0.3888888888888889,
+     "consistency": 0.3333333333333333
+    },
+    "scoreNumerator": 70,
+    "score": 0.32407407407407407,
+    "rank": 14,
+    "cloneOf": {
+     "address": "addr-16",
+     "correlation": 0.9066805005204711
+    },
+    "clones": [],
+    "finalist": false,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-19",
+    "kind": "trader",
+    "pool": "trader",
+    "activeDays": 537.3048285416667,
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "stillActive": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass",
+     "minCoverage": "pass",
+     "noRuin": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sharpe": 0.10630935821499916,
+     "sortino": 0.22376583538817163,
+     "calmar": 2.281818623340204,
+     "maxDrawdown": 0.14907322301468495,
+     "consistency": 0.7346310121095868,
+     "periodReturn": 0.34015805651625564,
+     "annualisedReturn": 2.309352058940336,
+     "annualisedVol": 0.7118977378842808,
+     "realizedVol": 0.03726243064464901,
+     "allTimeMaxDrawdown": 0.930622858812043,
+     "lookbackDays": 89.29788458333333,
+     "coveredDays": 89.29788458333333,
+     "skippedTimeShare": 0.0,
+     "fineTimeShare": 0.3392900614246488,
+     "flags": []
+    },
+    "percentiles": {
+     "sharpe": 0.2222222222222222,
+     "sortino": 0.2777777777777778,
+     "calmar": 0.3888888888888889,
+     "negMaxDrawdown": 0.5,
+     "consistency": 0.2777777777777778
+    },
+    "scoreNumerator": 70,
+    "score": 0.32407407407407407,
+    "rank": 15,
+    "cloneOf": {
+     "address": "addr-23",
+     "correlation": 0.9759277477039583
+    },
+    "clones": [],
+    "finalist": false,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-17",
+    "kind": "trader",
+    "pool": "trader",
+    "activeDays": 285.2841952199074,
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "stillActive": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass",
+     "minCoverage": "pass",
+     "noRuin": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sharpe": 0.12072242890391137,
+     "sortino": 0.2904303570040566,
+     "calmar": 0.8008159587820959,
+     "maxDrawdown": 0.7944393603988515,
+     "consistency": 0.41091461646038296,
+     "periodReturn": 0.6361997180920413,
+     "annualisedReturn": 6.475195824215882,
+     "annualisedVol": 5.148171184414814,
+     "realizedVol": 0.26946759555123084,
+     "allTimeMaxDrawdown": 0.9536792535049562,
+     "lookbackDays": 89.34093135416667,
+     "coveredDays": 89.34093135416663,
+     "skippedTimeShare": 0.0,
+     "fineTimeShare": 0.33883110461800137,
+     "flags": []
+    },
+    "percentiles": {
+     "sharpe": 0.3888888888888889,
+     "sortino": 0.4444444444444444,
+     "calmar": 0.16666666666666666,
+     "negMaxDrawdown": 0.1111111111111111,
+     "consistency": 0.16666666666666666
+    },
+    "scoreNumerator": 52,
+    "score": 0.24074074074074073,
+    "rank": 16,
+    "cloneOf": {
+     "address": "addr-16",
+     "correlation": 0.9128761183824236
+    },
+    "clones": [],
+    "finalist": false,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-14",
+    "kind": "trader",
+    "pool": "trader",
+    "activeDays": 565.2687197222223,
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "stillActive": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass",
+     "minCoverage": "pass",
+     "noRuin": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sharpe": 0.05471918894421774,
+     "sortino": 0.09574197724626984,
+     "calmar": -0.7856716045486837,
+     "maxDrawdown": 0.9477040276500781,
+     "consistency": 0.0,
+     "periodReturn": -0.744584144041087,
+     "annualisedReturn": -0.9976530569448746,
+     "annualisedVol": 4.958690300831129,
+     "realizedVol": 0.25954971281710765,
+     "allTimeMaxDrawdown": 0.9999999999864656,
+     "lookbackDays": 89.279803125,
+     "coveredDays": 82.2798034490741,
+     "skippedTimeShare": 0.07840518718578801,
+     "fineTimeShare": 0.33946738301216633,
+     "flags": [
+      "dust-equity"
+     ]
+    },
+    "percentiles": {
+     "sharpe": 0.1111111111111111,
+     "sortino": 0.1111111111111111,
+     "calmar": 0.1111111111111111,
+     "negMaxDrawdown": 0.0,
+     "consistency": 0.05555555555555555
+    },
+    "scoreNumerator": 16,
+    "score": 0.07407407407407407,
+    "rank": 17,
+    "cloneOf": null,
+    "clones": [],
+    "finalist": false,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-15",
+    "kind": "trader",
+    "pool": "trader",
+    "activeDays": 82.2923086574074,
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "stillActive": "pass",
+     "minTrades": "unknown",
+     "notClosed": "pass",
+     "minMonthPoints": "pass",
+     "minCoverage": "pass",
+     "noRuin": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sharpe": -0.14058183263995072,
+     "sortino": -0.1310992358761903,
+     "calmar": -0.9757213165060283,
+     "maxDrawdown": 0.689557933158541,
+     "consistency": 0.0,
+     "periodReturn": -0.6728163743486275,
+     "annualisedReturn": -0.9955884749424098,
+     "annualisedVol": 1.3323657911113571,
+     "realizedVol": 0.06973921287085198,
+     "allTimeMaxDrawdown": 0.7182602755187535,
+     "lookbackDays": 82.2923086574074,
+     "coveredDays": 75.18902712962965,
+     "skippedTimeShare": 0.0863176844065656,
+     "fineTimeShare": 0.3687812803712997,
+     "flags": [
+      "dust-equity",
+      "short-history"
+     ]
+    },
+    "percentiles": {
+     "sharpe": 0.05555555555555555,
+     "sortino": 0.05555555555555555,
+     "calmar": 0.0,
+     "negMaxDrawdown": 0.16666666666666666,
+     "consistency": 0.05555555555555555
+    },
+    "scoreNumerator": 14,
+    "score": 0.06481481481481481,
+    "rank": 18,
+    "cloneOf": null,
+    "clones": [],
+    "finalist": false,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-05",
+    "kind": "trader",
+    "pool": "trader",
+    "activeDays": 96.27559060185185,
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "stillActive": "pass",
+     "minTrades": "unknown",
+     "notClosed": "pass",
+     "minMonthPoints": "pass",
+     "minCoverage": "pass",
+     "noRuin": "pass"
+    },
+    "eligible": true,
+    "metrics": {
+     "sharpe": -0.17950706125233257,
+     "sortino": -0.15781944982694748,
+     "calmar": -0.971146250034474,
+     "maxDrawdown": 0.8937583384934825,
+     "consistency": 0.0,
+     "periodReturn": -0.8679700588649876,
+     "annualisedReturn": -0.9997459605001079,
+     "annualisedVol": 1.6040115383921556,
+     "realizedVol": 0.08395780113051853,
+     "allTimeMaxDrawdown": 0.8973573740493074,
+     "lookbackDays": 89.27559030092593,
+     "coveredDays": 89.27559030092588,
+     "skippedTimeShare": 0.0,
+     "fineTimeShare": 0.3395917877733749,
+     "flags": []
+    },
+    "percentiles": {
+     "sharpe": 0.0,
+     "sortino": 0.0,
+     "calmar": 0.05555555555555555,
+     "negMaxDrawdown": 0.05555555555555555,
+     "consistency": 0.05555555555555555
+    },
+    "scoreNumerator": 8,
+    "score": 0.037037037037037035,
+    "rank": 19,
+    "cloneOf": {
+     "address": "addr-13",
+     "correlation": 0.9035161604047094
+    },
+    "clones": [],
     "finalist": false,
     "passthrough": {
      "avgLeverage": null,
@@ -1621,25 +2721,42 @@
    {
     "address": "addr-01",
     "kind": "trader",
+    "pool": "trader",
+    "activeDays": 432.27973721064814,
     "filters": {
      "minAccountValue": "fail",
      "minActiveDays": "pass",
+     "stillActive": "pass",
      "minTrades": "pass",
      "notClosed": "pass",
-     "minMonthPoints": "pass"
+     "minMonthPoints": "pass",
+     "minCoverage": "pass",
+     "noRuin": "pass"
     },
     "eligible": false,
     "metrics": {
-     "sortino": 0.21386883479601979,
-     "calmar": 1.6690921136768908,
-     "maxDrawdown": 3.704200532976421e-05,
-     "pnlConsistency": 0.5483870967741935,
-     "realizedVol": 1.6171220483715634e-05,
+     "sharpe": 0.18631335871584873,
+     "sortino": 0.46625117481139616,
+     "calmar": 7.630785721321498,
+     "maxDrawdown": 3.7042005329920074e-05,
+     "consistency": 0.9132754130178644,
+     "periodReturn": 0.0002826596053606689,
+     "annualisedReturn": 0.001156004331005489,
+     "annualisedVol": 0.000324595020266449,
+     "realizedVol": 1.6990079876111467e-05,
+     "allTimeMaxDrawdown": 0.6555095379586925,
+     "lookbackDays": 89.28668158564815,
+     "coveredDays": 89.28668158564814,
+     "skippedTimeShare": 0.0,
+     "fineTimeShare": 0.33967382100004107,
      "flags": []
     },
     "percentiles": null,
+    "scoreNumerator": null,
     "score": null,
     "rank": null,
+    "cloneOf": null,
+    "clones": [],
     "finalist": false,
     "passthrough": {
      "avgLeverage": null,
@@ -1651,25 +2768,139 @@
    {
     "address": "addr-03",
     "kind": "trader",
+    "pool": "trader",
+    "activeDays": 257.3644696412037,
     "filters": {
      "minAccountValue": "pass",
      "minActiveDays": "pass",
+     "stillActive": "pass",
      "minTrades": "fail",
      "notClosed": "pass",
-     "minMonthPoints": "pass"
+     "minMonthPoints": "pass",
+     "minCoverage": "pass",
+     "noRuin": "pass"
     },
     "eligible": false,
     "metrics": {
-     "sortino": 0.04338361184926281,
-     "calmar": 0.0808378587894303,
+     "sharpe": 0.2565809099081418,
+     "sortino": 0.5593127808994023,
+     "calmar": 6.353140810840507,
      "maxDrawdown": 0.11645135061840683,
-     "pnlConsistency": 0.41935483870967744,
-     "realizedVol": 0.0344142852288095,
+     "consistency": 0.8743704269397263,
+     "periodReturn": 0.7398318280912974,
+     "annualisedReturn": 8.61475704432726,
+     "annualisedVol": 0.4972617482033904,
+     "realizedVol": 0.026027869479868578,
+     "allTimeMaxDrawdown": 0.47376473841147937,
+     "lookbackDays": 89.30891469907408,
+     "coveredDays": 89.30891469907407,
+     "skippedTimeShare": 0.0,
+     "fineTimeShare": 0.3390606287498338,
      "flags": []
     },
     "percentiles": null,
+    "scoreNumerator": null,
     "score": null,
     "rank": null,
+    "cloneOf": null,
+    "clones": [],
+    "finalist": false,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-08",
+    "kind": "trader",
+    "pool": "trader",
+    "activeDays": 460.34921862268516,
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "stillActive": "pass",
+     "minTrades": "pass",
+     "notClosed": "pass",
+     "minMonthPoints": "pass",
+     "minCoverage": "fail",
+     "noRuin": "pass"
+    },
+    "eligible": false,
+    "metrics": {
+     "sharpe": -0.06677517334925594,
+     "sortino": -0.09089887894703737,
+     "calmar": -0.284021803422912,
+     "maxDrawdown": 0.02477477360062234,
+     "consistency": 0.0,
+     "periodReturn": -0.0070365758774431075,
+     "annualisedReturn": -0.1658903091421402,
+     "annualisedVol": 0.1349920517225385,
+     "realizedVol": 0.007065806923111212,
+     "allTimeMaxDrawdown": 0.024774750976623197,
+     "lookbackDays": 89.3353291550926,
+     "coveredDays": 14.20929416666667,
+     "skippedTimeShare": 0.8409442904497695,
+     "fineTimeShare": 0.3392560554033299,
+     "flags": [
+      "dust-equity",
+      "low-coverage"
+     ]
+    },
+    "percentiles": null,
+    "scoreNumerator": null,
+    "score": null,
+    "rank": null,
+    "cloneOf": null,
+    "clones": [],
+    "finalist": false,
+    "passthrough": {
+     "avgLeverage": null,
+     "timeInMarket": null,
+     "medianHoldHours": null,
+     "makerShare": null
+    }
+   },
+   {
+    "address": "addr-10",
+    "kind": "trader",
+    "pool": "trader",
+    "activeDays": 320.3145061574074,
+    "filters": {
+     "minAccountValue": "pass",
+     "minActiveDays": "pass",
+     "stillActive": "fail",
+     "minTrades": "unknown",
+     "notClosed": "pass",
+     "minMonthPoints": "pass",
+     "minCoverage": "pass",
+     "noRuin": "pass"
+    },
+    "eligible": false,
+    "metrics": {
+     "sharpe": null,
+     "sortino": null,
+     "calmar": null,
+     "maxDrawdown": 0.0,
+     "consistency": null,
+     "periodReturn": 0.0,
+     "annualisedReturn": 0.0,
+     "annualisedVol": 0.0,
+     "realizedVol": 0.0,
+     "allTimeMaxDrawdown": 0.6302766658955853,
+     "lookbackDays": 89.28672833333333,
+     "coveredDays": 89.28672833333333,
+     "skippedTimeShare": 0.0,
+     "fineTimeShare": 0.3396741667257823,
+     "flags": []
+    },
+    "percentiles": null,
+    "scoreNumerator": null,
+    "score": null,
+    "rank": null,
+    "cloneOf": null,
+    "clones": [],
     "finalist": false,
     "passthrough": {
      "avgLeverage": null,
@@ -1681,25 +2912,42 @@
    {
     "address": "addr-12",
     "kind": "trader",
+    "pool": "trader",
+    "activeDays": 439.3242367824074,
     "filters": {
      "minAccountValue": "pass",
      "minActiveDays": "pass",
+     "stillActive": "pass",
      "minTrades": "fail",
      "notClosed": "pass",
-     "minMonthPoints": "pass"
+     "minMonthPoints": "pass",
+     "minCoverage": "pass",
+     "noRuin": "pass"
     },
     "eligible": false,
     "metrics": {
-     "sortino": 0.1787675631848747,
-     "calmar": 0.7132952371509614,
-     "maxDrawdown": 0.1268639173684079,
-     "pnlConsistency": 0.4838709677419355,
-     "realizedVol": 0.034233601914445945,
+     "sharpe": 0.10817847825590256,
+     "sortino": 0.23338807119041993,
+     "calmar": 2.3012886431570627,
+     "maxDrawdown": 0.16743635995506312,
+     "consistency": 0.7355023332718086,
+     "periodReturn": 0.38531939361614476,
+     "annualisedReturn": 2.789460793423641,
+     "annualisedVol": 0.79267377689935,
+     "realizedVol": 0.041490441763905775,
+     "allTimeMaxDrawdown": 0.6537911011380252,
+     "lookbackDays": 89.29784854166667,
+     "coveredDays": 89.29784854166665,
+     "skippedTimeShare": 0.0,
+     "fineTimeShare": 0.33928979475431176,
      "flags": []
     },
     "percentiles": null,
+    "scoreNumerator": null,
     "score": null,
     "rank": null,
+    "cloneOf": null,
+    "clones": [],
     "finalist": false,
     "passthrough": {
      "avgLeverage": null,
@@ -1710,11 +2958,73 @@
    }
   ],
   "finalists": [
-   "addr-07",
-   "addr-05",
+   "addr-21",
+   "addr-04",
    "addr-18",
-   "addr-14",
-   "addr-11"
+   "addr-13",
+   "addr-22"
+  ],
+  "correlations": [
+   {
+    "a": "addr-21",
+    "b": "addr-04",
+    "rho": 0.13251861551290117,
+    "linked": false
+   },
+   {
+    "a": "addr-21",
+    "b": "addr-18",
+    "rho": -0.04155052194762408,
+    "linked": false
+   },
+   {
+    "a": "addr-21",
+    "b": "addr-13",
+    "rho": 0.18004892329860378,
+    "linked": false
+   },
+   {
+    "a": "addr-21",
+    "b": "addr-22",
+    "rho": 0.10869921041237662,
+    "linked": false
+   },
+   {
+    "a": "addr-04",
+    "b": "addr-18",
+    "rho": 0.03346073795366173,
+    "linked": false
+   },
+   {
+    "a": "addr-04",
+    "b": "addr-13",
+    "rho": 0.5803430877181049,
+    "linked": false
+   },
+   {
+    "a": "addr-04",
+    "b": "addr-22",
+    "rho": 0.44903045888306264,
+    "linked": false
+   },
+   {
+    "a": "addr-18",
+    "b": "addr-13",
+    "rho": 0.28190494392086307,
+    "linked": false
+   },
+   {
+    "a": "addr-18",
+    "b": "addr-22",
+    "rho": 0.3208135051095007,
+    "linked": false
+   },
+   {
+    "a": "addr-13",
+    "b": "addr-22",
+    "rho": 0.7195763294516951,
+    "linked": false
+   }
   ],
   "funnel": [
    {
@@ -1730,33 +3040,101 @@
     "count": 23
    },
    {
+    "stage": "stillActive",
+    "count": 22
+   },
+   {
     "stage": "minTrades",
-    "count": 21
+    "count": 20
    },
    {
     "stage": "notClosed",
-    "count": 21
+    "count": 20
    },
    {
     "stage": "minMonthPoints",
-    "count": 21
+    "count": 20
    },
    {
-    "stage": "eligible",
-    "count": 21
+    "stage": "minCoverage",
+    "count": 19
+   },
+   {
+    "stage": "noRuin",
+    "count": 19
+   },
+   {
+    "stage": "ranked",
+    "count": 19
+   },
+   {
+    "stage": "distinct",
+    "count": 11
    },
    {
     "stage": "finalists",
     "count": 5
    }
   ],
+  "filterCounts": {
+   "minAccountValue": {
+    "pass": 23,
+    "fail": 1,
+    "unknown": 0
+   },
+   "minActiveDays": {
+    "pass": 24,
+    "fail": 0,
+    "unknown": 0
+   },
+   "stillActive": {
+    "pass": 23,
+    "fail": 1,
+    "unknown": 0
+   },
+   "minTrades": {
+    "pass": 18,
+    "fail": 2,
+    "unknown": 4
+   },
+   "notClosed": {
+    "pass": 24,
+    "fail": 0,
+    "unknown": 0
+   },
+   "minMonthPoints": {
+    "pass": 24,
+    "fail": 0,
+    "unknown": 0
+   },
+   "minCoverage": {
+    "pass": 23,
+    "fail": 1,
+    "unknown": 0
+   },
+   "noRuin": {
+    "pass": 24,
+    "fail": 0,
+    "unknown": 0
+   }
+  },
   "config": {
    "minAccountValue": 10000,
    "minActiveDays": 30,
+   "stillActiveDays": 7,
    "minTrades": 10,
    "minMonthPoints": 25,
+   "lookbackDays": 90,
+   "coarseGridDays": 7,
+   "dustEquityFraction": 0.01,
+   "maxSkippedTimeShare": 0.2,
+   "cloneCorrelation": 0.9,
+   "minOverlapDays": 20,
    "finalists": 5,
-   "allowUnknown": true
+   "finalistSplit": "proportional",
+   "allowUnknown": [
+    "minTrades"
+   ]
   }
  }
 }

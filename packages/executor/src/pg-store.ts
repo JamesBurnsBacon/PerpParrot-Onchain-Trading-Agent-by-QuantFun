@@ -1,5 +1,5 @@
 import { SQL } from "bun";
-import type { Controls, ExecutorStore, OrderBatch, RunRecord } from "./store";
+import { runAtMs, summarize, type Controls, type EquityPoint, type ExecutorStore, type OrderBatch, type RunRecord, type RunSummary } from "./store";
 import type { OrderResult } from "./exchange";
 import type { PlannedOrder } from "./planner";
 import type { Hex } from "viem";
@@ -118,6 +118,13 @@ export class PostgresStore implements ExecutorStore {
         envelope: r.envelope ?? undefined,
       }),
     );
+  }
+
+  async recentRunSummaries(limit: number): Promise<RunSummary[]> { return (await this.recentRuns(limit)).map(summarize); }
+
+  async equityCurve(): Promise<EquityPoint[]> {
+    const rows = await deadline(this.sql`select run_id, started_at, equity_usd, dry_run from executor_runs where kind = 'report' and status = 'executed' and equity_usd is not null order by started_at`);
+    return rows.map((r: Record<string, unknown>) => ({ t: runAtMs({ runId: r.run_id as string, startedAt: (r.started_at as Date).getTime() }), equityUsd: Number(r.equity_usd), dryRun: r.dry_run as boolean }));
   }
 
   async getControls(): Promise<Controls> {

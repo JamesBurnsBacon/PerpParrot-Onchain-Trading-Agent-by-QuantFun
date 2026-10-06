@@ -3,8 +3,9 @@
 //   TEST_DATABASE_URL=postgres://postgres:pp@localhost:54329/postgres bun test
 import { describe, expect, test } from "bun:test";
 import { SQL } from "bun";
+import { postgresRunLock } from "../src/lock";
 import { PostgresStore } from "../src/pg-store";
-import type { RunRecord } from "../src/store";
+import { summarize, type RunRecord } from "../src/store";
 
 const url = process.env.TEST_DATABASE_URL;
 
@@ -44,6 +45,13 @@ describe.skipIf(!url)("PostgresStore", async () => {
     const [newest, older] = await store.recentRuns(2);
     expect(newest).toEqual(run(`b-${unique}`, base + 1000));
     expect(older.id).toBe(`a-${unique}`);
+    const [summary] = await store.recentRunSummaries(1);
+    expect(summary).toEqual(summarize(run(`b-${unique}`, base + 1000)));
+    // runId mirror-<startedAt> here, so the curve's time is startedAt × 1000.
+    expect((await store.equityCurve()).filter((p) => p.t >= base * 1000)).toEqual([
+      { t: base * 1000, equityUsd: 470.12, dryRun: true },
+      { t: (base + 1000) * 1000, equityUsd: 470.12, dryRun: true },
+    ]);
   });
 
   test("holds a database-wide lock across executor instances", async () => {
@@ -95,5 +103,24 @@ describe.skipIf(!url)("PostgresStore", async () => {
     expect(await store.getControls()).toEqual(controls);
     await store.setControls({ ...controls, paused: false });
     expect((await store.getControls()).paused).toBe(false);
+  });
+});
+
+describe.skipIf(!process.env.TEST_DATABASE_URL)("postgresRunLock", () => {
+  test("one holder across connections; released for the next; times out while held", async () => {
+    const sqlA = new SQL(process.env.TEST_DATABASE_URL!);
+    const sqlB = new SQL(process.env.TEST_DATABASE_URL!);
+    const key = 900_000 + Math.floor(Math.random() * 1000); // not the production key
+    const a = postgresRunLock(sqlA, key);
+    const b = postgresRunLock(sqlB, key);
+    const releaseA = await a.acquire(1000);
+    await expect(b.acquire(600)).rejects.toThrow("held the run lock");
+    const waiting = b.acquire(5000); // gets it once A releases
+    await Bun.sleep(300);
+    await releaseA();
+    const releaseB = await waiting;
+    await releaseB();
+    await sqlA.close();
+    await sqlB.close();
   });
 });

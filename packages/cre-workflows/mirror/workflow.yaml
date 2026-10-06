@@ -34,3 +34,14 @@ production-settings:
     workflow-path: "./main.ts"
     config-path: "./config.production.json"
     secrets-path: "../secrets.yaml"
+
+# ==========================================================================
+# Simulation only (docs/cre/DEPLOY_REHEARSAL.md): production limits, rehearsal URLs.
+rehearsal-settings:
+  user-workflow:
+    workflow-name: "mirror-rehearsal"
+    deployment-registry: "private"
+  workflow-artifacts:
+    workflow-path: "./main.ts"
+    config-path: "./config.rehearsal.json"
+    secrets-path: "../secrets.yaml"

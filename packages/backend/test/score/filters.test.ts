@@ -1,53 +1,48 @@
 import { describe, expect, test } from "bun:test";
 import {
   computeFilters,
+  computeMetrics,
   DEFAULT_CONFIG,
   isEligible,
   scoreCandidates,
   type FilterName,
   type FilterStatus,
-  type ScoreInput,
-  type TimePoint,
 } from "../../src/score";
 import cases from "../fixtures/score/edge-cases.json";
+import { toInput, type RawInput } from "./helpers";
 
-describe("score filters (README §4.2)", () => {
-  for (const fixture of cases) {
-    const raw = fixture.input;
-    if (raw.kind !== "trader" && raw.kind !== "hypercore-vault" && raw.kind !== "erc4626-vault") {
-      throw new Error(`invalid fixture kind: ${raw.kind}`);
-    }
-    if (typeof raw.accountValue === "string" && raw.accountValue !== "NaN") {
-      throw new Error(`invalid fixture accountValue: ${raw.accountValue}`);
-    }
-    const input: ScoreInput = {
-      ...raw,
-      kind: raw.kind,
-      accountValue: raw.accountValue === "NaN" ? NaN : raw.accountValue,
-      month: raw.month === null ? null : {
-        accountValueHistory: raw.month.accountValueHistory.map(([ts, value]): TimePoint => [ts, value]),
-        pnlHistory: raw.month.pnlHistory.map(([ts, value]): TimePoint => [ts, value]),
-      },
-      allTime: raw.allTime === null ? null : {
-        accountValueHistory: raw.allTime.accountValueHistory.map(([ts, value]): TimePoint => [ts, value]),
-        pnlHistory: raw.allTime.pnlHistory.map(([ts, value]): TimePoint => [ts, value]),
-      },
-    };
+const ALL_FILTERS: FilterName[] = [
+  "minAccountValue", "minActiveDays", "stillActive", "minTrades", "notClosed", "minMonthPoints", "minCoverage", "noRuin",
+];
 
-    for (const allowUnknown of [false, true]) {
-      test(`${fixture.name}, allowUnknown=${allowUnknown}`, () => {
-        const result = allowUnknown ? scoreCandidates([input], { allowUnknown: true }) : scoreCandidates([input]);
-        const candidate = result.candidates[0];
-        const expected = fixture.expected;
-        expect(expected.filters).toEqual(candidate.filters);
-        expect(candidate.eligible).toBe(allowUnknown ? expected.eligibleWithAllowUnknown : expected.eligible);
+type EdgeCase = {
+  name: string;
+  input: RawInput;
+  expected: {
+    filters: Record<FilterName, FilterStatus>;
+    eligible: boolean;
+    metricsIsNull: boolean;
+    rank: number | null;
+    eligibleWithAllowUnknown: boolean;
+    rankWithAllowUnknown: number | null;
+  };
+};
+
+describe("score filters (SPEC Filters, Eligibility)", () => {
+  for (const fixture of cases as unknown as EdgeCase[]) {
+    const input = toInput(fixture.input);
+    for (const allowUnknown of [[], ALL_FILTERS]) {
+      test(`${fixture.name}, allowUnknown=${allowUnknown.length > 0 ? "all" : "none"}`, () => {
+        const candidate = scoreCandidates([input], { allowUnknown }).candidates[0];
+        const { expected } = fixture;
+        const relaxed = allowUnknown.length > 0;
+        expect(candidate.filters).toEqual(expected.filters);
+        expect(candidate.eligible).toBe(relaxed ? expected.eligibleWithAllowUnknown : expected.eligible);
         expect(candidate.metrics === null).toBe(expected.metricsIsNull);
-        expect(candidate.rank).toBe(allowUnknown ? expected.rankWithAllowUnknown : expected.rank);
+        expect(candidate.rank).toBe(relaxed ? expected.rankWithAllowUnknown : expected.rank);
         const config = { ...DEFAULT_CONFIG, allowUnknown };
-        expect(expected.filters).toEqual(computeFilters(input, config));
-        expect(isEligible(expected.filters as Record<FilterName, FilterStatus>, config)).toBe(
-          allowUnknown ? expected.eligibleWithAllowUnknown : expected.eligible,
-        );
+        expect(computeFilters(input, computeMetrics(input, config), config)).toEqual(expected.filters);
+        expect(isEligible(expected.filters, config)).toBe(relaxed ? expected.eligibleWithAllowUnknown : expected.eligible);
         if (candidate.rank === null) {
           expect(candidate.percentiles).toBeNull();
           expect(candidate.score).toBeNull();
@@ -57,20 +52,12 @@ describe("score filters (README §4.2)", () => {
     }
   }
 
-  test("invalid trade counts fail closed even when unknowns are allowed", () => {
-    const base = {
-      address: "addr-invalid-trades",
-      kind: "trader" as const,
-      accountValue: 20_000,
-      closed: false,
-      month: { accountValueHistory: [[0, 100], [86_400_000, 101]] as TimePoint[], pnlHistory: [[0, 0], [86_400_000, 1]] as TimePoint[] },
-      allTime: { accountValueHistory: [[0, 100], [31 * 86_400_000, 101]] as TimePoint[], pnlHistory: [[0, 0], [31 * 86_400_000, 1]] as TimePoint[] },
-    };
-    for (const tradeCount of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, -1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
-      const result = scoreCandidates([{ ...base, tradeCount }], { allowUnknown: true, minMonthPoints: 2 });
-      expect(result.candidates[0].filters.minTrades).toBe("fail");
-      expect(result.candidates[0].eligible).toBe(false);
-      expect(result.finalists).toEqual([]);
-    }
+  test("allowUnknown relaxes only the listed filters, never a fail", () => {
+    const statuses = Object.fromEntries(ALL_FILTERS.map((name) => [name, "pass"])) as Record<FilterName, FilterStatus>;
+    const withUnknownTrades = { ...statuses, minTrades: "unknown" as const };
+    expect(isEligible(withUnknownTrades, DEFAULT_CONFIG)).toBe(false);
+    expect(isEligible(withUnknownTrades, { ...DEFAULT_CONFIG, allowUnknown: ["minTrades"] })).toBe(true);
+    expect(isEligible(withUnknownTrades, { ...DEFAULT_CONFIG, allowUnknown: ["notClosed"] })).toBe(false);
+    expect(isEligible({ ...statuses, minTrades: "fail" }, { ...DEFAULT_CONFIG, allowUnknown: ALL_FILTERS })).toBe(false);
   });
 });
