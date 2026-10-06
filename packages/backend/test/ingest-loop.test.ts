@@ -126,6 +126,23 @@ describe("durable Top 100 cycle", () => {
     expect(actual.map(a => a.address)).toEqual(expected); expect(actual).toHaveLength(100);
     expect(actual.some(a => a.address === accounts[0].input.address)).toBe(false);
   });
+  test("CRE lookup stays on its requested bucket when a newer publication becomes latest", async () => {
+    const { store, selected } = setup(); let now = start;
+    const service = new LoopService(store, { async collect(account) {
+      return { account: { ...account, fetchedAt: new Date(now).toISOString() }, historyWarnings: [] };
+    } }, async () => selected, () => now);
+    const fetch = loopHandler(store, service, () => now);
+    const url = `http://localhost/ingest/runs/${runIdAt(start)}/publication`;
+    expect((await fetch(new Request(url))).status).toBe(503);
+    await service.execute(service.trigger());
+    const original = await (await fetch(new Request(url))).json();
+    now += 600_000;
+    await service.execute(service.trigger());
+    expect(await (await fetch(new Request(url))).json()).toEqual(original);
+    const latest = await (await fetch(new Request("http://localhost/ingest/latest"))).json() as Latest;
+    expect(latest.runId).toBe(runIdAt(now));
+    expect(latest.bucket).toBe(start + 600_000);
+  });
   test("scheduler resumes an unfinished previous bucket before starting the current one", async () => {
     const { store, selected } = setup(); let calls = 0, now = start;
     const first = new LoopService(store, { async collect(account) { if (++calls === 11) throw new Error("restart"); return { account, historyWarnings: [] }; } }, async () => selected, () => now);

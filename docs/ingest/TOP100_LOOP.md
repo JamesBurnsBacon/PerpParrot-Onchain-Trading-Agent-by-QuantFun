@@ -74,6 +74,7 @@ The endpoint file must already contain the user's personal HTTPS `/info` endpoin
 | `GET /health` | Bootstrap progress, latest publication and latest run |
 | `POST /ingest/trigger` with `{"bucket": <current UTC bucket ms>}` | Submit/replay one idempotent job; stable `202` acknowledgement |
 | `GET /ingest/runs/<id>` | Job status and frozen selection |
+| `GET /ingest/runs/<id>/publication` | Fixed publication pointer for that exact completed bucket; otherwise `503` |
 | `GET /ingest/latest` | Small latest pointer; `503` when missing or older than 15 minutes |
 | `GET /ingest/receipts/<sha256>` | Immutable receipt for a complete publication |
 | `GET /ingest/artifacts/<sha256>` | Full 100-input artifact and scoped Score output |
@@ -82,9 +83,9 @@ The endpoint file must already contain the user's personal HTTPS `/info` endpoin
 
 ## CRE simulation
 
-See [the workflow README](../../packages/cre-workflows/ingest-cycle/README.md). It performs real HTTP calls to the running worker, submits the current bucket idempotently, checks a completed receipt's hash/completeness/freshness and reaches consensus on a small acknowledgement. It does not recompute Score or independently attest to Hyperliquid's data.
+See [the workflow README](../../packages/cre-workflows/ingest-cycle/README.md). It performs real HTTP calls to the running worker, submits the current bucket idempotently, checks the previous scheduled bucket's receipt and reaches consensus on a small acknowledgement. The fixed bucket prevents node-local `/latest` lookups disagreeing during a publication. It does not recompute Score or independently attest to Hyperliquid's data.
 
-The first collection is asynchronous. Until it finishes, `/ingest/latest` returns `503`; retry simulation after `/health` reports ready. When a new bucket has just started, CRE can verify the previous fresh complete batch while acknowledging the newly requested job. The result names both IDs explicitly.
+Collection is asynchronous. Simulate once the previous scheduled bucket has a complete publication; on startup this can require waiting for the next ten-minute boundary. CRE verifies that fresh complete batch while acknowledging the newly requested job. The result names both IDs explicitly and fails if the required previous bucket is unavailable.
 
 ## Verification
 

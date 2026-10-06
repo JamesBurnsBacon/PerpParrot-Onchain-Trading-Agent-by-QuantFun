@@ -162,7 +162,9 @@ export class LoopStore {
       this.saveRun({ ...run, status: "complete", finishedAt: now, artifactHash: hash, error: null });
       this.setState(`published:${hash}`, { runId: run.id });
       this.setState(`receipt:${receiptHash}`, { runId: run.id });
-      this.setState("latest", { runId: run.id, bucket: run.bucket, completedAt: now, artifactHash: hash, receiptHash, count: accounts.length });
+      const publication = { runId: run.id, bucket: run.bucket, completedAt: now, artifactHash: hash, receiptHash, count: accounts.length };
+      this.setState(`publication:${run.id}`, publication);
+      this.setState("latest", publication);
       this.setState("selection", { generatedAt: now, sourceRun: run.id, selected: next });
       return hash;
     })();

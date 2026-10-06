@@ -29,6 +29,11 @@ export function loopHandler(store: LoopStore, service: LoopService, now: () => n
       if (!store.state(`receipt:${receipt[1]}`)) return json({ error: "Receipt not published" }, 404);
       return new Response(store.raw(receipt[1]), { headers: { "Content-Type": "application/json", ETag: receipt[1], "Cache-Control": "public,max-age=31536000,immutable" } });
     }
+    const publication = /^\/ingest\/runs\/(ingest-[0-9]{10,13})\/publication$/.exec(path);
+    if (request.method === "GET" && publication) {
+      const fixed = store.state<Latest>(`publication:${publication[1]}`);
+      return fixed ? json(fixed) : json({ error: "Requested bucket has no complete publication" }, 503);
+    }
     const run = /^\/ingest\/runs\/(ingest-[0-9]{10,13})$/.exec(path);
     if (request.method === "GET" && run) {
       const found = store.run(run[1]); return found ? json(found) : json({ error: "Unknown run" }, 404);

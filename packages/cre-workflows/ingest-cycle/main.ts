@@ -17,7 +17,11 @@ const observe = (runtime: NodeRuntime<Config>, now: number): string => {
     if (!ok(response)) throw new Error(`Ingest endpoint failed: ${response.statusCode}`);
     return text(response);
   };
-  const latest = latestSchema.parse(JSON.parse(get("/ingest/latest")));
+  // All nodes verify the same scheduled bucket. Never independently choose a
+  // mutable /latest pointer at a publication boundary before identical consensus.
+  const previousBucket = bucket - 600_000;
+  const latest = latestSchema.parse(JSON.parse(get(`/ingest/runs/ingest-${previousBucket / 1000}/publication`)));
+  if (latest.bucket !== previousBucket) throw new Error("Publication belongs to the wrong scheduled bucket");
   const raw = get(`/ingest/receipts/${latest.receiptHash}`);
   return JSON.stringify({ requestedRunId: accepted.runId, ...checkReceipt(latest, raw, now, runtime.config.maxAgeSeconds) });
 };
@@ -25,8 +29,7 @@ const observe = (runtime: NodeRuntime<Config>, now: number): string => {
 const onCronTrigger = (runtime: Runtime<Config>): string => {
   const observation = runtime.runInNodeMode(observe, consensusIdenticalAggregation<string>())(runtime.now().getTime()).result();
   const verified = JSON.parse(observation);
-  const result = JSON.stringify({ mode: "local-simulation", status: verified.requestedRunId === verified.runId
-    ? "current-batch-verified" : "previous-batch-verified-current-requested", ...verified });
+  const result = JSON.stringify({ mode: "local-simulation", status: "previous-batch-verified-current-requested", ...verified });
   runtime.log(result);
   // Receiver-free: no report, signer, exchange call, or write capability exists.
   return result;
