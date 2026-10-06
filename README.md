@@ -171,7 +171,8 @@ Each node runs steps 1–3 (`runInNodeMode`); the DON agrees per field, then sig
    - Contents: the **frozen configuration** (below), the eligible-asset list, and per frozen source its equity and eligible positions (signed USD notional). Amounts are decimal strings × 1e6.
    - **Equity = HL's live account value** from the `portfolio` request (last point of the `day` window, live), not Σ per-dex `accountValue`. Most leaderboard traders use unified or portfolio-margin accounts (23 + 5 of 40 sampled), where per-dex `accountValue` is only the margin set aside on that dex; summing it understated equity, and so overstated leverage, by 2–10×. The portfolio value is also what the backtest's returns use.
    - The mirror rejects it if it's for another run, was taken > 120 s from `runAt`, contains an ineligible asset, doesn't cover exactly the frozen sources, or its configuration isn't the pinned one.
-2. **Spot-check 4 sources**: `clearinghouseState` on the core dex **and** `xyz` (HIP-3 positions only come back per dex) plus `portfolio` for equity, 3 calls each. The sample is seeded by the snapshot ID, so every node checks the same sources. Deviation = the larger of Σ |snapshot − live notional| and |snapshot − live equity|, over live equity. **Reject the run if the worst source exceeds 5%.**
+   - The backend only builds real run times (`:x0`) within 120 s of now, so nobody can pre-build a stale snapshot for a future run through the public endpoint.
+2. **Spot-check 4 sources**: `clearinghouseState` on the core dex **and** `xyz` (HIP-3 positions only come back per dex) plus `portfolio` for equity, 3 calls each. The sample is seeded with `Math.random()` drawn in DON mode, which the CRE SDK seeds per execution and identically on every node: nodes agree on it, but the backend can't predict which sources get checked. Deviation = the larger of Σ |snapshot − live notional| and |snapshot − live equity|, over live equity. **Reject the run if the worst source exceeds 5%.**
 3. **Exposures:** `exposure_c = Σᵢ wᵢ' · nᵢ,c / Eᵢ` per asset in bigint math (`packages/shared/copy.ts`), so every node gets identical results.
    - Weights are the frozen `weightUnits`; cash stays cash. Flat sources' weight goes to active ones (`wᵢ' = wᵢ · W_all / W_active`), but **never past a source's frozen ceiling** (the run fails instead). Gross exposure is capped at the policy's `maxGrossLeverage`.
    - **Consensus:** snapshot ID, snapshot hash, account and exposures are `identical`; the spot-check's max deviation is `median` (live reads differ slightly between nodes). Only ≤ 59 exposures go through consensus, not the snapshot, which stays under the 25 KB limit (a 25-source snapshot can be ~60 KB).
@@ -186,22 +187,25 @@ Each node runs steps 1–3 (`runInNodeMode`); the DON agrees per field, then sig
 
 ### 4.8 Execute (executor service on Railway)
 Code: `packages/executor`. One long-running Bun service (Railway, `Dockerfile` + `railway.json`), so there's one HL nonce sequence, an in-process run queue and no function timeout.
-- **Intake** (`POST /reports`): verify the report (≥ f+1 DON signatures, pinned workflow owner, §4.13), then check the configuration hash, our account and expiry, dedupe by report ID, **answer 200 at once** and execute in the background (DON nodes time out after 10 s). Runs are queued, never concurrent.
+- **Intake** (`POST /reports`): verify the report (≥ f+1 DON signatures, pinned workflow owner, optionally workflow name and DON, §4.13), then check the configuration hash, our account, expiry and lifetime (≤ 300 s), dedupe by report ID, **answer 200 at once** and execute in the background (DON nodes time out after 10 s). Runs are queued, never concurrent; expiry is re-checked when a run starts, and a run that takes over 60 s is failed and can no longer submit.
 - **Plan** against the live account (`src/planner.ts`):
   - target = reported exposure × our live equity (HL portfolio value) for every eligible asset; anything we hold that isn't targeted goes to 0
   - **margin rule:** if `Σ |N_c| / maxLev_c` would exceed **95% of equity**, scale **all** targets down pro-rata
   - **drift rule:** trade a leg only if the gap is ≥ $10 and ≥ 10% of the target; full closes are always allowed (reduce-only)
   - reductions first; reduce-only whenever an order only shrinks a position
   - **sanity bound:** reject the report if gross exposure > 10× (the policy caps it at `maxGrossLeverage`, 3× in the fixture)
+  - **own eligibility check:** never open, add to or flip a position in a market that isn't cross-margin with ≥ $15M OI by the executor's own reading, whatever the snapshot's list says (reductions still follow the sources)
+  - the $10 minimum is checked at the IOC limit price
 - **Orders:** IOC limit at mark ± 50 bps, prices and sizes rounded to HL tick/lot rules, ≤ 20 orders per action, a deterministic `cloid` per report and asset. Remainders are retried on the next run.
-- **Leverage:** cross margin; each asset at its **max leverage** (`updateLeverage`, once per asset; many HIP-3 markets are 10x, BTC up to 40x).
+- **Leverage:** cross margin; each asset at its **max leverage** (`updateLeverage`, once per asset; many HIP-3 markets are 10x, BTC up to 40x). If HL refuses for one asset, only that asset's order is skipped.
 - **Dry run by default:** orders are built and signed through `@nktkas/hyperliquid` exactly as they'd be sent, then recorded instead of POSTed. `DRY_RUN=false` plus `HL_API_WALLET_KEY` goes live.
 - **Keys:** a fresh EOA. A human holds the master key; the executor holds only an **HL API wallet** key (trade, no withdraw).
 - **Kill switch:** manual, bearer-token admin routes (any team member with `ADMIN_TOKEN`; the dashboard calls them behind auth).
   - **Pause / resume:** stop or restart trading, keep positions.
   - **Flatten:** pause, then close everything reduce-only, bypassing CRE.
-- **Run log:** `GET /runs` (plans, order results, raw signed reports) and `GET /status`. In memory until the Supabase tables land.
+- **Run log:** `GET /runs` (plans, order results, raw signed reports) and `GET /status`; stored in Supabase (`executor_runs`) when `DATABASE_URL` is set.
 - **Alerts:** Telegram bot (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`) for failed runs, failed orders and missed reports.
+- **Account mode: unified** (one USDC balance margins core and `xyz` perps; `scripts/setup-account.ts`). Equity and the margin rule use HL's account value, which is only all usable margin in unified mode.
 - **Capital:** 5 HYPE, currently on HyperEVM.
   - Keep **0.1 HYPE** there for gas.
   - Send ~4.9 HYPE to HyperCore via the system address `0x2222…2222` (verify).
@@ -259,7 +263,8 @@ Code: `packages/executor`. One long-running Bun service (Railway, `Dockerfile` +
 - **Verification** in the executor (`src/verify.ts`, `src/handler.ts`):
   - ≥ f+1 signatures from the DON's signers, read from the Capability Registry `0x76c9cf548b4179F8901cda1f8623568b58215E62` on **Ethereum mainnet** (cached per DON ID; e.g. DON 1: f = 3, 10 signers). The executor needs an Ethereum mainnet RPC.
   - `workflowOwner` in the header = our **organization address** `0xc5feb3cf878c9ba42a776e9edf62a4558ab08b85` (private registry, §4.14; `cre whoami -v` → `derivedWorkflowOwners`), from `WORKFLOW_OWNER`. **Don't pin the workflow ID:** it is a hash of the binary + config and changes on every update.
-  - `configurationHash` = `FROZEN_CONFIGURATION_HASH`, `account` = `HL_ACCOUNT`, now ≤ `expiresAt` (`asOf` + 300 s), and `asOf` no more than 60 s ahead of our clock.
+  - Optionally the 10-byte workflow name field (`WORKFLOW_NAME`, copied from the first real report) and `DON_ID`, so another workflow of ours, e.g. `mirror-staging`, can't drive the production executor.
+  - `configurationHash` = `FROZEN_CONFIGURATION_HASH`, `account` = `HL_ACCOUNT`, now ≤ `expiresAt`, `expiresAt − asOf` ≤ 300 s (our own cap, whatever the mirror config says), and `asOf` no more than 60 s ahead of our clock. Signer sets are re-read hourly; unknown DON IDs are remembered and lookups rate-limited.
 - **Simulation:** `cre workflow simulate` signs with local test keys, which fail verification, and stamps the next `:x0` as `asOf`. `VERIFY_REPORTS=false` (simulation mode: signatures must still recover) is refused in production; `MAX_REPORT_LEAD_SECONDS=600` covers the early stamp.
 
 ### 4.14 CRE setup and team access

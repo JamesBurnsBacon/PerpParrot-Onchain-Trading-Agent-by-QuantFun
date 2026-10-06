@@ -22,6 +22,8 @@ const mode: VerifyMode = config.verifyReports
       kind: "registry",
       signers: registrySigners(createPublicClient({ chain: mainnet, transport: http(config.ethRpcUrl) })),
       workflowOwner: config.workflowOwner,
+      workflowName: config.workflowName,
+      donId: config.donId,
     }
   : { kind: "simulation" };
 
@@ -42,6 +44,7 @@ const runner = new Runner({
   config: {
     account: config.account,
     maxGrossLeverage: config.maxGrossLeverage,
+    runTimeoutMs: config.runTimeoutMs,
     plan: {
       minOrderUsd: config.minOrderUsd,
       driftFraction: config.driftFraction,
@@ -58,6 +61,7 @@ const app = createApp({
     account: config.account,
     now: () => Math.floor(Date.now() / 1000),
     maxLeadSeconds: config.maxReportLeadSeconds,
+    maxTtlSeconds: config.maxReportTtlSeconds,
   },
   runner,
   store,
@@ -76,14 +80,14 @@ const app = createApp({
 // Reports are a few KB; cap bodies well above that.
 const server = Bun.serve({ port: config.port, fetch: app, maxRequestBodySize: 256 * 1024 });
 
-// Missed-run watchdog: mirror runs every 10 min, so silence means CRE runs are failing
-// (README §4.7: alert after 2 consecutive failures).
+// Missed-run watchdog: mirror runs every 10 min, so no finished run means CRE runs are
+// failing or a run is stuck (README §4.7: alert after 2 consecutive failures).
 const startedAt = Date.now();
 let alerted = false;
 setInterval(() => {
-  const since = Date.now() - (runner.lastReportAt || startedAt);
+  const since = Date.now() - (runner.lastFinishedAt || startedAt);
   if (since > config.missedRunAlertMinutes * 60_000) {
-    if (!alerted) void alert(`no report for ${Math.round(since / 60_000)} min`);
+    if (!alerted) void alert(`no finished run for ${Math.round(since / 60_000)} min (last report accepted ${runner.lastReportAt ? new Date(runner.lastReportAt).toISOString() : "never"})`);
     alerted = true;
   } else {
     alerted = false;

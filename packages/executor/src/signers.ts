@@ -12,6 +12,8 @@ export class SignerLookupError extends Error {}
 
 const NO_SIGNERS: DonSigners = { f: 0, signers: new Set() };
 const NEGATIVE_TTL_MS = 10 * 60_000;
+// Re-read signer sets hourly so a node removed from the DON stops being trusted.
+const SIGNERS_TTL_MS = 60 * 60_000;
 // Uncached lookups allowed per minute, so forged reports with made-up DON IDs
 // can't turn into unbounded RPC traffic.
 const LOOKUPS_PER_MINUTE = 10;
@@ -28,7 +30,7 @@ const u256 = (n: number) => {
 // getDON(uint32) + getNodesByP2PIds(bytes32[]), decoded by hand as in the CRE guide.
 // Signer sets only change on DON reconfiguration, so they're cached per DON ID.
 export const registrySigners = (client: PublicClient, now: () => number = Date.now): SignerSource => {
-  const cache = new Map<number, DonSigners>();
+  const cache = new Map<number, DonSigners & { until: number }>();
   // DON IDs the registry doesn't know (getDON reverts), remembered for a while.
   const unknown = new Map<number, number>();
   let windowStart = 0;
@@ -45,7 +47,7 @@ export const registrySigners = (client: PublicClient, now: () => number = Date.n
 
   return async (donId) => {
     const cached = cache.get(donId);
-    if (cached) return cached;
+    if (cached && cached.until > now()) return cached;
     if ((unknown.get(donId) ?? 0) > now()) return NO_SIGNERS;
 
     if (now() - windowStart >= 60_000) {
@@ -90,7 +92,7 @@ export const registrySigners = (client: PublicClient, now: () => number = Date.n
     }
 
     const result = { f, signers };
-    cache.set(donId, result);
+    cache.set(donId, { ...result, until: now() + SIGNERS_TTL_MS });
     return result;
   };
 };

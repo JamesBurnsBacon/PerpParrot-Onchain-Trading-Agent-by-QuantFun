@@ -7,6 +7,8 @@ export const REPORT_HEADER_LENGTH = 109;
 export type ReportHeader = {
   donId: number;
   workflowId: Hex;
+  // 10-byte workflow name field as the DON encodes it (pin it from a real report).
+  workflowName: Hex;
   workflowOwner: Hex;
   body: Uint8Array;
 };
@@ -19,6 +21,7 @@ export const parseHeader = (rawReport: Uint8Array): ReportHeader => {
   return {
     donId: view.getUint32(37, false),
     workflowId: toHex(rawReport.slice(45, 77)),
+    workflowName: toHex(rawReport.slice(77, 87)),
     workflowOwner: toHex(rawReport.slice(87, 107)),
     body: rawReport.slice(REPORT_HEADER_LENGTH),
   };

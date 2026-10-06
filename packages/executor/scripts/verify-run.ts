@@ -47,7 +47,7 @@ console.log(`run ${run.runId} (${run.status}${run.dryRun ? ", dry run" : ""})`);
 ok(
   simulation ? "signatures recover" : "≥ f+1 DON signatures from the Capability Registry, pinned workflow owner",
   true,
-  `${verified.signers.length} signers, DON ${verified.donId}, owner ${verified.workflowOwner}`,
+  `${verified.signers.length} signers, DON ${verified.donId}, owner ${verified.workflowOwner}, workflow name ${verified.workflowName}`,
 );
 ok("report ID = keccak256(report)", verified.id === run.id, verified.id);
 console.log(`  configuration ${body.configurationHash}`);

@@ -17,7 +17,7 @@ const fakeInfo = (account: { equity: string; core?: [string, string][]; xyz?: [s
         return [null, { name: "xyz" }];
       case "metaAndAssetCtxs":
         return req.dex === "xyz"
-          ? [{ universe: [{ name: "xyz:MSFT", szDecimals: 3, maxLeverage: 10 }] }, [{ markPx: "500" }]]
+          ? [{ universe: [{ name: "xyz:MSFT", szDecimals: 3, maxLeverage: 10 }] }, [{ markPx: "500", openInterest: "1000000" }]]
           : [
               {
                 universe: [
@@ -26,7 +26,7 @@ const fakeInfo = (account: { equity: string; core?: [string, string][]; xyz?: [s
                   { name: "OLD", szDecimals: 0, maxLeverage: 3, isDelisted: true },
                 ],
               },
-              [{ markPx: "100000" }, { markPx: "4000" }, { markPx: "1" }],
+              [{ markPx: "100000", openInterest: "1000" }, { markPx: "4000", openInterest: "100000" }, { markPx: "1", openInterest: "0" }],
             ];
       case "clearinghouseState": {
         const positions = (req.dex === "xyz" ? account.xyz : account.core) ?? [];
@@ -42,19 +42,20 @@ const setup = (info: InfoFn) => {
   const store = new MemoryStore();
   const exchange = createExchange({ dryRun: true });
   const alerts: string[] = [];
-  const runner = new Runner({
+  const runnerDeps = {
     store,
     exchange,
     info,
-    alert: async (m) => void alerts.push(m),
+    alert: async (m: string) => void alerts.push(m),
     now: () => AS_OF * 1000,
     config: {
       account: ACCOUNT,
       maxGrossLeverage: 50,
+      runTimeoutMs: 1_000,
       plan: { minOrderUsd: 10, driftFraction: 0.1, marginCap: 0.95, slippageBps: 50 },
     },
-  });
-  return { store, exchange, runner, alerts };
+  };
+  return { store, exchange, runner: new Runner(runnerDeps), runnerDeps, alerts };
 };
 
 const verified = async (b = body()) => verifyEnvelope(await envelope(keys.slice(0, 2), { body: b }), registry);
@@ -131,6 +132,53 @@ describe("Runner.executeReport (dry run)", () => {
     expect(alerts).toHaveLength(1);
   });
 
+  test("skips only the asset whose leverage update fails; reductions still go out", async () => {
+    const s = setup(fakeInfo({ equity: "400", core: [["ETH", "0.1"]] }));
+    const original = s.exchange.setLeverage;
+    s.exchange.setLeverage = async (assetId, lev) => {
+      if (assetId === 0) throw new Error("Invalid leverage value");
+      return original(assetId, lev);
+    };
+    // BTC (asset 0) opens: its leverage fails. ETH reduces from $400 to −$350: a flip, not reduce-only,
+    // so its leverage is set and it trades.
+    const run = await s.runner.executeReport(await verified(), {});
+    expect(run.status).toBe("executed");
+    expect(run.plan?.orders.map((o) => o.asset)).toEqual(["ETH"]);
+    expect(run.plan?.skipped).toContainEqual(expect.objectContaining({ asset: "BTC", reason: "LEVERAGE_FAILED" }));
+    expect(s.alerts[0]).toContain("leverage update failed for BTC");
+  });
+
+  test("doesn't execute a report that expired while queued", async () => {
+    const s = setup(fakeInfo({ equity: "400" }));
+    const late = new Runner({ ...s.runnerDeps, now: () => (AS_OF + 301) * 1000 });
+    const run = await late.executeReport(await verified(), {});
+    expect(run).toMatchObject({ status: "failed", error: "report expired before execution" });
+  });
+
+  test("times out a hung run, records it, and never submits from it", async () => {
+    let release: () => void = () => {};
+    const hang = new Promise<void>((r) => (release = r));
+    const base = fakeInfo({ equity: "400" });
+    let first = true;
+    const s = setup((async (req: Record<string, unknown>) => {
+      if (req.type === "portfolio" && first) {
+        first = false;
+        await hang;
+      }
+      return base(req);
+    }) as InfoFn);
+    const run = await s.runner.executeReport(await verified(), {});
+    expect(run).toMatchObject({ status: "failed", error: "run timed out after 1s" });
+    expect((await s.store.recentRuns(1))[0].error).toBe("run timed out after 1s");
+    // The next report runs; then the hung one wakes up and must not trade.
+    const next = await s.runner.executeReport(await verified(body({ runId: "mirror-2" })), {});
+    expect(next.status).toBe("executed");
+    const sentBefore = s.exchange.recorded().length;
+    release();
+    await Bun.sleep(20);
+    expect(s.exchange.recorded().length).toBe(sentBefore);
+  });
+
   test("records HL read failures as failed runs", async () => {
     const { runner } = setup((async () => {
       throw new Error("HL down");
@@ -177,7 +225,14 @@ describe("app routes", () => {
     const s = setup(fakeInfo({ equity: "400", core: [["BTC", "0.002"]] }));
     const logs: string[] = [];
     const app = createApp({
-      handler: { mode: registry, frozenConfigurationHash: CONFIGURATION, account: ACCOUNT, now: () => AS_OF + 10, maxLeadSeconds: 60 },
+      handler: {
+        mode: registry,
+        frozenConfigurationHash: CONFIGURATION,
+        account: ACCOUNT,
+        now: () => AS_OF + 10,
+        maxLeadSeconds: 60,
+        maxTtlSeconds: 300,
+      },
       runner: s.runner,
       store: s.store,
       adminToken,
@@ -254,6 +309,13 @@ describe("loadConfig", () => {
 
   test("requires an admin token in production", () => {
     expect(() => loadConfig({ ...base, NODE_ENV: "production" })).toThrow("ADMIN_TOKEN is required");
+  });
+
+  test("refuses to trade live on unverified reports", () => {
+    const key = `0x${"22".repeat(32)}` as Hex;
+    expect(() => loadConfig({ ...base, DRY_RUN: "false", HL_API_WALLET_KEY: key, VERIFY_REPORTS: "false" })).toThrow(
+      "only allowed with DRY_RUN",
+    );
   });
 
   test("requires the API wallet key to trade live", () => {

@@ -20,6 +20,10 @@ export type ExecutorConfig = {
   telegramChatId?: string;
   missedRunAlertMinutes: number;
   maxReportLeadSeconds: number;
+  maxReportTtlSeconds: number;
+  runTimeoutMs: number;
+  workflowName?: Hex;
+  donId?: number;
 };
 
 const hex = (name: string, value: string | undefined, bytes: number): Hex => {
@@ -44,6 +48,7 @@ export const loadConfig = (env: Record<string, string | undefined>): ExecutorCon
   const verifyReports = env.VERIFY_REPORTS !== "false";
   if (production && !verifyReports) throw new Error("VERIFY_REPORTS=false is not allowed in production");
   const dryRun = env.DRY_RUN !== "false";
+  if (!dryRun && !verifyReports) throw new Error("VERIFY_REPORTS=false is only allowed with DRY_RUN");
   const apiWalletKey = env.HL_API_WALLET_KEY ? hex("HL_API_WALLET_KEY", env.HL_API_WALLET_KEY, 32) : undefined;
   if (!dryRun && !apiWalletKey) throw new Error("HL_API_WALLET_KEY is required when DRY_RUN=false");
   if (production && !env.ADMIN_TOKEN) throw new Error("ADMIN_TOKEN is required in production");
@@ -68,5 +73,9 @@ export const loadConfig = (env: Record<string, string | undefined>): ExecutorCon
     telegramChatId: env.TELEGRAM_CHAT_ID || undefined,
     missedRunAlertMinutes: num(env, "MISSED_RUN_ALERT_MINUTES", 25),
     maxReportLeadSeconds: num(env, "MAX_REPORT_LEAD_SECONDS", 60),
+    maxReportTtlSeconds: num(env, "MAX_REPORT_TTL_SECONDS", 300),
+    runTimeoutMs: num(env, "RUN_TIMEOUT_SECONDS", 60) * 1000,
+    workflowName: env.WORKFLOW_NAME ? hex("WORKFLOW_NAME", env.WORKFLOW_NAME, 10) : undefined,
+    donId: env.DON_ID ? num(env, "DON_ID", 0) : undefined,
   };
 };

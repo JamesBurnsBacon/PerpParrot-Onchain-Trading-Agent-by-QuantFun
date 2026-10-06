@@ -10,6 +10,8 @@ export type HandlerDeps = {
   now: () => number;
   // How far asOf may be ahead of our clock (DON clock skew; the simulator stamps the next :x0).
   maxLeadSeconds: number;
+  // Longest report lifetime we accept (expiresAt − asOf), whatever the mirror config says.
+  maxTtlSeconds: number;
   claim: (id: string) => Promise<boolean>;
   // Starts execution without waiting for it: DON nodes time out after 10 s.
   accept: (report: VerifiedReport, envelope: ReportEnvelope) => void;
@@ -36,6 +38,7 @@ export const handleReport = async (payload: unknown, deps: HandlerDeps): Promise
   const now = deps.now();
   if (now > Number(body.expiresAt)) return reject(`expired report (${now - Number(body.expiresAt)}s past expiry)`);
   if (Number(body.asOf) > now + deps.maxLeadSeconds) return reject("report from the future");
+  if (Number(body.expiresAt - body.asOf) > deps.maxTtlSeconds) return reject("report lifetime too long");
 
   if (!(await deps.claim(id))) return { status: 200, body: { status: "duplicate", id } };
   deps.accept(report, payload as ReportEnvelope);

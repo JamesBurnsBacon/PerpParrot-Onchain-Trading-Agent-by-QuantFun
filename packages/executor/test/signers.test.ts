@@ -31,6 +31,19 @@ describe("registrySigners", () => {
     expect(c.calls()).toBe(1);
   });
 
+  test("re-reads a DON's signers after an hour", async () => {
+    let now = 0;
+    const c = client("ok");
+    const signers = registrySigners(c.client, () => now);
+    await signers(7);
+    now = 59 * 60_000;
+    await signers(7);
+    expect(c.calls()).toBe(1);
+    now = 61 * 60_000;
+    await signers(7);
+    expect(c.calls()).toBe(2);
+  });
+
   test("remembers unknown DON IDs instead of asking again", async () => {
     let now = 0;
     const c = client("revert");
@@ -62,6 +75,7 @@ describe("handleReport with an unreachable registry", () => {
       account: ACCOUNT,
       now: () => AS_OF,
       maxLeadSeconds: 60,
+      maxTtlSeconds: 300,
       claim: async () => true,
       accept: () => {},
     });

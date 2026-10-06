@@ -63,4 +63,4 @@ export const envelope = async (
 
 // f = 1 → 2 valid signatures required.
 export const don: DonSigners = { f: 1, signers: new Set(keys.map((k) => privateKeyToAccount(k).address.toLowerCase())) };
-export const registry: VerifyMode = { kind: "registry", signers: async () => don, workflowOwner: OWNER };
+export const registry: Extract<VerifyMode, { kind: "registry" }> = { kind: "registry", signers: async () => don, workflowOwner: OWNER };

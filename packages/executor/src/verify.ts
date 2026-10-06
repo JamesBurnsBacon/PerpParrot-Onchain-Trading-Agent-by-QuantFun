@@ -4,8 +4,10 @@ import { decodeBody, parseHeader, reportId, signedHash } from "./report";
 import type { SignerSource } from "./signers";
 
 export type VerifyMode =
-  // Production: ≥ f+1 registry signers and the pinned workflow owner.
-  | { kind: "registry"; signers: SignerSource; workflowOwner: Hex }
+  // Production: ≥ f+1 registry signers and the pinned workflow owner. Optionally also
+  // the workflow name and DON, so another workflow of ours (e.g. mirror-staging)
+  // pointed at this executor can't drive it.
+  | { kind: "registry"; signers: SignerSource; workflowOwner: Hex; workflowName?: Hex; donId?: number }
   // `cre workflow simulate` signs with throwaway keys that aren't in the registry,
   // so only check that the signatures recover. Never allowed in production.
   | { kind: "simulation" };
@@ -13,6 +15,7 @@ export type VerifyMode =
 export type VerifiedReport = {
   id: Hex;
   donId: number;
+  workflowName: Hex;
   workflowOwner: Hex;
   signers: string[];
   body: MirrorReport;
@@ -54,6 +57,10 @@ export const verifyEnvelope = async (envelope: ReportEnvelope, mode: VerifyMode)
     if (header.workflowOwner.toLowerCase() !== mode.workflowOwner.toLowerCase()) {
       throw new Error(`unexpected workflow owner ${header.workflowOwner}`);
     }
+    if (mode.workflowName && header.workflowName.toLowerCase() !== mode.workflowName.toLowerCase()) {
+      throw new Error(`unexpected workflow name ${header.workflowName}`);
+    }
+    if (mode.donId !== undefined && header.donId !== mode.donId) throw new Error(`unexpected DON ${header.donId}`);
     const { f, signers } = await mode.signers(header.donId);
     const valid = [...recovered].filter((a) => signers.has(a)).length;
     if (valid < f + 1) throw new Error(`insufficient valid signatures: ${valid}/${f + 1}`);
@@ -64,6 +71,7 @@ export const verifyEnvelope = async (envelope: ReportEnvelope, mode: VerifyMode)
   return {
     id: reportId(rawReport),
     donId: header.donId,
+    workflowName: header.workflowName,
     workflowOwner: header.workflowOwner,
     signers: [...recovered],
     body: decodeBody(header.body),

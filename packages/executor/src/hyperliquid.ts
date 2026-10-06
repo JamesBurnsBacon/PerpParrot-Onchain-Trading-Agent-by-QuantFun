@@ -18,8 +18,14 @@ export const httpInfo =
     return (await res.json()) as T;
   };
 
-type Meta = { universe: { name: string; szDecimals: number; maxLeverage: number; isDelisted?: boolean }[] };
-type Ctx = { markPx: string | null };
+type Meta = {
+  universe: { name: string; szDecimals: number; maxLeverage: number; isDelisted?: boolean; onlyIsolated?: boolean; marginMode?: string }[];
+  collateralToken?: number;
+};
+type Ctx = { markPx: string | null; openInterest?: string };
+
+// README §4.4: assets stay eligible down to $15M OI (hysteresis floor).
+export const MIN_TRADABLE_OI_USD = 15_000_000;
 
 // Asset IDs: core perps use their index; builder (HIP-3) dexes use
 // 100000 + dexIndex × 10000 + index (same rule as @nktkas/hyperliquid SymbolConverter).
@@ -34,7 +40,10 @@ export const loadMarkets = async (info: InfoFn): Promise<Map<string, Market>> =>
     meta.universe.forEach((u, i) => {
       const markPx = Number(ctxs[i]?.markPx);
       if (u.isDelisted || !(markPx > 0)) return;
-      markets.set(u.name, { name: u.name, assetId: offset + i, szDecimals: u.szDecimals, maxLeverage: u.maxLeverage, markPx });
+      const cross = !u.onlyIsolated && u.marginMode !== "noCross" && u.marginMode !== "strictIsolated";
+      const usdc = (meta.collateralToken ?? 0) === 0;
+      const tradable = cross && usdc && Number(ctxs[i]?.openInterest ?? 0) * markPx >= MIN_TRADABLE_OI_USD;
+      markets.set(u.name, { name: u.name, assetId: offset + i, szDecimals: u.szDecimals, maxLeverage: u.maxLeverage, markPx, tradable });
     });
   }
   return markets;

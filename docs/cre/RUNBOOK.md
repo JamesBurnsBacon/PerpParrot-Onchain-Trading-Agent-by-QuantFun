@@ -56,7 +56,11 @@ Unit tests per package: `bun test` in `packages/backend`, `packages/executor`,
 | `MIN_ORDER_USD` / `DRIFT_FRACTION` / `MARGIN_CAP` | no | `10` / `0.1` / `0.95` | README §4.4, §4.8 |
 | `MAX_GROSS_LEVERAGE` | no | `10` | Sanity bound: reject reports whose gross exposure exceeds this |
 | `MAX_REPORT_LEAD_SECONDS` | no | `60` | How far `asOf` may be ahead of our clock (`600` for simulation) |
-| `MISSED_RUN_ALERT_MINUTES` | no | `25` | Alert after this long without a report |
+| `MAX_REPORT_TTL_SECONDS` | no | `300` | Longest report lifetime accepted (`expiresAt − asOf`) |
+| `RUN_TIMEOUT_SECONDS` | no | `60` | A run taking longer is failed and can no longer submit |
+| `WORKFLOW_NAME` | after deploy | — | 10-byte hex from the first real report (`verify-run` prints it); pins the production workflow |
+| `DON_ID` | after deploy | — | Pins the DON (`verify-run` prints it) |
+| `MISSED_RUN_ALERT_MINUTES` | no | `25` | Alert after this long without a finished run |
 
 ### `mirror` workflow (`config.production.json`)
 
@@ -77,7 +81,9 @@ The production file holds placeholders until the services are deployed and the s
    `packages/cre-workflows/mirror/config.production.json`, merge, then run the **CRE deploy**
    GitHub Action (`mirror`, `production-settings`). Needs deploy access and `CRE_API_KEY`.
 5. **Watch a dry-run cycle:** `GET {executor}/runs?limit=3` should show a run every 10 minutes
-   with `status: "executed"`, `dryRun: true` and a plan you agree with.
+   with `status: "executed"`, `dryRun: true` and a plan you agree with. Then run
+   `bun run scripts/verify-run.ts --executor … --backend …` in `packages/executor` and set
+   `WORKFLOW_NAME` and `DON_ID` on the executor from what it prints.
 6. **Go live:**
    1. Fund the account (README §4.8 Capital): USDC in the account, no other transfers needed in
       unified mode.

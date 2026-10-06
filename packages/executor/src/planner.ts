@@ -8,6 +8,9 @@ export type Market = {
   szDecimals: number;
   maxLeverage: number;
   markPx: number;
+  // Our own eligibility check (cross margin allowed, OI ≥ the $15M hysteresis floor),
+  // independent of the backend's list. False: we may reduce but never open or add.
+  tradable: boolean;
 };
 
 export type LivePosition = {
@@ -46,7 +49,7 @@ export type PlannedOrder = {
 
 export type SkippedLeg = {
   asset: string;
-  reason: "BELOW_DRIFT" | "BELOW_MIN_ORDER" | "UNKNOWN_MARKET" | "SIZE_ROUNDS_TO_ZERO";
+  reason: "BELOW_DRIFT" | "BELOW_MIN_ORDER" | "UNKNOWN_MARKET" | "SIZE_ROUNDS_TO_ZERO" | "NOT_TRADABLE" | "LEVERAGE_FAILED";
   targetUsd: number;
   currentUsd: number;
 };
@@ -92,12 +95,18 @@ export const planOrders = (
   for (const asset of assets) {
     const market = markets.get(asset);
     const szi = account.positions.get(asset)?.szi ?? 0;
-    const targetUsd = (targetsUsd.get(asset) ?? 0) * scale;
+    let targetUsd = (targetsUsd.get(asset) ?? 0) * scale;
     if (!market) {
       skipped.push({ asset, reason: "UNKNOWN_MARKET", targetUsd, currentUsd: 0 });
       continue;
     }
     const currentUsd = szi * market.markPx;
+    if (!market.tradable) {
+      // Follow reductions only: never open, add to or flip a position here.
+      const capped = Math.sign(targetUsd) === Math.sign(currentUsd) ? Math.sign(targetUsd) * Math.min(Math.abs(targetUsd), Math.abs(currentUsd)) : 0;
+      if (capped !== targetUsd && targetUsd !== 0) skipped.push({ asset, reason: "NOT_TRADABLE", targetUsd, currentUsd });
+      targetUsd = capped;
+    }
     const gapUsd = targetUsd - currentUsd;
     const leg = { asset, targetUsd, currentUsd };
     if (gapUsd === 0) continue;
@@ -123,17 +132,19 @@ export const planOrders = (
       skipped.push({ ...leg, reason: "SIZE_ROUNDS_TO_ZERO" });
       continue;
     }
+    // formatPrice truncates, so strip float noise first (100000 × 1.005 = 100499.99…).
+    const slip = cfg.slippageBps / 10_000;
+    const price = formatPrice(Number((market.markPx * (isBuy ? 1 + slip : 1 - slip)).toPrecision(12)), market.szDecimals);
     const notionalUsd = (isBuy ? 1 : -1) * Number(size) * market.markPx;
-    if (!fullClose && Math.abs(notionalUsd) < cfg.minOrderUsd) {
+    // HL's $10 minimum applies to the order itself, so check it at the limit price
+    // (a sell at mark − 50 bps is worth less than at mark).
+    if (!fullClose && Number(size) * Number(price) < cfg.minOrderUsd) {
       skipped.push({ ...leg, reason: "BELOW_MIN_ORDER" });
       continue;
     }
 
     // Reduce-only when the order only shrinks the current position (never flips it).
     const reduceOnly = fullClose || (szi !== 0 && Math.sign(gapUsd) === -Math.sign(szi) && Math.abs(gapUsd) <= Math.abs(currentUsd));
-    // formatPrice truncates, so strip float noise first (100000 × 1.005 = 100499.99…).
-    const slip = cfg.slippageBps / 10_000;
-    const price = formatPrice(Number((market.markPx * (isBuy ? 1 + slip : 1 - slip)).toPrecision(12)), market.szDecimals);
     orders.push({ asset, assetId: market.assetId, isBuy, price, size, reduceOnly, notionalUsd, targetUsd, currentUsd });
   }
 

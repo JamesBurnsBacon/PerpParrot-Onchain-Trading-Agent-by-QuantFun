@@ -2,9 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { marginScale, planFlatten, planOrders, type LiveAccount, type Market, type PlanConfig } from "../src/planner";
 
 const markets = new Map<string, Market>([
-  ["BTC", { name: "BTC", assetId: 0, szDecimals: 5, maxLeverage: 40, markPx: 100_000 }],
-  ["ETH", { name: "ETH", assetId: 1, szDecimals: 4, maxLeverage: 25, markPx: 4_000 }],
-  ["xyz:MSFT", { name: "xyz:MSFT", assetId: 110_005, szDecimals: 3, maxLeverage: 10, markPx: 500 }],
+  ["BTC", { name: "BTC", assetId: 0, szDecimals: 5, maxLeverage: 40, markPx: 100_000, tradable: true }],
+  ["ETH", { name: "ETH", assetId: 1, szDecimals: 4, maxLeverage: 25, markPx: 4_000, tradable: true }],
+  ["xyz:MSFT", { name: "xyz:MSFT", assetId: 110_005, szDecimals: 3, maxLeverage: 10, markPx: 500, tradable: true }],
 ]);
 
 const cfg: PlanConfig = { minOrderUsd: 10, driftFraction: 0.1, marginCap: 0.95, slippageBps: 50 };
@@ -71,6 +71,27 @@ describe("planOrders", () => {
       ["BTC", true],
       ["ETH", false],
     ]);
+  });
+
+  test("checks the $10 minimum at the limit price", () => {
+    // Sell $10.04 of ETH: at mark it's ≥ $10, at mark − 50 bps it isn't.
+    const plan = planOrders(targets({ ETH: -10.04 }), account(470), markets, cfg);
+    expect(plan.orders).toEqual([]);
+    expect(plan.skipped).toEqual([expect.objectContaining({ asset: "ETH", reason: "BELOW_MIN_ORDER" })]);
+  });
+
+  test("never opens or adds to a market that fails our own eligibility check", () => {
+    const thin = new Map(markets).set("ETH", { ...markets.get("ETH")!, tradable: false });
+    const open = planOrders(targets({ ETH: 200 }), account(470), thin, cfg);
+    expect(open.orders).toEqual([]);
+    expect(open.skipped).toEqual([expect.objectContaining({ asset: "ETH", reason: "NOT_TRADABLE" })]);
+    // Holding 0.05 ETH ($200): a bigger target is capped, a smaller one is followed down.
+    expect(planOrders(targets({ ETH: 400 }), account(470, { ETH: 0.05 }), thin, cfg).orders).toEqual([]);
+    const reduce = planOrders(targets({ ETH: 100 }), account(470, { ETH: 0.05 }), thin, cfg);
+    expect(reduce.orders).toEqual([expect.objectContaining({ asset: "ETH", isBuy: false, size: "0.025", reduceOnly: true })]);
+    // Flipping is not allowed either: close instead.
+    const flip = planOrders(targets({ ETH: -100 }), account(470, { ETH: 0.05 }), thin, cfg);
+    expect(flip.orders).toEqual([expect.objectContaining({ asset: "ETH", isBuy: false, size: "0.05", reduceOnly: true })]);
   });
 
   test("reports assets without market data", () => {

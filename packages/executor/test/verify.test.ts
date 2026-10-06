@@ -3,7 +3,7 @@ import type { Hex } from "viem";
 import { generatePrivateKey } from "viem/accounts";
 import { handleReport, type HandlerDeps } from "../src/handler";
 import { verifyEnvelope } from "../src/verify";
-import { ACCOUNT, AS_OF, body, DON_ID, envelope, keys, CONFIGURATION, registry } from "./helpers";
+import { ACCOUNT, AS_OF, body, CONFIGURATION, DON_ID, envelope, keys, registry } from "./helpers";
 
 describe("verifyEnvelope (registry)", () => {
   test("accepts f+1 registry signatures and decodes the body", async () => {
@@ -42,6 +42,14 @@ describe("verifyEnvelope (registry)", () => {
     await expect(verifyEnvelope({ report: "0xzz", context: "", signatures: [] }, registry)).rejects.toThrow("hex without 0x");
   });
 
+  test("pins the workflow name and DON when configured", async () => {
+    const env = await envelope(keys.slice(0, 2));
+    const name = `0x${"00".repeat(10)}` as Hex; // the test header leaves the name field zeroed
+    await expect(verifyEnvelope(env, { ...registry, workflowName: name, donId: DON_ID })).resolves.toMatchObject({ workflowName: name });
+    await expect(verifyEnvelope(env, { ...registry, workflowName: `0x${"11".repeat(10)}` })).rejects.toThrow("unexpected workflow name");
+    await expect(verifyEnvelope(env, { ...registry, donId: DON_ID + 1 })).rejects.toThrow("unexpected DON");
+  });
+
   test("rejects a missing signatures array", async () => {
     const env = await envelope(keys.slice(0, 2));
     await expect(verifyEnvelope({ ...env, signatures: undefined as unknown as string[] }, registry)).rejects.toThrow(
@@ -74,6 +82,7 @@ describe("handleReport", () => {
       account: ACCOUNT,
       now: () => AS_OF + 10,
       maxLeadSeconds: 60,
+      maxTtlSeconds: 300,
       claim: async (id) => !claimed.has(id) && Boolean(claimed.add(id)),
       accept: (r) => void accepted.push(r.body.runId),
       ...overrides,
@@ -103,6 +112,11 @@ describe("handleReport", () => {
   test("rejects reports from the future", async () => {
     const r = await handleReport(await envelope(keys.slice(0, 2)), deps({ now: () => AS_OF - 61 }).d);
     expect(r).toMatchObject({ status: 422, body: { error: "report from the future" } });
+  });
+
+  test("rejects reports that would stay valid too long", async () => {
+    const long = await envelope(keys.slice(0, 2), { body: body({ expiresAt: BigInt(AS_OF + 3600) }) });
+    expect(await handleReport(long, deps().d)).toMatchObject({ status: 422, body: { error: "report lifetime too long" } });
   });
 
   test("rejects a different frozen configuration", async () => {
