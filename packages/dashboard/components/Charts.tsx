@@ -165,3 +165,72 @@ export function Funnel({ steps }: { steps: { stage: string; label: string; count
     </div>
   );
 }
+
+const SKIP_LABEL: Record<string, string> = {
+  BELOW_DRIFT: "within drift",
+  BELOW_MIN_ORDER: "under $10",
+  NOT_TRADABLE: "not tradable",
+  UNKNOWN_MARKET: "no market",
+  SIZE_ROUNDS_TO_ZERO: "rounds to 0",
+  LEVERAGE_FAILED: "leverage failed",
+};
+
+// Last run, per asset: target (bar) vs held before the run (tick), and what the executor did.
+export function TargetsVsHeld({ run }: { run: Run }) {
+  const [ref, width] = useWidth<HTMLDivElement>(480);
+  const [hover, setHover] = useState<string | null>(null);
+  const equity = run.equityUsd ?? 0;
+  const legs = [
+    ...(run.plan?.orders ?? []).map((o) => ({
+      asset: o.asset,
+      target: o.targetUsd,
+      held: o.currentUsd,
+      action: `${o.isBuy ? "▲ buy" : "▼ sell"} ${Math.abs(o.notionalUsd).toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })}`,
+      traded: true,
+    })),
+    ...(run.plan?.skipped ?? []).map((s) => ({ asset: s.asset, target: s.targetUsd, held: s.currentUsd, action: `· ${SKIP_LABEL[s.reason] ?? s.reason}`, traded: false })),
+  ];
+  if (!legs.length || !(equity > 0)) return <Waiting what="Nothing to trade in the last run" source="executor /runs · plan" />;
+  const rows = legs.sort((a, b) => Math.max(Math.abs(b.target), Math.abs(b.held)) - Math.max(Math.abs(a.target), Math.abs(a.held))).slice(0, 14);
+  const hidden = legs.length - rows.length;
+  const max = Math.max(...rows.map((r) => Math.max(Math.abs(r.target), Math.abs(r.held)) / equity), 0.01);
+  const labelW = 92;
+  const actionW = 96;
+  const half = (width - labelW - actionW - 16) / 2;
+  const mid = labelW + half;
+  const x = (usd: number) => mid + (usd / equity / max) * half;
+  const rowH = 20;
+  return (
+    <div ref={ref} className="min-w-0 overflow-hidden">
+      <svg width={width} height={rows.length * rowH + 4} role="img" aria-label="Target vs held exposure per asset, last run">
+        <line x1={mid} x2={mid} y1={0} y2={rows.length * rowH} stroke="var(--axis)" />
+        {rows.map((r, i) => {
+          const yy = i * rowH + 3;
+          const long = r.target >= 0;
+          const w = Math.max(2, Math.abs(x(r.target) - mid));
+          return (
+            <g key={r.asset} onPointerEnter={() => setHover(r.asset)} onPointerLeave={() => setHover(null)}>
+              <rect x={0} y={yy - 3} width={width} height={rowH} fill={hover === r.asset ? "var(--grid)" : "transparent"} opacity={0.5} />
+              <text x={labelW - 8} y={yy + 7} dy="0.32em" textAnchor="end" fontSize="11" fill="var(--ink-2)">{r.asset}</text>
+              <rect x={long ? mid + 1 : mid - 1 - w} y={yy} width={w} height={14} rx={4} fill={long ? "var(--long)" : "var(--short)"} opacity={0.45} />
+              <rect x={x(r.held) - 1.5} y={yy - 2} width={3} height={18} rx={1.5} fill="var(--ink)" />
+              <text x={width - actionW} y={yy + 7} dy="0.32em" fontSize="11" fill={r.traded ? "var(--ink)" : "var(--muted)"} className="tabular">{r.action}</text>
+            </g>
+          );
+        })}
+      </svg>
+      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs" style={{ color: "var(--ink-2)" }}>
+        <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-sm opacity-45" style={{ background: "var(--long)" }} />Target</span>
+        <span className="inline-flex items-center gap-1.5"><span className="inline-block h-3 w-[3px] rounded-sm" style={{ background: "var(--ink)" }} />Held before the run</span>
+        <span style={{ color: "var(--muted)" }}>
+          {hover
+            ? (() => {
+                const r = rows.find((l) => l.asset === hover)!;
+                return `${r.asset}: target ${pct((r.target / equity) * 100, 1)}, held ${pct((r.held / equity) * 100, 1)}`;
+              })()
+            : `% of equity${hidden > 0 ? ` · ${hidden} more legs` : ""}${run.plan?.marginScale !== undefined && run.plan.marginScale < 1 ? ` · margin rule scaled targets ×${run.plan.marginScale.toFixed(2)}` : ""}`}
+        </span>
+      </div>
+    </div>
+  );
+}

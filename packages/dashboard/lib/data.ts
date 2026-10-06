@@ -32,7 +32,11 @@ export type Run = {
   equityUsd?: number;
   error?: string;
   orders?: number; // summaries only
-  plan?: { orders: { asset: string; isBuy: boolean; notionalUsd: number }[]; skipped: unknown[] };
+  plan?: {
+    orders: { asset: string; isBuy: boolean; notionalUsd: number; targetUsd: number; currentUsd: number }[];
+    skipped: { asset: string; reason: string; targetUsd: number; currentUsd: number }[];
+    marginScale?: number;
+  };
   results?: { status: string }[];
   envelope?: { report: string; context: string; signatures: string[] };
 };
