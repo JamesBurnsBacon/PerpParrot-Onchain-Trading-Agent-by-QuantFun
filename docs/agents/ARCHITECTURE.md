@@ -1,6 +1,6 @@
 # Agent / CRE architecture v1
 
-Status: additive design contract, not deployed trading code. The repository at base
+Status: additive design contract with an offline review core; not deployed trading code. See [integration guide](INTEGRATION.md) for implemented behavior and required adapters. The repository at base
 `0f07e229028c84d62caecf00d1e842adc774a9e8` contains only README.md. No existing
 TypeScript API, database schema, SDK version or executor implementation is available
 to validate. These files define the next integration boundary, not a claim that
