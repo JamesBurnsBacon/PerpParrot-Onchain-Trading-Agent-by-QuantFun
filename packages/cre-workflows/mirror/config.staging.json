@@ -1,3 +1,5 @@
 {
-  "schedule": "0 */10 * * * *"
+  "schedule": "0 */10 * * * *",
+  "executorUrl": "http://localhost:8787/reports",
+  "frozenSetHash": "0x0000000000000000000000000000000000000000000000000000000000000001"
 }

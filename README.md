@@ -246,6 +246,11 @@ That is ≤ 13 HTTP calls, under CRE's limit of 15.
   - `workflowOwner` in the header = our **organization address** (private registry, §4.14; shown in the CRE platform UI). **Don't pin the workflow ID:** it is a hash of the binary + config and changes on every update.
   - Reject reports whose `asOf` is older than 5 minutes.
 - **Simulation:** `cre workflow simulate` signs with local test keys, which fail verification. `VERIFY_REPORTS=false` is allowed only outside production; the executor refuses to start with it in production.
+- **Spike status (2026-10-06):** passed end to end in simulation.
+  - `mirror/` signs a fixture of 3 targets and `sendReport()`s it to the local executor (`packages/executor`, `bun run dev`), which recovers all 4 simulator signatures, decodes the body, and executes once. The body ABI lives in `packages/shared/report.ts`.
+  - The registry code reads real signer sets from Ethereum mainnet (e.g. DON 1: f = 3, 10 signers → 4 signatures needed).
+  - Not yet exercised against a real DON: the f+1 registry check, the owner pin, and dedupe across nodes (the simulator is one node). Unit tests cover all three.
+  - `mirror`'s production `executorUrl` is a placeholder until the executor is deployed, so the CI simulate step fails for `mirror` until then.
 
 ### 4.14 CRE setup and team access
 - **Organization** `PerpParrot`: James is the Owner. Ownership can't be transferred, and only the Owner can invite members. Teammates have been invited; members see every workflow, its runs and status at app.chain.link/cre/workflows.
