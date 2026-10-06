@@ -8,7 +8,7 @@
 #   ./scripts/soak-mirror.sh                  # 40 rounds, 90 s apart
 #   ROUNDS=10 INTERVAL=60 ./scripts/soak-mirror.sh
 #   DATABASE_URL=postgres://… ./scripts/soak-mirror.sh   # services on Postgres
-#   TIMING=production ROUNDS=12 ./scripts/soak-mirror.sh # one round per 10-min run, at :x9:57
+#   TIMING=production ROUNDS=12 ./scripts/soak-mirror.sh # one round per 10-min run, at :x9:50
 #
 # TIMING=production measures the spot-check deviation the DON will see: the snapshot is the
 # one the service's own scheduler prebuilt at ~:x8:30, checked ~90 s later. The default
@@ -46,10 +46,14 @@ code_state() {
 }
 START_STATE="$(code_state)"
 
-(cd "$ROOT/packages/backend" && PORT=8788 SNAPSHOT_MAX_LEAD_SECONDS=600 CONFIGURATION_PATH="$CONFIGURATION" \
+# The simulator stamps the next :x0, so the default timing needs 600 s of lead on both
+# services; production timing runs with the production limits.
+if [ "$TIMING" = production ]; then SNAPSHOT_LEAD=120 REPORT_LEAD=60; else SNAPSHOT_LEAD=600 REPORT_LEAD=600; fi
+
+(cd "$ROOT/packages/backend" && PORT=8788 SNAPSHOT_MAX_LEAD_SECONDS=$SNAPSHOT_LEAD CONFIGURATION_PATH="$CONFIGURATION" \
   FROZEN_CONFIGURATION_HASH="$CONFIGURATION_HASH" exec bun run src/server.ts >>"$OUT/backend.log" 2>&1) &
 PIDS+=($!)
-(cd "$ROOT/packages/executor" && PORT=8787 VERIFY_REPORTS=false DRY_RUN=true HL_ACCOUNT="$ACCOUNT" MAX_REPORT_LEAD_SECONDS=600 \
+(cd "$ROOT/packages/executor" && PORT=8787 VERIFY_REPORTS=false DRY_RUN=true HL_ACCOUNT="$ACCOUNT" MAX_REPORT_LEAD_SECONDS=$REPORT_LEAD \
   FROZEN_CONFIGURATION_HASH="$CONFIGURATION_HASH" WORKFLOW_OWNER=0xc5feb3cf878c9ba42a776e9edf62a4558ab08b85 \
   exec bun run src/server.ts >>"$OUT/executor.log" 2>&1) &
 PIDS+=($!)
@@ -57,9 +61,10 @@ for url in http://localhost:8788/health http://localhost:8787/health; do
   for _ in $(seq 1 50); do curl -sf "$url" >/dev/null && break; sleep 0.2; done
   curl -sf "$url" >/dev/null || { echo "service at $url didn't start"; cat "$OUT"/*.log; exit 1; }
 done
+SERVICES_AT=$(date +%s)
 
 if [ "$TIMING" = production ]; then
-  echo "soak: $ROUNDS rounds at :x9:57 (production timing), logs in $OUT"
+  echo "soak: $ROUNDS rounds at :x9:50 (production timing and limits), logs in $OUT"
 else
   echo "soak: $ROUNDS rounds, ${INTERVAL}s apart, logs in $OUT"
 fi
@@ -68,10 +73,11 @@ for i in $(seq 1 "$ROUNDS"); do
     echo "stopping: the code changed during the soak (rounds after this would test a mix of versions)"
     break
   fi
-  # Production timing: simulate 3 s before the run, so the simulator's run time (the next
-  # :x0) is the one whose snapshot the scheduler prebuilt.
+  # Production timing: start 10 s before the run (the simulator compiles for ~4 s before it
+  # reads the clock and stamps the next :x0), in a window whose snapshot the scheduler
+  # prebuilt at ~:x8:30, so not within 2 minutes of the services starting.
   if [ "$TIMING" = production ]; then
-    until s=$(( $(date +%s) % 600 )); [ "$s" -ge 597 ]; do sleep 1; done
+    until s=$(( $(date +%s) % 600 )); [ "$s" -ge 590 ] && [ "$s" -le 594 ] && [ $(( $(date +%s) - SERVICES_AT )) -gt 120 ]; do sleep 1; done
   fi
   t0=$(date +%s)
   if out=$(cd "$ROOT/packages/cre-workflows" && "$CRE" workflow simulate mirror --target staging-settings --trigger-index 0 --non-interactive 2>&1); then
@@ -82,9 +88,11 @@ for i in $(seq 1 "$ROUNDS"); do
   dev=$(echo "$out" | grep -o "max deviation [0-9]* bps" | grep -o "[0-9]*" | head -1 || true)
   err=$(echo "$out" | grep -o "execution failed: .*" | head -1 | cut -c1-200 | tr '"' "'" || true)
   snap=$(echo "$out" | grep -o "snap-[0-9]*" | head -1 || true)
-  printf '{"i":%d,"t":"%s","ok":%s,"secs":%d,"snap":"%s","devBps":%s,"err":"%s"}\n' \
+  # leadS: run time minus start; about 10 in production timing (600 means it stamped the run after).
+  lead=$([ -n "$snap" ] && echo $(( ${snap#snap-} - t0 )) || echo null)
+  printf '{"i":%d,"t":"%s","ok":%s,"secs":%d,"snap":"%s","leadS":%s,"devBps":%s,"err":"%s"}\n' \
     "$i" "$(date -u +%H:%M:%S)" "$([ $rc = 0 ] && echo true || echo false)" "$(( $(date +%s) - t0 ))" \
-    "$snap" "${dev:-null}" "$err" | tee -a "$RESULTS"
+    "$snap" "$lead" "${dev:-null}" "$err" | tee -a "$RESULTS"
   [ "$i" -lt "$ROUNDS" ] && [ "$TIMING" != production ] && sleep "$INTERVAL"
 done
 
