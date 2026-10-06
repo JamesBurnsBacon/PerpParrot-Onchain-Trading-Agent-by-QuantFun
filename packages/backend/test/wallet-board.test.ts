@@ -1,3 +1,4 @@
+import { SAMPLE_WALLET_IDS } from "../../shared/sample-wallet-ids";
 import { expect, test } from "bun:test";
 import * as strategy from "../src/chat/strategy";
 import { strategyFacts, handleLiveStrategy, type LiveDeps } from "../src/live/handler";
@@ -14,8 +15,8 @@ const deps = (): LiveDeps => ({ env: readLiveEnv({ LIVE_ENABLED: "true" }), chat
 const request = (body: unknown) => new Request("http://localhost/live/strategy", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 const { reply, clarify, ...intent } = intents.balanced;
 test("previous accepts known IDs and rejects unknown, oversize, duplicates and unknown keys", async () => {
-  expect((await handleLiveStrategy(request({ intent, previous: ["addr-01"] }), deps())).status).toBe(200);
-  for (const body of [{ intent, previous: ["unknown"] }, { intent, previous: Array.from({ length: 26 }, (_, i) => `addr-${String(i + 1).padStart(2, "0")}`) }, { intent, previous: ["addr-01", "addr-01"] }, { intent, previous: [], extra: true }, { intent, previous: null }])
+  expect((await handleLiveStrategy(request({ intent, previous: ["0x448bbd0cfd9c8aa81c4db28a36edca446d5e3609"] }), deps())).status).toBe(200);
+  for (const body of [{ intent, previous: ["0xffffffffffffffffffffffffffffffffffffffff"] }, { intent, previous: Array.from({ length: 26 }, (_, i) => SAMPLE_WALLET_IDS[i]) }, { intent, previous: ["0x448bbd0cfd9c8aa81c4db28a36edca446d5e3609", "0x448bbd0cfd9c8aa81c4db28a36edca446d5e3609"] }, { intent, previous: [], extra: true }, { intent, previous: null }])
     expect((await handleLiveStrategy(request(body), deps())).status).toBe(400);
 });
 test("selection reasons describe actual pipeline exclusions and additions", async () => {
@@ -31,7 +32,7 @@ test("selection reasons describe actual pipeline exclusions and additions", asyn
     expect(e.maxDrawdown).toBe(Math.round(f.maxDrawdown! * 10000) / 10000);
     expect(e.tags).not.toContain("high vol"); // balanced fixture is calm
   }
-  const flags = strategy.explainSelection(intents.balanced, base, data, ["addr-37", "addr-38", "addr-39", "addr-40"]);
+  const flags = strategy.explainSelection(intents.balanced, base, data, ["0x6d0755291550ccfc856fb38f026d1e37b64d00dd", "0x9ff6151b1553ab55225b50cd62124647b71993c0", "0x60ccd7c009c4b71d418f01d6a87228be5aab387e", "0xfa00fb76aecc9abe224557bbfc7091517dbbc7eb"]);
   expect(flags.changes!.removed.map(r => r.reason)).toEqual(["flagged: overflow", "flagged: ruin", "flagged: low-coverage", "flagged: no-intervals"]);
   const clone = data.finalists.find(f => f.cloneOf)!;
   expect(strategy.explainSelection(intents.balanced, base, data, [clone.address]).changes!.removed[0].reason).toMatch(/^clone/);
@@ -43,7 +44,7 @@ test("facts preserve policy and safety, cap each side at three and total at 1200
   const selection = { ...strategy.selectStrategy(intents.clamped, base, data), ...strategy.explainSelection(intents.clamped, base, data, data.finalists.slice(15, 40).map(f => f.address)) };
   const facts = strategyFacts(intents.clamped, selection);
   expect(facts).toContain("Added "); expect(facts).toContain("Removed ");
-  for (const side of ["Added", "Removed"]) expect((facts.split(side)[1].split(".")[0].match(/\(addr-\d+\)/g) ?? []).length).toBeLessThanOrEqual(3);
+  for (const side of ["Added", "Removed"]) expect((facts.split(side)[1].split(".")[0].match(/\(0x[0-9a-f]{40}\)/g) ?? []).length).toBeLessThanOrEqual(3);
   for (const side of ["added", "removed"] as const) {
     const item = selection.changes![side][0];
     expect(facts).toContain(`${side === "added" ? "Added" : "Removed"} ${walletNickname(item.address)} (${item.address})`);
@@ -52,9 +53,9 @@ test("facts preserve policy and safety, cap each side at three and total at 1200
   expect(facts).toEndWith("No orders are placed; an operator must review and freeze any strategy.");
 });
 test("live guard rejects malformed evidence and changes", async () => {
-  const valid = await (await handleLiveStrategy(request({ intent, previous: ["addr-01"] }), deps())).json() as Record<string, any>;
+  const valid = await (await handleLiveStrategy(request({ intent, previous: ["0x448bbd0cfd9c8aa81c4db28a36edca446d5e3609"] }), deps())).json() as Record<string, any>;
   expect(isLiveStrategy(valid)).toBe(true);
-  for (const patch of [{ evidence: undefined }, { evidence: Array(26).fill({}) }, { evidence: [{ address: "<bad>", rank: 1, maxDrawdown: .1, annualisedVol: .2, tags: [] }] }, { evidence: valid.evidence?.map((e: object) => ({ ...e, maxDrawdown: Infinity })) }, { changes: { added: [{ address: valid.shortlist.addresses[0], reason: "model invented prose" }], removed: [] } }]) expect(isLiveStrategy({ ...valid, ...patch })).toBe(false);
+  for (const patch of [{ evidence: undefined }, { evidence: Array(26).fill({}) }, { evidence: [{ address: "<bad>", rank: 1, maxDrawdown: .1, realizedVol: .2, tags: [] }] }, { evidence: valid.evidence?.map((e: object) => ({ ...e, maxDrawdown: Infinity })) }, { changes: { added: [{ address: valid.shortlist.addresses[0], reason: "model invented prose" }], removed: [] } }]) expect(isLiveStrategy({ ...valid, ...patch })).toBe(false);
 });
 
 test("facts budget includes both sides even with longest wallet IDs", async () => {
@@ -67,7 +68,7 @@ test("facts budget includes both sides even with longest wallet IDs", async () =
 });
 
 test("guard fails closed for malformed shortlist before using changes", () => {
-  expect(isLiveStrategy({ ok: true, intent: intents.balanced, policy: {}, shortlist: {}, facts: "Facts", changes: { added: [{ address: "addr-01", reason: "low vol" }], removed: [] }, evidence: [] })).toBe(false);
+  expect(isLiveStrategy({ ok: true, intent: intents.balanced, policy: {}, shortlist: {}, facts: "Facts", changes: { added: [{ address: "0x448bbd0cfd9c8aa81c4db28a36edca446d5e3609", reason: "low vol" }], removed: [] }, evidence: [] })).toBe(false);
 });
 
 test("pending preview preserves the board's exact conservative membership and order", async () => {
@@ -83,22 +84,22 @@ test("pending preview preserves the board's exact conservative membership and or
 });
 
 test("reason codes distinguish score-window exclusion from style priority", () => {
-  const finalists = Array.from({ length: 15 }, (_, i) => ({ address: `test-${i}`, kind: "trader", score: 100 - i,
-    maxDrawdown: (15 - i) / 100, annualisedVol: .2, flags: [] as string[], cloneOf: false }));
+  const finalists = Array.from({ length: 15 }, (_, i) => ({ address: `0x${i.toString(16).padStart(40, "0")}`, kind: "trader", score: 100 - i,
+    maxDrawdown: (15 - i) / 100, realizedVol: .2, flags: [] as string[], cloneOf: false }));
   const intent = { ...intents.balanced, maxSources: 5 };
-  const result = strategy.explainSelection(intent, base, { finalists, dataSource: "sample" }, ["test-0", "test-12"]);
-  expect(result.evidence.map(e => e.address)).toEqual(["test-9", "test-8", "test-7", "test-6", "test-5"]);
-  expect(result.changes!.removed).toEqual([{ address: "test-0", reason: "lower priority for this style" }, { address: "test-12", reason: "outside the style score window" }]);
+  const result = strategy.explainSelection(intent, base, { finalists, dataSource: "sample" }, ["0x0000000000000000000000000000000000000000", "0x000000000000000000000000000000000000000c"]);
+  expect(result.evidence.map(e => e.address)).toEqual(["0x0000000000000000000000000000000000000009", "0x0000000000000000000000000000000000000008", "0x0000000000000000000000000000000000000007", "0x0000000000000000000000000000000000000006", "0x0000000000000000000000000000000000000005"]);
+  expect(result.changes!.removed).toEqual([{ address: "0x0000000000000000000000000000000000000000", reason: "lower priority for this style" }, { address: "0x000000000000000000000000000000000000000c", reason: "outside the style score window" }]);
   expect(result.evidence.map(e => e.rank)).toEqual([10, 9, 8, 7, 6]);
   for (const row of result.changes!.added) expect(result.evidence.find(e => e.address === row.address)!.tags).toContain(row.reason);
 });
 
 test("guard bounds every evidence/change field, rejects extras, duplicates and crossed sides", async () => {
-  const valid = await (await handleLiveStrategy(request({ intent, previous: ["addr-01"] }), deps())).json() as Record<string, any>;
-  for (const patch of [{ rank: 0 }, { rank: NaN }, { annualisedVol: -1 }, { annualisedVol: Infinity }, { maxDrawdown: 1.1 },
+  const valid = await (await handleLiveStrategy(request({ intent, previous: ["0x448bbd0cfd9c8aa81c4db28a36edca446d5e3609"] }), deps())).json() as Record<string, any>;
+  for (const patch of [{ rank: 0 }, { rank: NaN }, { realizedVol: -1 }, { realizedVol: Infinity }, { maxDrawdown: 1.1 },
     { address: "a".repeat(67) }, { tags: ["invented"] }, { tags: Array(7).fill("low vol") }, { surprise: true }]) {
     expect(isLiveStrategy({ ...valid, evidence: valid.evidence.map((e: object, i: number) => i ? e : { ...e, ...patch }) })).toBe(false);
   }
-  for (const changes of [{ added: [], removed: [], extra: true }, { added: Array(26).fill({ address: "addr-01", reason: "low vol" }), removed: [] },
+  for (const changes of [{ added: [], removed: [], extra: true }, { added: Array(26).fill({ address: "0x448bbd0cfd9c8aa81c4db28a36edca446d5e3609", reason: "low vol" }), removed: [] },
     { added: [{ address: "not-selected", reason: "low vol" }], removed: [] }, { added: [], removed: [{ address: valid.shortlist.addresses[0], reason: "low vol" }] }]) expect(isLiveStrategy({ ...valid, changes })).toBe(false);
 });

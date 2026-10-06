@@ -1,3 +1,4 @@
+import { SAMPLE_WALLET_IDS } from "./sample-wallet-ids";
 // Display-only personalities. Never use these names or vibes for scoring, policy or execution.
 export const BIRD_NAMES = [
   "Captain Cracker", "Sir Squawks-a-lot", "Feather Locksmith", "Wing Commander Wobble",
@@ -21,7 +22,7 @@ function hashId(id: string): number {
 // Resolve hash collisions against the whole fixed sample universe, not the current
 // shortlist: all 40 names are unique and kept/reentering birds never change names.
 // This registry is presentation vocabulary only, not a list of eligible sources.
-function namesFor(ids: string[]): ReadonlyMap<string, string> {
+function namesFor(ids: readonly string[]): ReadonlyMap<string, string> {
   const used = new Set<number>();
   return new Map(ids.map(id => {
     let index = hashId(id) % BIRD_NAMES.length;
@@ -30,18 +31,18 @@ function namesFor(ids: string[]): ReadonlyMap<string, string> {
     return [id, BIRD_NAMES[index]];
   }));
 }
-const sampleNames = namesFor(Array.from({ length: 40 }, (_, i) => `addr-${String(i + 1).padStart(2, "0")}`));
+const sampleNames = namesFor(SAMPLE_WALLET_IDS);
 const cachedNames = namesFor(Array.from({ length: 6 }, (_, i) => `0x${String(i + 1).repeat(40)}`));
 // Unknown ids retain stable hash names too. A finite vocabulary cannot guarantee
 // uniqueness for arbitrary live ids; the current server and cached demo are unique.
 export const walletNickname = (id: string): string => sampleNames.get(id) ?? cachedNames.get(id) ?? BIRD_NAMES[hashId(id) % BIRD_NAMES.length];
 
 export type WalletVibe = "calm" | "steady" | "wild";
-type VibeEvidence = { maxDrawdown?: number | null; annualisedVol?: number | null };
+type VibeEvidence = { maxDrawdown?: number | null; realizedVol?: number | null };
 export function walletVibe(evidence?: VibeEvidence | null): WalletVibe {
-  const dd = evidence?.maxDrawdown, vol = evidence?.annualisedVol;
+  const dd = evidence?.maxDrawdown, vol = evidence?.realizedVol;
   // Fractions, not percentages. Unknown/invalid either metric => neutral Steady.
-  // Calm: BOTH drawdown < 15% and annualised volatility < 45%.
+  // Calm: BOTH drawdown < 15% and realized volatility < 45%.
   // Wild: EITHER drawdown >= 30% or volatility >= 80%. Otherwise Steady.
   // Cosmetic buckets describe supplied evidence, never future returns or safety.
   if (dd == null || vol == null || !Number.isFinite(dd) || !Number.isFinite(vol) || dd < 0 || dd > 1 || vol < 0) return "steady";

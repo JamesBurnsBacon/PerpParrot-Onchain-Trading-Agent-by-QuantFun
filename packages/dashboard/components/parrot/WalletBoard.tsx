@@ -37,7 +37,7 @@ export function WalletTile({ address, evidence, reason, change, quiet = false, i
       {evidence ? <>
         <p>Score rank: {evidence.rank}</p>
         <p>Drawdown: {metric(evidence.maxDrawdown)}</p>
-        <p>Volatility: {metric(evidence.annualisedVol)}</p>
+        <p>Realized volatility: {metric(evidence.realizedVol)}</p>
         {evidence.tags.length > 0 && <p>{evidence.tags.join(" · ")}</p>}
       </> : <p>Metrics unavailable</p>}
       {reason && <p>{reason}</p>}

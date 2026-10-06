@@ -6,9 +6,9 @@ import { walletNickname } from "../lib/wallet-board";
 import { PARROT_PRESETS } from "../lib/parrot-presets";
 
 test("tile face has one bird and one meter; exact evidence lives in closed details", () => {
-  const html = renderToStaticMarkup(<WalletTile address="addr-01" evidence={{ address: "addr-01", rank: 7, maxDrawdown: .1234, annualisedVol: .4321, tags: ["clone-checked"] }} reason="low drawdown" quiet />);
+  const html = renderToStaticMarkup(<WalletTile address="0x448bbd0cfd9c8aa81c4db28a36edca446d5e3609" evidence={{ address: "0x448bbd0cfd9c8aa81c4db28a36edca446d5e3609", rank: 7, maxDrawdown: .1234, realizedVol: .4321, tags: ["clone-checked"] }} reason="low drawdown" quiet />);
   const face = html.split("</summary>")[0];
-  expect(face).toContain(walletNickname("addr-01"));
+  expect(face).toContain(walletNickname("0x448bbd0cfd9c8aa81c4db28a36edca446d5e3609"));
   expect(face).toContain("calm vibe");
   expect(face.match(/<svg/g)).toHaveLength(1);
   expect(face.match(/class="wallet-risk"/g)).toHaveLength(1);
@@ -16,20 +16,20 @@ test("tile face has one bird and one meter; exact evidence lives in closed detai
     expect(face).not.toContain(old);
   expect(html).toContain("<details");
   expect(html).not.toContain(" open=");
-  for (const detail of ["Score rank: 7", "Drawdown: 12.34%", "Volatility: 43.21%", "clone-checked", "low drawdown"]) expect(html).toContain(detail);
+  for (const detail of ["Score rank: 7", "Drawdown: 12.34%", "Realized volatility: 43.21%", "clone-checked", "low drawdown"]) expect(html).toContain(detail);
 });
 
 test("static changes keep stickers, kept tiles do not roll, and cached evidence stays neutral", () => {
   for (const change of ["new", "removed", undefined] as const) {
-    const html = renderToStaticMarkup(<WalletTile address="addr-02" change={change} quiet />);
-    expect(html).toContain(`aria-label="${walletNickname("addr-02")}, steady vibe${change ? `, ${change}` : ""}"`);
+    const html = renderToStaticMarkup(<WalletTile address="0xa359fdc22e3828ff99173b42a133515329549883" change={change} quiet />);
+    expect(html).toContain(`aria-label="${walletNickname("0xa359fdc22e3828ff99173b42a133515329549883")}, steady vibe${change ? `, ${change}` : ""}"`);
     expect(html).not.toContain("wallet-reel");
     if (change) expect(html).toContain(change === "new" ? "NEW!" : "Bye!");
     else expect(html).not.toContain("wallet-sticker");
     expect(html).toContain("Metrics unavailable");
   }
-  expect(renderToStaticMarkup(<WalletTile address="addr-02" />)).not.toContain("wallet-reel");
-  expect(renderToStaticMarkup(<WalletTile address="addr-02" change="new" />)).toContain("wallet-reel");
+  expect(renderToStaticMarkup(<WalletTile address="0xa359fdc22e3828ff99173b42a133515329549883" />)).not.toContain("wallet-reel");
+  expect(renderToStaticMarkup(<WalletTile address="0xa359fdc22e3828ff99173b42a133515329549883" change="new" />)).toContain("wallet-reel");
 });
 
 test("board retains sample provenance, hidden announcements and the short waiting state", () => {

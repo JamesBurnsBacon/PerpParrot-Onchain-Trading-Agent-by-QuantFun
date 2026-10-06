@@ -1,6 +1,6 @@
 import { keccak256, stringToBytes } from "viem";
 import { commitment } from "../../../shared/commitments";
-import type { PolicyResult, StrategyIntent } from "../../../shared/parrot-intent";
+import type { StrategyPreview, StrategyIntent } from "../../../shared/strategy-intent";
 
 export class PreviewError extends Error {
   constructor(readonly code: "too_few_sources" | "infeasible") {
@@ -10,11 +10,11 @@ export class PreviewError extends Error {
 }
 
 export const buildPreview = ({ intent, policyResult, addresses }: {
-  intent: StrategyIntent; policyResult: PolicyResult; addresses: string[];
+  intent: StrategyIntent; policyResult: StrategyPreview; addresses: string[];
 }) => {
   const n = addresses.length;
   if (n < 5 || n > 25) throw new PreviewError("too_few_sources");
-  const { policy, liveEligible, notes } = policyResult;
+  const { policy } = policyResult;
   const cashUnits = Math.ceil(policy.cashBuffer * 1_000_000);
   const rest = 1_000_000 - cashUnits;
   const ceilingUnits = Math.floor(policy.maxSourceWeight * 1_000_000);
@@ -31,5 +31,5 @@ export const buildPreview = ({ intent, policyResult, addresses }: {
   const keccakUtf8 = (text: string) => keccak256(stringToBytes(text));
   // A separate domain from perpparrot:frozen:v1 prevents confusion with a pinned configuration hash.
   const previewHash = commitment(keccakUtf8, "perpparrot:parrot-preview:v1", { version, intent, policy, sources, cashUnits });
-  return { version, liveEligible, paperOnly: !liveEligible, weighting: "equal (preview only)" as const, policy, sources, cashUnits, notes, previewHash };
+  return { version, weighting: "equal (preview only)" as const, policy, sources, cashUnits, previewHash };
 };

@@ -3,7 +3,7 @@
 // Prints pass/fail per fixed visitor message (how words map to fields, the leverage capture, the language handling); never the key.
 import { callIntentModel } from "../src/chat/openai";
 import { buildMessages, CHAT_SYSTEM_PROMPT } from "../src/chat/prompt";
-import type { StrategyIntent } from "../../shared/parrot-intent";
+import type { StrategyIntent } from "../../shared/strategy-intent";
 
 const apiKey = process.env.OPENAI_API_KEY;
 if (!apiKey) throw new Error("set OPENAI_API_KEY");

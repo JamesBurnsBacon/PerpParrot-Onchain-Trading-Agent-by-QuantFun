@@ -1,4 +1,4 @@
-import { parseStrategyIntent, STRATEGY_INTENT_JSON_SCHEMA, type StrategyIntent } from "../../../shared/parrot-intent";
+import { parseStrategyIntent, STRATEGY_INTENT_JSON_SCHEMA, type StrategyIntent } from "../../../shared/strategy-intent";
 import type { Message } from "./prompt";
 import { MAX_COMPLETION_TOKENS } from "./budget";
 

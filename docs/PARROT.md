@@ -17,9 +17,14 @@ browser ── hold to confirm ──► POST /chat/preview ──► PENDING re
   explain them in the parrot's voice, and save a pending request.
 - **Cannot:** place orders, hold keys, freeze or change a frozen configuration, call `/reports`, or read admin tokens. The code under `packages/backend/src/chat`
   and `src/live` references none of `ADMIN_TOKEN`, `HL_API_WALLET_KEY`, `CRE_API_KEY`.
-- **The model never allocates.** `intentToPolicy` can only tighten the base policy (a request for 100x becomes the policy cap); non-aggressive styles are
-  paper-only; only code builds the facts the parrot speaks. Visitor text and model prose never enter state or the prompt as facts.
+- **The model never allocates.** `intentToPreview` can only tighten the base policy (a request for 100x becomes the policy cap). Every style produces a **simulation preview**; an operator must review and freeze separately. Only code builds the facts the parrot speaks. Visitor text and model prose never enter state or the prompt as facts.
 - **Honest labels.** The finalists are currently **sample data** (`SAMPLE DATA` badge). Nothing on the page is a forecast or a signed report.
+
+## Strategy contract
+
+`packages/shared/strategy-intent.ts` is the team's single source for `StrategyIntent`, validation, `intentToPreview` and `shortlist`. `packages/backend/src/strategy-intent-adapter.ts` maps real Score outputs to that contract; Parrot does not alter either module. Diversification and leverage comfort use `low | medium | high`.
+
+The policy summary is `{ changes, clamps, requiredSources, maxSources }`: the source limit is the visitor's maximum, and the UI/facts state "needs at least N". Infeasible limits return HTTP 422 without raising that maximum. Text-chat clarification returns reply, clarify, intent, model and latency, without policy or shortlist. Every saved PENDING preview contains the compiled SIMULATION policy, rounds cash up to millionths, and has exact integer allocation totals. The deterministic hash retains the `perpparrot:parrot-preview:v1` domain; it never grants execution authority.
 
 ## Endpoints
 
@@ -78,7 +83,11 @@ CHAT_ENABLED=true LIVE_ENABLED=true OPENAI_API_KEY=… PORT=8788 bun run src/ser
 
 Dashboard (from `packages/dashboard`): `bun run dev` (its dev rewrite sends `/api/backend` to `localhost:8788`). Open `/parrot` in Chrome and allow the microphone.
 
-## Verification record (2026-10-06)
+## Offline contract migration (2026-10-07)
+
+The recorded Live event fixture is a protocol replay adapted from the earlier recording: its enum spelling is migrated to `medium`. This is not a new real-provider verification. The real-model evaluation script imports the team schema; Claude will rerun it, Postgres tests and Linux checks separately. No network was used for this migration.
+
+## Earlier verification record (2026-10-06)
 
 - Real API, text-driven through the real WebRTC protocol: session creation (201), delegated `set_strategy` call, clamp 100x → 3x, spoken explanation grounded in the facts,
   `event_not_allowed` for browser reconfiguration, 429 after the per-IP limit, normal and requested close with usage.
@@ -87,10 +96,10 @@ Dashboard (from `packages/dashboard`): `bun run dev` (its dev rewrite sends `/ap
 
 ## Wallet board
 
-The wallet board uses 40 deterministic synthetic finalists. Evidence includes original Score rank, rounded risk metrics and fixed code tags; `changes` explains membership against `previous`. Spoken facts include at most three wallets per side, stay within 1200 characters and retain the no-orders statement. Conservative selection uses a slightly wider candidate window; Score is unchanged, and pending previews use the same selector. Reels, feathers and sound celebrate strategy selection or a pending request, never gains. SAMPLE DATA stays visible; Calm/reduced motion keep static states, and visitor speech suppresses effects.
+The wallet board uses 40 deterministic synthetic finalists. Their fake `0x` + 40 hex addresses are SHA-256(seed:index) prefixes, generated with seed 20261006 by `scripts/make-sample-finalists.ts`; no venue accounts are fetched. Cards show shortened ids such as `0x1234...abcd` beside nicknames. The generated shared id registry keeps nickname collision resolution independent of the current selection. Evidence includes original Score rank, rounded risk metrics and fixed code tags; `changes` explains membership against `previous`. Spoken facts include at most three wallets per side, stay within 1200 characters and retain the no-orders statement. Conservative selection calls the team shortlist with `M = min(25, ceil(1.2 * N))`, an intent maximum of M, then takes N; the team function uses its fixed top-2M score window. Other styles call it directly with N; Score is unchanged, and pending previews use the same selector. Reels, feathers and sound celebrate strategy selection or a pending request, never gains. SAMPLE DATA stays visible; Calm/reduced motion keep static states, and visitor speech suppresses effects.
 
 “The Flock” shows three bird tiles per row: an inline clay bird, a deterministic nickname, a muted wallet id and one three-zone meter. Tap or keyboard-activate a tile to expand its original Score rank, exact supplied risk metrics, server tags and change reason. NEW! and Bye! stickers mark additions and ~2.5-second removal ghosts; kept birds do not roll again. The initial/connecting board says “Waiting for birds...”.
 
-`packages/shared/wallet-persona.ts` is presentation-only and has no backend/dashboard imports. It supplies the same nickname to cards and spoken added/removed facts. Hash collisions are resolved over the fixed 40-id sample universe, keeping all sample names unique and stable across selection changes; the six cached-demo identities are similarly stable and unique. Arbitrary future ids use a stable hash fallback and can collide with the finite name vocabulary. Vibe uses fractional evidence: Calm requires drawdown <15% AND annualised volatility <45%; Wild requires drawdown ≥30% OR volatility ≥80%; otherwise Steady. Missing/invalid either metric is neutral Steady. These buckets have no policy, Score or trading authority.
+`packages/shared/wallet-persona.ts` is presentation-only and has no backend/dashboard imports. It supplies the same nickname to cards and spoken added/removed facts. Hash collisions are resolved over the fixed 40-id sample universe, keeping all sample names unique and stable across selection changes; the six cached-demo identities are similarly stable and unique. Arbitrary future ids use a stable hash fallback and can collide with the finite name vocabulary. Evidence uses Score’s native non-annualised `realizedVol`. Vibe uses fractional evidence: Calm requires drawdown <15% AND realized volatility <45%; Wild requires drawdown ≥30% OR volatility ≥80%; otherwise Steady. Missing/invalid either metric is neutral Steady. These buckets have no policy, Score or trading authority.
 
 Offline implementation evidence and full pairwise measurements: [Wallet board verification](WALLET-BOARD-VERIFICATION.md).

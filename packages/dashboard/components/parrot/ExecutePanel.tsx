@@ -8,7 +8,6 @@ export function ExecutePanel({ chat, demo, result, busy, failure, onConfirm, exe
   chat: ChatResponse; demo: boolean; result: PreviewResponse | null; busy: boolean;
   failure: Failure | null; onConfirm: () => void; executionDisabled: boolean;
 }) {
-  const eligible = result?.preview.liveEligible ?? chat.policy.liveEligible;
   const bucket = result?.preview.policy.bucket;
   return <div className="space-y-4">
     <Panel title={demo ? "A simulated request." : "A request. Then a human review."} meta={demo ? <Badge kind="CACHED DEMO" /> : <span className="parrot-eyebrow">03 / EXECUTE</span>}>
@@ -17,14 +16,13 @@ export function ExecutePanel({ chat, demo, result, busy, failure, onConfirm, exe
         <StatTile label="Bucket" value={typeof bucket === "string" ? bucket : chat.intent.riskStyle.toUpperCase()} />
         <StatTile label="Sources" value={String(result?.preview.sources.length ?? chat.shortlist.addresses.length)} />
       </div>
-      <span className="parrot-chip font-bold">{eligible ? "eligible for live" : "paper only"}</span>
+      <span className="parrot-chip font-bold">simulation preview, awaiting operator freeze</span>
       <p className="mt-4 text-xs font-bold uppercase tracking-wider">Preview hash</p>
       <p className="parrot-hash mt-2">{result?.preview.previewHash ?? (demo ? "Available after the simulation." : "Available after the request is saved.")}</p>
       <div className="parrot-rule my-5"><p className="text-sm font-semibold leading-relaxed">What the parrot cannot do: place orders, hold keys, change a frozen set</p></div>
       {result ? <div className="parrot-success" role="status">
         <span className="parrot-eyebrow">{demo ? "CACHED DEMO · SIMULATED" : "PENDING"}</span>
         <p className="mt-2 font-bold break-words">{demo ? "Simulated request. Nothing was saved; no operator will review it." : `Request ${result.requestId} saved. Awaiting operator freeze.`}</p>
-        {result.preview.paperOnly && <p className="mt-2 text-sm">{demo ? "simulated paper book request" : "paper book request"}</p>}
         <p className="parrot-hash mt-3">{result.preview.previewHash}</p>
       </div> : <HoldButton chat={chat} disabled={busy || executionDisabled || !chat.shortlist.addresses.length} onConfirm={onConfirm} />}
       {executionDisabled && !result && <p className="mt-3 text-center text-xs" style={{ color: "var(--ink-2)" }}>End voice to lock this strategy.</p>}

@@ -1,4 +1,4 @@
-import { parseStrategyIntent, type StrategyIntent } from "../../../shared/parrot-intent";
+import { parseStrategyIntent, type StrategyIntent } from "../../../shared/strategy-intent";
 import { walletNickname } from "../../../shared/wallet-persona";
 import { failure, type ChatDeps } from "../chat/handler";
 import { hashIp } from "../chat/limits";
@@ -85,13 +85,13 @@ export const strategyFacts = (intent: StrategyIntent, selection: Omit<ReturnType
   const { policy, shortlist } = selection;
   const safety = "No orders are placed; an operator must review and freeze any strategy.";
   const core = [
-    `Style: ${intent.riskStyle}. Sources: ${shortlist.addresses.length}; source limit: ${policy.effectiveMaxSources}.`,
+    `Style: ${intent.riskStyle}. Sources: ${shortlist.addresses.length}; source limit: ${policy.maxSources}; needs at least ${policy.requiredSources}.`,
     `Diversification: ${intent.diversification}. Leverage comfort: ${intent.leverageComfort}.`,
     `Requested leverage: ${intent.requestedLeverage === null ? "not specified" : `${intent.requestedLeverage}x`}.`,
     `Avoid clones: ${intent.avoidClones}. Horizon: ${intent.horizon}.`,
     ...policy.changes.map(c => `${c.field}: ${c.from} to ${c.to}.`),
     ...policy.clamps.map(c => `${c.field}: requested ${c.requested}x, policy cap ${c.applied}x.`),
-    ...(!policy.liveEligible ? ["Paper-only; not eligible for live trading."] : []),
+    "Simulation preview.",
     `Data source: ${shortlist.dataSource}.`,
   ].join(" ");
   let facts = core;
@@ -117,7 +117,7 @@ export const handleLiveStrategy = async (req: Request, deps: LiveDeps): Promise<
     if (!object(body) || Object.keys(body).some(k => !["intent", "previous"].includes(k)) || !object(body.intent) ||
         Object.keys(body.intent).some(k => !Object.hasOwn(SET_STRATEGY_TOOL.parameters.properties, k))) throw new Error();
     if (body.previous !== undefined && (!Array.isArray(body.previous) || body.previous.length > 25 ||
-        !body.previous.every(id => typeof id === "string" && /^[\w.:-]{1,66}$/.test(id)) || new Set(body.previous).size !== body.previous.length)) throw new Error();
+        !body.previous.every(id => typeof id === "string" && /^0x[0-9a-fA-F]{40}$/.test(id)) || new Set(body.previous).size !== body.previous.length)) throw new Error();
     intent = parseStrategyIntent({ ...body.intent, reply: "Strategy checked by code. No orders are placed.", clarify: null });
   } catch { return failure(400, "invalid_model_output"); }
   try {
@@ -131,7 +131,7 @@ export const handleLiveStrategy = async (req: Request, deps: LiveDeps): Promise<
     buildPreview({ intent, policyResult, addresses: selection.shortlist.addresses });
     return json({ ok: true, intent, ...selection, facts: strategyFacts(intent, selection) });
   } catch (error) {
-    const code = error instanceof PreviewError ? error.code : error instanceof Error && error.message.startsWith("infeasible:") ? "infeasible" : "unavailable";
+    const code = error instanceof PreviewError ? error.code : error instanceof RangeError ? "infeasible" : "unavailable";
     return failure(code === "unavailable" ? 503 : 422, code);
   }
 };

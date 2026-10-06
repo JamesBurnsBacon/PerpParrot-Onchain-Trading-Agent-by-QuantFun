@@ -1,6 +1,6 @@
 import type { SQL } from "bun";
 import type { Policy } from "../../../shared/src/contracts";
-import { parseStrategyIntent, type FinalistLike, type StrategyIntent } from "../../../shared/parrot-intent";
+import { parseStrategyIntent, type FinalistLike, type StrategyIntent } from "../../../shared/strategy-intent";
 import { hashIp, type ChatLimiter, type Kind, type LimitConfig, type Reservation } from "./limits";
 import { callIntentModel, ModelError } from "./openai";
 import { selectStrategy } from "./strategy";
@@ -103,7 +103,7 @@ const reserve = (req: Request, deps: ChatDeps, kind: Kind): Promise<Reservation>
 const denied = (reservation: Extract<Reservation, { ok: false }>): Response =>
   failure(429, reservation.reason === "daily_budget" ? "budget" : "rate_limited", reservation.retryAfterSec);
 const infeasible = (error: unknown): boolean =>
-  error instanceof PreviewError ? error.code === "infeasible" : error instanceof Error && error.message.startsWith("infeasible:");
+  error instanceof PreviewError ? error.code === "infeasible" : error instanceof RangeError;
 
 export const handleChat = async (req: Request, deps: ChatDeps): Promise<Response> => {
   if (req.method !== "POST") return failure(405, "method_not_allowed");
@@ -143,9 +143,13 @@ export const handleChat = async (req: Request, deps: ChatDeps): Promise<Response
     const costMicroUsd = promptTokens === null || completionTokens === null ? worstCaseMicroUsd(deps)
       : Math.ceil(promptTokens * deps.env.priceInPerM + completionTokens * deps.env.priceOutPerM);
     await deps.limiter.settle({ id: reservation.id, tokens: (promptTokens ?? 0) + (completionTokens ?? 0), costMicroUsd });
+    const { riskStyle, maxSources, diversification, leverageComfort, requestedLeverage, avoidClones, horizon } = intent;
+    if (intent.clarify !== null) {
+      audit("clarify", { intent: { riskStyle, maxSources, diversification, leverageComfort, requestedLeverage, avoidClones, horizon }, promptTokens, completionTokens });
+      return json({ ok: true, reply: intent.reply, clarify: intent.clarify, intent, model: deps.env.model, latencyMs: deps.now() - started });
+    }
     const { policyResult: _policyResult, ...selection } = selectStrategy(intent, deps.basePolicy, await deps.finalists());
     const latencyMs = deps.now() - started;
-    const { riskStyle, maxSources, diversification, leverageComfort, requestedLeverage, avoidClones, horizon } = intent;
     audit("ok", { intent: { riskStyle, maxSources, diversification, leverageComfort, requestedLeverage, avoidClones, horizon }, promptTokens, completionTokens });
     return json({ ok: true, reply: intent.reply, clarify: intent.clarify, intent, ...selection, model: deps.env.model, latencyMs });
   } catch (error) {

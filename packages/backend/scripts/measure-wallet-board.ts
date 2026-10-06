@@ -2,14 +2,14 @@ import { selectStrategy } from "../src/chat/strategy";
 import { loadFinalists } from "../src/chat/finalists";
 import fixture from "../fixtures/frozen-configuration.json";
 import type { Policy } from "../../shared/src/contracts";
-import type { StrategyIntent } from "../../shared/parrot-intent";
+import type { StrategyIntent } from "../../shared/strategy-intent";
 export const intents: Record<string, StrategyIntent> = Object.fromEntries([
   ["safe/few", { riskStyle: "conservative", maxSources: 6, leverageComfort: "low", diversification: "high" }],
   ["balanced", {}], ["aggressive/many", { riskStyle: "aggressive", maxSources: 14, leverageComfort: "high" }],
   ["clones/on", { avoidClones: false }], ["clones/off", { avoidClones: true }],
   ["diverse", { diversification: "high" }], ["low leverage", { leverageComfort: "low" }],
   ["clamped", { requestedLeverage: 100 }],
-].map(([name, patch]) => [name, { riskStyle: "balanced", maxSources: 12, diversification: "med", leverageComfort: "med",
+].map(([name, patch]) => [name, { riskStyle: "balanced", maxSources: 12, diversification: "medium", leverageComfort: "medium",
   requestedLeverage: null, avoidClones: true, horizon: "medium", reply: "Code checked.", clarify: null, ...patch as object }]));
 if (import.meta.main) {
   const data = await loadFinalists();

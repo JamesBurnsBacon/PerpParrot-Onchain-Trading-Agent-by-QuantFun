@@ -1,5 +1,5 @@
 import { WALLET_TAGS, isSelectionReason, type WalletEvidence, type WalletChanges } from "../../shared/wallet-evidence";
-import type { StrategyIntent } from "../../shared/parrot-intent";
+import type { StrategyIntent } from "../../shared/strategy-intent";
 
 export type Clamp = { field: string; requested: number; applied: number };
 export type ChatResponse = {
@@ -10,11 +10,10 @@ export type ChatResponse = {
   clarify: string | null;
   intent: StrategyIntent;
   policy: {
-    liveEligible: boolean;
-    effectiveMaxSources: number;
+    requiredSources: number;
+    maxSources: number;
     changes: { field: string; from: number | string; to: number | string }[];
     clamps: Clamp[];
-    notes: string[];
   };
   shortlist: { addresses: string[]; dataSource: "live" | "sample" };
   model: string;
@@ -25,13 +24,10 @@ export type PreviewResponse = {
   requestId: string;
   preview: {
     version: "1";
-    liveEligible: boolean;
-    paperOnly: boolean;
     weighting: string;
     policy: Record<string, unknown>;
     sources: { address: string; weightUnits: number; ceilingUnits: number }[];
     cashUnits: number;
-    notes: string[];
     previewHash: string;
   };
 };
@@ -43,18 +39,17 @@ const str = (v: unknown): v is string => typeof v === "string";
 const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 const nonnegative = (v: unknown): v is number => finite(v) && v >= 0;
 const integer = (v: unknown): v is number => nonnegative(v) && Number.isSafeInteger(v);
-const strings = (v: unknown): v is string[] => Array.isArray(v) && v.every(str);
 const nullableString = (v: unknown): v is string | null => v === null || str(v);
 const address = (v: unknown): v is string => str(v) && /^0x[0-9a-fA-F]{40}$/.test(v);
-// Sample fixtures use ids like "addr-21"; live data uses 0x addresses. Rendered as text only.
-const walletId = (v: unknown): v is string => str(v) && /^[\w.:-]{1,66}$/.test(v);
+// Synthetic and live candidates share the same address contract.
+const walletId = address;
 const oneOf = (v: unknown, choices: string[]) => str(v) && choices.includes(v);
 const scalar = (v: unknown) => str(v) || finite(v);
 
 const isIntent = (v: unknown): v is StrategyIntent => record(v) &&
   oneOf(v.riskStyle, ["aggressive", "balanced", "conservative"]) &&
   integer(v.maxSources) && v.maxSources >= 5 && v.maxSources <= 25 &&
-  oneOf(v.diversification, ["low", "med", "high"]) && oneOf(v.leverageComfort, ["low", "med", "high"]) &&
+  oneOf(v.diversification, ["low", "medium", "high"]) && oneOf(v.leverageComfort, ["low", "medium", "high"]) &&
   (v.requestedLeverage === null || (finite(v.requestedLeverage) && v.requestedLeverage > 0 && v.requestedLeverage <= 1000)) &&
   typeof v.avoidClones === "boolean" && oneOf(v.horizon, ["short", "medium"]) &&
   nullableString(v.clarify) && (v.clarify === null || v.clarify.length <= 200) &&
@@ -62,33 +57,40 @@ const isIntent = (v: unknown): v is StrategyIntent => record(v) &&
 
 export const isWalletEvidence = (v: unknown): v is WalletEvidence[] => Array.isArray(v) && v.length <= 25 &&
   new Set(v.map(e => record(e) ? e.address : null)).size === v.length && v.every(e => record(e) &&
-    Object.keys(e).every(k => ["address", "rank", "maxDrawdown", "annualisedVol", "tags"].includes(k)) && walletId(e.address) && integer(e.rank) && e.rank > 0 &&
+    Object.keys(e).every(k => ["address", "rank", "maxDrawdown", "realizedVol", "tags"].includes(k)) && walletId(e.address) && integer(e.rank) && e.rank > 0 &&
     (e.maxDrawdown === null || (nonnegative(e.maxDrawdown) && e.maxDrawdown <= 1)) &&
-    (e.annualisedVol === null || nonnegative(e.annualisedVol)) && Array.isArray(e.tags) && e.tags.length <= 6 &&
+    (e.realizedVol === null || nonnegative(e.realizedVol)) && Array.isArray(e.tags) && e.tags.length <= 6 &&
     e.tags.every(t => typeof t === "string" && (WALLET_TAGS as readonly string[]).includes(t)));
 export const isWalletChanges = (v: unknown): v is WalletChanges => record(v) && Object.keys(v).length === 2 &&
   [v.added, v.removed].every(side => Array.isArray(side) && side.length <= 25 &&
     new Set(side.map(e => record(e) ? e.address : null)).size === side.length && side.every(e => record(e) &&
       Object.keys(e).length === 2 && walletId(e.address) && isSelectionReason(e.reason)));
 
+export type ChatClarification = Pick<ChatResponse, "ok" | "reply" | "intent" | "model" | "latencyMs"> & { clarify: string };
+export function isChatClarification(v: unknown): v is ChatClarification {
+  return record(v) && v.ok === true && str(v.reply) && str(v.clarify) && isIntent(v.intent) &&
+    v.intent.clarify === v.clarify && str(v.model) && nonnegative(v.latencyMs) &&
+    !("policy" in v) && !("shortlist" in v);
+}
+
 export function isChatResponse(v: unknown): v is ChatResponse {
-  if (!record(v) || v.ok !== true || !str(v.reply) || !nullableString(v.clarify) || !isIntent(v.intent) ||
+  if (!record(v) || v.ok !== true || !str(v.reply) || v.clarify !== null || !isIntent(v.intent) || v.intent.clarify !== null ||
       !str(v.model) || !nonnegative(v.latencyMs) || !record(v.policy) || !record(v.shortlist) || !Array.isArray(v.shortlist.addresses)) return false;
   if (v.evidence !== undefined && (!isWalletEvidence(v.evidence) || JSON.stringify(v.evidence.map(e => e.address)) !== JSON.stringify(v.shortlist.addresses))) return false;
   if (v.changes !== undefined && (!isWalletChanges(v.changes) || v.changes.added.some(e => !(v.shortlist as {addresses: string[]}).addresses.includes(e.address)) || v.changes.removed.some(e => (v.shortlist as {addresses: string[]}).addresses.includes(e.address)))) return false;
   const p = v.policy;
-  return typeof p.liveEligible === "boolean" && integer(p.effectiveMaxSources) && p.effectiveMaxSources >= 5 && p.effectiveMaxSources <= 25 &&
+  return integer(p.requiredSources) && integer(p.maxSources) && p.requiredSources <= p.maxSources && p.maxSources >= 5 && p.maxSources <= 25 && p.maxSources === v.intent.maxSources &&
     Array.isArray(p.changes) && p.changes.every(c => record(c) && str(c.field) && scalar(c.from) && scalar(c.to)) &&
     Array.isArray(p.clamps) && p.clamps.every(c => record(c) && str(c.field) && finite(c.requested) && finite(c.applied)) &&
-    strings(p.notes) && Array.isArray(v.shortlist.addresses) && v.shortlist.addresses.length <= 25 && new Set(v.shortlist.addresses).size === v.shortlist.addresses.length && v.shortlist.addresses.every(walletId) &&
+    Array.isArray(v.shortlist.addresses) && v.shortlist.addresses.length <= 25 && new Set(v.shortlist.addresses).size === v.shortlist.addresses.length && v.shortlist.addresses.every(walletId) &&
     oneOf(v.shortlist.dataSource, ["live", "sample"]);
 }
 
 export function isPreviewResponse(v: unknown): v is PreviewResponse {
   if (!record(v) || v.ok !== true || !str(v.requestId) || !v.requestId || !record(v.preview)) return false;
   const p = v.preview;
-  return p.version === "1" && typeof p.liveEligible === "boolean" && typeof p.paperOnly === "boolean" &&
-    str(p.weighting) && record(p.policy) && integer(p.cashUnits) && strings(p.notes) && str(p.previewHash) && p.previewHash.length > 0 &&
+  return p.version === "1" &&
+    str(p.weighting) && record(p.policy) && p.policy.mode === "SIMULATION" && integer(p.cashUnits) && str(p.previewHash) && p.previewHash.length > 0 &&
     Array.isArray(p.sources) && p.sources.every(s => record(s) && walletId(s.address) && integer(s.weightUnits) && integer(s.ceilingUnits));
 }
 
@@ -118,7 +120,7 @@ export function describeError(code: string, retryAfterSec?: number): string {
 }
 
 export function intentChips(intent: StrategyIntent): string[] {
-  const levels = { low: "Low", med: "Medium", high: "High" };
+  const levels = { low: "Low", medium: "Medium", high: "High" };
   return [intent.riskStyle[0].toUpperCase() + intent.riskStyle.slice(1), `Up to ${intent.maxSources} sources`,
     `${levels[intent.diversification]} diversification`, `${levels[intent.leverageComfort]} leverage comfort`,
     intent.avoidClones ? "Avoid clones" : "Clones allowed"];

@@ -15,7 +15,7 @@ const deps = (): LiveDeps => ({
   env: readLiveEnv({ LIVE_ENABLED: "true", OPENAI_API_KEY: key }),
   chatEnv: { ipSalt: "salt", limits: { ipHourly: 10, previewIpHourly: 30, previewGlobalDaily: 500, globalDaily: 100, dailyBudgetMicroUsd: 5_000_000 } },
   limiter: new MemoryChatLimiter(), now: () => 2_000_000_000_000, log: () => {}, basePolicy: fixture.policy as Policy,
-  finalists: async () => ({ dataSource: "sample", finalists: Array.from({ length: 25 }, (_, i) => ({ address: `untrusted-wallet-${i}`, kind: "trader", score: 100 - i, flags: [], maxDrawdown: 0.1, annualisedVol: 0.5, cloneOf: false })) }),
+  finalists: async () => ({ dataSource: "sample", finalists: Array.from({ length: 25 }, (_, i) => ({ address: `0x${i.toString(16).padStart(40, "0")}`, kind: "trader", score: 100 - i, flags: [], maxDrawdown: 0.1, realizedVol: 0.5, cloneOf: false })) }),
   fetchImpl: (async (_url: string | URL | Request, _init?: RequestInit) => Response.json({ session: { id: "live_123", secret: key }, transport: { sdp: "v=0\r\no=answer", type: "webrtc" }, secret: key }, { status: 201 })) as typeof fetch,
 });
 const check = async (response: Response, status: number, code?: string) => {
@@ -160,10 +160,10 @@ test("live strategy clamps 100x to 3x with deterministic safe facts", async () =
   expect(body.facts).toEndWith("No orders are placed; an operator must review and freeze any strategy.");
 });
 
-test("live conservative strategy is paper-only with every policy change", async () => {
+test("live conservative strategy is a simulation preview with every policy change", async () => {
   const body = await check(await handleLiveStrategy(request({ intent: { ...args, riskStyle: "conservative", diversification: "high" } }), deps()), 200);
-  expect(body.policy.liveEligible).toBe(false);
-  expect(body.facts).toContain("Paper-only");
+  expect(body.policy.changes).toContainEqual({ field: "mode", from: "LIVE", to: "SIMULATION" });
+  expect(body.facts).toContain("Simulation preview");
   for (const c of body.policy.changes) expect(body.facts).toContain(`${c.field}: ${c.from} to ${c.to}.`);
   expect(body.facts.length).toBeLessThanOrEqual(1200);
 });
@@ -186,4 +186,8 @@ test("live strategy rejects outer keys and maps feasibility, loader and preview 
   await check(await handleLiveStrategy(request({ intent: args }), tight), 422, "infeasible");
   const failed = deps(); failed.finalists = async () => { throw new Error(key); };
   await check(await handleLiveStrategy(request({ intent: args }), failed), 503, "unavailable");
+});
+
+test("live tool maps a source maximum below requiredSources to 422", async () => {
+  await check(await handleLiveStrategy(request({ intent: { ...args, riskStyle: "conservative", maxSources: 5 } }), deps()), 422, "infeasible");
 });

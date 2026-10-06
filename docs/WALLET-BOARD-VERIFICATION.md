@@ -1,62 +1,32 @@
-# Wallet board verification — 2026-10-06
+# Wallet board verification — 2026-10-07
 
-Offline worktree verification; no screen, speakers, network, provider session or database was used.
+Offline verification of the migration to the team's StrategyIntent contract. No network, provider session, database or browser interaction was used.
 
-## Flock tile simplification — current verification
+## Contract and selection
 
-The Flock now uses inline bird SVGs with three evidence-derived moods, shared deterministic nicknames, one three-zone meter, native expandable evidence, NEW!/Bye! stickers and three columns at every viewport size. Kept tiles have no reel or entry animation. Ghost expiry remains 2500 ms; Calm and reduced motion keep static stickers. The board precedes the policy controls in Select, and the empty/connecting state is one line. No selection, Score, protected strategy-intent file, dependency, execution, provider or sound-hook code changed.
+`packages/shared/strategy-intent.ts` is the single source for intent validation, simulation policy compilation and style ordering. It, the backend Score adapter and `backend/test/strategy-intent.test.ts` are byte-for-byte unchanged. The duplicate Parrot module and its test have been removed; a regression test checks absence and imports across tracked and untracked package sources. Local main was already an ancestor of this branch; no fetch or history rewrite was needed.
 
-Pure logic lives in `packages/shared/wallet-persona.ts` and is re-exported by dashboard `lib/wallet-board.ts`. All 40 sample identities have distinct stable names, as do all six cached identities; arbitrary future ids may collide in the finite vocabulary. Backend facts use that same function. Exact thresholds and the missing-evidence Steady fallback are documented beside the function and in PARROT.md.
+Parrot projects its sample rows to the seven contract fields before calling the team shortlist: display metadata is not accepted by that strict API. All previews are SIMULATION, with separate operator review and freeze. Policy summaries expose changes, clamps, requiredSources and the requested maxSources. A conservative five-source request that needs six returns 422 instead of expanding the maximum. Text-chat clarification, including an empty non-null question, returns no policy or shortlist and never invokes the candidate loader.
 
-Verification on this change:
+40 synthetic rows: 36 generated equity paths run through unchanged Score, including eight clone copies, plus four exclusion controls. Seed 20261006. Fake addresses are the first 40 hex characters of SHA-256(seed:index), prefixed with `0x`; every row/response retains `dataSource: "sample"` and the UI retains SAMPLE DATA. The fixture generator also writes the presentation-only shared id registry. All 40 sample nicknames are unique and stable; arbitrary future ids can collide in the finite name vocabulary.
 
-- Dashboard `bunx tsc --noEmit && bun test`: passed, **7 pass / 0 fail**.
-- Backend `bunx tsc --noEmit && bun test`: passed, **795 pass / 20 skip / 0 fail**. `TEST_DATABASE_URL` was unset for offline verification; real DB checks remain for Claude.
-- `bun run build`: Turbopack failed while processing CSS because its process could not bind a local port (`Operation not permitted`). `NEXT_TELEMETRY_DISABLED=1 bun run build --webpack`: passed, including static `/parrot` generation.
-- `git diff --check`: passed. Git staging was denied at the external worktree `index.lock`; changes remain uncommitted.
-- The only changed existing test is `backend/test/wallet-board.test.ts`: facts now assert the shared nickname and count parenthesized wallet ids rather than the old parenthesized reasons. No existing DOM tests asserted the old card face. New render tests stay under `dashboard/test/wallet-board-render.test.tsx`; backend tests/scripts have no React dependency.
+Evidence now uses Score's native **non-annualised realizedVol**, not an annualised statistic. The board shows a shortened address and deterministic nickname, original Score rank, rounded supplied risk metrics, code-owned tags and membership-change reasons. Unknown clone status is excluded when avoidClones is enabled. Spoken facts keep nicknames, at most three wallets per side, a 1200-character ceiling and the no-orders/operator-freeze statement.
 
-Red/green proof: the new logic/render tests initially failed on absent exports. With persona logic added but the old facts builder retained, the facts assertion failed on the missing nickname. The reproducible pure negative controls (`bun packages/backend/scripts/check-wallet-persona-mutations.ts`, run alone) then produced **12 assertion failures**, one per removed behavior, followed by **15 passing tests** with sources restored:
+The team's conservative ordering uses the top 2N by score. Parrot alone widens its call to `M = min(25, ceil(1.2 * N))`, passes maxSources M in the intent, then takes N. Other styles call the team shortlist directly with N. Two calm wallets still enter when moving from aggressive fourteen to conservative six. Saved PENDING previews use this same selector and order.
 
-```text
-RED: calm drawdown boundary (1 fail)
-RED: calm volatility boundary (1 fail)
-RED: wild drawdown boundary (1 fail)
-RED: wild volatility boundary (1 fail)
-RED: missing evidence neutrality (2 fail)
-RED: nickname determinism (1 fail)
-RED: nickname uniqueness (1 fail)
-RED: nickname vocabulary safety (1 fail)
-RED: board identity diff (1 fail)
-RED: spoken nicknames (1 fail)
-RED: facts length budget (1 fail)
-RED: accessible change label (1 fail)
-GREEN: restored sources; 15 pass
-```
+## Measured swaps
 
-Render assertions verify closed details, exact supplied percentages and server text, one face bird/meter in static mode, removal of old face labels, accessible names, static stickers, no reels on kept birds, cached-data fallback, SAMPLE DATA, waiting text and the hidden live region. These are markup checks, not browser interaction tests.
+Rerun: `bun packages/backend/scripts/measure-wallet-board.ts`.
 
-**Still unverified visually/on-device:** desktop and 375 px sizing/no horizontal scroll; nickname wrapping and meter legibility; mood recognition and clay appearance; both themes and contrast; bounce/reels, wave/ghost collapse and rapid reentry; native detail toggling and visible focus; screen-reader announcements; reduced-motion/Calm transitions; sound and real microphone/provider behavior. The earlier verification below describes the preceding board implementation, not these new visuals.
+- safe/few: 6; balanced: 12; aggressive/many: 14; all remaining requests: 12.
+- safe/few ↔ balanced: **33%**; safe/few ↔ aggressive/many: **60%**.
+- balanced ↔ aggressive/many: **46%**; clones on ↔ off: **42%**.
+- aggressive/many ↔ clones/on: **62%**, slightly above the rough 30–60% target.
+- Diversification and leverage alone change policy, so their membership turnover remains **0%**. No extra sample tuning was needed for this migration.
 
-## Selection and fixture
-
-40 synthetic rows: 36 generated price/equity paths run through the existing Score implementation, including eight deliberate clone copies; four explicit exclusion controls. Fixed seed 20261006. Every row and response is labelled sample. No Score code or shared strategy-intent source changed.
-
-With the richer data alone, conservative six remained a subset of aggressive fourteen: there were no incoming cards when asking for safety. The backend now widens the conservative score window from `2 × N` to `2 × min(25, ceil(1.2 × N))`, then uses the same volatility ordering and takes N. This produces two incoming calm wallets when switching aggressive/many to safe/few. Balanced and aggressive selection remain unchanged. Preview creation now uses this same selector, so the saved PENDING sources match the displayed list exactly (regression demonstrated red before the preview-path fix).
-
-Diversification/leverage continue to tighten policy, not fabricate per-wallet exposure information: their membership-only comparisons are zero. Turnover below means `(added + removed) / (before size + after size)`, not a return or performance measure.
-
-Run `bun packages/backend/scripts/measure-wallet-board.ts`:
+Turnover is `(added + removed) / (before size + after size)`, not a return/performance measure. Full pairwise results:
 
 ```text
-safe/few: 6 [addr-18, addr-06, addr-15, addr-09, addr-03, addr-17]
-balanced: 12 [addr-03, addr-21, addr-06, addr-15, addr-24, addr-09, addr-12, addr-18, addr-02, addr-17, addr-23, addr-08]
-aggressive/many: 14 [addr-01, addr-23, addr-06, addr-15, addr-26, addr-07, addr-03, addr-28, addr-16, addr-08, addr-19, addr-17, addr-14, addr-02]
-clones/on: 12 [addr-03, addr-29, addr-06, addr-30, addr-15, addr-31, addr-09, addr-32, addr-18, addr-33, addr-02, addr-17]
-clones/off: 12 [addr-03, addr-21, addr-06, addr-15, addr-24, addr-09, addr-12, addr-18, addr-02, addr-17, addr-23, addr-08]
-diverse: 12 [addr-03, addr-21, addr-06, addr-15, addr-24, addr-09, addr-12, addr-18, addr-02, addr-17, addr-23, addr-08]
-low leverage: 12 [addr-03, addr-21, addr-06, addr-15, addr-24, addr-09, addr-12, addr-18, addr-02, addr-17, addr-23, addr-08]
-clamped: 12 [addr-03, addr-21, addr-06, addr-15, addr-24, addr-09, addr-12, addr-18, addr-02, addr-17, addr-23, addr-08]
 from -> to: kept / in / out; turnover = (in + out) / (before + after)
 safe/few -> balanced: 6 / 6 / 0; 33%
 safe/few -> aggressive/many: 4 / 10 / 2; 60%
@@ -86,48 +56,22 @@ clones/off -> clamped: 12 / 0 / 0; 0%
 diverse -> low leverage: 12 / 0 / 0; 0%
 diverse -> clamped: 12 / 0 / 0; 0%
 low leverage -> clamped: 12 / 0 / 0; 0%
-
 ```
 
-## Negative controls
+## Verification
 
-New tests failed before implementation. The reproducible script `bun packages/backend/scripts/check-wallet-board-mutations.ts` additionally removes one fix at a time, requires a failing assertion, and restores the file in `finally`. Run it alone; it temporarily edits source. Final observed output:
+- Backend `bunx tsc --noEmit && bun test`: **608 pass / 20 skip / 0 fail**. TEST_DATABASE_URL is unset; Postgres and Linux checks remain for Claude.
+- Dashboard `bunx tsc --noEmit && bun test`: **7 pass / 0 fail**. React render tests remain in `packages/dashboard/test`; backend tests do not need React.
+- `bun run build`: Turbopack's CSS subprocess could not bind a local port (`Operation not permitted`). `NEXT_TELEMETRY_DISABLED=1 bun run build --webpack`: passed, including static `/parrot` generation.
+- Prompt is 1499 characters (existing 1500-character bound); fixed prompt-hash checks and medium/simulation behavior assertions pass. The real-model eval script imports the team contract; it was not run offline.
+- Parrot integration tests cover policy cap clamps, tighter base limits across styles, source feasibility → HTTP 422, cash rounding upward, exact allocation totals, stable hashes/domain, contract field projection, conservative window, unknown clone reasons, and exact displayed/saved membership. The team's own compiler/shortlist coverage replaces the deleted duplicate contract tests.
+- Cached demos use SIMULATION, matching policy fields/source requirements and millionth allocation totals. UI guards distinguish clarification responses from selectable plans and reject non-simulation previews.
+- Existing no-authority, limiter, Live protocol and CI-related tests remain. Live config structure, persona, allowed client events, limits, CI workflows and dependencies are unchanged; prompt wording now states simulation semantics. The recorded event replay's enum spelling was migrated to medium; this is not a new provider recording.
+- `git diff --check` and SHA-256 checks of all three protected files pass.
+- Git staging failed creating the external worktree `index.lock` (`Operation not permitted`); all changes remain uncommitted.
 
-```text
-RED: reason consistency (1 fail)
-RED: style priority reason (1 fail)
-RED: previous unknown id (1 fail)
-RED: previous oversize (1 fail)
-RED: previous unknown keys (1 fail)
-RED: facts per-side cap (2 fail)
-RED: facts length (1 fail)
-RED: board diff (1 fail)
-RED: evidence guard (2 fail)
-RED: reason vocabulary guard (1 fail)
-RED: speech skip (1 fail)
-RED: flash cap (1 fail)
-GREEN: restored sources; 15 pass
+The requested legacy-term scan has two intentional existing documentation hits: `docs/agents/PAPER_LIFECYCLE.md:30` describes the separate paper lifecycle's pause authority, and `docs/cre/INTEGRATION.md:17` describes the retired mirror spike. The new `parrot-contract.test.ts` deliberately names the deleted module to prevent its return; it never imports it. No obsolete fields, enum spellings or eligibility labels remain in Parrot product code/docs.
 
-```
+## Not verified here
 
-The oversized previous list uses 26 distinct known ids, and the bad reason uses an otherwise selected id, so unrelated validation cannot mask those regressions. Tests also cover exact selection/diff membership, rank retention, code vocabulary, long-id facts budgeting, cached response compatibility, reel timing, combo reset/cap, particle count/lifetime, calm gating, speech suppression, and a rolling flash envelope cap. One visual luminance envelope per second is stricter than the requested maximum of three; individual reels use movement, not flashing.
-
-## Checks
-
-- Dashboard: `bunx tsc --noEmit` passed.
-- Backend: `bunx tsc --noEmit` passed; full `bun test`: 735 passed, 17 database tests skipped without TEST_DATABASE_URL, zero failed.
-- `parrot-no-authority.test.ts` included and green.
-- `bun run build` hit the existing Turbopack filesystem-root/symlink restriction. `bun run build --webpack` passed, including static `/parrot` generation.
-- No new dependencies; no edits to Score, `packages/shared/strategy-intent.ts`, Live persona/config/allowed-events, limits or migrations.
-- Existing expectations changed only for the new `evidence` response key and evidence in the live guard test fixture; the generated-fixture test now asserts 40 sample rows and four exclusion controls. No prior wallet-address assertions were relaxed.
-- Git add/commit could not create the worktree index lock: `Operation not permitted` in the repository's external `.git/worktrees/parrot-board` directory. Changes remain uncommitted.
-
-## Unverified without a screen or speakers
-
-- Actual 375 px and desktop layout, absence of horizontal scrolling, both themes, contrast and text clipping.
-- Card movement/FLIP, reel lock timing, ghost collapse/reentry, counter motion, portrait/blink/bob, clamp motion, feather/ray/shimmer layering and visual taste.
-- Pointer/touch tilt and reason tooltips, visible keyboard focus, screen-reader announcements, and unobscured/clickable conclusions and lock controls during effects.
-- Browser persistence and OS reduced-motion/Calm transitions, actual animation cancellation on navigation/visibility loss, and real laptop 60 fps/low-power behavior.
-- Live remote audio reactivity, autoplay fallback, synthesized sound quality/volume/pitch, visitor-speech suppression under real microphone latency, and speaker feedback.
-- Actual rendered photosensitivity compliance: the schedule cap is tested as data; no visual luminance measurements were performed.
-- Real microphone/provider E2E, database persistence or deployed behavior.
+Real-model intent quality, microphone/provider E2E, Postgres persistence, Linux, deployment and funded behavior remain unverified. Render assertions do not prove browser layout, native detail interaction/focus, screen-reader announcements, motion/ghost timing, reduced motion, sound or visual photosensitivity. These still need device/browser checks. No trading authority is created by this work.

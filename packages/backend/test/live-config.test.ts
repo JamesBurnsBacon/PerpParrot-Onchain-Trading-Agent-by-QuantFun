@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { BACKEND_INSTRUCTIONS, buildLiveConfig, LIVE_INSTRUCTIONS, liveReservationMicroUsd, readLiveEnv } from "../src/live/config";
 import { STRATEGY_FIELD_GUIDE, CHAT_SYSTEM_PROMPT } from "../src/chat/prompt";
-import { STRATEGY_INTENT_JSON_SCHEMA } from "../../shared/parrot-intent";
+import { STRATEGY_INTENT_JSON_SCHEMA } from "../../shared/strategy-intent";
 
 test("live config snapshot has only one strict bounded function and server-owned settings", () => {
   const config = buildLiveConfig(readLiveEnv({}));
@@ -14,7 +14,7 @@ test("live config snapshot has only one strict bounded function and server-owned
   expect(LIVE_INSTRUCTIONS.length).toBeLessThanOrEqual(2500);
   expect(BACKEND_INSTRUCTIONS).toContain(STRATEGY_FIELD_GUIDE);
   expect(CHAT_SYSTEM_PROMPT).toContain(STRATEGY_FIELD_GUIDE);
-  expect(new Bun.CryptoHasher("sha256").update(CHAT_SYSTEM_PROMPT).digest("hex")).toBe("3fd75cf01b50e08ba88e6480fe1b27080bcd0dbe44d8aa262a38193918a9980e");
+  expect(new Bun.CryptoHasher("sha256").update(CHAT_SYSTEM_PROMPT).digest("hex")).toBe("752cc4f83d3a1afb5d6aeb7181305a31e9d743a6681e192dfbdd7c773d282371");
 });
 
 test("live env defaults and invalid optional numbers never block startup", () => {

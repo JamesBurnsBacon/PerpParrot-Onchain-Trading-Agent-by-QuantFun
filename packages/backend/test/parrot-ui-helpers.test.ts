@@ -10,15 +10,15 @@ const chat: ChatResponse = {
   ok: true, reply: "Let's keep it bounded.", clarify: null,
   intent: { riskStyle: "aggressive", maxSources: 5, diversification: "high", leverageComfort: "high",
     requestedLeverage: 100, avoidClones: true, horizon: "medium", clarify: null, reply: "Let's keep it bounded." },
-  policy: { liveEligible: true, effectiveMaxSources: 5, changes: [{ field: "mode", from: "LIVE", to: "SIMULATION" }],
-    clamps: [{ field: "maxGrossLeverage", requested: 100, applied: 3 }], notes: ["Bounded by code"] },
+  policy: { requiredSources: 4, maxSources: 5, changes: [{ field: "mode", from: "LIVE", to: "SIMULATION" }],
+    clamps: [{ field: "maxGrossLeverage", requested: 100, applied: 3 }] },
   shortlist: { addresses: ["0x123456789012345678901234567890123456abcd"], dataSource: "sample" },
   model: "test-model", latencyMs: 120,
 };
 const preview: PreviewResponse = {
-  ok: true, requestId: "request-1", preview: { version: "1", liveEligible: false, paperOnly: true,
-    weighting: "equal", policy: { bucket: "AGGRESSIVE" }, sources: [{ address: chat.shortlist.addresses[0], weightUnits: 1000, ceilingUnits: 2000 }],
-    cashUnits: 9000, notes: [], previewHash: "0xabcdef" },
+  ok: true, requestId: "request-1", preview: { version: "1",
+    weighting: "equal", policy: { bucket: "AGGRESSIVE", mode: "SIMULATION" }, sources: [{ address: chat.shortlist.addresses[0], weightUnits: 1000, ceilingUnits: 2000 }],
+    cashUnits: 9000, previewHash: "0xabcdef" },
 };
 
 describe("parrot display helpers", () => {
@@ -40,7 +40,7 @@ describe("parrot display helpers", () => {
   });
   test("intent chips expose all five preferences", () => {
     expect(intentChips(chat.intent)).toEqual(["Aggressive", "Up to 5 sources", "High diversification", "High leverage comfort", "Avoid clones"]);
-    expect(intentChips({ ...chat.intent, avoidClones: false, diversification: "med" })).toContain("Medium diversification");
+    expect(intentChips({ ...chat.intent, avoidClones: false, diversification: "medium" })).toContain("Medium diversification");
     expect(intentChips({ ...chat.intent, avoidClones: false })).toContain("Clones allowed");
   });
   test("clamp banner makes the policy boundary explicit", () => {
@@ -68,7 +68,7 @@ describe("untrusted API results", () => {
       expect(isChatResponse(demo.chat)).toBe(true);
       expect(isPreviewResponse(demo.preview)).toBe(true);
       expect(demo.preview.preview.sources.map(s => s.address)).toEqual(demo.chat.shortlist.addresses);
-      expect(demo.preview.preview.sources.reduce((total, s) => total + s.weightUnits, demo.preview.preview.cashUnits)).toBe(10000);
+      expect(demo.preview.preview.sources.reduce((total, s) => total + s.weightUnits, demo.preview.preview.cashUnits)).toBe(1_000_000);
       expect(demo.preview.preview.sources.every(s => s.weightUnits <= s.ceilingUnits)).toBe(true);
     }
     expect(PARROT_PRESETS.some(demo => demo.chat.policy.clamps.some(c => c.requested === 100))).toBe(true);
@@ -91,7 +91,7 @@ describe("untrusted API results", () => {
       { intent: { ...chat.intent, reply: undefined } }, { intent: { ...chat.intent, horizon: "year" } },
       { policy: { ...chat.policy, changes: [{ field: "x", from: {}, to: 1 }] } },
       { policy: { ...chat.policy, clamps: [{ field: "x", requested: 100, applied: "3" }] } },
-      { policy: { ...chat.policy, notes: [null] } }, { policy: { ...chat.policy, liveEligible: 1 } },
+      { policy: { ...chat.policy, requiredSources: 26 } }, { policy: { ...chat.policy, maxSources: 4 } },
       { shortlist: { addresses: [42], dataSource: "sample" } },
       { shortlist: { addresses: ["<img src=x>"], dataSource: "live" } },
       { shortlist: { addresses: ["a".repeat(67)], dataSource: "live" } },
@@ -100,17 +100,17 @@ describe("untrusted API results", () => {
     ]) expect(isChatResponse({ ...chat, ...patch })).toBe(false);
   });
   test("accepts sample-fixture wallet ids as well as 0x addresses (real-backend regression)", () => {
-    expect(isChatResponse({ ...chat, shortlist: { addresses: ["addr-21", "addr-04"], dataSource: "sample" } })).toBe(true);
-    expect(isPreviewResponse({ ...preview, preview: { ...preview.preview, sources: [{ address: "addr-21", weightUnits: 1, ceilingUnits: 2 }] } })).toBe(true);
+    expect(isChatResponse({ ...chat, shortlist: { addresses: ["0xee126d9bc4ca95cbb53de71b5e8bef429f7c0226", "0xc0f33e70adf8c1e70344d9850833b5518237c921"], dataSource: "sample" } })).toBe(true);
+    expect(isPreviewResponse({ ...preview, preview: { ...preview.preview, sources: [{ address: "0xee126d9bc4ca95cbb53de71b5e8bef429f7c0226", weightUnits: 1, ceilingUnits: 2 }] } })).toBe(true);
   });
   test("validates every nested preview structure", () => {
     expect(isPreviewResponse({ ...preview, requestId: 1 })).toBe(false);
     for (const patch of [
-      { version: "2" }, { paperOnly: "yes" }, { liveEligible: null }, { policy: [] }, { weighting: null },
+      { version: "2" }, { policy: { mode: "LIVE" } }, { policy: [] }, { weighting: null },
       { sources: [{ address: "has space", weightUnits: 1, ceilingUnits: 2 }] },
       { sources: [{ ...preview.preview.sources[0], weightUnits: NaN }] },
       { sources: [{ ...preview.preview.sources[0], ceilingUnits: -1 }] },
-      { cashUnits: -1 }, { notes: [42] }, { previewHash: "" },
+      { cashUnits: -1 }, { policy: { mode: null } }, { previewHash: "" },
     ]) expect(isPreviewResponse({ ...preview, preview: { ...preview.preview, ...patch } })).toBe(false);
   });
   test("errors require known codes and valid optional retry", () => {
@@ -119,4 +119,16 @@ describe("untrusted API results", () => {
       { ok: false, code: "budget", reply: "x", retryAfterSec: -1 },
       { ok: false, code: "budget", reply: "x", retryAfterSec: "12" }]) expect(isApiError(value)).toBe(false);
   });
+});
+
+
+test("cached simulation policy fields and source requirements agree with the team compiler", async () => {
+  const { intentToPreview } = await import("../../shared/strategy-intent");
+  const { default: fixture } = await import("../fixtures/frozen-configuration.json");
+  for (const demo of PARROT_PRESETS) {
+    const compiled = intentToPreview(demo.chat.intent, fixture.policy);
+    expect(compiled.policy).toMatchObject(demo.preview.preview.policy);
+    expect(demo.chat.policy.requiredSources).toBe(compiled.requiredSources);
+    expect(demo.chat.policy.maxSources).toBe(compiled.maxSources);
+  }
 });

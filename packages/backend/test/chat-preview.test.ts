@@ -1,17 +1,17 @@
 import { expect, test } from "bun:test";
 import { keccak256, stringToBytes } from "viem";
 import { buildPreview, PreviewError } from "../src/chat/preview";
-import { intentToPolicy, type StrategyIntent } from "../../shared/parrot-intent";
+import { intentToPreview, type StrategyIntent } from "../../shared/strategy-intent";
 import type { Policy } from "../../shared/src/contracts";
 import { commitment } from "../../shared/commitments";
 import fixture from "../fixtures/frozen-configuration.json";
 
 const intent: StrategyIntent = { riskStyle: "aggressive", maxSources: 25, diversification: "low", leverageComfort: "high", requestedLeverage: null, avoidClones: false, horizon: "medium", clarify: null, reply: "Squawk." };
 const base = fixture.policy as Policy;
-const addresses = (n: number) => Array.from({ length: n }, (_, i) => `source-${i}`);
+const addresses = (n: number) => Array.from({ length: n }, (_, i) => `0x${i.toString(16).padStart(40, "0")}`);
 
 test.each([0, 0.1, 0.2, 0.333333, 0.35])("integer allocation for all N, cash %s", (cashBuffer) => {
-  const policyResult = intentToPolicy(intent, { ...base, cashBuffer });
+  const policyResult = intentToPreview(intent, { ...base, cashBuffer });
   for (let n = 5; n <= 25; n++) {
     const preview = buildPreview({ intent, policyResult, addresses: addresses(n) });
     expect(preview.cashUnits + preview.sources.reduce((sum, s) => sum + s.weightUnits, 0)).toBe(1_000_000);
@@ -25,17 +25,17 @@ test.each([0, 0.1, 0.2, 0.333333, 0.35])("integer allocation for all N, cash %s"
 });
 
 test("source bounds and infeasible integer ceiling fail closed", () => {
-  const policyResult = intentToPolicy(intent, base);
+  const policyResult = intentToPreview(intent, base);
   for (const n of [0, 4, 26]) expect(() => buildPreview({ intent, policyResult, addresses: addresses(n) })).toThrow(new PreviewError("too_few_sources"));
   expect(() => buildPreview({ intent, policyResult: { ...policyResult, policy: { ...base, maxSourceWeight: 0.01 } }, addresses: addresses(5) })).toThrow();
 });
 
 test("stable hash binds intent, policy, sources, order and weights; distinct domain", () => {
-  const policyResult = intentToPolicy(intent, base);
+  const policyResult = intentToPreview(intent, base);
   const args = { intent, policyResult, addresses: addresses(7) };
   const preview = buildPreview(args);
   expect(buildPreview(args)).toEqual(preview);
-  expect(preview).toMatchObject({ version: "1", liveEligible: true, paperOnly: false, weighting: "equal (preview only)" });
+  expect(preview).toMatchObject({ version: "1", weighting: "equal (preview only)" });
   for (const changed of [
     { ...args, intent: { ...intent, horizon: "short" as const } },
     { ...args, addresses: [...addresses(6), "other"] },
@@ -58,7 +58,7 @@ test("review-6: random cash minima round up with exact totals ceilings and stabl
     const n = 5 + Math.floor(random() * 21);
     const minCeiling = Math.ceil((1_000_000 - Math.ceil(cashBuffer * 1_000_000)) / n);
     const maxSourceWeight = (minCeiling + 1 + Math.floor(random() * 1000)) / 1_000_000;
-    const policyResult = { ...intentToPolicy(intent, base), policy: { ...base, cashBuffer, maxSourceWeight } };
+    const policyResult = { ...intentToPreview(intent, base), policy: { ...base, cashBuffer, maxSourceWeight } };
     const args = { intent, policyResult, addresses: addresses(n) };
     const preview = buildPreview(args);
     expect(preview.cashUnits / 1_000_000).toBeGreaterThanOrEqual(cashBuffer);
