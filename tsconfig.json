@@ -1,8 +1,22 @@
 {
   "compilerOptions": {
-    "target": "ES2022", "module": "ESNext", "moduleResolution": "Bundler",
-    "strict": true, "noEmit": true, "allowImportingTsExtensions": true,
-    "resolveJsonModule": true, "esModuleInterop": true, "skipLibCheck": true
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "erasableSyntaxOnly": true,
+    "strict": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true
   },
-  "include": ["packages/**/*.ts", "tests/**/*.ts"]
+  "include": [
+    "packages/shared/**/*.ts",
+    "packages/backend/**/*.ts",
+    "packages/executor/**/*.ts",
+    "packages/cre-workflows/mirror/**/*.ts",
+    "packages/cre-workflows/review/**/*.ts",
+    "tests/**/*.ts"
+  ]
 }

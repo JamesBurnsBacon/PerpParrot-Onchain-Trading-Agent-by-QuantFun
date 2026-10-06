@@ -1,0 +1,9 @@
+simulation-settings:
+  user-workflow:
+    workflow-name: perpparrot-mirror-paper
+  workflow-artifacts:
+    workflow-path: ./main.ts
+    config-path: ./config.simulation.json
+    secrets-path: ./secrets.yaml
+# Simulation config must be generated from a verified deployment and freeze.
+# No executor delivery, exchange signing, or live deployment target.

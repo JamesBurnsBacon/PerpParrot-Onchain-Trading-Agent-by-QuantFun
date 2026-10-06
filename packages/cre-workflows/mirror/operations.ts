@@ -1,6 +1,6 @@
 import {commitment} from '../../shared/src/commitments.ts';
-import {validateFrozenConfiguration} from '../../shared/src/frozen.ts';
-import type {FrozenConfiguration} from '../../shared/src/frozen.ts';
+import {validateFrozenConfiguration} from '../../shared/src/frozen-runtime.ts';
+import type {FrozenConfiguration} from '../../shared/src/frozen-runtime.ts';
 
 /** Seed must come from agreed trusted orchestration. This does not generate randomness.
  * Avoid node-local Math.random() and avoid treating a backend-selected seed as trusted.

@@ -1,37 +1,13 @@
 import {commitment} from '../../shared/src/commitments.ts';
-import {requireConfirmedFreeze, WEIGHT_UNITS} from '../../shared/src/frozen.ts';
-import type {ConfirmedFreeze, FrozenConfiguration} from '../../shared/src/frozen.ts';
+import {requireConfirmedFreeze, WEIGHT_UNITS} from '../../shared/src/frozen-runtime.ts';
 
 /** Monetary fields are canonical decimal micro-USD integers. No binary-float sizing. */
 import type {MirrorPlan, Position} from '../../shared/src/mirror-plan.ts';
 export type {MirrorPlan, Position} from '../../shared/src/mirror-plan.ts';
-export interface AccountState {
-  address: string;
-  observedAtMs: number;
-  equityMicros: string;
-  positions: Position[];
-}
-export interface PositionsSnapshot {
-  configurationHash: string;
-  publishedAtMs: number;
-  sources: AccountState[];
-  snapshotHash: string;
-}
-export interface MarketLimit {market: string; maxAbsNotionalMicros: string; reduceOnly: boolean}
-export interface MirrorInput {
-  configuration: FrozenConfiguration;
-  confirmedFreeze: ConfirmedFreeze;
-  snapshot: PositionsSnapshot;
-  account: AccountState;
-  checks: AccountState[];
-  /** Agreed sample supplied by trusted orchestration; this core does not invent randomness. */
-  sampledAddresses: string[];
-  markets: MarketLimit[];
-  nowMs: number;
-  maxStateAgeMs: number;
-  runId: string;
-}
-export type MirrorResult = {status: 'HOLD'; reason: string} | {status: 'READY'; plan: MirrorPlan};
+import type {AccountState,PositionsSnapshot,MirrorInput,MirrorResult} from '../../shared/src/mirror-state.ts';
+import {snapshotHash} from '../../shared/src/mirror-state.ts';
+export type {AccountState,PositionsSnapshot,MarketLimit,MirrorInput,MirrorResult} from '../../shared/src/mirror-state.ts';
+export {snapshotHash} from '../../shared/src/mirror-state.ts';
 const MONEY_BOUND = 10n ** 24n;
 function ensure(ok: boolean, reason: string): asserts ok {if (!ok) throw new Error(reason);}
 function money(value: string): bigint {
@@ -52,9 +28,6 @@ function positions(state: AccountState, nowMs: number, ageMs: number): Map<strin
     result.set(position.market, money(position.notionalMicros));
   }
   return result;
-}
-export function snapshotHash(snapshot: Omit<PositionsSnapshot, 'snapshotHash'>): string {
-  return commitment('perpparrot:positions:v1', snapshot);
 }
 /** Paper-only compiler: no model, HTTP, report signing, contract writes or orders. */
 export function buildMirrorPlan(input: MirrorInput): MirrorResult {

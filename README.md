@@ -2,7 +2,7 @@
 
 > Copy the best Hyperliquid perps traders and vaults, picked by quant screens and an AI agent, orchestrated by Chainlink CRE.
 >
-> **TOKEN2049 Origins Hackathon** · Tracks: **Chainlink (CRE)** · **AI x Crypto** · Status: design doc, no code yet
+> **TOKEN2049 Origins Hackathon** · Tracks: **Chainlink (CRE)** · **AI x Crypto** · Status: agent core and paper integrations implemented; live deployment gated
 
 **TL;DR**
 - Score Hyperliquid addresses (traders, HyperCore vaults, ERC-4626 vaults) on risk-adjusted performance.
@@ -147,7 +147,7 @@
 ### 4.6 AI layer: the agent in the CRE `review` workflow (hourly)
 
 Contribution status: [simulation-only real-SDK spike and PAPER mirror integration guide](docs/agents/CRE_SPIKE.md).
-WASM compilation is verified; a real LLM simulation, frozen-set consumer and live mirror adapters remain deployment gates.
+Review and paper-mirror WASM compilation is verified. A freeze/report consumer, exact IOC preview compiler, read-only adapters and durable Supabase state now have local integration tests; see [production integration status](docs/agents/PRODUCTION_INTEGRATION.md). Authenticated CRE runs, contract deployment, signed execution delivery and funded validation remain gates.
 
 A dedicated workstream, integrated into the CRE flow.
 - **Before go-live:** the agent picks **5–25 sources from ~25 finalists**, assigns weights, and writes a rationale and red flags (martingale, wash-like behavior, concentration, near-liquidation). It also judges:

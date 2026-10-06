@@ -34,5 +34,6 @@ jobs:
           work/schema-check/bin/python -m pip install jsonschema==4.25.1
           work/schema-check/bin/python tests/validate_contracts.py
       - run: pnpm compile:review-spike
+      - run: pnpm compile:mirror-spike
       - run: git diff --exit-code
       # No model credentials, external LLM simulation, deployment or broadcast here.
