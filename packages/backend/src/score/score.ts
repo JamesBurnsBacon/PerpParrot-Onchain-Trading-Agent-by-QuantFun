@@ -170,20 +170,28 @@ export const scoreCandidates = (inputs: ScoreInput[], overrides: Partial<ScoreCo
   }
   const returns = new Map(ranked.map((c) => [c.address, dailyReturns(analyses.get(c.address)!)]));
   const rho = (a: string, b: string) => correlation(returns.get(a)!, returns.get(b)!, config.minOverlapDays);
-  const representatives: Ranked[] = [];
+  // A head is compared with each earlier representative's link unit (the representative, then its
+  // link-clones), never with correlation clones, so correlation cannot chain (SPEC "Clone grouping").
+  const representativeUnits: { representative: Ranked; members: Ranked[] }[] = [];
   for (const [head, ...members] of units.values()) {
-    for (const representative of representatives) {
-      const value = rho(head.address, representative.address);
-      if (value !== null && value >= config.cloneCorrelation) {
-        head.cloneOf = { address: representative.address, correlation: value };
-        break;
+    search: for (const unit of representativeUnits) {
+      for (const account of unit.members) {
+        const value = rho(head.address, account.address);
+        if (value !== null && value >= config.cloneCorrelation) {
+          const { address } = unit.representative;
+          head.cloneOf = account === unit.representative
+            ? { address, correlation: value }
+            : { address, correlation: value, via: account.address };
+          break search;
+        }
       }
     }
-    if (head.cloneOf === null) representatives.push(head);
+    if (head.cloneOf === null) representativeUnits.push({ representative: head, members: [head, ...members] });
     for (const member of members) {
       member.cloneOf = { address: head.cloneOf?.address ?? head.address, correlation: null };
     }
   }
+  const representatives = representativeUnits.map(({ representative }) => representative);
   // Unit members can be discovered early; clone lists still follow cross-pool order (SPEC "Clone grouping").
   const representativeByAddress = new Map(representatives.map((c) => [c.address, c]));
   for (const candidate of ranked) {
