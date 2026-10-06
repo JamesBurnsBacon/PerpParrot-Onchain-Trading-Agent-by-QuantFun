@@ -7,12 +7,17 @@
     "dev": "bun run --watch src/server.ts",
     "start": "bun run src/server.ts",
     "test": "bun test",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "ingest": "bun run src/ingest/cli.ts",
+    "ingest:sync": "bun run src/ingest/sync-cli.ts",
+    "score:stored": "bun run src/ingest/score-cli.ts"
   },
   "license": "UNLICENSED",
   "dependencies": {
     "@vercel/functions": "^3.9.11",
-    "viem": "^2.57.3"
+    "viem": "^2.57.3",
+    "@supabase/supabase-js": "^2.117.2",
+    "zod": "3.25.76"
   },
   "devDependencies": {
     "@types/bun": "^1.4.2",

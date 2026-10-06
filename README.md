@@ -100,6 +100,15 @@
 - **Fills** (trade count, leverage, holding times, maker share): only for addresses that pass the cheap filters.
 - Cache the leaderboard every few hours and save every snapshot.
 
+Implementation: [`packages/backend/src/ingest/`](packages/backend/src/ingest/) and its
+[runbook](packages/backend/README.md). Each invocation saves an immutable local snapshot;
+`--supabase` also imports it into the four Ingest tables defined in
+[`supabase/migrations/20261006070000_ingest.sql`](supabase/migrations/20261006070000_ingest.sql).
+The initial 200-address run is in Supabase. Collection is not scheduled yet.
+The explicit `score:stored` command loads a completed local/Supabase snapshot into Score;
+see [the data handoff](docs/ingest/SCORE_HANDOFF_CN.md). It does not fetch new portfolios/fills
+or automatically publish candidates to review.
+
 ### 4.2 Score (backend)
 - **Hard filters:**
   - ≥ $10k

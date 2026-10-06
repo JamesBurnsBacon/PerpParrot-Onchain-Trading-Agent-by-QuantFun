@@ -14,6 +14,9 @@ CRE `mirror` workflow → executor. Design: README §4.7, §4.8, §4.13, §4.14.
 | Dashboard | `packages/dashboard` (Next.js) | Vercel service `dashboard`, every other path | snapshot service, executor (browser fetches on the same origin, read-only) |
 
 All three deploy as one Vercel project from the root `vercel.json` (one domain, one deployment).
+The Ingest migration `supabase/migrations/20261006070000_ingest.sql` was applied through the
+Supabase SQL Editor and is not recorded in CLI migration history. Reconcile that history
+before any `supabase db push`; do not reset the remote database. See `supabase/README.md`.
 On Vercel the two Bun services run as functions that stop between requests, so their timers are
 Vercel Cron jobs there: `/api/backend/cron/snapshot` at :x9 builds the coming run's snapshot, and
 `/api/executor/cron/watchdog` every 5 minutes alerts on missed runs. Both services also answer on
