@@ -34,7 +34,6 @@ export type PreviewResponse = {
 };
 export const errorCodes = ["disabled", "bad_request", "too_large", "rate_limited", "budget", "model_unavailable", "invalid_model_output", "infeasible", "too_few_sources"] as const;
 export type ApiError = { ok: false; code: typeof errorCodes[number]; reply: string; retryAfterSec?: number };
-export type HistoryTurn = { role: "user" | "parrot"; text: string };
 
 const record = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 const str = (v: unknown): v is string => typeof v === "string";
@@ -89,15 +88,15 @@ export function describeError(code: string, retryAfterSec?: number): string {
     ? `Try again in ${Math.ceil(retryAfterSec)} seconds.` : "Try again shortly.";
   switch (code) {
     case "disabled": return "The parrot is resting: chat is switched off";
-    case "rate_limited": return `One little breath, please! Too many requests. ${retry}`;
-    case "budget": return `I've used my chat allowance for now. ${retry}`;
+    case "rate_limited": return `Too many requests; ${retry[0].toLowerCase()}${retry.slice(1)}`;
+    case "budget": return `I've used my chat allowance for now; ${retry[0].toLowerCase()}${retry.slice(1)}`;
     case "bad_request": return "Give me a short description of the strategy you'd like to explore.";
     case "too_large": return "That's a beakful! Keep your message to 500 characters.";
-    case "model_unavailable": return "My thinking cap is taking a break. Please try again shortly.";
-    case "invalid_model_output": return "My answer didn't pass the code checks. Let's try that again.";
+    case "model_unavailable": return "The model is unavailable; please try again shortly.";
+    case "invalid_model_output": return "My answer didn't pass the code checks; please try again.";
     case "infeasible": return "Those preferences don't fit the policy limits. Try more sources or less leverage.";
     case "too_few_sources": return "There aren't enough eligible wallets for that mix. Let's try a broader selection.";
-    case "network": return "I can't reach the nest right now. Check your connection or play the cached demo.";
+    case "network": return "I can't reach the nest; check your connection or play the cached demo.";
     default: return "My answer couldn't be checked. Please try again.";
   }
 }

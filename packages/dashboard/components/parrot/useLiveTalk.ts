@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { describeError, type ChatResponse } from "../../lib/parrot";
 import { functionResultMessages, initialLiveEvents, isLiveSession, isLiveStrategy, liveAsChat, reduceLiveEvent, type LiveEvents } from "../../lib/parrot-live";
-import { post } from "./api";
+import { post, type Failure } from "./api";
 
 type Phase = "idle" | "connecting" | "live" | "closing";
 type Runtime = {
@@ -9,8 +9,8 @@ type Runtime = {
   timers: Set<ReturnType<typeof setTimeout>>; events: LiveEvents; closing: boolean; draining: boolean;
   processed: Set<string>; deadline?: number;
 };
-export type LiveView = { phase: Phase; user: string; parrot: string; avatar: "listening" | "speaking" | "thinking"; remaining: number; status: string };
-const idle: LiveView = { phase: "idle", user: "", parrot: "", avatar: "listening", remaining: 0, status: "" };
+export type LiveView = { phase: Phase; user: string; parrot: string; avatar: "listening" | "speaking" | "thinking"; remaining: number; status: string; failure: Failure | null; playbackBlocked: boolean };
+const idle: LiveView = { phase: "idle", user: "", parrot: "", avatar: "listening", remaining: 0, status: "", failure: null, playbackBlocked: false };
 
 export function useLiveTalk(onStrategy: (chat: ChatResponse) => void) {
   const [view, setView] = useState<LiveView>(idle);
@@ -19,7 +19,7 @@ export function useLiveTalk(onStrategy: (chat: ChatResponse) => void) {
   const callback = useRef(onStrategy);
   useEffect(() => { callback.current = onStrategy; }, [onStrategy]);
 
-  const cleanup = useCallback((run: Runtime, status?: string) => {
+  const cleanup = useCallback((run: Runtime, status?: string, failure: Failure | null = null) => {
     if (active.current !== run) return;
     active.current = null;
     run.controller.abort();
@@ -27,7 +27,7 @@ export function useLiveTalk(onStrategy: (chat: ChatResponse) => void) {
     run.mic?.getTracks().forEach(track => track.stop());
     run.channel?.close(); run.peer?.close();
     if (audio.current) { audio.current.pause(); audio.current.srcObject = null; }
-    if (status !== undefined) setView(v => ({ ...v, phase: "idle", status }));
+    if (status !== undefined) setView(v => ({ ...v, phase: "idle", status, failure, playbackBlocked: false }));
   }, []);
 
   const end = useCallback(() => {
@@ -68,9 +68,9 @@ export function useLiveTalk(onStrategy: (chat: ChatResponse) => void) {
     active.current = run;
     setView({ ...idle, phase: "connecting", avatar: "thinking", status: "Warming up my voice…" });
     const current = () => active.current === run && !run.controller.signal.aborted;
-    const fail = (status: string) => {
+    const fail = (status: string, failure: Failure | null = null) => {
       try { if (run.channel?.readyState === "open") run.channel.send(JSON.stringify({ type: "session.close" })); } catch {}
-      cleanup(run, status);
+      cleanup(run, status, failure);
     };
     const later = (fn: () => void, ms: number) => {
       const timer = setTimeout(() => { run.timers.delete(timer); if (current()) fn(); }, ms);
@@ -104,13 +104,13 @@ export function useLiveTalk(onStrategy: (chat: ChatResponse) => void) {
             for (const message of functionResultMessages(results, responseId)) run.channel.send(JSON.stringify(message));
           }
         }
-      } catch { if (current()) fail(`${describeError("model_unavailable")} Type or tap to talk instead.`); }
+      } catch { if (current()) fail(describeError("model_unavailable"), { code: "model_unavailable" }); }
       finally { run.draining = false; }
       if (current() && !run.closing && run.events.readyResponses.some(id => !run.processed.has(id))) void drain();
     };
     try {
       if (!navigator.mediaDevices?.getUserMedia || typeof RTCPeerConnection === "undefined") throw new Error("unsupported");
-      const startup = later(() => fail("My voice could not connect. Type or tap to talk instead."), 45_000);
+      const startup = later(() => fail("My voice could not connect; please try again.", { code: "network" }), 45_000);
       const mic = await navigator.mediaDevices.getUserMedia({ audio: true });
       if (!current()) { mic.getTracks().forEach(track => track.stop()); return; }
       run.mic = mic;
@@ -118,14 +118,14 @@ export function useLiveTalk(onStrategy: (chat: ChatResponse) => void) {
       peer.ontrack = event => {
         if (!current() || !audio.current) return;
         audio.current.srcObject = new MediaStream([event.track]);
-        void audio.current.play().catch(() => { if (current()) setView(v => ({ ...v, status: "Press play below to hear your parrot." })); });
+        void audio.current.play().catch(() => { if (current()) setView(v => ({ ...v, playbackBlocked: true })); });
       };
       peer.onconnectionstatechange = () => {
-        if (current() && ["failed", "disconnected", "closed"].includes(peer.connectionState)) fail("The voice connection ended. Type or tap to talk instead.");
+        if (current() && ["failed", "disconnected", "closed"].includes(peer.connectionState)) fail("The voice connection ended; please try again.", { code: "network" });
       };
       mic.getAudioTracks().forEach(track => {
         peer.addTrack(track, mic);
-        track.onended = () => { if (current()) fail("The microphone disconnected. Type or tap to talk instead."); };
+        track.onended = () => { if (current()) fail("The microphone disconnected; check it and try again."); };
       });
       const channel = peer.createDataChannel("oai-events"); run.channel = channel;
       let speakingTimer: ReturnType<typeof setTimeout> | undefined;
@@ -133,8 +133,8 @@ export function useLiveTalk(onStrategy: (chat: ChatResponse) => void) {
         if (!current()) return;
         const previous = run.events;
         run.events = reduceLiveEvent(previous, event.data);
-        if (run.events.error) { fail(`${describeError("model_unavailable")} Type or tap to talk instead.`); return; }
-        if (run.events.closed) { cleanup(run, "Conversation ended. Your microphone is off."); return; }
+        if (run.events.error) { fail(describeError("model_unavailable"), { code: "model_unavailable" }); return; }
+        if (run.events.closed) { cleanup(run, "Conversation ended; your microphone is off."); return; }
         if (!previous.started && run.events.started) {
           clearTimeout(startup); run.timers.delete(startup);
           setView(v => ({ ...v, phase: "live", avatar: "listening", status: "I'm listening. What strategy is on your mind?" }));
@@ -149,8 +149,8 @@ export function useLiveTalk(onStrategy: (chat: ChatResponse) => void) {
         }
         void drain();
       };
-      channel.onerror = () => { if (current()) fail("The voice connection failed. Type or tap to talk instead."); };
-      channel.onclose = () => { if (current()) fail("Conversation ended; final usage was not confirmed."); };
+      channel.onerror = () => { if (current()) fail("The voice connection failed; please try again.", { code: "network" }); };
+      channel.onclose = () => { if (current()) fail("Conversation ended; final usage was not confirmed.", { code: "network" }); };
       await peer.setLocalDescription(await peer.createOffer());
       if (!current()) return;
       if (peer.iceGatheringState !== "complete") await new Promise<void>((resolve, reject) => {
@@ -172,9 +172,9 @@ export function useLiveTalk(onStrategy: (chat: ChatResponse) => void) {
       const result = await post("/live/session", { sdp }, isLiveSession, signal());
       if (!current()) return;
       if ("error" in result) {
-        const message = result.error.code === "disabled" ? "Squawk, live voice is resting right now."
+        const message = result.error.code === "disabled" ? "Live voice is resting right now."
           : describeError(result.error.code, result.error.retryAfterSec);
-        fail(`${message} Type or tap to talk instead.`); return;
+        fail(message, result.error); return;
       }
       run.deadline = Date.now() + result.data.maxSessionSeconds * 1000;
       const tick = () => {
@@ -186,10 +186,20 @@ export function useLiveTalk(onStrategy: (chat: ChatResponse) => void) {
       await peer.setRemoteDescription({ type: "answer", sdp: result.data.transport.sdp });
     } catch (error) {
       if (!current()) return;
-      fail(error instanceof Error && error.name === "NotAllowedError"
-        ? "Squawk, microphone permission is blocked. Allow it in your browser, or type or tap to talk instead."
-        : "My voice could not connect. Check your microphone, or type or tap to talk instead.");
+      const micDenied = error instanceof Error && error.name === "NotAllowedError";
+      const micMissing = error instanceof Error && ["NotFoundError", "NotReadableError"].includes(error.name);
+      fail(micDenied ? "Allow microphone access in your browser to talk live."
+        : micMissing ? "Check your microphone and try again."
+        : "My voice could not connect; please try again.", micDenied || micMissing ? null : { code: "network" });
     }
   }
-  return { view, audio, start, end, active: view.phase !== "idle" };
+  async function resumeAudio() {
+    const run = active.current;
+    if (!run || !audio.current) return;
+    try {
+      await audio.current.play();
+      if (active.current === run) setView(v => ({ ...v, playbackBlocked: false }));
+    } catch { /* Keep the user-gesture retry available if playback is still blocked. */ }
+  }
+  return { view, audio, start, end, resumeAudio, active: view.phase !== "idle" };
 }

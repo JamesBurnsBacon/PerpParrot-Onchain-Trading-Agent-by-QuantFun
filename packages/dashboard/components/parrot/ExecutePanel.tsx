@@ -2,11 +2,11 @@ import { Panel, StatTile } from "../Charts";
 import { describeError, type ChatResponse, type PreviewResponse } from "../../lib/parrot";
 import { Badge } from "./Badge";
 import { HoldButton } from "./HoldButton";
-import { canDemo, type Failure } from "./api";
+import type { Failure } from "./api";
 
-export function ExecutePanel({ chat, demo, result, busy, failure, onConfirm, onDemo }: {
+export function ExecutePanel({ chat, demo, result, busy, failure, onConfirm, executionDisabled }: {
   chat: ChatResponse; demo: boolean; result: PreviewResponse | null; busy: boolean;
-  failure: Failure | null; onConfirm: () => void; onDemo: () => void;
+  failure: Failure | null; onConfirm: () => void; executionDisabled: boolean;
 }) {
   const eligible = result?.preview.liveEligible ?? chat.policy.liveEligible;
   const bucket = result?.preview.policy.bucket;
@@ -27,9 +27,10 @@ export function ExecutePanel({ chat, demo, result, busy, failure, onConfirm, onD
         <p className="mt-2 font-bold break-words">Request {result.requestId} saved. Awaiting operator freeze.</p>
         {result.preview.paperOnly && <p className="mt-2 text-sm">paper book request</p>}
         <p className="parrot-hash mt-3">{result.preview.previewHash}</p>
-      </div> : <HoldButton disabled={busy || !chat.shortlist.addresses.length} onConfirm={onConfirm} />}
+      </div> : <HoldButton disabled={busy || executionDisabled || !chat.shortlist.addresses.length} onConfirm={onConfirm} />}
+      {executionDisabled && !result && <p className="mt-3 text-center text-xs" style={{ color: "var(--ink-2)" }}>End voice to lock this strategy.</p>}
       {busy && <p role="status" className="mt-3 text-sm">Saving the pending request…</p>}
-      {failure && <div className="parrot-error mt-4" role="alert"><p>{describeError(failure.code, failure.retryAfterSec)}</p>{canDemo(failure) && <button className="parrot-button mt-3" onClick={onDemo}>Play the cached demo</button>}</div>}
+      {failure && <div className="parrot-error mt-4" role="alert"><p>{describeError(failure.code, failure.retryAfterSec)}</p></div>}
       {result && <details className="parrot-details mt-4"><summary>Show preview JSON</summary><pre>{JSON.stringify(result, null, 2)}</pre></details>}
     </Panel>
     <div className="parrot-terminal"><span aria-hidden="true">&gt; </span>intent → code limits → pending request<br /><span className="opacity-80">Operator freeze and a signed report are separate steps.</span></div>

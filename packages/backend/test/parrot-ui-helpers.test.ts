@@ -35,7 +35,7 @@ describe("parrot display helpers", () => {
     expect(describeError("rate_limited", 12)).toContain("12 seconds");
     expect(describeError("budget", 60)).toContain("60 seconds");
     expect(describeError("budget")).not.toContain("undefined");
-    expect(describeError("rate_limited")).toContain("Try again shortly");
+    expect(describeError("rate_limited")).toContain("try again shortly");
     expect(describeError("arbitrary server message")).not.toContain("arbitrary");
   });
   test("intent chips expose all five preferences", () => {
