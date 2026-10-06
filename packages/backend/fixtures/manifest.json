@@ -1,0 +1,72 @@
+{
+  "schemaVersion": "1.0.0",
+  "snapshotHash": "0x5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+  "policyHash": "0x05067d07259744af32de9b20391c5e75bd26c5ecf4cf668eaa71fcd56ec460cd",
+  "createdAtMs": 1791244800000,
+  "expiresAtMs": 1792454400000,
+  "bucket": "BALANCED",
+  "mode": "LIVE",
+  "status": "VALID",
+  "rebuildCount": 0,
+  "policy": {
+    "bucket": "BALANCED",
+    "mode": "LIVE",
+    "capitalUsd": 470,
+    "minOrderUsd": 10,
+    "minExecutableTargets": 3,
+    "maxSourceWeight": 0.25,
+    "maxGrossLeverage": 3,
+    "cashBuffer": 0.1,
+    "maxPairCorrelation": 0.8,
+    "maxExposureOverlap": 0.5,
+    "minHistoryDays": 30,
+    "maxFrameAgeMs": 3600000,
+    "minExecutionFit": 50,
+    "riskRejectThreshold": 80,
+    "riskWatchThreshold": 60,
+    "minConfidence": 60,
+    "redTeamRebuildThreshold": 70,
+    "redTeamExcludeThreshold": 85
+  },
+  "sources": [
+    {
+      "candidate": 0,
+      "sourceAddress": "0x1e37a337ed460039d1b15bd3bc489de789768d5e",
+      "weight": 0.2,
+      "maxAllocation": 0.25
+    },
+    {
+      "candidate": 1,
+      "sourceAddress": "0xc179e03922afe8fa9533d3f896338b9fb87ce0c8",
+      "weight": 0.15,
+      "maxAllocation": 0.25
+    },
+    {
+      "candidate": 2,
+      "sourceAddress": "0x07fd993f0fa3a185f7207adccd29f7a87404689d",
+      "weight": 0.15,
+      "maxAllocation": 0.25
+    },
+    {
+      "candidate": 3,
+      "sourceAddress": "0x53f8f390fd4f70941c5d160a964f6893c8dbceff",
+      "weight": 0.1,
+      "maxAllocation": 0.25
+    },
+    {
+      "candidate": 4,
+      "sourceAddress": "0x654016a8c9fcf0c4cb7ed6078aba21f7f399f7b7",
+      "weight": 0.1,
+      "maxAllocation": 0.25
+    },
+    {
+      "candidate": 5,
+      "sourceAddress": "0xd6e56265890b76413d1d527eb9b75e334c0c5b42",
+      "weight": 0.1,
+      "maxAllocation": 0.25
+    }
+  ],
+  "cashWeight": 0.2,
+  "reason": "OK",
+  "manifestHash": "0xed75bffaf51205d926e3e71cafab945a515e8d430d2575c0ef858e9a1602e9d5"
+}

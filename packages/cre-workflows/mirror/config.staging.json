@@ -1,10 +1,11 @@
 {
   "schedule": "0 */10 * * * *",
-  "frozenSetHash": "0xf169c1cec9f53dbc068305c9147d11410e7b5ced85363fe994ad191e411e4a32",
-  "spotCheckCount": 5,
-  "maxDeviationBps": 500,
-  "maxSnapshotAgeSeconds": 120,
   "backendUrl": "http://localhost:8788",
   "executorUrl": "http://localhost:8787/reports",
-  "account": "0x010461c14e146ac35fe42271bdc1134ee31c703a"
+  "account": "0x010461c14e146ac35fe42271bdc1134ee31c703a",
+  "frozenManifestHash": "0xed75bffaf51205d926e3e71cafab945a515e8d430d2575c0ef858e9a1602e9d5",
+  "spotCheckCount": 5,
+  "maxDeviationBps": 500,
+  "maxSnapshotAgeSeconds": 600,
+  "reportTtlSeconds": 300
 }

@@ -4,7 +4,16 @@ import { REPORT_BODY_ABI, type MirrorReport, type ReportEnvelope } from "../../s
 const bodyParams = parseAbiParameters(REPORT_BODY_ABI);
 
 export const encodeReportBody = (r: MirrorReport): Hex =>
-  encodeAbiParameters(bodyParams, [r.runId, r.snapshotId, r.asOf, r.frozenSetHash, r.equityE6, r.targets]);
+  encodeAbiParameters(bodyParams, [
+    r.runId,
+    r.snapshotHash,
+    r.manifestHash,
+    r.account,
+    r.asOf,
+    r.expiresAt,
+    r.equityE6,
+    r.targets,
+  ]);
 
 type SignedReport = {
   rawReport: Uint8Array;

@@ -14,13 +14,14 @@ import {
   prepareReportRequest,
   Runner,
   type Runtime,
+  text,
 } from "@chainlink/cre-sdk";
 import { z } from "zod";
-import { computeExposures, deviationBps, parseAccount, toTargetE6 } from "../../shared/copy";
+import { capGrossExposure, computeExposures, deviationBps, EXPOSURE_SCALE, parseAccount, toTargetE6 } from "../../shared/copy";
 import type { MirrorReport } from "../../shared/report";
 import { ELIGIBLE_DEXES } from "../../shared/snapshot";
 import { encodeReportBody, toEnvelope } from "./report";
-import { checkSnapshot, pickSample, snapshotSchema } from "./snapshot";
+import { checkSnapshot, keccakUtf8, pickSample, snapshotSchema } from "./snapshot";
 
 const HL_INFO_URL = "https://api.hyperliquid.xyz/info";
 
@@ -30,13 +31,16 @@ const configSchema = z.object({
   backendUrl: z.string().startsWith("http"),
   executorUrl: z.string().startsWith("http"),
   // Our HL account; its equity sizes the targets.
-  account: z.string().regex(/^0x[0-9a-fA-F]{40}$/),
-  frozenSetHash: z.string().regex(/^0x[0-9a-f]{64}$/),
+  account: z.string().regex(/^0x[0-9a-f]{40}$/),
+  // manifestHash of the frozen live manifest (README §4.7 freeze commitment).
+  frozenManifestHash: z.string().regex(/^0x[0-9a-f]{64}$/),
   // 2 HTTP calls per source (core + xyz). Budget: 1 snapshot + 2 own account
   // + 2 × spotCheckCount + 1 executor ≤ 15.
   spotCheckCount: z.number().int().min(1).max(5),
   maxDeviationBps: z.number().int().positive(),
   maxSnapshotAgeSeconds: z.number().int().positive(),
+  // The executor rejects the report after asOf + reportTtlSeconds.
+  reportTtlSeconds: z.number().int().positive(),
 });
 
 export type Config = z.infer<typeof configSchema>;
@@ -45,6 +49,8 @@ export type Config = z.infer<typeof configSchema>;
 // identical across nodes; live HL reads differ slightly, so they take the median.
 type Observation = {
   snapshotId: string;
+  // keccak256 of the snapshot JSON bytes.
+  snapshotHash: string;
   // JSON [{asset, exposureE9}] — kept small for the 25 KB consensus limit.
   exposures: string;
   maxDeviationBps: number;
@@ -57,8 +63,13 @@ const observe = (nodeRuntime: NodeRuntime<Config>, runAt: number): Observation =
 
   const snapRes = http.sendRequest(nodeRuntime, { url: `${config.backendUrl}/snapshots/${runAt}`, method: "GET" }).result();
   if (!ok(snapRes)) throw new Error(`snapshot fetch failed: ${snapRes.statusCode}`);
-  const snapshot = snapshotSchema.parse(json(snapRes));
-  checkSnapshot(snapshot, { frozenSetHash: config.frozenSetHash, runAt, maxSnapshotAgeSeconds: config.maxSnapshotAgeSeconds });
+  const raw = text(snapRes);
+  const snapshot = snapshotSchema.parse(JSON.parse(raw));
+  const sources = checkSnapshot(snapshot, {
+    frozenManifestHash: config.frozenManifestHash,
+    runAt,
+    maxSnapshotAgeSeconds: config.maxSnapshotAgeSeconds,
+  });
 
   const eligible = new Set(snapshot.eligibleAssets);
   const account = (user: string) =>
@@ -79,14 +90,16 @@ const observe = (nodeRuntime: NodeRuntime<Config>, runAt: number): Observation =
       eligible,
     );
 
-  const sample = pickSample(snapshot.sources, snapshot.snapshotId, config.spotCheckCount);
+  const sample = pickSample(sources, snapshot.snapshotId, config.spotCheckCount);
   const maxDev = Math.max(...sample.map((s) => deviationBps(s, account(s.address))));
+
+  const maxGrossE9 = BigInt(Math.round(snapshot.manifest.policy.maxGrossLeverage * Number(EXPOSURE_SCALE)));
+  const exposures = capGrossExposure(computeExposures(sources), maxGrossE9);
 
   return {
     snapshotId: snapshot.snapshotId,
-    exposures: JSON.stringify(
-      computeExposures(snapshot.sources).map((e) => ({ asset: e.asset, exposureE9: e.exposureE9.toString() })),
-    ),
+    snapshotHash: keccakUtf8(raw),
+    exposures: JSON.stringify(exposures.map((e) => ({ asset: e.asset, exposureE9: e.exposureE9.toString() }))),
     maxDeviationBps: maxDev,
     equityE6: account(config.account).equityE6,
   };
@@ -96,9 +109,11 @@ export const buildMirrorReport = (config: Config, runAt: number, obs: Observatio
   const exposures = JSON.parse(obs.exposures) as { asset: string; exposureE9: string }[];
   return {
     runId: `mirror-${runAt}`,
-    snapshotId: obs.snapshotId,
+    snapshotHash: obs.snapshotHash as `0x${string}`,
+    manifestHash: config.frozenManifestHash as `0x${string}`,
+    account: config.account as `0x${string}`,
     asOf: BigInt(runAt),
-    frozenSetHash: config.frozenSetHash as `0x${string}`,
+    expiresAt: BigInt(runAt + config.reportTtlSeconds),
     equityE6: obs.equityE6,
     targets: exposures.map((e) => ({ asset: e.asset, notionalE6: toTargetE6(BigInt(e.exposureE9), obs.equityE6) })),
   };
@@ -115,6 +130,7 @@ export const onCronTrigger = (runtime: Runtime<Config>, payload: CronPayload): s
       observe,
       ConsensusAggregationByFields<Observation>({
         snapshotId: identical,
+        snapshotHash: identical,
         exposures: identical,
         maxDeviationBps: median,
         equityE6: median,
@@ -130,26 +146,26 @@ export const onCronTrigger = (runtime: Runtime<Config>, payload: CronPayload): s
   const mirrorReport = buildMirrorReport(config, runAt, obs);
   const report = runtime.report(prepareReportRequest(encodeReportBody(mirrorReport))).result();
 
-  const delivered = new HTTPClient()
+  // The status code, not just ok: duplicates and acceptances are both 200, and a
+  // rejection is the same 4xx on every node, so identical consensus holds either way.
+  const status = new HTTPClient()
     .sendRequest(
       runtime,
       (sendRequester) =>
-        ok(
-          sendRequester
-            .sendReport(report, (r) => ({
-              url: config.executorUrl,
-              method: "POST",
-              body: bytesToBase64(new TextEncoder().encode(JSON.stringify(toEnvelope(r)))),
-              headers: { "Content-Type": "application/json" },
-              cacheSettings: { store: true, maxAge: "60s" },
-            }))
-            .result(),
-        ),
-      consensusIdenticalAggregation<boolean>(),
+        sendRequester
+          .sendReport(report, (r) => ({
+            url: config.executorUrl,
+            method: "POST",
+            body: bytesToBase64(new TextEncoder().encode(JSON.stringify(toEnvelope(r)))),
+            headers: { "Content-Type": "application/json" },
+            cacheSettings: { store: true, maxAge: "60s" },
+          }))
+          .result().statusCode,
+      consensusIdenticalAggregation<number>(),
     )()
     .result();
 
-  if (!delivered) throw new Error("Executor rejected the report");
+  if (status < 200 || status >= 300) throw new Error(`executor rejected the report: HTTP ${status}`);
   runtime.log(`delivered ${mirrorReport.runId}: ${mirrorReport.targets.length} targets`);
   return mirrorReport.runId;
 };

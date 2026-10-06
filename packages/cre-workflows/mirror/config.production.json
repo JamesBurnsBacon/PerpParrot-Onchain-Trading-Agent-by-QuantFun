@@ -1,10 +1,11 @@
 {
   "schedule": "0 */10 * * * *",
-  "frozenSetHash": "0xf169c1cec9f53dbc068305c9147d11410e7b5ced85363fe994ad191e411e4a32",
+  "backendUrl": "https://REPLACE-backend.up.railway.app",
+  "executorUrl": "https://REPLACE-executor.vercel.app/reports",
+  "account": "0x0000000000000000000000000000000000000000",
+  "frozenManifestHash": "0xed75bffaf51205d926e3e71cafab945a515e8d430d2575c0ef858e9a1602e9d5",
   "spotCheckCount": 5,
   "maxDeviationBps": 500,
   "maxSnapshotAgeSeconds": 120,
-  "backendUrl": "https://REPLACE-backend.up.railway.app",
-  "executorUrl": "https://REPLACE-executor.vercel.app/reports",
-  "account": "0x0000000000000000000000000000000000000000"
+  "reportTtlSeconds": 300
 }

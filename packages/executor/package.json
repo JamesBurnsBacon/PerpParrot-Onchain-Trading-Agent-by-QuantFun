@@ -4,12 +4,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun run src/dev-server.ts",
+    "dev": "bun run --watch src/server.ts",
+    "start": "bun run src/server.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
   },
   "license": "UNLICENSED",
   "dependencies": {
+    "@nktkas/hyperliquid": "^0.33.3",
     "viem": "^2.57.3"
   },
   "devDependencies": {

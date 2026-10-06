@@ -1,12 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { computeExposures, decToE6, deviationBps, parseAccount, toTargetE6 } from "../../shared/copy";
-import type { SnapshotSource } from "../../shared/snapshot";
-import { eligibleFromMeta } from "../src/eligibility";
-import { frozenSetHash } from "../src/snapshot";
-import frozenSet from "../fixtures/frozen-set.json";
+import { capGrossExposure, computeExposures, decToE6, deviationBps, parseAccount, toTargetE6, type WeightedSource } from "../../shared/copy";
 
-const src = (address: string, weightE6: number, equityE6: string, positions: [string, string][]): SnapshotSource => ({
-  address: address as `0x${string}`,
+const src = (address: string, weightE6: number, equityE6: string, positions: [string, string][]): WeightedSource => ({
+  address,
   weightE6,
   equityE6,
   positions: positions.map(([asset, notionalE6]) => ({ asset, notionalE6 })),
@@ -59,13 +55,26 @@ describe("computeExposures", () => {
     ]);
   });
 
-  test("renormalizes weights over sources that hold positions", () => {
+  test("keeps the cash share: weights summing to 0.8 give 80% of the exposure", () => {
+    const exp = computeExposures([src("0xa", 800_000, "1000000000", [["BTC", "1000000000"]])]);
+    expect(exp).toEqual([{ asset: "BTC", exposureE9: 800_000_000n }]);
+  });
+
+  test("redistributes flat sources' weight over active ones, cash unchanged", () => {
+    // 0.4 + 0.4 invested (0.2 cash); B is flat, so A carries the full 0.8.
     const exp = computeExposures([
-      src("0xa", 500_000, "1000000000", [["BTC", "1000000000"]]),
-      src("0xb", 500_000, "1000000000", []),
+      src("0xa", 400_000, "1000000000", [["BTC", "1000000000"]]),
+      src("0xb", 400_000, "1000000000", []),
     ]);
-    // A is the only active source, so it gets the full weight: 1× BTC.
-    expect(exp).toEqual([{ asset: "BTC", exposureE9: 1_000_000_000n }]);
+    expect(exp).toEqual([{ asset: "BTC", exposureE9: 800_000_000n }]);
+  });
+
+  test("ignores sources with zero equity", () => {
+    const exp = computeExposures([
+      src("0xa", 500_000, "0", [["BTC", "1000000000"]]),
+      src("0xb", 500_000, "1000000000", [["ETH", "1000000000"]]),
+    ]);
+    expect(exp).toEqual([{ asset: "ETH", exposureE9: 1_000_000_000n }]);
   });
 
   test("is empty when every source is flat", () => {
@@ -74,6 +83,25 @@ describe("computeExposures", () => {
 
   test("toTargetE6 scales by our equity", () => {
     expect(toTargetE6(1_250_000_000n, 470_000_000n)).toBe(587_500_000n);
+  });
+});
+
+describe("capGrossExposure", () => {
+  const exposures = [
+    { asset: "BTC", exposureE9: 3_000_000_000n },
+    { asset: "ETH", exposureE9: -1_000_000_000n },
+  ];
+
+  test("scales pro-rata when gross exceeds the cap", () => {
+    // Gross 4× capped at 2× → halve everything.
+    expect(capGrossExposure(exposures, 2_000_000_000n)).toEqual([
+      { asset: "BTC", exposureE9: 1_500_000_000n },
+      { asset: "ETH", exposureE9: -500_000_000n },
+    ]);
+  });
+
+  test("leaves exposures under the cap untouched", () => {
+    expect(capGrossExposure(exposures, 5_000_000_000n)).toBe(exposures);
   });
 });
 
@@ -92,41 +120,5 @@ describe("deviationBps", () => {
 
   test("treats zero live equity as a full mismatch", () => {
     expect(deviationBps(snap, { equityE6: 0n, positions: new Map() })).toBe(10_000);
-  });
-});
-
-describe("eligibleFromMeta", () => {
-  const meta = (collateralToken: number) => ({
-    collateralToken,
-    universe: [
-      { name: "BTC", maxLeverage: 40 },
-      { name: "OLD", maxLeverage: 10, isDelisted: true },
-      { name: "xyz:HOOD", maxLeverage: 10, onlyIsolated: true, marginMode: "noCross" },
-      { name: "io:ANTH", maxLeverage: 10, marginMode: "strictIsolated" },
-      { name: "SMALL", maxLeverage: 10 },
-    ],
-  });
-  const ctxs = [
-    { openInterest: "1000", markPx: "85000" },
-    { openInterest: "1e9", markPx: "1" },
-    { openInterest: "1e9", markPx: "1" },
-    { openInterest: "1e9", markPx: "1" },
-    { openInterest: "100", markPx: "1000" },
-  ];
-
-  test("keeps listed cross-margin USDC markets with ≥ $20M OI", () => {
-    expect(eligibleFromMeta([meta(0), ctxs])).toEqual(["BTC"]);
-  });
-
-  test("skips dexes with non-USDC collateral", () => {
-    expect(eligibleFromMeta([meta(1), ctxs])).toEqual([]);
-  });
-});
-
-describe("frozenSetHash", () => {
-  test("is order-independent and matches the mirror config", () => {
-    const set = frozenSet.sources as { address: `0x${string}`; weightE6: number }[];
-    expect(frozenSetHash([...set].reverse())).toBe(frozenSetHash(set));
-    expect(frozenSetHash(set)).toBe("0xf169c1cec9f53dbc068305c9147d11410e7b5ced85363fe994ad191e411e4a32");
   });
 });

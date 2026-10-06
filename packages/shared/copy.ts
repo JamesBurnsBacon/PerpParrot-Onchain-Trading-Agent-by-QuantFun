@@ -20,6 +20,8 @@ type ClearinghouseState = {
   assetPositions: { position: { coin: string; szi: string; positionValue: string } }[];
 };
 
+const abs = (n: bigint) => (n < 0n ? -n : n);
+
 export type AccountState = {
   equityE6: bigint;
   // Signed notional per eligible asset.
@@ -42,18 +44,22 @@ export const parseAccount = (states: ClearinghouseState[], eligible: ReadonlySet
   return { equityE6, positions };
 };
 
-const abs = (n: bigint) => (n < 0n ? -n : n);
+export type WeightedSource = SnapshotSource & { weightE6: number };
 
-// exposure_c = Σ_i w'_i × n_i,c / E_i, with w' renormalized over sources that hold
-// any eligible position ("flat is not a signal", README §4.4). Sorted by asset.
-export const computeExposures = (sources: SnapshotSource[]): { asset: string; exposureE9: bigint }[] => {
+// exposure_c = Σ_i w'_i × n_i,c / E_i (README §4.4). Weights come from the
+// manifest and sum to 1 − cash. "Flat is not a signal": flat sources' weight is
+// redistributed over sources holding any eligible position, keeping the cash
+// share fixed (w'_i = w_i × W_all / W_active). Sorted by asset.
+export const computeExposures = (sources: WeightedSource[]): { asset: string; exposureE9: bigint }[] => {
+  const allWeight = BigInt(sources.reduce((sum, s) => sum + s.weightE6, 0));
   const active = sources.filter((s) => s.positions.some((p) => BigInt(p.notionalE6) !== 0n) && BigInt(s.equityE6) > 0n);
   const activeWeight = BigInt(active.reduce((sum, s) => sum + s.weightE6, 0));
   const totals = new Map<string, bigint>();
   for (const s of active) {
     const equity = BigInt(s.equityE6);
     for (const p of s.positions) {
-      const term = (BigInt(s.weightE6) * BigInt(p.notionalE6) * EXPOSURE_SCALE) / (equity * activeWeight);
+      const term =
+        (BigInt(s.weightE6) * allWeight * BigInt(p.notionalE6) * EXPOSURE_SCALE) / (equity * activeWeight * E6);
       totals.set(p.asset, (totals.get(p.asset) ?? 0n) + term);
     }
   }
@@ -61,6 +67,16 @@ export const computeExposures = (sources: SnapshotSource[]): { asset: string; ex
     .filter(([, e]) => e !== 0n)
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
     .map(([asset, exposureE9]) => ({ asset, exposureE9 }));
+};
+
+// Scales all exposures down pro-rata so gross (Σ |exposure|) ≤ the policy's maxGrossLeverage.
+export const capGrossExposure = (
+  exposures: { asset: string; exposureE9: bigint }[],
+  maxGrossE9: bigint,
+): { asset: string; exposureE9: bigint }[] => {
+  const gross = exposures.reduce((sum, e) => sum + abs(e.exposureE9), 0n);
+  if (gross <= maxGrossE9) return exposures;
+  return exposures.map((e) => ({ asset: e.asset, exposureE9: (e.exposureE9 * maxGrossE9) / gross }));
 };
 
 // Target notional for our account: exposure × our equity.

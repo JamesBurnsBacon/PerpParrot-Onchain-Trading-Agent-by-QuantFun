@@ -3,19 +3,21 @@ import { verifyEnvelope, type VerifiedReport, type VerifyMode } from "./verify";
 
 export type HandlerDeps = {
   mode: VerifyMode;
-  frozenSetHash: string;
-  maxAgeSeconds: number;
+  frozenManifestHash: string;
+  account: string;
+  // Unix seconds.
   now: () => number;
-  // Returns false if the report ID was already claimed. In-memory for the spike;
-  // Supabase (unique report_id) once the executor is real.
+  // How far asOf may be ahead of our clock (DON clock skew; the simulator stamps the next :x0).
+  maxLeadSeconds: number;
   claim: (id: string) => Promise<boolean>;
-  execute: (report: VerifiedReport) => Promise<void>;
+  // Starts execution without waiting for it: DON nodes time out after 10 s.
+  accept: (report: VerifiedReport, envelope: ReportEnvelope) => void;
 };
 
 export type HandlerResult = { status: number; body: Record<string, unknown> };
 
-// Every DON node POSTs its own copy: the first valid one executes, the rest get
-// 200 duplicate so the workflow's identical-consensus on `ok` still holds.
+// Every DON node POSTs its own copy: the first valid one is accepted, the rest get
+// 200 duplicate so the workflow's identical consensus on the status code holds.
 export const handleReport = async (payload: unknown, deps: HandlerDeps): Promise<HandlerResult> => {
   let report: VerifiedReport;
   try {
@@ -24,18 +26,15 @@ export const handleReport = async (payload: unknown, deps: HandlerDeps): Promise
     return { status: 401, body: { error: (e as Error).message } };
   }
 
-  const { body } = report;
-  if (body.frozenSetHash.toLowerCase() !== deps.frozenSetHash.toLowerCase()) {
-    return { status: 422, body: { error: "frozen set mismatch", id: report.id } };
-  }
-  const age = deps.now() - Number(body.asOf);
-  if (age > deps.maxAgeSeconds) {
-    return { status: 422, body: { error: `stale report (${age}s old)`, id: report.id } };
-  }
+  const { body, id } = report;
+  const reject = (error: string) => ({ status: 422, body: { error, id } });
+  if (body.manifestHash.toLowerCase() !== deps.frozenManifestHash.toLowerCase()) return reject("manifest mismatch");
+  if (body.account.toLowerCase() !== deps.account.toLowerCase()) return reject("account mismatch");
+  const now = deps.now();
+  if (now > Number(body.expiresAt)) return reject(`expired report (${now - Number(body.expiresAt)}s past expiry)`);
+  if (Number(body.asOf) > now + deps.maxLeadSeconds) return reject("report from the future");
 
-  if (!(await deps.claim(report.id))) {
-    return { status: 200, body: { status: "duplicate", id: report.id } };
-  }
-  await deps.execute(report);
-  return { status: 200, body: { status: "executed", id: report.id, runId: body.runId } };
+  if (!(await deps.claim(id))) return { status: 200, body: { status: "duplicate", id } };
+  deps.accept(report, payload as ReportEnvelope);
+  return { status: 200, body: { status: "accepted", id, runId: body.runId } };
 };
