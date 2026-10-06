@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { typewriterFrames } from "../../lib/parrot";
 
-export function SpeechBubble({ reply, clarify, onTyping }: { reply: string; clarify: string | null; onTyping: (value: boolean) => void }) {
+export function SpeechBubble({ reply, clarify, onTyping, captions }: { captions?: { user: string; parrot: string }; reply: string; clarify: string | null; onTyping: (value: boolean) => void }) {
   const [shown, setShown] = useState(reply);
   const [complete, setComplete] = useState(false);
   const [reduceMotion, setReduceMotion] = useState(true);
@@ -12,7 +12,9 @@ export function SpeechBubble({ reply, clarify, onTyping }: { reply: string; clar
     return () => query.removeEventListener("change", update);
   }, []);
   useEffect(() => { setComplete(false); }, [reply]);
+  const live = captions !== undefined;
   useEffect(() => {
+    if (live) { onTyping(false); return; }
     if (complete || reduceMotion) { setShown(reply); onTyping(false); return; }
     const frames = typewriterFrames(reply, 22);
     const start = performance.now();
@@ -23,7 +25,14 @@ export function SpeechBubble({ reply, clarify, onTyping }: { reply: string; clar
       if (frame === frames.length - 1) { clearInterval(timer); onTyping(false); }
     }, 22);
     return () => { clearInterval(timer); onTyping(false); };
-  }, [reply, complete, reduceMotion, onTyping]);
+  }, [reply, complete, reduceMotion, onTyping, live]);
+  if (captions) return <div className="parrot-bubble" aria-live="polite" aria-relevant="text">
+    <span className="parrot-eyebrow">LIVE CONVERSATION</span>
+    <div className="max-h-60 overflow-y-auto whitespace-pre-wrap break-words">
+      <p className="mt-2 text-sm"><strong>You: </strong>{captions.user || "…"}</p>
+      <p className="mt-2 text-base font-semibold"><strong>Parrot: </strong>{captions.parrot || "I'm listening."}</p>
+    </div>
+  </div>;
   return <div className="parrot-bubble">
     <span className="parrot-eyebrow">A WORD FROM YOUR PARROT</span>
     <button type="button" className="mt-2 block w-full text-left text-base font-semibold leading-relaxed" onClick={() => setComplete(true)}
