@@ -28,22 +28,53 @@ export const fetchOpenInterest = async (): Promise<Map<string, number>> => {
   return new Map(metas.flatMap((m) => [...openInterestFromMeta(m)]));
 };
 
-// Re-checked daily (README §4.4); the list is held between checks so snapshots
-// within a day agree on eligibility.
-export class EligibilityTracker {
-  private assets: string[] = [];
-  private checkedAt = 0;
+export type EligibilityState = { assets: string[]; checkedAt: number };
 
+// Persisted so hysteresis survives restarts and every instance agrees on the list.
+export interface EligibilityStore {
+  load(): Promise<EligibilityState | undefined>;
+  save(state: EligibilityState): Promise<void>;
+}
+
+export class MemoryEligibilityStore implements EligibilityStore {
+  private state?: EligibilityState;
+  async load() {
+    return this.state;
+  }
+  async save(state: EligibilityState) {
+    this.state = state;
+  }
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// Re-checked once per UTC day (README §4.4), on the first snapshot after midnight, so
+// every snapshot within a day agrees on eligibility. A check that would drop more than
+// max(3, 20%) of the list at once is refused (kept: yesterday's list) as a likely data
+// error, since every dropped asset we hold gets closed.
+export class EligibilityTracker {
   constructor(
+    private readonly store: EligibilityStore = new MemoryEligibilityStore(),
     private readonly fetchOi: () => Promise<Map<string, number>> = fetchOpenInterest,
-    private readonly refreshMs = 24 * 60 * 60 * 1000,
+    private readonly onRefused: (message: string) => void = () => {},
   ) {}
 
   async current(nowMs: number): Promise<string[]> {
-    if (this.assets.length === 0 || nowMs - this.checkedAt >= this.refreshMs) {
-      this.assets = applyHysteresis(await this.fetchOi(), new Set(this.assets));
-      this.checkedAt = nowMs;
+    const previous = await this.store.load();
+    const dayStart = Math.floor(nowMs / DAY_MS) * DAY_MS;
+    if (previous && previous.checkedAt >= dayStart) return previous.assets;
+
+    const next = applyHysteresis(await this.fetchOi(), new Set(previous?.assets ?? []));
+    if (previous) {
+      const kept = new Set(next);
+      const dropped = previous.assets.filter((a) => !kept.has(a));
+      if (dropped.length > Math.max(3, Math.floor(previous.assets.length * 0.2))) {
+        this.onRefused(`eligibility check would drop ${dropped.length} of ${previous.assets.length} assets; keeping the previous list`);
+        await this.store.save({ assets: previous.assets, checkedAt: nowMs });
+        return previous.assets;
+      }
     }
-    return this.assets;
+    await this.store.save({ assets: next, checkedAt: nowMs });
+    return next;
   }
 }

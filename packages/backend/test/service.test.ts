@@ -3,7 +3,7 @@ import { commitment } from "../../shared/commitments";
 import { checkFrozenConfiguration, type FrozenConfiguration } from "../../shared/frozen";
 import type { PositionsSnapshot } from "../../shared/snapshot";
 import configurationFixture from "../fixtures/frozen-configuration.json";
-import { applyHysteresis, EligibilityTracker, openInterestFromMeta } from "../src/eligibility";
+import { applyHysteresis, EligibilityTracker, MemoryEligibilityStore, openInterestFromMeta } from "../src/eligibility";
 import type { ConfigurationSource } from "../src/configuration-source";
 import { nextRunAt, SnapshotError, SnapshotService } from "../src/service";
 import type { HlReader } from "../src/hyperliquid";
@@ -122,15 +122,35 @@ describe("eligibility", () => {
     expect(applyHysteresis(new Map([["MID", 14_999_999]]), new Set(["MID"]))).toEqual([]);
   });
 
-  test("tracker refreshes daily and carries state across checks", async () => {
+  test("tracker refreshes once per UTC day and carries state across checks", async () => {
     const readings = [new Map([["MID", 25e6]]), new Map([["MID", 16e6]]), new Map([["MID", 14e6]])];
     let calls = 0;
-    const tracker = new EligibilityTracker(async () => readings[calls++]);
-    expect(await tracker.current(0)).toEqual(["MID"]);
-    expect(await tracker.current(3_600_000)).toEqual(["MID"]); // cached
-    expect(await tracker.current(86_400_000)).toEqual(["MID"]); // $16M, already eligible
-    expect(await tracker.current(2 * 86_400_000)).toEqual([]); // $14M
+    const tracker = new EligibilityTracker(new MemoryEligibilityStore(), async () => readings[calls++]);
+    const day = 86_400_000;
+    expect(await tracker.current(day + 3_600_000)).toEqual(["MID"]);
+    expect(await tracker.current(day + 20 * 3_600_000)).toEqual(["MID"]); // same UTC day: cached
+    expect(await tracker.current(2 * day + 60_000)).toEqual(["MID"]); // next day, $16M, already eligible
+    expect(await tracker.current(3 * day + 60_000)).toEqual([]); // $14M
     expect(calls).toBe(3);
+  });
+
+  test("hysteresis survives a restart through the store", async () => {
+    const store = new MemoryEligibilityStore();
+    const day = 86_400_000;
+    await new EligibilityTracker(store, async () => new Map([["MID", 25e6]])).current(day);
+    // A new process the next day: $17M keeps MID because the store remembers it.
+    expect(await new EligibilityTracker(store, async () => new Map([["MID", 17e6]])).current(2 * day)).toEqual(["MID"]);
+  });
+
+  test("refuses a check that would drop too much of the list", async () => {
+    const store = new MemoryEligibilityStore();
+    const day = 86_400_000;
+    const all = new Map(["A", "B", "C", "D", "E", "F"].map((a) => [a, 50e6] as [string, number]));
+    await new EligibilityTracker(store, async () => all).current(day);
+    const refusals: string[] = [];
+    const tracker = new EligibilityTracker(store, async () => new Map([["A", 50e6]]), (m) => void refusals.push(m));
+    expect(await tracker.current(2 * day)).toEqual(["A", "B", "C", "D", "E", "F"]);
+    expect(refusals[0]).toContain("drop 5 of 6");
   });
 });
 
@@ -152,7 +172,7 @@ describe("SnapshotService", () => {
     const configurations: ConfigurationSource = { load: async () => configuration };
     const service = new SnapshotService({
       configurations,
-      eligibility: new EligibilityTracker(async () => new Map([["BTC", 1e9]])),
+      eligibility: new EligibilityTracker(new MemoryEligibilityStore(), async () => new Map([["BTC", 1e9]])),
       store: new MemorySnapshotStore(),
       nowMs: () => nowMs,
       hl: {
@@ -186,8 +206,20 @@ describe("SnapshotService", () => {
 
   test("refuses runs too far ahead or long past", async () => {
     const { service } = make();
-    await expect(service.get(runAt + 1200)).rejects.toBeInstanceOf(SnapshotError);
+    await expect(service.get(runAt + 600)).rejects.toThrow("too far ahead");
     await expect(service.get(runAt - 1200)).rejects.toThrow("has no snapshot");
+  });
+
+  test("won't pre-build a run's snapshot early, which would leave it stale", async () => {
+    // The 12:10 run is 9m50s away at 12:00:10: too early to build.
+    const { service } = make(Date.parse("2026-10-07T12:00:10Z"));
+    await expect(service.get(runAt)).rejects.toThrow("too far ahead");
+  });
+
+  test("only builds real run times", async () => {
+    const { service } = make();
+    await expect(service.get(runAt + 1)).rejects.toThrow("not a mirror run time");
+    await expect(service.get(runAt + 1)).rejects.toBeInstanceOf(SnapshotError);
   });
 
   test("tick builds only in the window before a run", async () => {

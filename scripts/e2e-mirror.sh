@@ -34,7 +34,7 @@ wait_up() {
 }
 
 start_backend() { # port
-  (cd "$ROOT/packages/backend" && PORT="$1" CONFIGURATION_PATH="$CONFIGURATION" FROZEN_CONFIGURATION_HASH="$CONFIGURATION_HASH" \
+  (cd "$ROOT/packages/backend" && PORT="$1" SNAPSHOT_MAX_LEAD_SECONDS=600 CONFIGURATION_PATH="$CONFIGURATION" FROZEN_CONFIGURATION_HASH="$CONFIGURATION_HASH" \
     exec bun run src/server.ts >"$LOGS/backend.log" 2>&1) &
   PIDS+=($!)
   wait_up "http://localhost:$1/health"

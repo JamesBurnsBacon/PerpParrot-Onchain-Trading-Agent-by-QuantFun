@@ -1,10 +1,10 @@
 // Positions snapshot API for the mirror workflow (README §4.7). Runs on Railway;
 // locally: bun run dev (set CONFIGURATION_PATH and FROZEN_CONFIGURATION_HASH).
 import { SQL } from "bun";
-import { EligibilityTracker } from "./eligibility";
+import { EligibilityTracker, MemoryEligibilityStore } from "./eligibility";
 import { FileConfigurationSource } from "./configuration-source";
 import { SnapshotError, SnapshotService } from "./service";
-import { PostgresSnapshotStore } from "./pg-store";
+import { PostgresEligibilityStore, PostgresSnapshotStore } from "./pg-store";
 import { MemorySnapshotStore } from "./snapshot";
 
 const env = process.env;
@@ -16,17 +16,21 @@ const required = (name: string) => {
 
 // Supabase Postgres when DATABASE_URL is set (snapshots then survive restarts and
 // are shared between instances); in memory otherwise.
-const store = env.DATABASE_URL ? new PostgresSnapshotStore(new SQL(env.DATABASE_URL)) : new MemorySnapshotStore();
+const sql = env.DATABASE_URL ? new SQL(env.DATABASE_URL) : undefined;
+const store = sql ? new PostgresSnapshotStore(sql) : new MemorySnapshotStore();
+const log = (msg: string, extra: Record<string, unknown> = {}) =>
+  console.log(JSON.stringify({ t: new Date().toISOString(), msg, ...extra }));
 
 const service = new SnapshotService({
   configurations: new FileConfigurationSource(required("CONFIGURATION_PATH"), required("FROZEN_CONFIGURATION_HASH")),
-  eligibility: new EligibilityTracker(),
+  eligibility: new EligibilityTracker(sql ? new PostgresEligibilityStore(sql) : new MemoryEligibilityStore(), undefined, (m) =>
+    log("eligibility refused", { reason: m }),
+  ),
   store,
   nowMs: Date.now,
+  // Only `cre workflow simulate` needs more (it stamps the next :x0): set 600 locally.
+  maxLeadSeconds: Number(env.SNAPSHOT_MAX_LEAD_SECONDS ?? 120),
 });
-
-const log = (msg: string, extra: Record<string, unknown> = {}) =>
-  console.log(JSON.stringify({ t: new Date().toISOString(), msg, ...extra }));
 
 const server = Bun.serve({
   port: Number(env.PORT ?? 8788),

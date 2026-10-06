@@ -33,7 +33,8 @@ Unit tests per package: `bun test` in `packages/backend`, `packages/executor`,
 |---|---|---|
 | `CONFIGURATION_PATH` | yes | Frozen configuration JSON (the review core's freeze output) |
 | `FROZEN_CONFIGURATION_HASH` | yes | Its `configurationHash`; the service refuses any other |
-| `DATABASE_URL` | prod | Supabase Postgres (service role). Without it snapshots live in memory |
+| `DATABASE_URL` | prod | Supabase Postgres (service role). Without it snapshots and the eligibility list live in memory |
+| `SNAPSHOT_MAX_LEAD_SECONDS` | no | How close to a run a snapshot may be built (default 120). `600` only for local simulation |
 | `PORT` | no | Railway sets it |
 
 ### Executor (`packages/executor`)

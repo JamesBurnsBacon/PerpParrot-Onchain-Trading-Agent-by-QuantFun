@@ -1,19 +1,16 @@
 // Runs against a real Postgres when TEST_DATABASE_URL is set; see executor/test/pg-store.test.ts.
-import { beforeAll, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { SQL } from "bun";
-import { PostgresSnapshotStore } from "../src/pg-store";
+import { PostgresEligibilityStore, PostgresSnapshotStore } from "../src/pg-store";
 
 const url = process.env.TEST_DATABASE_URL;
 
-// skipIf still runs this callback to collect tests, so connect in beforeAll, which a skipped suite never runs.
-describe.skipIf(!url)("PostgresSnapshotStore", () => {
-  let sql: SQL;
-  let store: PostgresSnapshotStore;
-  beforeAll(async () => {
-    sql = new SQL(url!);
-    await sql.unsafe(await Bun.file(new URL("../../../supabase/migrations/20261006120000_cre_mirror.sql", import.meta.url)).text());
-    store = new PostgresSnapshotStore(sql);
-  });
+// describe.skipIf still runs the describe body, so connect lazily.
+describe.skipIf(!url)("PostgresSnapshotStore", async () => {
+  if (!url) return;
+  const sql = new SQL(url);
+  await sql.unsafe(await Bun.file(new URL("../../../supabase/migrations/20261006120000_cre_mirror.sql", import.meta.url)).text());
+  const store = new PostgresSnapshotStore(sql);
   const runAt = 2_000_000_000 + Math.floor(Math.random() * 1e6) * 600;
   // Key order and spacing that jsonb would normalize away.
   const body = (n: number) => `{"snapshotId":"snap-${runAt}","configuration":{"configurationHash":"0x${"ab".repeat(32)}"},  "n":${n}}`;
@@ -29,5 +26,12 @@ describe.skipIf(!url)("PostgresSnapshotStore", () => {
     const [row] = await sql`select snapshot_hash, configuration_hash from cre_snapshots where run_at = ${runAt}`;
     expect(row.configuration_hash).toBe(`0x${"ab".repeat(32)}`);
     expect(row.snapshot_hash).toMatch(/^0x[0-9a-f]{64}$/);
+  });
+
+  test("persists the eligible-asset list", async () => {
+    const eligibility = new PostgresEligibilityStore(sql);
+    const state = { assets: ["BTC", "ETH", "xyz:MSFT"], checkedAt: Date.parse("2026-10-07T00:01:00Z") };
+    await eligibility.save(state);
+    expect(await eligibility.load()).toEqual(state);
   });
 });

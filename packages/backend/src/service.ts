@@ -14,7 +14,9 @@ export type SnapshotServiceDeps = {
   store: SnapshotStore;
   nowMs: () => number;
   hl?: HlReader;
-  // Refuse to build snapshots for runs further out than this (stops arbitrary runAt spam).
+  // Build only this close to the run (default 120 s): a snapshot built earlier would be
+  // stale at run time, and every node would reject it. 600 for `cre workflow simulate`,
+  // which stamps the next :x0.
   maxLeadSeconds?: number;
   // Refuse to build snapshots for runs that are this far in the past.
   maxLagSeconds?: number;
@@ -26,13 +28,16 @@ export class SnapshotService {
   constructor(private readonly deps: SnapshotServiceDeps) {}
 
   // Returns the stored snapshot for runAt, building it once if needed. Concurrent
-  // requests (one per DON node) share the same build.
+  // requests (one per DON node) share the same build. Only real run times (:x0
+  // boundaries) close to now can be built, so the public endpoint can't be used to
+  // pre-build a stale snapshot for a future run or to burn our HL rate limit.
   async get(runAt: number): Promise<string> {
+    if (runAt % RUN_INTERVAL_SECONDS !== 0) throw new SnapshotError(404, `${runAt} is not a mirror run time`);
     const stored = await this.deps.store.get(runAt);
     if (stored) return stored;
 
     const nowSeconds = Math.floor(this.deps.nowMs() / 1000);
-    const lead = this.deps.maxLeadSeconds ?? RUN_INTERVAL_SECONDS;
+    const lead = this.deps.maxLeadSeconds ?? 120;
     const lag = this.deps.maxLagSeconds ?? 120;
     if (runAt > nowSeconds + lead) throw new SnapshotError(404, `run ${runAt} is too far ahead`);
     if (runAt < nowSeconds - lag) throw new SnapshotError(404, `run ${runAt} has no snapshot`);

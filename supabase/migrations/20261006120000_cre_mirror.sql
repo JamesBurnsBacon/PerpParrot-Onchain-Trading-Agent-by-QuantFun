@@ -59,3 +59,12 @@ begin
   end if;
 exception when duplicate_object then null;
 end $$;
+
+-- The eligible-asset list (README §4.4 hysteresis) and when it was last checked.
+-- Persisted so a backend restart doesn't reset hysteresis. A single row.
+create table if not exists cre_eligibility (
+  id         smallint primary key default 1 check (id = 1),
+  assets     jsonb not null,
+  checked_at timestamptz not null
+);
+alter table cre_eligibility enable row level security;
