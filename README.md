@@ -160,7 +160,7 @@ A dedicated workstream, integrated into the CRE flow.
   - **Budget:** ≈ 25 × ≤ 4 KB, under CRE's 120 KB request limit.
 - **Models:** two (≥ 1 from OpenAI; ❓ which). The backtest winner selects the live set, and the loser is **shadow-tracked on paper**. Output is structured JSON. API keys are CRE secrets.
 - **Calling the model: Confidential HTTP.** The call runs **once, inside an enclave**, not on every node, so there is one answer and no per-field consensus. The API key is injected from the Vault DON through a `{{.openaiApiKey}}` header template, so nodes never see it. Limits: 125 KB request, 500 KB response, 90 s timeout (the simulator's production limits).
-  - **Spike status:** `review/` sends a fixture of 3 finalists to OpenAI Chat Completions (`gpt-5-mini`, strict JSON schema) and validates the picks: known IDs only, every finalist classified, weights sum to 1. It simulates up to the API call; it needs `OPENAI_API_KEY` to finish.
+  - **Spike status:** `review/` sends a fixture of 3 finalists to OpenAI Chat Completions (`gpt-5-mini`, strict JSON schema) and validates the picks: known IDs only, every finalist classified, weights sum to 1. **Passed in simulation on 2026-10-06:** ~8 s for the call; F01/F02 picked (0.65/0.35), F03 (22× leverage, 12-minute holds) rejected as martingale-like.
 - **Output format:** ❓ *a weight grid (0–3 units), continuous weights with median consensus, or a ranking plus a formula.*
 - **Logging:** full prompts and outputs go to Supabase with their hashes.
 - **First deliverable:** a CRE `review` spike proving an LLM call plus consensus works in `cre workflow simulate`. Then schemas in `packages/shared`, a prompt + offline eval, and the point-in-time backtest harness.
