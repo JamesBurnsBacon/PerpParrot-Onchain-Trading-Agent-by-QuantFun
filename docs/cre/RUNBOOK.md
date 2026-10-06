@@ -158,7 +158,7 @@ the run ID is `keccak256(report)`, and that the stored snapshot hashes to the re
 | No runs in `/runs`, Telegram "no report for N min" | CRE UI → workflow executions | Mirror run failing (see its error) or not deployed |
 | Mirror error `snapshot fetch failed` / `snapshot taken …s before the run` | Snapshot service logs | Service down, or HL slow at `:x9` |
 | Mirror error `not the pinned frozen authority` / `commitment mismatch` | Hashes in all three places | Freeze steps out of sync |
-| Mirror error `spot-check failed` | Mirror log line with the deviation | A source traded between `:x9` and `:x0`, or a bad snapshot. Holds this run only |
+| Mirror error `spot-check failed` | Mirror log line with the deviation | A bad or stale snapshot (normal deviation is 0–30 bps for a 60–90 s old snapshot; the soak test saw ~50 bps at 8 min). Holds this run only |
 | Mirror error `executor rejected the report: HTTP 401` | Executor logs | Signature/owner check: `WORKFLOW_OWNER`, Ethereum RPC |
 | `HTTP 422` | Executor logs (`error` field) | Configuration hash, account or expiry mismatch |
 | Run `failed` in `/runs` | `error` on the run | HL unreachable, or the gross-leverage bound |
