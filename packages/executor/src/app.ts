@@ -79,19 +79,43 @@ export const createApp = (deps: AppDeps) => async (req: Request): Promise<Respon
       if (typeof body?.id !== "string" || body.id.length > 200 || typeof body?.evidence !== "string" || body.evidence.trim().length < 40 || body.evidence.trim().length > 2_000) {
         return json({ error: "batch id and reconciliation evidence (at least 40 characters) are required" }, 400);
       }
-      await deps.store.setControls({ paused: true, updatedAt: Date.now(), updatedBy: `reconciliation:${by}` });
-      await deps.store.reconcileOrderBatch(body.id, by, body.evidence.trim(), Date.now());
-      const unresolved = await deps.store.unresolvedOrderBatches();
-      deps.log("order batch reconciled", { id: body.id, by, remaining: unresolved.length });
-      return json({ reconciled: body.id, unresolved: unresolved.length, paused: true });
+      const result = await deps.store.withExecutionLock(async () => {
+        await deps.store.setControls({ paused: true, updatedAt: Date.now(), updatedBy: `reconciliation:${by}` });
+        await deps.store.reconcileOrderBatch(body.id as string, by, body.evidence as string, Date.now());
+        const unresolved = await deps.store.unresolvedOrderBatches();
+        return { unresolved: unresolved.length };
+      });
+      deps.log("order batch reconciled", { id: body.id, by, remaining: result.unresolved });
+      return json({ reconciled: body.id, ...result, paused: true });
     }
     switch (pathname) {
       case "/admin/pause":
       case "/admin/resume": {
-        const controls = { paused: pathname === "/admin/pause", updatedAt: Date.now(), updatedBy: by };
-        await deps.store.setControls(controls);
-        deps.log("controls changed", controls);
-        return json(controls);
+        const paused = pathname === "/admin/pause";
+        if (paused) {
+          // Keep the kill switch prompt: the active run sees this durable flag
+          // before its next exchange batch. An already dispatched request cannot
+          // be recalled, and the route must not wait for the execution lock.
+          const controls = { paused: true, updatedAt: Date.now(), updatedBy: by };
+          await deps.store.setControls(controls);
+          deps.log("controls changed", controls);
+          return json(controls);
+        }
+        const result = await deps.store.withExecutionLock(async () => {
+          const unresolved = await deps.store.unresolvedOrderBatches();
+          if (unresolved.length > 0) {
+            await deps.store.setControls({ paused: true, updatedAt: Date.now(), updatedBy: `unresolved-order-batch:${unresolved[0].id}` });
+            return { blocked: unresolved.length };
+          }
+          const controls = { paused: false, updatedAt: Date.now(), updatedBy: by };
+          await deps.store.setControls(controls);
+          return { controls };
+        });
+        if (result.blocked !== undefined) {
+          return json({ error: "unresolved order actions must be reconciled before resume", unresolved: result.blocked, paused: true }, 409);
+        }
+        deps.log("controls changed", result.controls!);
+        return json(result.controls);
       }
       case "/admin/flatten": {
         // Pause first so the next report doesn't reopen what we're closing.

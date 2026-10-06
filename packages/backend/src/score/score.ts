@@ -115,15 +115,15 @@ export const scoreCandidates = (
   });
 
   const rankable = candidates.filter((candidate): candidate is Candidate & { metrics: Metrics } =>
-    candidate.eligible && candidate.metrics !== null,
+    candidate.eligible && candidate.metrics !== null && !candidate.metrics.flags.includes("no-intervals"),
   );
   const candidatesByAddress = new Map(rankable.map((candidate) => [candidate.address, candidate]));
   const ranked = rankByMetrics(rankable, config.finalists).map((entry) => ({
     ...candidatesByAddress.get(entry.address)!,
     ...entry,
   }));
-  const unranked = candidates.filter((candidate) => !candidate.eligible || candidate.metrics === null)
-    .sort(compareAddresses);
+  const rankedAddresses = new Set(ranked.map(({ address }) => address));
+  const unranked = candidates.filter((candidate) => !rankedAddresses.has(candidate.address)).sort(compareAddresses);
   const finalists = ranked.filter((candidate) => candidate.finalist).map((candidate) => candidate.address);
 
   const funnel: FunnelStep[] = [{ stage: "universe", count: candidates.length }];

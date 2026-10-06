@@ -21,7 +21,7 @@ test('rich committee output feeds the current snapshot, exposures report and dry
  const frozen=proposeFreeze(receipt.manifest,f.account,999,NOW);
  const configuration={...frozen,policy:{...frozen.policy}};
  const runAt=Math.ceil(NOW/600000)*600;
- const snapshot=await buildSnapshot(configuration,['BTC'],runAt,runAt-1,{
+ const snapshot=await buildSnapshot(configuration,['BTC'],runAt,()=>((runAt-1)*1000),{
    async perp(_,dex){return {assetPositions:dex?[]:[{position:{coin:'BTC',szi:'0.01',positionValue:'1000'}}]};},
    async portfolio(){return [['day',{accountValueHistory:[[NOW,'1000']]}]];},
  });

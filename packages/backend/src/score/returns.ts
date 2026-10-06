@@ -2,12 +2,14 @@ import type { WindowHistory } from "./types";
 
 const DAY_MS = 86_400_000;
 
-// Matching, strictly increasing timestamps are required for scoring (README §4.2).
+// Finite observations and safe, matching, strictly increasing timestamps are required for scoring (README §4.2).
 export const validateSeries = (w: WindowHistory | null): boolean => {
   if (w === null || w.accountValueHistory.length < 2 || w.accountValueHistory.length !== w.pnlHistory.length) {
     return false;
   }
-  return w.accountValueHistory.every(([timestamp], i) =>
+  return w.accountValueHistory.every(([timestamp, equity], i) =>
+    Number.isSafeInteger(timestamp) && Number.isFinite(equity) &&
+    Number.isSafeInteger(w.pnlHistory[i][0]) && Number.isFinite(w.pnlHistory[i][1]) &&
     timestamp === w.pnlHistory[i][0] && (i === 0 || timestamp > w.accountValueHistory[i - 1][0]),
   );
 };

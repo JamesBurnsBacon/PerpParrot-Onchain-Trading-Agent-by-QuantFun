@@ -48,6 +48,24 @@ describe("computeMetrics", () => {
     });
   });
 
+  test("is invariant to equity currency scale and a constant PnL baseline", () => {
+    const history: WindowHistory = {
+      accountValueHistory: [[0, 1_000], [86_400_000, 1_020], [172_800_000, 990], [259_200_000, 1_010]],
+      pnlHistory: [[0, 50], [86_400_000, 70], [172_800_000, 40], [259_200_000, 60]],
+    };
+    const scaled: WindowHistory = {
+      accountValueHistory: history.accountValueHistory.map(([ts, value]) => [ts, value * 1_000]),
+      pnlHistory: history.pnlHistory.map(([ts, value]) => [ts, value * 1_000 + 99_000]),
+    };
+    const expected = computeMetrics(history);
+    const actual = computeMetrics(scaled);
+    for (const key of ["sortino", "calmar", "maxDrawdown", "pnlConsistency", "realizedVol"] as const) {
+      if (expected[key] === null || actual[key] === null) expect(actual[key]).toBe(expected[key]);
+      else expect(Math.abs(actual[key]! - expected[key]!)).toBeLessThanOrEqual(1e-12);
+    }
+    expect(actual.flags).toEqual(expected.flags);
+  });
+
   test("skips negative equity and reports repeated skipped intervals once", () => {
     expect(computeMetrics({
       accountValueHistory: [[0, -100], [86_400_000, 0], [172_800_000, 100]],
@@ -83,4 +101,21 @@ describe("validateSeries", () => {
       expect(validateSeries(window)).toBe(false);
     });
   }
+
+  test("rejects non-finite observations and unsafe timestamps", () => {
+    for (const value of [NaN, Infinity, -Infinity]) {
+      expect(validateSeries({
+        accountValueHistory: [[0, 100], [86_400_000, value]],
+        pnlHistory: [[0, 0], [86_400_000, 1]],
+      })).toBe(false);
+      expect(validateSeries({
+        accountValueHistory: [[0, 100], [86_400_000, 101]],
+        pnlHistory: [[0, 0], [86_400_000, value]],
+      })).toBe(false);
+    }
+    expect(validateSeries({
+      accountValueHistory: [[0, 100], [Number.MAX_SAFE_INTEGER + 1, 101]],
+      pnlHistory: [[0, 0], [Number.MAX_SAFE_INTEGER + 1, 1]],
+    })).toBe(false);
+  });
 });

@@ -15,7 +15,9 @@ export const computeFilters = (input: ScoreInput, config: ScoreConfig): Record<F
     minAccountValue: !Number.isFinite(input.accountValue) ? "unknown" :
       input.accountValue >= config.minAccountValue ? "pass" : "fail",
     minActiveDays,
-    minTrades: input.tradeCount === null ? "unknown" : input.tradeCount >= config.minTrades ? "pass" : "fail",
+    minTrades: input.tradeCount === null ? "unknown" :
+      Number.isSafeInteger(input.tradeCount) && input.tradeCount >= 0 && input.tradeCount >= config.minTrades
+        ? "pass" : "fail",
     notClosed: input.closed === null ? "unknown" : input.closed ? "fail" : "pass",
     minMonthPoints: input.month === null || !validateSeries(input.month) ? "unknown" :
       input.month.accountValueHistory.length >= config.minMonthPoints ? "pass" : "fail",

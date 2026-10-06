@@ -102,10 +102,11 @@
 - **Hard filters:**
   - ≥ $10k
   - ≥ 30 days active
-  - ≥ 10 trades
+  - ≥ 10 trades (non-negative safe integer; malformed counts fail closed)
   - not closed
   - **≥ 25 points in the `portfolio` `month` window**. History length varies a lot by address (issue #1), so "≥ 30 days active" alone doesn't guarantee enough points for Sortino/Calmar. Short-history addresses are **excluded**, with no fallback metric.
-- **Score = average percentile rank** of 30-day **Sortino**, **Calmar / −max drawdown** and **PnL consistency**. Computed from PnL history, so deposits and withdrawals don't count as returns. **Top ~25 → finalists.**
+- **Score = average percentile rank** of 30-day **Sortino**, **Calmar**, **−max drawdown**, and **PnL consistency**. For each adjacent PnL point, the return is `ΔPnL / prior account value` when that value is positive. Sortino uses mean return per elapsed day over downside deviation; the compounded curve supplies maximum drawdown and Calmar (`total compounded return / max drawdown`); consistency is positive UTC days / observed UTC days. Deposits and withdrawals do not enter as PnL returns. **Top ~25 → finalists.**
+- Percentiles use integer midranks across the eligible cohort; null metrics are strictly worst, the four terms have equal weight, and address order breaks exact score ties. This is a **relative screening rank**, not a forecast, follower PnL estimate, or proof of an edge. All-time eligibility filters and the later point-in-time out-of-sample backtest remain separate gates. Histories with invalid numeric observations or no usable positive-equity interval are not ranked.
 - **Also computed** for the agent:
   - realized volatility and average leverage
   - time in market and holding times
@@ -174,10 +175,10 @@ A dedicated workstream, integrated into the CRE flow.
 
 ### 4.7 Mirror (CRE workflow, every 10 min: `0 */10 * * * *`)
 Each node runs steps 1–3 (`runInNodeMode`); the DON agrees per field, then signs and sends in step 4. Code: `packages/cre-workflows/mirror`, `packages/shared`.
-1. **Fetch the positions snapshot** for this run: `GET {backendUrl}/snapshots/{runAt}` (1 call). The backend builds it at `:x9` and never changes it, so every node gets identical bytes (`packages/shared/snapshot.ts`).
+1. **Fetch the positions snapshot** for this run: `GET {backendUrl}/snapshots/{runAt}` (1 call). The backend builds it at `:x9` and never changes it, so every node gets identical bytes (`packages/shared/snapshot.ts`). It records both the start and completion of its exchange-read window; CRE rejects a snapshot whose oldest reads or total collection window exceed the configured freshness bound.
    - Contents: the **frozen configuration** (below), the eligible-asset list, and per frozen source its equity and eligible positions (signed USD notional). Amounts are decimal strings × 1e6.
    - **Equity = HL's live account value** from the `portfolio` request (last point of the `day` window, live), not Σ per-dex `accountValue`. Most leaderboard traders use unified or portfolio-margin accounts (23 + 5 of 40 sampled), where per-dex `accountValue` is only the margin set aside on that dex; summing it understated equity, and so overstated leverage, by 2–10×. The portfolio value is also what the backtest's returns use.
-   - The mirror rejects it if it's for another run, was taken > 120 s from `runAt`, contains an ineligible asset, doesn't cover exactly the frozen sources, or its configuration isn't the pinned one.
+   - The mirror rejects it if it's for another run, the oldest read starts > 120 s from `runAt`, the read window itself exceeds 120 s, contains an ineligible asset, doesn't cover exactly the frozen sources, or its configuration isn't the pinned one.
    - The backend only builds real run times (`:x0`) within 120 s of now, so nobody can pre-build a stale snapshot for a future run through the public endpoint.
 2. **Spot-check 4 sources**: `clearinghouseState` on the core dex **and** `xyz` (HIP-3 positions only come back per dex) plus `portfolio` for equity, 3 calls each. The sample is seeded with HMAC-SHA256 keyed by `mirrorSamplingKey`, a CRE secret the snapshot service never sees, over the run time and the snapshot hash (from the review core's mirror spike). Every node computes the same sample; the backend can't predict it. Deviation = the larger of Σ |snapshot − live notional| and |snapshot − live equity|, over live equity. **Reject the run if the worst source exceeds 5%.**
 3. **Exposures:** `exposure_c = Σᵢ wᵢ' · nᵢ,c / Eᵢ` per asset in bigint math (`packages/shared/copy.ts`), so every node gets identical results.
@@ -219,6 +220,9 @@ Code: `packages/executor`. One long-running Bun service (Railway, `Dockerfile` +
   - Swap it to **USDC on spot** (`@107`). Portfolio margin needs $10k, and we have just under $500.
 
 ### 4.9 Backtest (backend): the main value claim
+- **Implemented first real-data screening evaluation:** `pnpm --filter @perpparrot/backend backtest:public` takes a fixed-seed public leaderboard sample, fetches real `portfolio` histories, ranks using the existing formula before a shared cutoff, and measures later per-source returns. The first 12-account run had -3.70% median held-out return among the five selected versus -3.58% for the cohort (-11.8 bps). It is a small, biased source-ranking diagnostic and **not** a copy-trading backtest or evidence of an edge; see [`docs/agents/REAL_DATA_BACKTEST.md`](docs/agents/REAL_DATA_BACKTEST.md) and the raw artifact under `work/backtests/`.
+- **Public feature-discovery spike:** `pnpm --filter @perpparrot/backend backtest:explore:active` analyzes frozen cohort, backtest, and complete funding/ledger captures; the observed funding/return association is explicitly exploratory and is not fed into scoring. The source selection, tests, network caveats, and next evidence gates are in [`docs/agents/FEATURE_DISCOVERY.md`](docs/agents/FEATURE_DISCOVERY.md).
+- **Optional strategy-intent preview:** [`packages/shared/strategy-intent.ts`](packages/shared/strategy-intent.ts) defines a strict visitor-intent contract, monotonic policy preview, and deterministic finalist shortlist; [`packages/backend/src/strategy-intent-adapter.ts`](packages/backend/src/strategy-intent-adapter.ts) maps the current Score result into it without inventing clone status. It always emits simulation-only output and remains unwired; see [`docs/agents/STRATEGY_INTENT.md`](docs/agents/STRATEGY_INTENT.md).
 - **Return-based:**
   - Portfolio return ≈ `Σ wᵢ · rᵢ`, which follows from equity-ratio scaling.
   - Subtract a **turnover-based haircut** (HL taker fee + slippage bps per unit of turnover).
@@ -260,6 +264,10 @@ Code: `packages/executor`. One long-running Bun service (Railway, `Dockerfile` +
 | `execute` | report | `orders`, `fills`, `ledger` |
 | `paper` | snapshot, buckets, mark prices | `paper_books` |
 | `dashboard` | all tables | — |
+
+These rows describe the target project workflow. As of this review, `packages/backend/src/score/` is a tested pure
+library; no backend runtime calls `scoreCandidates`, and no persisted point-in-time candidate table feeds the CRE
+review workflow. Automated finalist selection is therefore not yet connected end to end.
 
 ### 4.13 Mirror → executor report
 - **Transport:** `runtime.report()` (`evm` / `ecdsa` / `keccak256`), then `sendReport()` POSTs JSON `{report, context, signatures}` (hex, no `0x`) to the executor. **Every DON node POSTs its own copy.** `cacheSettings` only trims duplicates, because each node's signatures differ. The mirror reaches consensus on the executor's HTTP status, so it fails loudly on a rejection.

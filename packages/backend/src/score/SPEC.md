@@ -2,6 +2,8 @@
 
 Status: draft. This file is the single source of truth for the implementation in `src/score/`.
 Where the README is silent, the choice below is marked **[interpretation]** and is open for the team to change.
+The module is not currently called by a backend runtime path: it is a pure library with fixture-driven tests.
+The README's ingest → score → review flow is therefore a planned integration, not an operating production pipeline.
 
 ## What it does
 `scoreCandidates(inputs)` takes one record per address (the data `ingest` will produce), applies the hard
@@ -51,8 +53,8 @@ export type Candidate = {
   eligible: boolean;
   metrics: Metrics | null;       // null only when the month series is invalid or missing
   percentiles: { sortino: number; calmar: number; negMaxDrawdown: number; pnlConsistency: number } | null;
-  score: number | null;          // null unless eligible
-  rank: number | null;           // 1-based, null unless eligible
+  score: number | null;          // null unless eligible and rankable
+  rank: number | null;           // 1-based, null unless eligible and rankable
   finalist: boolean;
   passthrough: { avgLeverage: number | null; timeInMarket: number | null; medianHoldHours: number | null; makerShare: number | null };
 };
@@ -85,8 +87,9 @@ Throw an `Error` whose message starts with `portfolio:` for anything malformed (
 non-finite number, non-integer timestamp). It does not check ordering or alignment; scoring does.
 
 ## Series validation
-A window history is valid only if `accountValueHistory` and `pnlHistory` have the same length (>= 2), the same
-timestamps at every index, and strictly increasing timestamps. An invalid month series gives
+A window history is valid only if `accountValueHistory` and `pnlHistory` have the same length (>= 2), timestamps
+are safe integers and values finite, both histories have the same timestamp at each index, and timestamps increase
+strictly. An invalid month series gives
 `minMonthPoints = "unknown"`, `metrics = null` and is never eligible unless `allowUnknown` is true and no filter
 fails; even then `metrics` stays `null`, so it cannot be ranked and is excluded from ranking and finalists.
 
@@ -117,7 +120,7 @@ Every number in `Metrics` is finite or `null`; never `NaN` or `Infinity`.
 - `minActiveDays`: from the valid `allTime` history, `activeDays = (lastTs - firstTs)/86_400_000` where `firstTs` is the
   first point with `accountValue > 0` and `lastTs` the last point. `allTime` missing or invalid: `unknown`. No point with
   value > 0: `fail`. Pass if `activeDays >= minActiveDays`. **[interpretation]**
-- `minTrades`: `tradeCount === null` -> `unknown`; else pass if `>= minTrades`.
+- `minTrades`: `tradeCount === null` -> `unknown`; a non-negative safe integer passes iff `>= minTrades`; malformed counts (non-finite, fractional, negative, or unsafe integer) fail closed.
 - `notClosed`: `closed === null` -> `unknown`; `false` -> pass; `true` -> fail.
 - `minMonthPoints`: month window missing or invalid -> `unknown`; else pass if the number of points `>= minMonthPoints`.
 
@@ -127,7 +130,9 @@ Every number in `Metrics` is finite or `null`; never `NaN` or `Infinity`.
 until fills are ingested, so demos and fixtures may set `allowUnknown: true`.
 
 ## Ranking
-Only eligible candidates with non-null metrics are ranked (N of them). Four terms, each "higher is better":
+Only eligible candidates with metrics and at least one usable positive-equity interval are ranked (N of them).
+A valid series whose intervals are all skipped has null metric values and the `no-intervals` flag; it remains in
+the output, with null score/rank and no finalist status. Four terms, each "higher is better":
 `sortino`, `calmar`, `negMaxDrawdown = -maxDrawdown`, `pnlConsistency`. A `null` value is worse than every non-null
 value, and nulls tie with each other.
 - Exact integer ranking. For a value, `L` is the number of values strictly worse and `E` the number equal to it
@@ -152,7 +157,8 @@ value, and nulls tie with each other.
 two inputs with the same lower-cased address make `scoreCandidates` throw `Error("duplicate address: ...")`.
 `funnel` is, in this order: `universe` (all inputs), then after each filter in the order `minAccountValue`,
 `minActiveDays`, `minTrades`, `notClosed`, `minMonthPoints` the number of candidates that passed that filter and all
-earlier ones (`unknown` counts as passed only with `allowUnknown`), then `eligible` (with non-null metrics),
+earlier ones (`unknown` counts as passed only with `allowUnknown`), then `eligible` (eligible and rankable with a
+usable interval),
 then `finalists`. Counts never increase along the funnel.
 Invalid config (non-integer or `< 1` for `finalists`, `minMonthPoints`; negative or non-finite numbers) throws.
 
@@ -182,6 +188,7 @@ README. Change any of them here first, then in the code and the fixtures. Items 
 **Filters, eligibility and ranking**
 - The thresholds default to the README numbers ($10,000, 30 days, 10 trades, 25 points, top 25).
 - A non-finite `accountValue` gives `unknown`. `allTime` with no point above 0 gives `fail` for active days.
+- Trade counts must be non-negative safe integers. Malformed supplied counts fail rather than becoming unknown, including when `allowUnknown` is true.
 - `unknown` is never eligible by default (fail-closed). A candidate with `eligible: true` can still be unranked when its
   month series is invalid (`allowUnknown` only); it is then excluded from ranking and finalists.
 - A `null` metric is worse than every number and ties with other `null`s. With a single ranked candidate every

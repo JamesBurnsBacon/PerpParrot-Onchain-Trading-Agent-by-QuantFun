@@ -384,6 +384,9 @@ describe("app routes", () => {
     expect((await app(get())).status).toBe(401);
     const listing = await app(get({ authorization: "Bearer s3cret" }));
     expect(await listing.json()).toMatchObject([{ id: "report:0", state: "dispatching" }]);
+    const resume = await app(post("/admin/resume", { headers: { authorization: "Bearer s3cret" } }));
+    expect(resume.status).toBe(409);
+    expect(await resume.json()).toMatchObject({ unresolved: 1, paused: true });
     const invalid = await app(post("/admin/reconcile-batch", {
       headers: { authorization: "Bearer s3cret", "content-type": "application/json" },
       body: JSON.stringify({ id: "report:0", evidence: "looked" }),
@@ -396,6 +399,51 @@ describe("app routes", () => {
     expect(await resolved.json()).toMatchObject({ reconciled: "report:0", unresolved: 0, paused: true });
     expect(await store.unresolvedOrderBatches()).toEqual([]);
     expect((await store.getControls()).paused).toBe(true);
+  });
+
+  test("reconciliation waits for the active execution lock", async () => {
+    const { app, store } = make("s3cret");
+    await store.beginOrderBatch({
+      id: "in-flight:0", reportId: "in-flight", createdAt: AS_OF * 1000,
+      orders: [], cloids: [], kind: "orders",
+    });
+    let entered!: () => void;
+    let release!: () => void;
+    const locked = new Promise<void>((resolve) => { entered = resolve; });
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const owner = store.withExecutionLock(async () => { entered(); await gate; });
+    await locked;
+    const reconciliation = app(post("/admin/reconcile-batch", {
+      headers: { authorization: "Bearer s3cret", "content-type": "application/json" },
+      body: JSON.stringify({ id: "in-flight:0", evidence: "Verified exchange status, fills and account positions" }),
+    }));
+    await Bun.sleep(10);
+    expect(await store.unresolvedOrderBatches()).toMatchObject([{ id: "in-flight:0", state: "dispatching" }]);
+    release();
+    await owner;
+    expect((await reconciliation).status).toBe(200);
+    expect(await store.unresolvedOrderBatches()).toEqual([]);
+  });
+
+  test("pause does not wait for the active execution lock", async () => {
+    const { app, store } = make("s3cret");
+    let entered!: () => void;
+    let release!: () => void;
+    const locked = new Promise<void>((resolve) => { entered = resolve; });
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const owner = store.withExecutionLock(async () => { entered(); await gate; });
+    await locked;
+    try {
+      const response = await Promise.race([
+        app(post("/admin/pause", { headers: { authorization: "Bearer s3cret" } })),
+        Bun.sleep(100).then(() => null),
+      ]);
+      expect(response).not.toBeNull();
+      expect(await store.getControls()).toMatchObject({ paused: true });
+    } finally {
+      release();
+      await owner;
+    }
   });
 
   test("admin routes are disabled without a configured token", async () => {

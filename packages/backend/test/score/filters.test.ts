@@ -56,4 +56,21 @@ describe("score filters (README §4.2)", () => {
       });
     }
   }
+
+  test("invalid trade counts fail closed even when unknowns are allowed", () => {
+    const base = {
+      address: "addr-invalid-trades",
+      kind: "trader" as const,
+      accountValue: 20_000,
+      closed: false,
+      month: { accountValueHistory: [[0, 100], [86_400_000, 101]] as TimePoint[], pnlHistory: [[0, 0], [86_400_000, 1]] as TimePoint[] },
+      allTime: { accountValueHistory: [[0, 100], [31 * 86_400_000, 101]] as TimePoint[], pnlHistory: [[0, 0], [31 * 86_400_000, 1]] as TimePoint[] },
+    };
+    for (const tradeCount of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, -1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+      const result = scoreCandidates([{ ...base, tradeCount }], { allowUnknown: true, minMonthPoints: 2 });
+      expect(result.candidates[0].filters.minTrades).toBe("fail");
+      expect(result.candidates[0].eligible).toBe(false);
+      expect(result.finalists).toEqual([]);
+    }
+  });
 });

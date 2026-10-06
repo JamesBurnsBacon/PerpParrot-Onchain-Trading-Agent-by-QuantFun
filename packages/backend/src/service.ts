@@ -54,7 +54,7 @@ export class SnapshotService {
     const nowMs = this.deps.nowMs();
     const configuration = await this.deps.configurations.load(nowMs);
     const eligible = await this.deps.eligibility.current(nowMs);
-    const snapshot = await buildSnapshot(configuration, eligible, runAt, Math.floor(nowMs / 1000), this.deps.hl);
+    const snapshot = await buildSnapshot(configuration, eligible, runAt, this.deps.nowMs, this.deps.hl);
     return this.deps.store.putIfAbsent(runAt, JSON.stringify(snapshot));
   }
 

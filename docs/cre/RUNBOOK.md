@@ -209,12 +209,16 @@ Before clearing an unknown-outcome pause:
    controls. Do not replay the old signed report or assume repeated client order
    IDs provide exchange idempotency; the next fresh report plans against live equity.
 
-This branch still needs a durable pre-dispatch execution journal and tested crash
-recovery: a process can die after sending an action but before saving its result
-or persistent pause. Automatic reconciliation is not implemented. Database failure
-while saving the pause is also an operational blocker. These remain funded-launch
-gates alongside configured CRE/model secrets and deployment-level simulation/soak
-checks. Local mocked transport tests do not prove real exchange execution.
+The executor now writes a durable pre-dispatch journal and pauses on unresolved
+actions at startup and before later reports. Reconciliation is manual: the endpoint
+records an operator attestation but does not query Hyperliquid or verify that the
+originating process has stopped. Before clearing a `dispatching` row, stop/fence every
+executor instance and confirm no exchange request remains in flight. Then inspect
+Hyperliquid state, record evidence, and keep the executor paused until every unresolved
+batch has been reviewed and an operator explicitly resumes it. This reduces crash
+risk but does not make Hyperliquid and Postgres atomic. CRE/model credentials, deployed
+consensus, persistent-store recovery drills and deployment-level soak checks remain
+funded-launch gates. Local mocked transport tests do not prove real exchange execution.
 
 References: [Hyperliquid exchange endpoint](https://hyperliquid.gitbook.io/Hyperliquid-docs/for-developers/api/exchange-endpoint)
 and [order-status queries](https://hyperliquid.gitbook.io/Hyperliquid-docs/for-developers/api/info-endpoint).
@@ -262,7 +266,12 @@ paused while evidence is incomplete.
 After reviewing a batch, record the operator and evidence with
 `POST /admin/reconcile-batch` and JSON `{ "id": "<batch-id>", "evidence": "<what was checked>" }`.
 This records a human attestation; the service does not independently verify the
-exchange evidence. Reconciliation keeps the executor paused. Only after every
+exchange evidence. Reconciliation acquires the executor's shared execution lock, so
+it waits for a healthy active run to finish. Still stop/fence every executor instance
+and confirm the originating process cannot still be inside an exchange request before
+reconciling: a lost database connection can release its lock while that process is
+still alive. Clearing a live `dispatching` row could erase the recovery signal while
+the request is still in flight. Reconciliation keeps the executor paused. Only after every
 uncertain action has been reviewed should an operator explicitly call
 `POST /admin/resume`. Never replay the old report. The next fresh report sizes from
 the current account state.
