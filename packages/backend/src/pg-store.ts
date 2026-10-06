@@ -28,13 +28,20 @@ export class PostgresEligibilityStore implements EligibilityStore {
   constructor(private readonly sql: SQL) {}
 
   async load(): Promise<EligibilityState | undefined> {
-    const [row] = await this.sql`select assets, checked_at from cre_eligibility where id = 1`;
-    return row ? { assets: row.assets as string[], checkedAt: (row.checked_at as Date).getTime() } : undefined;
+    const [row] = await this.sql`select assets, checked_at, refusing_since from cre_eligibility where id = 1`;
+    if (!row) return undefined;
+    return {
+      assets: row.assets as string[],
+      checkedAt: (row.checked_at as Date).getTime(),
+      ...(row.refusing_since ? { refusingSince: (row.refusing_since as Date).getTime() } : {}),
+    };
   }
 
   async save(state: EligibilityState): Promise<void> {
     await this.sql`
-      insert into cre_eligibility (id, assets, checked_at) values (1, ${state.assets}::jsonb, ${new Date(state.checkedAt)})
-      on conflict (id) do update set assets = excluded.assets, checked_at = excluded.checked_at`;
+      insert into cre_eligibility (id, assets, checked_at, refusing_since)
+      values (1, ${state.assets}::jsonb, ${new Date(state.checkedAt)}, ${state.refusingSince ? new Date(state.refusingSince) : null})
+      on conflict (id) do update set
+        assets = excluded.assets, checked_at = excluded.checked_at, refusing_since = excluded.refusing_since`;
   }
 }

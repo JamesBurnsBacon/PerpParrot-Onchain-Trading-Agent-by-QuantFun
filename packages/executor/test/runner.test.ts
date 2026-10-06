@@ -155,11 +155,11 @@ describe("Runner.executeReport (dry run)", () => {
     expect(run).toMatchObject({ status: "failed", error: "report expired before execution" });
   });
 
-  test("times out a hung run, records it, and never submits from it", async () => {
+  test("cancels a slow run before it submits, and never overlaps the next run", async () => {
     let release: () => void = () => {};
     const hang = new Promise<void>((r) => (release = r));
-    const base = fakeInfo({ equity: "400" });
     let first = true;
+    const base = fakeInfo({ equity: "400" });
     const s = setup((async (req: Record<string, unknown>) => {
       if (req.type === "portfolio" && first) {
         first = false;
@@ -167,16 +167,19 @@ describe("Runner.executeReport (dry run)", () => {
       }
       return base(req);
     }) as InfoFn);
-    const run = await s.runner.executeReport(await verified(), {});
-    expect(run).toMatchObject({ status: "failed", error: "run timed out after 1s" });
-    expect((await s.store.recentRuns(1))[0].error).toBe("run timed out after 1s");
-    // The next report runs; then the hung one wakes up and must not trade.
-    const next = await s.runner.executeReport(await verified(body({ runId: "mirror-2" })), {});
-    expect(next.status).toBe("executed");
-    const sentBefore = s.exchange.recorded().length;
+    const slow = s.runner.executeReport(await verified(), {});
+    const next = s.runner.executeReport(await verified(body({ runId: "mirror-2" })), {});
+    await Bun.sleep(1_100); // past the 1 s timeout
+    expect(s.alerts[0]).toContain("still running after 1s");
+    // The queue waits for the slow run: the next one hasn't started.
+    expect(s.exchange.recorded()).toEqual([]);
     release();
-    await Bun.sleep(20);
-    expect(s.exchange.recorded().length).toBe(sentBefore);
+    const [a, b] = await Promise.all([slow, next]);
+    expect(a).toMatchObject({ status: "failed", error: "run timed out after 1s" });
+    expect(b.status).toBe("executed");
+    // Only the second run sent anything.
+    const orders = s.exchange.recorded().filter((r) => (r.payload as { action: { type: string } }).action.type === "order");
+    expect(orders).toHaveLength(1);
   });
 
   test("records HL read failures as failed runs", async () => {
@@ -309,6 +312,14 @@ describe("loadConfig", () => {
 
   test("requires an admin token in production", () => {
     expect(() => loadConfig({ ...base, NODE_ENV: "production" })).toThrow("ADMIN_TOKEN is required");
+  });
+
+  test("live trading in production needs the workflow and DON pins", () => {
+    const live = { ...base, NODE_ENV: "production", ADMIN_TOKEN: "x", DRY_RUN: "false", HL_API_WALLET_KEY: `0x${"22".repeat(32)}` };
+    expect(() => loadConfig(live)).toThrow("WORKFLOW_NAME and DON_ID are required");
+    expect(loadConfig({ ...live, WORKFLOW_NAME: `0x${"ab".repeat(10)}`, DON_ID: "1" })).toMatchObject({ dryRun: false, donId: 1 });
+    // Dry run in production is fine without them (that's how you learn their values).
+    expect(loadConfig({ ...base, NODE_ENV: "production", ADMIN_TOKEN: "x" }).dryRun).toBe(true);
   });
 
   test("refuses to trade live on unverified reports", () => {

@@ -88,6 +88,10 @@ expect_failure() { # message pattern
   grep -q -E "$1" "$SIM_LOG" || { cat "$SIM_LOG"; fail "expected an error matching: $1"; }
 }
 
+for port in 8787 8788 8789; do
+  if lsof -ti ":$port" >/dev/null 2>&1; then echo "port $port is in use: stop whatever is running there first"; exit 1; fi
+done
+
 run_scenario() {
   SCENARIO="$1"
   LOGS="$(mktemp -d)"

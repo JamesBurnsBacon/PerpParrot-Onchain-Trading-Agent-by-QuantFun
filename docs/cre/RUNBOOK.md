@@ -57,9 +57,9 @@ Unit tests per package: `bun test` in `packages/backend`, `packages/executor`,
 | `MAX_GROSS_LEVERAGE` | no | `10` | Sanity bound: reject reports whose gross exposure exceeds this |
 | `MAX_REPORT_LEAD_SECONDS` | no | `60` | How far `asOf` may be ahead of our clock (`600` for simulation) |
 | `MAX_REPORT_TTL_SECONDS` | no | `300` | Longest report lifetime accepted (`expiresAt − asOf`) |
-| `RUN_TIMEOUT_SECONDS` | no | `60` | A run taking longer is failed and can no longer submit |
-| `WORKFLOW_NAME` | after deploy | — | 10-byte hex from the first real report (`verify-run` prints it); pins the production workflow |
-| `DON_ID` | after deploy | — | Pins the DON (`verify-run` prints it) |
+| `RUN_TIMEOUT_SECONDS` | no | `60` | A run still going after this is alerted on and stops before its next order batch; the next run waits for it to finish |
+| `WORKFLOW_NAME` | live | — | 10-byte hex from the first real report (`verify-run` prints it); pins the production workflow. Required for `DRY_RUN=false` in production |
+| `DON_ID` | live | — | Pins the DON (`verify-run` prints it). Required for `DRY_RUN=false` in production |
 | `MISSED_RUN_ALERT_MINUTES` | no | `25` | Alert after this long without a finished run |
 
 ### `mirror` workflow (`config.production.json`)
@@ -123,7 +123,8 @@ curl -X POST -H "Authorization: Bearer $ADMIN_TOKEN" -H "x-operator: $NAME" $EXE
 curl -X POST -H "Authorization: Bearer $ADMIN_TOKEN" -H "x-operator: $NAME" $EXECUTOR/admin/flatten  # pause + close everything
 ```
 
-Flatten bypasses CRE and stays paused afterwards. To stop CRE itself, pause the workflow in the
+Flatten bypasses CRE and stays paused afterwards. It queues behind a run in progress; if a run is
+stuck (alert "still running after …"), restart the executor on Railway, then flatten. To stop CRE itself, pause the workflow in the
 CRE UI or with `cre workflow pause`.
 
 ## Data for the dashboard (README §4.11)

@@ -44,6 +44,19 @@ describe("registrySigners", () => {
     expect(c.calls()).toBe(2);
   });
 
+  test("keeps the last good signer set when a refresh can't reach the registry", async () => {
+    let now = 0;
+    let down = false;
+    const ok = client("ok");
+    const flaky = { call: async (args: { data: string }) => (down ? client("down").client.call(args as never) : ok.client.call(args as never)) };
+    const signers = registrySigners(flaky as unknown as PublicClient, () => now);
+    expect((await signers(7)).f).toBe(1);
+    down = true;
+    now = 2 * 60 * 60_000;
+    expect((await signers(7)).f).toBe(1);
+    await expect(signers(8)).rejects.toBeInstanceOf(SignerLookupError); // nothing cached for DON 8
+  });
+
   test("remembers unknown DON IDs instead of asking again", async () => {
     let now = 0;
     const c = client("revert");

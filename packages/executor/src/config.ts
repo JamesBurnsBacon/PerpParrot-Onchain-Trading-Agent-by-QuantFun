@@ -43,7 +43,9 @@ const num = (env: Record<string, string | undefined>, name: string, fallback: nu
 
 // Safe by default: DRY_RUN and VERIFY_REPORTS are on unless explicitly "false",
 // and production refuses to run without report verification.
-export const loadConfig = (env: Record<string, string | undefined>): ExecutorConfig => {
+export const loadConfig = (env: Record<string, string | undefined>): ExecutorConfig => requirePinsForLive(readConfig(env));
+
+const readConfig = (env: Record<string, string | undefined>): ExecutorConfig => {
   const production = env.NODE_ENV === "production";
   const verifyReports = env.VERIFY_REPORTS !== "false";
   if (production && !verifyReports) throw new Error("VERIFY_REPORTS=false is not allowed in production");
@@ -78,4 +80,13 @@ export const loadConfig = (env: Record<string, string | undefined>): ExecutorCon
     workflowName: env.WORKFLOW_NAME ? hex("WORKFLOW_NAME", env.WORKFLOW_NAME, 10) : undefined,
     donId: env.DON_ID ? num(env, "DON_ID", 0) : undefined,
   };
+};
+
+// Live trading in production must pin the exact workflow and DON (copied from the first
+// dry-run report: verify-run prints both), not just our organization.
+export const requirePinsForLive = (c: ExecutorConfig): ExecutorConfig => {
+  if (c.production && !c.dryRun && (!c.workflowName || c.donId === undefined)) {
+    throw new Error("WORKFLOW_NAME and DON_ID are required to trade live in production");
+  }
+  return c;
 };

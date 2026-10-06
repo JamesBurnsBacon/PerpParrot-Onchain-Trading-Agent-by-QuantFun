@@ -86,27 +86,36 @@ export const planOrders = (
   markets: Map<string, Market>,
   cfg: PlanConfig,
 ): Plan => {
-  const { scale, initialMarginUsd } = marginScale(targetsUsd, markets, account.equityUsd, cfg.marginCap);
   const orders: PlannedOrder[] = [];
   const skipped: SkippedLeg[] = [];
 
+  // Markets failing our own eligibility check: follow reductions only, never open, add
+  // to or flip. Capped before the margin rule so they don't use up margin they won't get.
+  const targets = new Map<string, number>();
+  for (const [asset, targetUsd] of targetsUsd) {
+    const market = markets.get(asset);
+    if (!market || market.tradable) {
+      targets.set(asset, targetUsd);
+      continue;
+    }
+    const currentUsd = (account.positions.get(asset)?.szi ?? 0) * market.markPx;
+    const capped = Math.sign(targetUsd) === Math.sign(currentUsd) ? Math.sign(targetUsd) * Math.min(Math.abs(targetUsd), Math.abs(currentUsd)) : 0;
+    if (capped !== targetUsd && targetUsd !== 0) skipped.push({ asset, reason: "NOT_TRADABLE", targetUsd, currentUsd });
+    targets.set(asset, capped);
+  }
+  const { scale, initialMarginUsd } = marginScale(targets, markets, account.equityUsd, cfg.marginCap);
+
   // Every asset we target or hold; held assets missing from the targets go to 0.
-  const assets = [...new Set([...targetsUsd.keys(), ...account.positions.keys()])].sort();
+  const assets = [...new Set([...targets.keys(), ...account.positions.keys()])].sort();
   for (const asset of assets) {
     const market = markets.get(asset);
     const szi = account.positions.get(asset)?.szi ?? 0;
-    let targetUsd = (targetsUsd.get(asset) ?? 0) * scale;
+    const targetUsd = (targets.get(asset) ?? 0) * scale;
     if (!market) {
       skipped.push({ asset, reason: "UNKNOWN_MARKET", targetUsd, currentUsd: 0 });
       continue;
     }
     const currentUsd = szi * market.markPx;
-    if (!market.tradable) {
-      // Follow reductions only: never open, add to or flip a position here.
-      const capped = Math.sign(targetUsd) === Math.sign(currentUsd) ? Math.sign(targetUsd) * Math.min(Math.abs(targetUsd), Math.abs(currentUsd)) : 0;
-      if (capped !== targetUsd && targetUsd !== 0) skipped.push({ asset, reason: "NOT_TRADABLE", targetUsd, currentUsd });
-      targetUsd = capped;
-    }
     const gapUsd = targetUsd - currentUsd;
     const leg = { asset, targetUsd, currentUsd };
     if (gapUsd === 0) continue;

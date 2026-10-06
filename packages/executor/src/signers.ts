@@ -45,7 +45,7 @@ export const registrySigners = (client: PublicClient, now: () => number = Date.n
     }
   };
 
-  return async (donId) => {
+  const lookup = async (donId: number): Promise<DonSigners> => {
     const cached = cache.get(donId);
     if (cached && cached.until > now()) return cached;
     if ((unknown.get(donId) ?? 0) > now()) return NO_SIGNERS;
@@ -94,5 +94,17 @@ export const registrySigners = (client: PublicClient, now: () => number = Date.n
     const result = { f, signers };
     cache.set(donId, { ...result, until: now() + SIGNERS_TTL_MS });
     return result;
+  };
+
+  // If an hourly refresh can't reach the registry, keep using the last good set
+  // rather than rejecting reports until it's back.
+  return async (donId) => {
+    try {
+      return await lookup(donId);
+    } catch (e) {
+      const stale = cache.get(donId);
+      if (e instanceof SignerLookupError && stale) return stale;
+      throw e;
+    }
   };
 };

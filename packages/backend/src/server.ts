@@ -21,6 +21,13 @@ const store = sql ? new PostgresSnapshotStore(sql) : new MemorySnapshotStore();
 const log = (msg: string, extra: Record<string, unknown> = {}) =>
   console.log(JSON.stringify({ t: new Date().toISOString(), msg, ...extra }));
 
+function leadSeconds(raw: string | undefined): number {
+  if (raw === undefined || raw === "") return 120;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 90 || value > 600) throw new Error("SNAPSHOT_MAX_LEAD_SECONDS must be an integer from 90 to 600");
+  return value;
+}
+
 const service = new SnapshotService({
   configurations: new FileConfigurationSource(required("CONFIGURATION_PATH"), required("FROZEN_CONFIGURATION_HASH")),
   eligibility: new EligibilityTracker(sql ? new PostgresEligibilityStore(sql) : new MemoryEligibilityStore(), undefined, (m) =>
@@ -29,7 +36,7 @@ const service = new SnapshotService({
   store,
   nowMs: Date.now,
   // Only `cre workflow simulate` needs more (it stamps the next :x0): set 600 locally.
-  maxLeadSeconds: Number(env.SNAPSHOT_MAX_LEAD_SECONDS ?? 120),
+  maxLeadSeconds: leadSeconds(env.SNAPSHOT_MAX_LEAD_SECONDS),
 });
 
 const server = Bun.serve({

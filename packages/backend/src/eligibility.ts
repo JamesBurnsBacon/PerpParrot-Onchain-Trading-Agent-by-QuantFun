@@ -28,7 +28,13 @@ export const fetchOpenInterest = async (): Promise<Map<string, number>> => {
   return new Map(metas.flatMap((m) => [...openInterestFromMeta(m)]));
 };
 
-export type EligibilityState = { assets: string[]; checkedAt: number };
+export type EligibilityState = {
+  assets: string[];
+  checkedAt: number;
+  // Set while big drops are being refused; once refusals have lasted a day the drop is
+  // accepted (it's real, not a data glitch).
+  refusingSince?: number;
+};
 
 // Persisted so hysteresis survives restarts and every instance agrees on the list.
 export interface EligibilityStore {
@@ -50,8 +56,9 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 // Re-checked once per UTC day (README §4.4), on the first snapshot after midnight, so
 // every snapshot within a day agrees on eligibility. A check that would drop more than
-// max(3, 20%) of the list at once is refused (kept: yesterday's list) as a likely data
-// error, since every dropped asset we hold gets closed.
+// max(3, 20%) of the list at once is refused as a likely data error, since every
+// dropped asset we hold gets closed: the previous list is kept and the check retried
+// on the next snapshot. If the drop persists for a day it's accepted.
 export class EligibilityTracker {
   constructor(
     private readonly store: EligibilityStore = new MemoryEligibilityStore(),
@@ -62,15 +69,16 @@ export class EligibilityTracker {
   async current(nowMs: number): Promise<string[]> {
     const previous = await this.store.load();
     const dayStart = Math.floor(nowMs / DAY_MS) * DAY_MS;
-    if (previous && previous.checkedAt >= dayStart) return previous.assets;
+    if (previous && previous.checkedAt >= dayStart && previous.refusingSince === undefined) return previous.assets;
 
     const next = applyHysteresis(await this.fetchOi(), new Set(previous?.assets ?? []));
     if (previous) {
       const kept = new Set(next);
       const dropped = previous.assets.filter((a) => !kept.has(a));
-      if (dropped.length > Math.max(3, Math.floor(previous.assets.length * 0.2))) {
+      const refusingSince = previous.refusingSince ?? nowMs;
+      if (dropped.length > Math.max(3, Math.floor(previous.assets.length * 0.2)) && nowMs - refusingSince < DAY_MS) {
         this.onRefused(`eligibility check would drop ${dropped.length} of ${previous.assets.length} assets; keeping the previous list`);
-        await this.store.save({ assets: previous.assets, checkedAt: nowMs });
+        await this.store.save({ ...previous, refusingSince });
         return previous.assets;
       }
     }

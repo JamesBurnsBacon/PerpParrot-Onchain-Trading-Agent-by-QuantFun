@@ -89,6 +89,20 @@ describe("live submission", () => {
   });
 });
 
+describe("stopping between batches", () => {
+  test("sends no further batches once asked to stop", async () => {
+    const { transport, requests } = fakeHl((orders) => ({
+      status: "ok",
+      response: { type: "order", data: { statuses: orders.map(() => ({ resting: { oid: 1 } })) } },
+    }));
+    const ex = createExchange({ privateKey: KEY, dryRun: false, transport });
+    const orders = Array.from({ length: 45 }, (_, i) => planned(`A${i}`, i));
+    const results = await ex.submit(orders, cloids(45), () => requests.length >= 1);
+    expect(requests).toHaveLength(1);
+    expect(results.filter((r) => r.status === "not_sent")).toHaveLength(25);
+  });
+});
+
 describe("dry run", () => {
   test("signs but never uses a live transport", async () => {
     let called = false;

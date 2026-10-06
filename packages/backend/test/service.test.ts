@@ -151,6 +151,23 @@ describe("eligibility", () => {
     const tracker = new EligibilityTracker(store, async () => new Map([["A", 50e6]]), (m) => void refusals.push(m));
     expect(await tracker.current(2 * day)).toEqual(["A", "B", "C", "D", "E", "F"]);
     expect(refusals[0]).toContain("drop 5 of 6");
+    // Retried on later snapshots; once the drop has persisted for a day it's accepted.
+    expect(await tracker.current(2 * day + 600_000)).toEqual(["A", "B", "C", "D", "E", "F"]);
+    expect(await tracker.current(3 * day + 1)).toEqual(["A"]);
+    expect((await store.load())?.refusingSince).toBeUndefined();
+  });
+
+  test("a refused drop that recovers clears the refusal", async () => {
+    const store = new MemoryEligibilityStore();
+    const day = 86_400_000;
+    const all = new Map(["A", "B", "C", "D", "E", "F"].map((a) => [a, 50e6] as [string, number]));
+    await new EligibilityTracker(store, async () => all).current(day);
+    let readings = new Map([["A", 50e6]]);
+    const tracker = new EligibilityTracker(store, async () => readings);
+    await tracker.current(2 * day);
+    readings = all;
+    expect(await tracker.current(2 * day + 600_000)).toEqual(["A", "B", "C", "D", "E", "F"]);
+    expect((await store.load())?.refusingSince).toBeUndefined();
   });
 });
 

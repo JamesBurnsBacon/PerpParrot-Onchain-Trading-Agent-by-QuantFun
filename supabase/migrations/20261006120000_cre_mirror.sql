@@ -65,6 +65,8 @@ end $$;
 create table if not exists cre_eligibility (
   id         smallint primary key default 1 check (id = 1),
   assets     jsonb not null,
-  checked_at timestamptz not null
+  checked_at timestamptz not null,
+  refusing_since timestamptz          -- set while a large drop is being refused
 );
+alter table cre_eligibility add column if not exists refusing_since timestamptz;
 alter table cre_eligibility enable row level security;

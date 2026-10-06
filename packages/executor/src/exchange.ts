@@ -32,7 +32,7 @@ export class DryRunTransport implements IRequestTransport {
 
 export type OrderResult = {
   asset: string;
-  status: "filled" | "resting" | "error" | "dry_run";
+  status: "filled" | "resting" | "error" | "dry_run" | "not_sent";
   filledSize?: string;
   avgPx?: string;
   error?: string;
@@ -41,7 +41,8 @@ export type OrderResult = {
 export type Exchange = {
   dryRun: boolean;
   signer: Hex;
-  submit(orders: PlannedOrder[], cloids: Hex[]): Promise<OrderResult[]>;
+  // Stops between batches once shouldStop() is true; unsent orders are reported as not sent.
+  submit(orders: PlannedOrder[], cloids: Hex[], shouldStop?: () => boolean): Promise<OrderResult[]>;
   setLeverage(assetId: number, leverage: number): Promise<void>;
   // Signed requests captured in dry-run (for logs and tests).
   recorded(): SignedRequest[];
@@ -79,10 +80,14 @@ export const createExchange = (opts: { privateKey?: Hex; dryRun: boolean; transp
     signer: wallet.address,
     recorded: () => dryTransport.requests,
 
-    async submit(orders, cloids) {
+    async submit(orders, cloids, shouldStop) {
       const results: OrderResult[] = [];
       for (let i = 0; i < orders.length; i += ORDER_BATCH_SIZE) {
         const batch = orders.slice(i, i + ORDER_BATCH_SIZE);
+        if (shouldStop?.()) {
+          results.push(...orders.slice(i).map((o) => ({ asset: o.asset, status: "not_sent" as const })));
+          break;
+        }
         const params = {
           orders: batch.map((o, j) => ({
             a: o.assetId,
