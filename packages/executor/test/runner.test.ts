@@ -301,6 +301,17 @@ describe("app routes", () => {
     expect(run).not.toHaveProperty("envelope");
     expect(run).not.toHaveProperty("plan");
   });
+
+  test("GET /equity gives the run-time equity curve", async () => {
+    const { app } = make();
+    await app(post("/reports", { body: JSON.stringify(await envelope(keys.slice(0, 2))) }));
+    await Bun.sleep(20);
+    const res = await app(new Request("http://x/equity"));
+    expect(res.headers.get("access-control-allow-origin")).toBe("*");
+    const body = (await res.json()) as { runs: number; points: [number, number][] };
+    expect(body.runs).toBe(1);
+    expect(body.points[0][0]).toBe(AS_OF * 1000);
+  });
 });
 
 describe("loadConfig", () => {

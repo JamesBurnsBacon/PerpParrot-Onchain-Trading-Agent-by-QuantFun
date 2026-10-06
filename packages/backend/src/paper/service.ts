@@ -1,7 +1,7 @@
-import { capGrossExposure, computeExposures, EXPOSURE_SCALE } from "../../../shared/copy";
+import { capGrossExposure, checkActiveCeilings, computeExposures, EXPOSURE_SCALE } from "../../../shared/copy";
 import type { PositionsSnapshot } from "../../../shared/snapshot";
 import { metaAndAssetCtxs } from "../hyperliquid";
-import { equityOf, newBook, stepBtcBook, stepCopyBook, type Market, type PaperBook, type PaperConfig } from "./book";
+import { accrueFunding, equityOf, newBook, recordMarks, stepBtcBook, stepCopyBook, type Market, type PaperBook, type PaperConfig } from "./book";
 
 export type PaperPoint = { bookId: string; t: number; equityUsd: number };
 
@@ -9,8 +9,9 @@ export type PaperState = { books: PaperBook[]; lastRunAt: number };
 
 export interface PaperStore {
   load(): Promise<PaperState | undefined>;
-  // Saves the books and appends this run's points, atomically where the store can.
-  save(state: PaperState, points: PaperPoint[]): Promise<void>;
+  // Saves the books and appends this run's points, atomically where the store can. False if
+  // a newer or equal run was already saved (another instance stepped it): nothing written.
+  save(state: PaperState, points: PaperPoint[]): Promise<boolean>;
   points(sinceT: number): Promise<PaperPoint[]>;
 }
 
@@ -21,8 +22,10 @@ export class MemoryPaperStore implements PaperStore {
     return this.state && structuredClone(this.state);
   }
   async save(state: PaperState, points: PaperPoint[]) {
+    if (this.state && this.state.lastRunAt >= state.lastRunAt) return false;
     this.state = structuredClone(state);
     this.history.push(...points);
+    return true;
   }
   async points(sinceT: number) {
     return this.history.filter((p) => p.t >= sinceT);
@@ -52,28 +55,56 @@ export const loadPaperMarkets = async (): Promise<Map<string, Market>> => {
     meta.universe.forEach((u, i) => {
       const markPx = Number(ctxs[i]?.markPx);
       if (!(markPx > 0)) return;
-      markets.set(u.name, { markPx, maxLeverage: u.maxLeverage, feeBps: dex ? FEE_BPS.hip3 : FEE_BPS.core });
+      const fundingRate = Number(ctxs[i]?.funding ?? 0);
+      markets.set(u.name, {
+        markPx,
+        maxLeverage: u.maxLeverage,
+        feeBps: dex ? FEE_BPS.hip3 : FEE_BPS.core,
+        fundingRate: Number.isFinite(fundingRate) ? fundingRate : 0,
+      });
     });
   }
   return markets;
 };
 
 // The same exposures the mirror's DON computes from this snapshot (weights and ceilings
-// from the frozen configuration, gross capped at the policy's maxGrossLeverage).
+// from the frozen configuration, gross capped at the policy's maxGrossLeverage), with the
+// mirror's deterministic checks: where it would send no report, this throws and the books
+// hold, as the executor does. (A spot-check failure can't be seen from here.)
 export const exposuresFromSnapshot = (snapshot: PositionsSnapshot): Map<string, number> => {
   const frozen = new Map(snapshot.configuration.sources.map((s) => [s.sourceAddress.toLowerCase(), s]));
+  const eligible = new Set(snapshot.eligibleAssets);
+  for (const s of snapshot.sources) {
+    if (!frozen.has(s.address)) throw new Error(`source ${s.address} is not in the frozen configuration`);
+    for (const p of s.positions) if (!eligible.has(p.asset)) throw new Error(`ineligible asset in snapshot: ${p.asset}`);
+  }
   const sources = snapshot.sources.map((s) => ({
     ...s,
-    weightE6: frozen.get(s.address)?.weightUnits ?? 0,
-    ceilingE6: frozen.get(s.address)?.ceilingUnits ?? 0,
+    weightE6: frozen.get(s.address)!.weightUnits,
+    ceilingE6: frozen.get(s.address)!.ceilingUnits,
   }));
+  checkActiveCeilings(sources);
   const maxGrossE9 = BigInt(Math.round(snapshot.configuration.policy.maxGrossLeverage * Number(EXPOSURE_SCALE)));
   return new Map(
     capGrossExposure(computeExposures(sources), maxGrossE9).map((e) => [e.asset, Number(e.exposureE9) / Number(EXPOSURE_SCALE)]),
   );
 };
 
+// At most `max` points: every point if it fits, else evenly spaced ones plus the last.
+const thin = <T,>(points: T[], max: number): T[] => {
+  if (points.length <= max) return points;
+  const step = (points.length - 1) / (max - 1);
+  return Array.from({ length: max }, (_, i) => points[Math.round(i * step)]);
+};
+
+const CURVE_POINTS = 1500;
+
+type PaperView = Awaited<ReturnType<PaperService["build"]>>;
+
 export class PaperService {
+  // The dashboard's view, rebuilt once per step instead of per request.
+  private cached?: PaperView;
+
   constructor(
     private readonly deps: {
       store: PaperStore;
@@ -92,26 +123,38 @@ export class PaperService {
         state.books.push(newBook(spec.id, spec.label, spec.kind, spec.startingEquityUsd, runAt, spec.multiplier ?? 1));
       }
     }
-    const markets = await (this.deps.markets ?? loadPaperMarkets)();
     const exposures = exposuresFromSnapshot(JSON.parse(snapshotJson) as PositionsSnapshot);
+    const markets = await (this.deps.markets ?? loadPaperMarkets)();
+    // Funding for the interval just held; a gap longer than a day counts as a day.
+    const hours = state.lastRunAt ? Math.min(runAt - state.lastRunAt, 86_400) / 3600 : 0;
     for (const book of state.books) {
+      accrueFunding(book, markets, hours);
       if (book.kind === "btc") stepBtcBook(book, markets, this.deps.cfg);
       else stepCopyBook(book, exposures, markets, this.deps.cfg);
+      recordMarks(book, markets);
     }
     const points = state.books.map((b) => ({ bookId: b.id, t: runAt, equityUsd: equityOf(b, markets) }));
-    await this.deps.store.save({ ...state, lastRunAt: runAt }, points);
-    return points;
+    const saved = await this.deps.store.save({ ...state, lastRunAt: runAt }, points);
+    this.cached = undefined;
+    return saved === false ? [] : points;
   }
 
-  // For the dashboard: each book with its equity curve.
+  // For the dashboard: each book with its equity curve (at most CURVE_POINTS points).
   async view(sinceT = 0) {
+    this.cached ??= await this.build();
+    const view = this.cached;
+    return sinceT ? { ...view, books: view.books.map((b) => ({ ...b, curve: b.curve.filter(([t]) => t >= sinceT) })) } : view;
+  }
+
+  private async build() {
     const state = await this.deps.store.load();
-    const points = await this.deps.store.points(sinceT);
+    const points = await this.deps.store.points(0);
     return {
       lastRunAt: state?.lastRunAt ?? null,
       books: (state?.books ?? []).map((b) => {
-        const curve = points.filter((p) => p.bookId === b.id).map((p) => [p.t, p.equityUsd] as [number, number]);
-        const equity = curve.at(-1)?.[1] ?? b.startingEquityUsd;
+        const all = points.filter((p) => p.bookId === b.id).map((p) => [p.t, p.equityUsd] as [number, number]);
+        const curve = thin(all, CURVE_POINTS);
+        const equity = all.at(-1)?.[1] ?? b.startingEquityUsd;
         return {
           id: b.id,
           label: b.label,
@@ -120,6 +163,7 @@ export class PaperService {
           equityUsd: equity,
           returnPct: (equity / b.startingEquityUsd - 1) * 100,
           feesUsd: b.feesUsd,
+          fundingUsd: b.fundingUsd ?? 0,
           trades: b.trades,
           openPositions: Object.keys(b.positions).length,
           curve,

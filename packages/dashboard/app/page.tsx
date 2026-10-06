@@ -46,7 +46,7 @@ const lastReturn = (series: Series[], id: string) => series.find((s) => s.id ===
 
 export default function Page() {
   const data = useDashboard();
-  const series = performanceSeries(data?.paper ?? null, data?.runs ?? null);
+  const series = performanceSeries(data?.paper ?? null, data?.equity ?? null);
   const lastRun = data?.runs?.filter((r) => r.kind === "report").sort((a, b) => b.startedAt - a.startedAt)[0];
   const finalists = data?.funnel?.finalists ?? [];
   const live = lastReturn(series, "live");
@@ -55,7 +55,7 @@ export default function Page() {
   const btc = lastReturn(series, "btc-hold");
   const book470 = data?.paper?.books.find((b) => b.id === "aggressive-470");
   const book10k = data?.paper?.books.find((b) => b.id === "aggressive-10k");
-  const executed = data?.runs?.filter((r) => r.kind === "report" && r.status === "executed").length ?? 0;
+  const executed = data?.equity?.runs ?? 0;
   const tone = (v?: number) => (v === undefined || Math.abs(v) < 0.005 ? undefined : v > 0 ? "up" : "down");
 
   return (
@@ -92,8 +92,8 @@ export default function Page() {
       </div>
 
       <div className="mb-4 grid gap-4 md:grid-cols-2">
-        <Panel title="What we hold now" meta={data?.exposures ? `run ${time(data.exposures.runAt * 1000)}` : undefined}>
-          {data?.exposures?.exposures.length ? <ExposureBars exposures={data.exposures.exposures} /> : <Waiting what="No exposures yet" source="From the latest DON-agreed snapshot" />}
+        <Panel title="Target exposures" meta={data?.exposures ? `run ${time(data.exposures.runAt * 1000)}` : undefined}>
+          {data?.exposures?.exposures.length ? <ExposureBars exposures={data.exposures.exposures} /> : <Waiting what="No exposures yet" source="Computed from the latest run's snapshot" />}
         </Panel>
         <Panel title="CRE heartbeat" meta="one cell per 10-min run">
           {data?.runs?.length ? <RunStrip runs={data.runs} /> : <Waiting what="No CRE runs yet" source="executor /runs" />}
@@ -120,7 +120,7 @@ export default function Page() {
             <Waiting what="Backtest not published yet" source="dashboard_artifacts · backtest" />
           )}
         </Panel>
-        <Panel title="Selection funnel" meta={data?.funnel ? `${data.funnel.steps[0]?.count.toLocaleString()} addresses → frozen set` : undefined}>
+        <Panel title="Selection funnel" meta={data?.funnel?.steps.length ? `${data.funnel.steps[0].count.toLocaleString()} addresses → frozen set` : undefined}>
           {data?.funnel?.steps.length ? <Funnel steps={data.funnel.steps} /> : <Waiting what="Funnel not published yet" source="dashboard_artifacts · funnel" />}
         </Panel>
       </div>

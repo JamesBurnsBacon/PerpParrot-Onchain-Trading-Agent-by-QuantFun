@@ -42,7 +42,19 @@ const valueAt = (points: [number, number][], t: number) => {
   return found;
 };
 
-export function LineChart({ series, height = 300, format, xFormat, zeroLine = true }: Props) {
+// Min and max without spreading (long series overflow the argument limit).
+const extent = (values: number[]): [number, number] => {
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (const v of values) {
+    if (v < lo) lo = v;
+    if (v > hi) hi = v;
+  }
+  return [lo, hi];
+};
+
+export function LineChart({ series: input, height = 300, format, xFormat, zeroLine = true }: Props) {
+  const series = input.filter((s) => s.points.length > 0);
   const [ref, width] = useWidth<HTMLDivElement>();
   const [hoverT, setHoverT] = useState<number | null>(null);
   const [table, setTable] = useState(false);
@@ -51,10 +63,12 @@ export function LineChart({ series, height = 300, format, xFormat, zeroLine = tr
 
   const { xs, x, y, yTicks, times } = useMemo(() => {
     const all = series.flatMap((s) => s.points);
-    const tMin = Math.min(...all.map((p) => p[0]));
-    const tMax = Math.max(...all.map((p) => p[0]));
-    let vMin = Math.min(...all.map((p) => p[1]), zeroLine ? 0 : Infinity);
-    let vMax = Math.max(...all.map((p) => p[1]), zeroLine ? 0 : -Infinity);
+    const [tMin, tMax] = extent(all.map((p) => p[0]));
+    let [vMin, vMax] = extent(all.map((p) => p[1]));
+    if (zeroLine) {
+      vMin = Math.min(vMin, 0);
+      vMax = Math.max(vMax, 0);
+    }
     if (vMax - vMin < 0.2) {
       vMin -= 0.1;
       vMax += 0.1;

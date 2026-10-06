@@ -177,11 +177,12 @@ CRE UI or with `cre workflow pause`.
 
 | Source | What | Access |
 |---|---|---|
-| `GET {backend}/paper[?since=unix]` | paper books: equity, return, fees, trades, open positions, equity curve | public, CORS `*` |
-| `GET {backend}/exposures` | the latest DON-agreed exposures (fraction of equity per asset) | public, CORS `*` |
+| `GET {backend}/paper[?since=unix]` | paper books: equity, return, fees, funding, trades, open positions, equity curve (≤ 1,500 points, rebuilt once per run) | public, CORS `*` |
+| `GET {backend}/exposures` | the target exposures of the last run the paper books stepped (fraction of equity per asset) | public, CORS `*` |
 | `GET {backend}/artifacts/backtest`, `/artifacts/funnel` | what other jobs published to `dashboard_artifacts` (below); 404 until then | public, CORS `*` |
 | `GET {executor}/status` | dry run on/off, account, API wallet, pinned configuration hash, last report time, kill-switch state | public, CORS `*` |
-| `GET {executor}/runs?summary=1&limit=N` (≤ 5000) | runs without plan, results and report: time, status, equity, order count | public, CORS `*` |
+| `GET {executor}/runs?summary=1&limit=N` (≤ 500) | runs without plan, results and report: time, status, equity, order count | public, CORS `*` |
+| `GET {executor}/equity` | the live account's equity at every executed run since the start (≤ 1,500 points, cached 1 min) | public, CORS `*` |
 | `GET {executor}/runs?limit=N` (≤ 200) | per run: `runId`, `status`, `dryRun`, equity, `plan` (orders, skipped legs with reasons, margin scale), `results` (per-order fill/error), `envelope` (raw DON-signed report) | public, CORS `*` |
 | Supabase `executor_runs` | same rows as `/runs` | anon `select` |
 | Supabase `cre_snapshots` | each run's snapshot JSON (`body`, exact bytes) and its keccak hash | anon `select` |
@@ -239,4 +240,4 @@ the run ID is `keccak256(report)`, and that the stored snapshot hashes to the re
 | Run `failed` in `/runs` | `error` on the run | HL unreachable, or the gross-leverage bound |
 | Orders with `status: "error"` | `results` on the run | HL rejection (min size, margin); the next run retries |
 | Dashboard pills say "Executor offline" / panels empty | Browser console (CORS, mixed content) | `NEXT_PUBLIC_*` URLs wrong or not `https`; redeploy after fixing them |
-| Paper curves stop | Snapshot service log `paper books stepped` | No snapshot built this run (mirror not calling), or HL marks unavailable |
+| Paper curves stop | Snapshot service log `paper books not stepped` (with the reason) | The run fails the mirror's checks (the books hold, like the executor), HL marks unavailable, or no snapshot was requested |

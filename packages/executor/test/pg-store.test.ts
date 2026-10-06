@@ -45,6 +45,11 @@ describe.skipIf(!url)("PostgresStore", async () => {
     expect(older.id).toBe(`a-${unique}`);
     const [summary] = await store.recentRunSummaries(1);
     expect(summary).toEqual(summarize(run(`b-${unique}`, base + 1000)));
+    // runId mirror-<startedAt> here, so the curve's time is startedAt × 1000.
+    expect((await store.equityCurve()).filter(([t]) => t >= base * 1000)).toEqual([
+      [base * 1000, 470.12],
+      [(base + 1000) * 1000, 470.12],
+    ]);
   });
 
   test("persists the kill switch", async () => {

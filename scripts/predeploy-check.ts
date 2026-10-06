@@ -6,6 +6,9 @@
 //   bun scripts/predeploy-check.ts --backend https://… --executor https://… [--dashboard https://…]
 //   DATABASE_URL=postgres://… bun scripts/predeploy-check.ts …       # also the Supabase tables
 //
+// In the CRE deploy Action: --from-config takes the service URLs from the mirror's production
+// config (so the deploy stops if those services don't pin the same configuration).
+//
 // Rehearsal before the freeze (docs/cre/DEPLOY_REHEARSAL.md): --services-only skips the mirror's
 // production config, and --configuration <file> compares the services against that file
 // instead of packages/backend/frozen/live.json.
@@ -18,8 +21,11 @@ const arg = (name: string) => {
   const i = args.indexOf(`--${name}`);
   return i >= 0 ? args[i + 1]?.replace(/\/+$/, "") : undefined;
 };
-const backend = arg("backend");
-const executor = arg("executor");
+const root = new URL("..", import.meta.url).pathname;
+const cfg = await Bun.file(`${root}packages/cre-workflows/mirror/config.production.json`).json();
+const fromConfig = process.argv.includes("--from-config");
+const backend = arg("backend") ?? (fromConfig ? cfg.backendUrl.replace(/\/+$/, "") : undefined);
+const executor = arg("executor") ?? (fromConfig ? cfg.executorUrl.replace(/\/reports\/?$/, "") : undefined);
 const dashboard = arg("dashboard");
 const servicesOnly = args.includes("--services-only");
 const configurationPath = arg("configuration") ?? "packages/backend/frozen/live.json";
@@ -32,7 +38,6 @@ const warn = (m: string) => (warned++, console.log(`  warn  ${m}`));
 const check = (ok: boolean, good: string, bad: string) => (ok ? pass(good) : fail(bad));
 const section = (m: string) => console.log(`\n${m}`);
 
-const root = new URL("..", import.meta.url).pathname;
 const ZERO = `0x${"0".repeat(64)}`;
 
 const getJson = async (url: string): Promise<{ status: number; body: any; headers: Headers } | undefined> => {
@@ -51,7 +56,6 @@ const getJson = async (url: string): Promise<{ status: number; body: any; header
 };
 
 // 1. Mirror production config.
-const cfg = await Bun.file(`${root}packages/cre-workflows/mirror/config.production.json`).json();
 if (!servicesOnly) {
 section("mirror/config.production.json");
 check(!/REPLACE/.test(cfg.backendUrl) && cfg.backendUrl.startsWith("https://"), `backendUrl ${cfg.backendUrl}`, `backendUrl is a placeholder or not https: ${cfg.backendUrl}`);
@@ -102,6 +106,11 @@ if (backend) {
   if (paper) {
     check(paper.status === 200 && Array.isArray(paper.body?.books), `/paper serves ${paper.body?.books?.length ?? 0} books`, `/paper HTTP ${paper.status}`);
     check(paper.headers.get("access-control-allow-origin") === "*", "CORS open for the dashboard", "/paper has no CORS header");
+    const last = paper.body?.lastRunAt as number | null | undefined;
+    const ageMin = last ? (Date.now() / 1000 - last) / 60 : undefined;
+    if (ageMin === undefined) warn("paper books have not stepped yet (they step on the first snapshot a run requests)");
+    else if (ageMin > 25) warn(`paper books last stepped ${ageMin.toFixed(0)} min ago: look for "paper books not stepped" in the service log`);
+    else pass(`paper books stepped ${ageMin.toFixed(0)} min ago`);
   }
 }
 
@@ -147,8 +156,13 @@ if (process.env.DATABASE_URL) {
     const readable = new Set(policies.map((p: { tablename: string }) => p.tablename));
     const closed = ["executor_runs", "cre_snapshots", "paper_points", "dashboard_artifacts"].filter((t) => !readable.has(t));
     check(closed.length === 0, "anon can read the public tables", `no anon read policy on: ${closed.join(", ")}`);
-    const writable = await sql`select tablename from pg_policies where 'anon' = any(roles) and cmd <> 'SELECT'`;
-    check(writable.length === 0, "anon cannot write", `anon write policies on: ${writable.map((p: { tablename: string }) => p.tablename).join(", ")}`);
+    // RLS off means Supabase's default grants let anon write; a policy "to public" includes anon.
+    const open = await sql`select tablename from pg_tables where schemaname = 'public' and not rowsecurity`;
+    check(open.length === 0, "row-level security on every table", `RLS off (writable by anon): ${open.map((t: { tablename: string }) => t.tablename).join(", ")}`);
+    const writable = await sql`
+      select tablename from pg_policies
+      where schemaname = 'public' and cmd <> 'SELECT' and ('anon' = any(roles) or 'public' = any(roles))`;
+    check(writable.length === 0, "anon cannot write", `write policies open to anon on: ${writable.map((p: { tablename: string }) => p.tablename).join(", ")}`);
   } catch (e) {
     fail(`Supabase: ${(e as Error).message}`);
   } finally {

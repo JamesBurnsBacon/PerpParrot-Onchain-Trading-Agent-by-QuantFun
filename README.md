@@ -231,7 +231,7 @@ Code: `packages/executor`. One long-running Bun service (Railway, `Dockerfile` +
 
 ### 4.10 Paper books (backend only)
 
-Status: built (`packages/backend/src/paper/`), stepped from every DON-agreed snapshot and served at `GET /paper`. Running now: Aggressive at $470 (live size), its $10k twin, Balanced at $470 (Aggressive's weights × 0.5, `PAPER_BALANCED_MULTIPLIER`) and BTC buy & hold. Conservative, the shadow model and the $10k Balanced book wait for the review core to emit their configurations; adding one is a `BookSpec` in `defaultBooks`.
+Status: built (`packages/backend/src/paper/`), stepped from every DON-agreed snapshot and served at `GET /paper`. Running now: Aggressive at $470 (live size), its $10k twin, Balanced at $470 (Aggressive's weights × 0.5, `PAPER_BALANCED_MULTIPLIER`) and BTC buy & hold. Books hold on runs the mirror's deterministic checks would refuse, and pay funding between runs at HL's current hourly rate. Conservative, the shadow model and the $10k Balanced book wait for the review core to emit their configurations; adding one is a `BookSpec` in `defaultBooks`.
 - **Books:** Balanced, Conservative, the shadow model, and a $10k twin of live Aggressive.
 - **Sizes:** each at **~$470 and $10k**, to show the strategy both with and without the minimum-order effect.
 - **Fills:** at HL mark price, plus the taker fee, plus the backtest slippage, with the $10 minimum applied.

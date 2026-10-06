@@ -56,16 +56,21 @@ export class PostgresPaperStore implements PaperStore {
     return row ? (row.state as PaperState) : undefined;
   }
 
-  async save(state: PaperState, points: PaperPoint[]): Promise<void> {
-    await this.sql.begin(async (tx) => {
-      await tx`
+  async save(state: PaperState, points: PaperPoint[]): Promise<boolean> {
+    return this.sql.begin(async (tx) => {
+      // Only forward: a second instance stepping the same run from the same state writes nothing.
+      const written = await tx`
         insert into paper_state (id, state, last_run_at) values (1, ${JSON.parse(JSON.stringify(state))}::jsonb, ${state.lastRunAt})
-        on conflict (id) do update set state = excluded.state, last_run_at = excluded.last_run_at, updated_at = now()`;
+        on conflict (id) do update set state = excluded.state, last_run_at = excluded.last_run_at, updated_at = now()
+        where paper_state.last_run_at < excluded.last_run_at
+        returning id`;
+      if (!written.length) return false;
       for (const p of points) {
         await tx`
           insert into paper_points (book_id, t, equity_usd) values (${p.bookId}, ${p.t}, ${p.equityUsd})
           on conflict (book_id, t) do nothing`;
       }
+      return true;
     });
   }
 

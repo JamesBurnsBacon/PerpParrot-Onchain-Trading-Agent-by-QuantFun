@@ -39,12 +39,14 @@ export type Run = {
 
 export const ordersOf = (r: Run) => r.orders ?? r.plan?.orders.length ?? 0;
 
+export type Equity = { runs: number; points: [tMs: number, equityUsd: number][] };
 export type Status = { dryRun: boolean; account: string; controls: { paused: boolean }; lastReportAt: number | null };
 export type Exposures = { runAt: number; exposures: { asset: string; fraction: number }[] };
 
 export type DashboardData = {
   paper: PaperView | null;
-  runs: Run[] | null; // summaries, ~30 days
+  runs: Run[] | null; // summaries of the last day's runs
+  equity: Equity | null; // the live account at every executed run since the start
   recent: Run[] | null; // full records with signed reports, newest first
   status: Status | null;
   exposures: Exposures | null;
@@ -63,16 +65,17 @@ const get = async <T,>(url: string): Promise<T | null> => {
 };
 
 export const load = async (): Promise<DashboardData> => {
-  const [paper, runs, recent, status, exposures, backtest, funnel] = await Promise.all([
+  const [paper, runs, equity, recent, status, exposures, backtest, funnel] = await Promise.all([
     get<PaperView>(`${BACKEND}/paper`),
-    get<Run[]>(`${EXECUTOR}/runs?summary=1&limit=4320`),
+    get<Run[]>(`${EXECUTOR}/runs?summary=1&limit=144`),
+    get<Equity>(`${EXECUTOR}/equity`),
     get<Run[]>(`${EXECUTOR}/runs?limit=8`),
     get<Status>(`${EXECUTOR}/status`),
     get<Exposures>(`${BACKEND}/exposures`),
     get<BacktestArtifact>(`${BACKEND}/artifacts/backtest`),
     get<FunnelArtifact>(`${BACKEND}/artifacts/funnel`),
   ]);
-  return { paper, runs, recent, status, exposures, backtest, funnel, loadedAt: Date.now() };
+  return { paper, runs, equity, recent, status, exposures, backtest, funnel, loadedAt: Date.now() };
 };
 
 // Refreshes every minute: mirror runs land every 10 min, so this is plenty live.
@@ -110,13 +113,10 @@ export const runTime = (r: Run) => {
   return m ? Number(m[1]) * 1000 : r.startedAt;
 };
 
-// Live account (executor runs) and paper books as % return since their first point.
-export const performanceSeries = (paper: PaperView | null, runs: Run[] | null): Series[] => {
+// Live account (from its first executed run) and paper books (from their starting capital), as % return.
+export const performanceSeries = (paper: PaperView | null, equity: Equity | null): Series[] => {
   const series: Series[] = [];
-  const live = (runs ?? [])
-    .filter((r) => r.kind === "report" && r.status === "executed" && typeof r.equityUsd === "number")
-    .map((r) => [runTime(r), r.equityUsd!] as [number, number])
-    .sort((a, b) => a[0] - b[0]);
+  const live = equity?.points ?? [];
   if (live.length) series.push({ id: "live", label: "Live account", short: "Live", color: "var(--series-1)", points: toReturns(live) });
 
   const slots: Record<string, [color: string, short: string]> = {
@@ -144,5 +144,11 @@ const dayTime = (ms: number) =>
 // Time labels for a chart: clock time within a day and a half, date and time beyond.
 export const stamp = (series: Series[]) => {
   const ts = series.flatMap((s) => s.points.map((p) => p[0]));
-  return Math.max(...ts) - Math.min(...ts) > 36 * 3600e3 ? dayTime : time;
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (const t of ts) {
+    if (t < lo) lo = t;
+    if (t > hi) hi = t;
+  }
+  return hi - lo > 36 * 3600e3 ? dayTime : time;
 };

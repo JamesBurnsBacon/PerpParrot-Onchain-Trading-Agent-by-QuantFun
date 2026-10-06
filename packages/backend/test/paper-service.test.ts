@@ -30,7 +30,44 @@ describe("exposuresFromSnapshot", () => {
   });
 });
 
+describe("exposuresFromSnapshot: the mirror's checks", () => {
+  test("refuses an ineligible asset", () => {
+    const s = JSON.parse(snapshot(600)) as PositionsSnapshot;
+    s.eligibleAssets = [];
+    expect(() => exposuresFromSnapshot(s)).toThrow("ineligible asset");
+  });
+
+  test("refuses a run where one active source would exceed its ceiling", () => {
+    const s = JSON.parse(snapshot(600)) as PositionsSnapshot;
+    s.sources = s.sources.map((src, i) => (i === 0 ? src : { ...src, positions: [] }));
+    expect(() => exposuresFromSnapshot(s)).toThrow();
+  });
+});
+
 describe("PaperService", () => {
+  test("holds every book on a run the mirror would refuse", async () => {
+    const store = new MemoryPaperStore();
+    const service = new PaperService({ store, specs: defaultBooks(0.5), cfg, markets: marketsAt(100_000) });
+    await service.step(600, snapshot(600));
+    const bad = JSON.parse(snapshot(1200)) as PositionsSnapshot;
+    bad.eligibleAssets = [];
+    await expect(service.step(1200, JSON.stringify(bad))).rejects.toThrow("ineligible asset");
+    expect((await service.view()).lastRunAt).toBe(600);
+  });
+
+  test("accrues funding between runs and refreshes the cached view", async () => {
+    const store = new MemoryPaperStore();
+    const markets = async () => new Map<string, Market>([["BTC", { markPx: 100_000, maxLeverage: 40, feeBps: 0, fundingRate: 0.0006 }]]);
+    const service = new PaperService({ store, specs: defaultBooks(0.5), cfg, markets });
+    await service.step(600, snapshot(600));
+    expect((await service.view()).lastRunAt).toBe(600);
+    await service.step(1200, snapshot(1200));
+    const book = (await service.view()).books.find((b) => b.id === "aggressive-470")!;
+    // $176.25 long (0.375 × 470) for 1/6 h at 0.06%/h.
+    expect(book.fundingUsd).toBeCloseTo(176.25 * 0.0006 / 6, 9);
+    expect(book.curve.at(-1)).toEqual([1200, expect.closeTo(470 - (176.25 * 0.0006) / 6, 9)]);
+  });
+
   test("steps every book once per run and records equity curves", async () => {
     const store = new MemoryPaperStore();
     let price = 100_000;

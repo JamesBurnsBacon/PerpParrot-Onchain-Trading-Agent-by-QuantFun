@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { equityOf, newBook, stepBtcBook, stepCopyBook, type Market, type PaperConfig } from "../src/paper/book";
+import { accrueFunding, equityOf, newBook, recordMarks, stepBtcBook, stepCopyBook, type Market, type PaperConfig } from "../src/paper/book";
 
 const cfg: PaperConfig = { minOrderUsd: 10, driftFraction: 0.1, marginCap: 0.95, slippageBps: 0 };
 const markets = (btc = 100_000, eth = 4_000) =>
@@ -87,5 +87,27 @@ describe("stepBtcBook", () => {
     stepBtcBook(book, markets(120_000), cfg);
     expect(book.trades).toBe(1);
     expect(equityOf(book, markets(120_000))).toBeCloseTo(1_200, 6);
+  });
+});
+
+describe("funding and missing markets", () => {
+  test("longs pay positive funding, shorts receive it, pro rata to the hours held", () => {
+    const book = newBook("f", "F", "copy", 1_000, 0);
+    stepCopyBook(book, new Map([["BTC", 1], ["ETH", -0.5]]), markets(), cfg);
+    const m = new Map<string, Market>([
+      ["BTC", { markPx: 100_000, maxLeverage: 40, feeBps: 0, fundingRate: 0.0001 }],
+      ["ETH", { markPx: 4_000, maxLeverage: 25, feeBps: 0, fundingRate: 0.0001 }],
+    ]);
+    accrueFunding(book, m, 0.5);
+    // Long $1,000 pays 0.01% × 0.5 h = $0.05; short $500 receives $0.025.
+    expect(book.fundingUsd).toBeCloseTo(0.025, 9);
+    expect(equityOf(book, m)).toBeCloseTo(1_000 - 0.025, 9);
+  });
+
+  test("a market that disappears keeps its last mark, not its entry", () => {
+    const book = newBook("g", "G", "copy", 1_000, 0);
+    stepCopyBook(book, new Map([["BTC", 1]]), markets(100_000), cfg);
+    recordMarks(book, markets(110_000));
+    expect(equityOf(book, new Map())).toBeCloseTo(1_100, 6);
   });
 });

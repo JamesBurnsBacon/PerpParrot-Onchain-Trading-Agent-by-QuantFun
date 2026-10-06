@@ -2,9 +2,11 @@
 // multipliers, plus a BTC buy-and-hold benchmark. Pure, so every rule is unit-tested.
 //
 // Fills: at mark ± slippage (always adverse), plus a taker fee, with the live executor's
-// $10 minimum and 10% drift rule and the 95% margin rule. Lot/tick rounding is not modelled.
+// $10 minimum and 10% drift rule and the 95% margin rule. Funding accrues between runs at
+// the current hourly rate. Lot/tick rounding is not modelled.
 
-export type PaperPosition = { szi: number; entryPx: number };
+// markPx: the last mark seen, so a market that disappears keeps its last value, not its entry.
+export type PaperPosition = { szi: number; entryPx: number; markPx?: number };
 
 export type PaperBook = {
   id: string;
@@ -18,10 +20,13 @@ export type PaperBook = {
   cashUsd: number;
   positions: Record<string, PaperPosition>;
   feesUsd: number;
+  // Net funding paid (negative: received). Absent on books saved before funding was modelled.
+  fundingUsd?: number;
   trades: number;
 };
 
-export type Market = { markPx: number; maxLeverage: number; feeBps: number };
+// fundingRate: HL's hourly funding rate (longs pay when positive).
+export type Market = { markPx: number; maxLeverage: number; feeBps: number; fundingRate?: number };
 
 export type PaperConfig = {
   minOrderUsd: number;
@@ -42,7 +47,7 @@ export const newBook = (
 export const equityOf = (book: PaperBook, markets: Map<string, Market>): number => {
   let equity = book.cashUsd;
   for (const [asset, p] of Object.entries(book.positions)) {
-    const mark = markets.get(asset)?.markPx ?? p.entryPx;
+    const mark = markets.get(asset)?.markPx ?? p.markPx ?? p.entryPx;
     equity += p.szi * (mark - p.entryPx);
   }
   return equity;
@@ -69,6 +74,26 @@ const fill = (book: PaperBook, asset: string, delta: number, fillPx: number, fee
     book.positions[asset] = { szi, entryPx: (Math.abs(p.szi) * p.entryPx + added * fillPx) / Math.abs(szi) };
   } else {
     book.positions[asset] = { szi, entryPx: p.entryPx };
+  }
+};
+
+// Funding for the `hours` since the last run, at each market's current rate.
+export const accrueFunding = (book: PaperBook, markets: Map<string, Market>, hours: number): void => {
+  if (!(hours > 0)) return;
+  for (const [asset, p] of Object.entries(book.positions)) {
+    const m = markets.get(asset);
+    if (!m?.fundingRate) continue;
+    const paid = p.szi * m.markPx * m.fundingRate * hours;
+    book.cashUsd -= paid;
+    book.fundingUsd = (book.fundingUsd ?? 0) + paid;
+  }
+};
+
+// Remembers each position's mark, for valuing it if its market later goes missing.
+export const recordMarks = (book: PaperBook, markets: Map<string, Market>): void => {
+  for (const [asset, p] of Object.entries(book.positions)) {
+    const m = markets.get(asset);
+    if (m) p.markPx = m.markPx;
   }
 };
 

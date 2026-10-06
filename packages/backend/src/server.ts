@@ -29,11 +29,21 @@ function leadSeconds(raw: string | undefined): number {
   return value;
 }
 
+// A number from the environment, or the default when unset; anything else stops startup
+// (a NaN would be saved into the paper books and never wash out).
+function envNumber(name: string, fallback: number, min: number, max: number): number {
+  const raw = env[name];
+  if (raw === undefined || raw === "") return fallback;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < min || value > max) throw new Error(`${name} must be a number from ${min} to ${max}`);
+  return value;
+}
+
 // Paper books (README §4.10), stepped once per run when its snapshot is built.
 const paper = new PaperService({
   store: sql ? new PostgresPaperStore(sql) : new MemoryPaperStore(),
-  specs: defaultBooks(Number(env.PAPER_BALANCED_MULTIPLIER ?? 0.5)),
-  cfg: { minOrderUsd: 10, driftFraction: 0.1, marginCap: 0.95, slippageBps: Number(env.PAPER_SLIPPAGE_BPS ?? 5) },
+  specs: defaultBooks(envNumber("PAPER_BALANCED_MULTIPLIER", 0.5, 0.05, 1)),
+  cfg: { minOrderUsd: 10, driftFraction: 0.1, marginCap: 0.95, slippageBps: envNumber("PAPER_SLIPPAGE_BPS", 5, 0, 100) },
 });
 
 const service = new SnapshotService({
@@ -46,8 +56,12 @@ const service = new SnapshotService({
   // Only `cre workflow simulate` needs more (it stamps the next :x0): set 600 locally.
   maxLeadSeconds: leadSeconds(env.SNAPSHOT_MAX_LEAD_SECONDS),
   onBuilt: async (runAt, json) => {
-    const points = await paper.step(runAt, json);
-    if (points.length) log("paper books stepped", { runAt, books: points.length });
+    try {
+      const points = await paper.step(runAt, json);
+      if (points.length) log("paper books stepped", { runAt, books: points.length });
+    } catch (e) {
+      log("paper books not stepped", { runAt, error: (e as Error).message });
+    }
   },
 });
 
@@ -58,6 +72,8 @@ const readArtifact = sql
       const file = Bun.file(`${env.ARTIFACTS_DIR ?? "artifacts"}/${name}.json`);
       return (await file.exists()) ? file.json() : undefined;
     };
+
+let exposuresCache: { runAt: number; exposures: { asset: string; fraction: number }[] } | undefined;
 
 const server = Bun.serve({
   port: Number(env.PORT ?? 8788),
@@ -73,11 +89,15 @@ const server = Bun.serve({
       const since = Number(searchParams.get("since") ?? 0) || 0;
       return Response.json(await paper.view(since), { headers: cors });
     }
+    // The target exposures of the last run the paper books stepped (once per run, not per request).
     if (req.method === "GET" && pathname === "/exposures") {
       const { lastRunAt } = await paper.view(Number.MAX_SAFE_INTEGER);
       if (!lastRunAt) return Response.json({ error: "no run yet" }, { status: 404, headers: cors });
-      const exposures = exposuresFromSnapshot(JSON.parse(await service.get(lastRunAt)));
-      return Response.json({ runAt: lastRunAt, exposures: [...exposures].map(([asset, fraction]) => ({ asset, fraction })) }, { headers: cors });
+      if (exposuresCache?.runAt !== lastRunAt) {
+        const exposures = exposuresFromSnapshot(JSON.parse(await service.get(lastRunAt)));
+        exposuresCache = { runAt: lastRunAt, exposures: [...exposures].map(([asset, fraction]) => ({ asset, fraction })) };
+      }
+      return Response.json(exposuresCache, { headers: cors });
     }
     const artifact = /^\/artifacts\/(backtest|funnel)$/.exec(pathname);
     if (req.method === "GET" && artifact) {
