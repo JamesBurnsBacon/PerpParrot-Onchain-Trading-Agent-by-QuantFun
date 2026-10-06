@@ -1,5 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import { computeFilters, DEFAULT_CONFIG, isEligible, scoreCandidates, type ScoreInput, type TimePoint } from "../../src/score";
+import {
+  computeFilters,
+  DEFAULT_CONFIG,
+  isEligible,
+  scoreCandidates,
+  type FilterName,
+  type FilterStatus,
+  type ScoreInput,
+  type TimePoint,
+} from "../../src/score";
 import cases from "../fixtures/score/edge-cases.json";
 
 describe("score filters (README §4.2)", () => {
@@ -36,7 +45,9 @@ describe("score filters (README §4.2)", () => {
         expect(candidate.rank).toBe(allowUnknown ? expected.rankWithAllowUnknown : expected.rank);
         const config = { ...DEFAULT_CONFIG, allowUnknown };
         expect(expected.filters).toEqual(computeFilters(input, config));
-        expect(isEligible(candidate.filters, config)).toBe(candidate.eligible);
+        expect(isEligible(expected.filters as Record<FilterName, FilterStatus>, config)).toBe(
+          allowUnknown ? expected.eligibleWithAllowUnknown : expected.eligible,
+        );
         if (candidate.rank === null) {
           expect(candidate.percentiles).toBeNull();
           expect(candidate.score).toBeNull();
