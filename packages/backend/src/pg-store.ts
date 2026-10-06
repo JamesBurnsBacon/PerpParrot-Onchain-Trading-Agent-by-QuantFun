@@ -1,5 +1,6 @@
 import { SQL } from "bun";
 import type { EligibilityState, EligibilityStore } from "./eligibility";
+import type { PaperPoint, PaperState, PaperStore } from "./paper/service";
 import { keccakUtf8, type SnapshotStore } from "./snapshot";
 
 // cre_snapshots (supabase/migrations/20261006120000_cre_mirror.sql). The body is
@@ -43,5 +44,33 @@ export class PostgresEligibilityStore implements EligibilityStore {
       values (1, ${state.assets}::jsonb, ${new Date(state.checkedAt)}, ${state.refusingSince ? new Date(state.refusingSince) : null})
       on conflict (id) do update set
         assets = excluded.assets, checked_at = excluded.checked_at, refusing_since = excluded.refusing_since`;
+  }
+}
+
+// paper_books / paper_points (README §4.10): book state and equity curves.
+export class PostgresPaperStore implements PaperStore {
+  constructor(private readonly sql: SQL) {}
+
+  async load(): Promise<PaperState | undefined> {
+    const [row] = await this.sql`select state from paper_state where id = 1`;
+    return row ? (row.state as PaperState) : undefined;
+  }
+
+  async save(state: PaperState, points: PaperPoint[]): Promise<void> {
+    await this.sql.begin(async (tx) => {
+      await tx`
+        insert into paper_state (id, state, last_run_at) values (1, ${JSON.parse(JSON.stringify(state))}::jsonb, ${state.lastRunAt})
+        on conflict (id) do update set state = excluded.state, last_run_at = excluded.last_run_at, updated_at = now()`;
+      for (const p of points) {
+        await tx`
+          insert into paper_points (book_id, t, equity_usd) values (${p.bookId}, ${p.t}, ${p.equityUsd})
+          on conflict (book_id, t) do nothing`;
+      }
+    });
+  }
+
+  async points(sinceT: number): Promise<PaperPoint[]> {
+    const rows = await this.sql`select book_id, t, equity_usd from paper_points where t >= ${sinceT} order by t`;
+    return rows.map((r: Record<string, unknown>) => ({ bookId: r.book_id as string, t: Number(r.t), equityUsd: Number(r.equity_usd) }));
   }
 }

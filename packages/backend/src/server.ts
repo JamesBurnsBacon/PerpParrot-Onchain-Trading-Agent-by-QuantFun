@@ -4,7 +4,8 @@ import { SQL } from "bun";
 import { EligibilityTracker, MemoryEligibilityStore } from "./eligibility";
 import { FileConfigurationSource } from "./configuration-source";
 import { SnapshotError, SnapshotService } from "./service";
-import { PostgresEligibilityStore, PostgresSnapshotStore } from "./pg-store";
+import { MemoryPaperStore, PaperService, defaultBooks } from "./paper/service";
+import { PostgresEligibilityStore, PostgresPaperStore, PostgresSnapshotStore } from "./pg-store";
 import { MemorySnapshotStore } from "./snapshot";
 
 const env = process.env;
@@ -39,11 +40,23 @@ const service = new SnapshotService({
   maxLeadSeconds: leadSeconds(env.SNAPSHOT_MAX_LEAD_SECONDS),
 });
 
+// Paper books (README §4.10), stepped after each scheduled snapshot.
+const paper = new PaperService({
+  store: sql ? new PostgresPaperStore(sql) : new MemoryPaperStore(),
+  specs: defaultBooks(Number(env.PAPER_BALANCED_MULTIPLIER ?? 0.5)),
+  cfg: { minOrderUsd: 10, driftFraction: 0.1, marginCap: 0.95, slippageBps: Number(env.PAPER_SLIPPAGE_BPS ?? 5) },
+});
+
 const server = Bun.serve({
   port: Number(env.PORT ?? 8788),
   async fetch(req) {
-    const { pathname } = new URL(req.url);
+    const { pathname, searchParams } = new URL(req.url);
     if (req.method === "GET" && pathname === "/health") return Response.json({ ok: true });
+    // Public, for the dashboard.
+    if (req.method === "GET" && pathname === "/paper") {
+      const since = Number(searchParams.get("since") ?? 0) || 0;
+      return Response.json(await paper.view(since), { headers: { "Access-Control-Allow-Origin": "*" } });
+    }
 
     const m = /^\/snapshots\/(\d{1,12})$/.exec(pathname);
     if (req.method !== "GET" || !m) return new Response("not found", { status: 404 });
@@ -63,10 +76,15 @@ const server = Bun.serve({
 
 // Check every 15 s; tick() only builds inside the window before each :x0 run.
 setInterval(() => {
-  service.tick().then(
-    (runAt) => runAt && log("snapshot ready", { runAt }),
-    (e) => log("scheduled snapshot failed", { error: (e as Error).message }),
-  );
+  service
+    .tick()
+    .then(async (runAt) => {
+      if (!runAt) return;
+      log("snapshot ready", { runAt });
+      const points = await paper.step(runAt, await service.get(runAt));
+      if (points.length) log("paper books stepped", { runAt, books: points.length });
+    })
+    .catch((e) => log("scheduled snapshot or paper step failed", { error: (e as Error).message }));
 }, 15_000);
 
 log("snapshot service listening", { port: server.port, store: env.DATABASE_URL ? "postgres" : "memory" });

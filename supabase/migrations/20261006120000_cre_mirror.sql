@@ -70,3 +70,28 @@ create table if not exists cre_eligibility (
 );
 alter table cre_eligibility add column if not exists refusing_since timestamptz;
 alter table cre_eligibility enable row level security;
+
+-- Paper books (README §4.10): the copy strategy simulated at other sizes and multipliers,
+-- plus a BTC benchmark. One state row (all books), and an equity point per book per run.
+create table if not exists paper_state (
+  id          smallint primary key default 1 check (id = 1),
+  state       jsonb not null,
+  last_run_at bigint not null,
+  updated_at  timestamptz not null default now()
+);
+create table if not exists paper_points (
+  book_id    text not null,
+  t          bigint not null,              -- unix seconds of the mirror run
+  equity_usd double precision not null,
+  primary key (book_id, t)
+);
+alter table paper_state enable row level security;
+alter table paper_points enable row level security;
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'anon') then
+    execute 'create policy paper_points_public_read on paper_points for select to anon using (true)';
+    execute 'create policy paper_state_public_read on paper_state for select to anon using (true)';
+  end if;
+exception when duplicate_object then null;
+end $$;

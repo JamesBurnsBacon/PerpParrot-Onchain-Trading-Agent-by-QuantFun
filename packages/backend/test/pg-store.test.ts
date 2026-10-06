@@ -1,7 +1,7 @@
 // Runs against a real Postgres when TEST_DATABASE_URL is set; see executor/test/pg-store.test.ts.
 import { describe, expect, test } from "bun:test";
 import { SQL } from "bun";
-import { PostgresEligibilityStore, PostgresSnapshotStore } from "../src/pg-store";
+import { PostgresEligibilityStore, PostgresPaperStore, PostgresSnapshotStore } from "../src/pg-store";
 
 const url = process.env.TEST_DATABASE_URL;
 
@@ -33,5 +33,15 @@ describe.skipIf(!url)("PostgresSnapshotStore", async () => {
     const state = { assets: ["BTC", "ETH", "xyz:MSFT"], checkedAt: Date.parse("2026-10-07T00:01:00Z") };
     await eligibility.save(state);
     expect(await eligibility.load()).toEqual(state);
+  });
+
+  test("saves paper books and their equity points", async () => {
+    const paper = new PostgresPaperStore(sql);
+    const t = runAt;
+    const state = { books: [], lastRunAt: t };
+    await paper.save(state, [{ bookId: "aggressive-470", t, equityUsd: 471.5 }]);
+    await paper.save(state, [{ bookId: "aggressive-470", t, equityUsd: 999 }]); // same point: kept
+    expect(await paper.load()).toEqual(state);
+    expect(await paper.points(t)).toEqual([{ bookId: "aggressive-470", t, equityUsd: 471.5 }]);
   });
 });
