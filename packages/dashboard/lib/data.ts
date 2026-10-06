@@ -88,14 +88,20 @@ export const useDashboard = (): DashboardData | null => {
 export type Series = {
   id: string;
   label: string;
+  short: string; // direct label at the line end
   color: string;
   reference?: boolean; // benchmark: dashed, muted
   points: [tMs: number, value: number][];
 };
 
-const toReturns = (points: [number, number][]): [number, number][] => {
-  const base = points[0]?.[1];
-  return base ? points.map(([t, v]) => [t, (v / base - 1) * 100]) : [];
+// % return against `base` (default: the first point).
+const toReturns = (points: [number, number][], base = points[0]?.[1]): [number, number][] =>
+  base ? points.map(([t, v]) => [t, (v / base - 1) * 100]) : [];
+
+// A run's scheduled time (runId "mirror-<runAt>"), the same clock as the paper books.
+export const runTime = (r: Run) => {
+  const m = /-(\d+)$/.exec(r.runId);
+  return m ? Number(m[1]) * 1000 : r.startedAt;
 };
 
 // Live account (executor runs) and paper books as % return since their first point.
@@ -103,16 +109,21 @@ export const performanceSeries = (paper: PaperView | null, runs: Run[] | null): 
   const series: Series[] = [];
   const live = (runs ?? [])
     .filter((r) => r.kind === "report" && r.status === "executed" && typeof r.equityUsd === "number")
-    .sort((a, b) => a.startedAt - b.startedAt)
-    .map((r) => [r.startedAt, r.equityUsd!] as [number, number]);
-  if (live.length) series.push({ id: "live", label: "Live account", color: "var(--series-1)", points: toReturns(live) });
+    .map((r) => [runTime(r), r.equityUsd!] as [number, number])
+    .sort((a, b) => a[0] - b[0]);
+  if (live.length) series.push({ id: "live", label: "Live account", short: "Live", color: "var(--series-1)", points: toReturns(live) });
 
-  const slots: Record<string, string> = { "aggressive-470": "var(--series-2)", "aggressive-10k": "var(--series-3)", "balanced-470": "var(--series-4)" };
+  const slots: Record<string, [color: string, short: string]> = {
+    "aggressive-470": ["var(--series-2)", "$470"],
+    "aggressive-10k": ["var(--series-3)", "$10k"],
+    "balanced-470": ["var(--series-4)", "Balanced"],
+  };
   for (const b of paper?.books ?? []) {
-    const points = toReturns(b.curve.map(([t, v]) => [t * 1000, v]));
+    // Paper books start from their capital, so the first fills' fees show.
+    const points = toReturns(b.curve.map(([t, v]) => [t * 1000, v]), b.startingEquityUsd);
     if (!points.length) continue;
-    if (b.kind === "btc") series.push({ id: b.id, label: "BTC buy & hold", color: "var(--muted)", reference: true, points });
-    else if (slots[b.id]) series.push({ id: b.id, label: b.label.replace(" · ", " "), color: slots[b.id], points });
+    if (b.kind === "btc") series.push({ id: b.id, label: "BTC buy & hold", short: "BTC", color: "var(--muted)", reference: true, points });
+    else if (slots[b.id]) series.push({ id: b.id, label: b.label.replace(" · ", " "), short: slots[b.id][1], color: slots[b.id][0], points });
   }
   return series;
 };

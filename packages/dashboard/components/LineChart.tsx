@@ -149,7 +149,7 @@ export function LineChart({ series, height = 300, format, xFormat, zeroLine = tr
             <g key={s.id}>
               <circle cx={x(s.points.at(-1)![0])} cy={y(v)} r="4" fill={s.color} stroke="var(--surface)" strokeWidth="2" />
               <text x={width - PAD.right + 10} y={yy} dy="0.32em" fontSize="11" fill="var(--ink-2)" className="tabular">
-                <tspan fontWeight="600" fill="var(--ink)">{format(v)}</tspan> {s.label.split(" ")[0]}
+                <tspan fontWeight="600" fill="var(--ink)">{format(v)}</tspan> {s.short}
               </text>
             </g>
           ))}

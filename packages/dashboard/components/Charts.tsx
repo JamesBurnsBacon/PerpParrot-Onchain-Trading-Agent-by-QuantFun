@@ -26,17 +26,20 @@ export function Waiting({ what, source }: { what: string; source: string }) {
   );
 }
 
-export function StatTile({ label, value, delta, tone }: { label: string; value: string; delta?: string; tone?: "up" | "down" }) {
+// Hero number with an optional signed change (tone + arrow) and a neutral note.
+export function StatTile({ label, value, tone, note }: { label: string; value: string; tone?: "up" | "down"; note?: string }) {
   return (
     <div className="rounded-xl p-4" style={{ background: "var(--surface)", border: "1px solid var(--ring)" }}>
       <div className="text-xs" style={{ color: "var(--ink-2)" }}>{label}</div>
-      <div className="mt-1 text-2xl font-semibold">{value}</div>
-      {delta && (
-        <div className="mt-0.5 text-xs" style={{ color: tone === "up" ? "var(--up)" : tone === "down" ? "var(--critical)" : "var(--muted)" }}>
-          {tone === "up" ? "▲ " : tone === "down" ? "▼ " : ""}
-          {delta}
-        </div>
-      )}
+      <div className="mt-1 flex items-baseline gap-1.5 text-2xl font-semibold">
+        {tone && (
+          <span className="text-sm" style={{ color: tone === "up" ? "var(--up)" : "var(--critical)" }} aria-label={tone === "up" ? "up" : "down"}>
+            {tone === "up" ? "▲" : "▼"}
+          </span>
+        )}
+        {value}
+      </div>
+      {note && <div className="mt-0.5 text-xs" style={{ color: "var(--muted)" }}>{note}</div>}
     </div>
   );
 }
