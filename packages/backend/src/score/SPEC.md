@@ -160,3 +160,48 @@ Invalid config (non-integer or `< 1` for `finalists`, `minMonthPoints`; negative
 TypeScript strict, ESM, extensionless imports, double quotes, semicolons, trailing commas, `const` arrow-function
 exports, no `any`, tests with `bun:test` in `test/score/*.test.ts`, comments cite the README section.
 Files: `src/score/{types,parse,returns,metrics,filters,score,index}.ts`.
+
+## Decisions made without a README basis
+Everything below was chosen by the author of this module (Claude, with Codex writing the code), not taken from the
+README. Change any of them here first, then in the code and the fixtures. Items marked **[interpretation]** above
+(four equal-weight terms, PnL consistency, active days, returns denominator) are the main ones to confirm.
+
+**Metrics and series**
+- Non-annualised Sortino and Calmar: all candidates use the same 30-day window, so annualising cannot change ranks.
+- Sortino uses a minimum acceptable return of 0, per-day normalisation by elapsed time, and downside deviation
+  `sqrt(sum(min(r,0)^2)/T)`.
+- Undefined metrics are `null` with a flag instead of a large number: `no-downside`, `no-drawdown`, `no-intervals`.
+  A `null` ranks worst. (A perfectly steady account is not rewarded for having no drawdown.)
+- Intervals that start with account value <= 0 are skipped and flagged `zero-equity-interval`.
+- A loss that wipes out the account (`1 + r <= 0`) sets the compounded curve to 0 from then on and adds `ruin`.
+- A month series is valid only with equal lengths, identical timestamps in both histories, strictly increasing
+  timestamps and at least 2 points. An invalid series makes `minMonthPoints` `unknown` and `metrics` `null`.
+- Arithmetic that overflows to a non-finite number becomes `null`; a repeated flag appears once.
+- Metrics use only the `month` window; `realizedVol` is reported but not ranked.
+
+**Filters, eligibility and ranking**
+- The thresholds default to the README numbers ($10,000, 30 days, 10 trades, 25 points, top 25).
+- A non-finite `accountValue` gives `unknown`. `allTime` with no point above 0 gives `fail` for active days.
+- `unknown` is never eligible by default (fail-closed). A candidate with `eligible: true` can still be unranked when its
+  month series is invalid (`allowUnknown` only); it is then excluded from ranking and finalists.
+- A `null` metric is worse than every number and ties with other `null`s. With a single ranked candidate every
+  percentile and the score are 0.5.
+- Ranking is by exact integer numerators (see "Ranking"); the order of the input never matters.
+- `finalists` and `minMonthPoints` must be integers >= 1; the other thresholds must be finite and >= 0. A non-integer
+  `minTrades` is allowed. Invalid config throws and the error names the field.
+- Addresses are compared case-insensitively, and two inputs that differ only by case throw `duplicate address`.
+- Empty input returns empty `candidates` and `finalists`, a `universe` count of 0 and zero counts after it.
+- The funnel counts candidates that passed each filter and all earlier ones (not each filter on its own).
+
+**Parsing**
+- `parsePortfolio` accepts only plain decimal strings (optional sign, digits with an optional decimal point such as
+  `5.` or `.5`, no exponent) and integer timestamps; anything else throws `portfolio: ...`. Windows other than `month` and `allTime` are ignored; if a window appears twice the
+  last one wins.
+
+**Scope and packaging**
+- Pure functions in `packages/backend/src/score/`, nothing exported from a package entry point, no new dependencies.
+- Fill-derived values (`tradeCount`, `avgLeverage`, `timeInMarket`, `medianHoldHours`, `makerShare`) are inputs that a
+  future ingest supplies. Score only passes them through.
+- Fixture addresses are replaced by `addr-NN`. `closed` and `tradeCount` in `portfolio-sample.json` are synthetic.
+- Output is Score's own record, not the `Finalist` type (`cre-scaffold`) or the `Candidate` schema
+  (`ai-agent-workflow`); adapters are left to the team.
