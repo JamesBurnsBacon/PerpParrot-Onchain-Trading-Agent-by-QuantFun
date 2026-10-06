@@ -168,7 +168,7 @@ A dedicated workstream, integrated into the CRE flow.
 1. Fetch the **positions snapshot** for all sources (1 call). The backend refreshes it at `:x9`, just before each run.
 2. **Spot-check** ~10 random sources plus our account via `clearinghouseState`. **Reject the run if any source's notional differs by more than 5% of its equity.**
 3. Slices → net → diff → drift rule.
-4. `report()` → executor, plus the hash → HyperEVM consumer contract.
+4. `report()` → `sendReport()` POSTs it to the executor (§4.13), plus the hash → HyperEVM consumer contract.
 
 That is ≤ 13 HTTP calls, under CRE's limit of 15.
 - **On failure** (consensus, spot-check, timeout): hold positions, retry on the next run, and send a Telegram alert after 2 consecutive failures. There is no backend fallback.
@@ -176,8 +176,8 @@ That is ≤ 13 HTTP calls, under CRE's limit of 15.
 
 ### 4.8 Execute (serverless executor)
 - **Checks:**
-  - verify the DON signature
-  - dedupe by report ID (HL nonces back this up)
+  - verify the report: ≥ f+1 DON signatures and the pinned workflow owner (§4.13)
+  - dedupe by report ID = `keccak256(rawReport)` (HL nonces back this up)
   - **sanity bounds:** the source set must match the frozen set, and total notional must stay ≤ e.g. 50× equity
 - **Orders:** IOC limit at mark ± a slippage cap. Remainders are retried on the next run.
 - **Leverage:** cross margin; each asset at its **max leverage** (`updateLeverage`; many HIP-3 markets are 10x, BTC up to 40x). Exposure is mirrored exactly.
@@ -235,13 +235,49 @@ That is ≤ 13 HTTP calls, under CRE's limit of 15.
 | `paper` | snapshot, buckets, mark prices | `paper_books` |
 | `dashboard` | all tables | — |
 
+### 4.13 Mirror → executor report
+- **Transport:** `runtime.report()` (`evm` / `ecdsa` / `keccak256`), then `sendReport()` POSTs JSON `{report, context, signatures}` (hex, no `0x`) to the executor. **Every DON node POSTs its own copy.** `cacheSettings` only trims duplicates, because each node's signatures differ.
+- **Body** (ABI-encoded, after the 109-byte header): `runId`, `snapshotId`, `asOf`, `frozenSetHash`, `equity`, and `targets[]` (asset, signed notional in USD). ❓ *Exact types in `packages/shared`.*
+  - **Targets, not orders.** The executor diffs targets against the live account when it runs, so price moves between report and execution don't matter.
+- **Report ID** = `keccak256(rawReport)`, identical across nodes. The first valid copy is executed; later copies get `200 duplicate`.
+- **Verification** in the executor:
+  - ≥ f+1 signatures from the DON's signers, read from the Capability Registry `0x76c9cf548b4179F8901cda1f8623568b58215E62` on **Ethereum mainnet**. Cache the signers per DON ID. The executor therefore needs an Ethereum mainnet RPC.
+  - `workflowOwner` in the header = our **organization address** (private registry, §4.14; shown in the CRE platform UI). **Don't pin the workflow ID:** it is a hash of the binary + config and changes on every update.
+  - Reject reports whose `asOf` is older than 5 minutes.
+- **Simulation:** `cre workflow simulate` signs with local test keys, which fail verification. `VERIFY_REPORTS=false` is allowed only outside production; the executor refuses to start with it in production.
+
+### 4.14 CRE setup and team access
+- **Organization** `PerpParrot`: James is the Owner. Ownership can't be transferred, and only the Owner can invite members. Teammates have been invited; members see every workflow, its runs and status at app.chain.link/cre/workflows.
+- **Deploy access:** requested; approval arrives by email. **Until then:** simulation works, but deploys and API keys don't (an API key needs deploy access).
+- **Registry: private (Chainlink-hosted)**, set per target with `deployment-registry: "private"` in each `workflow.yaml`.
+  - Deploys are authorized by a CRE login or `CRE_API_KEY`. No linked wallet, no ETH, no deployer key.
+  - The workflow owner is the **organization address**, so it stays the same across redeploys and teammates. The executor pins it (§4.13).
+  - Trade-off: the list of deployed workflows lives in Chainlink's hosted registry, not the Ethereum `WorkflowRegistry`. Execution, DON signatures and our HyperEVM hashes are unchanged.
+  - Switching to the onchain registry is one line per target (`onchain:ethereum-mainnet`), but then needs a linked wallet (`cre account link-key`, permanent) and mainnet ETH.
+- **Deploys: GitHub Actions** (`.github/workflows/cre-deploy.yml`, run manually), so any teammate with write access to the repo can deploy. It runs the tests, simulates, then `cre workflow deploy <workflow> --target production-settings --yes --non-interactive`.
+  - Secret: `CRE_API_KEY` (CRE platform → Organization → APIs → **+ Organization API**), in the GitHub `production` environment.
+  - Updates keep the workflow name; the workflow ID changes.
+- **CRE secrets** (LLM API keys): org-owned (`CRE_CLI_SECRETS_ORG_OWNED=true`) with `--secrets-auth=browser`, so any member can rotate them. ❓ *Confirm with the sponsor.* Simulation reads secrets from `.env`.
+- **Project:** `packages/cre-workflows/` holds `project.yaml`, `secrets.yaml`, and the `mirror/` and `review/` workflows, each with a `workflow.yaml` and `config.{staging,production}.json`.
+  - Targets: `staging-settings` (simulate) and `production-settings` (deploy).
+  - RPC: `hyperliquid-mainnet` (`https://rpc.hyperliquid.xyz/evm`). Forwarder `0x9eF6468C5f37b976E57d52054c693269479A784d`, mock forwarder (simulation) `0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1`.
+  - Toolchain: CRE CLI v1.37, `@chainlink/cre-sdk` 1.23, **Bun ≥ 1.2.21** (older Bun fails simulation with a `wasm unreachable` trap at `subscribe`).
+- **Local setup:**
+  ```
+  curl -sSL https://app.chain.link/cre/install.sh | bash
+  cre login
+  cd packages/cre-workflows
+  bun install --cwd ./mirror && bun install --cwd ./review
+  cre workflow simulate mirror --target staging-settings
+  ```
+
 ## 5. Stack
 | Layer | Choice |
 |---|---|
 | Language / repo | TypeScript. **pnpm monorepo:** `packages/{backend, cre-workflows, executor, dashboard, contracts, shared}`. No license yet. |
 | Hyperliquid | [`@nktkas/hyperliquid`](https://github.com/nktkas/hyperliquid) in the backend and executor; raw HTTP inside CRE |
 | Prices | Hyperliquid oracle/mark prices via the Info API (`metaAndAssetCtxs`). BTC history from `candleSnapshot`. No Chainlink Data Feeds. |
-| Orchestration | Chainlink CRE (`@chainlink/cre-sdk`, `cre` CLI), DON access from the sponsor on-site. Consumer contract on HyperEVM. |
+| Orchestration | Chainlink CRE (`@chainlink/cre-sdk`, `cre` CLI), DON access from the sponsor on-site. Consumer contract on HyperEVM. Private registry; deploys from GitHub Actions with `CRE_API_KEY` (§4.14). |
 | AI | Two LLMs (≥ 1 OpenAI), structured JSON |
 | Storage / hosting | Supabase. Backend on Railway (the leaderboard download is too slow for serverless). Executor + dashboard on Vercel. |
 | Secrets | Railway/Vercel env vars plus CRE secrets. `.env.example` only in the repo. |
@@ -253,7 +289,7 @@ Budget ~1 h of testing per 2 h of features. Integrate only tested modules.
 
 | When | Milestone |
 |---|---|
-| **Before Tue 12:00** | Handoff notes (one member is away midday Tue): scaffold, Supabase schema, env vars, task split |
+| **Before Tue 12:00** | Handoff notes (one member is away midday Tue): scaffold, Supabase schema, env vars, task split · CRE organization + deploy access request (§4.14) |
 | Tue 12–16 | DON access · wallet + API wallet · move and swap HYPE · spikes: `portfolio`, $10 IOC order, CRE in simulation, LLM-in-CRE |
 | Tue 16–24 | `ingest` + `score` · kind labeling · start saving snapshots |
 | Wed 00–08 | `backtest` (4 windows, algo vs. model A vs. model B) · `review` workflow |
@@ -271,6 +307,8 @@ Budget ~1 h of testing per 2 h of features. Integrate only tested modules.
 - **No testnet** → fixtures plus tiny mainnet runs.
 - **Undocumented endpoints** → cached snapshots; HyperTracker/NOWNodes as fallbacks.
 - **Duplicate orders** → report-ID dedupe plus HL nonces.
+- **CRE API key / repo write access = trading authority:** either can deploy a workflow whose reports the executor trusts. Mitigated by keeping repo write access to the team, the `production` environment, and the executor's sanity bounds (frozen set, notional cap).
+- **Deploy access not yet approved** → no deploys or API key until it is. Ask the sponsor on-site.
 
 ## 8. Open questions
 - [ ] ❓ Which two models (≥ 1 OpenAI)
@@ -280,6 +318,7 @@ Budget ~1 h of testing per 2 h of features. Integrate only tested modules.
 - [ ] ❓ Balanced multiplier `m` (from the backtest)
 - [ ] ❓ How to read sources' lending positions for Conservative
 - [ ] ❓ Per-tier type-B threshold N (production)
+- [ ] ❓ Org-owned CRE secrets on the private registry: confirm with the sponsor
 
 ---
 
