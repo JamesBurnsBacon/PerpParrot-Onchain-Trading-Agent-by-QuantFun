@@ -64,6 +64,7 @@ export default function Page() {
     <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
       <header className="mb-6 flex flex-wrap items-center gap-3">
         <h1 className="mr-auto text-xl font-semibold">PerpParrot 🦜</h1>
+        <a href="/parrot" className="rounded-md px-2 py-1 text-xs underline underline-offset-4" style={{ color: "var(--ink-2)" }}>Talk to the Parrot</a>
         {data?.status ? (
           <>
             <Pill color={data.status.dryRun ? "var(--warning)" : "var(--good)"}>{data.status.dryRun ? "Dry run" : "Live"}</Pill>
