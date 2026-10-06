@@ -13,7 +13,8 @@ finalists, a funnel and per-filter counts.
 
 It is a pure, deterministic function: no I/O, no network, no clock, no randomness, no new dependencies.
 Ingest, persistence and the AI review are out of scope; the adapter to the review's `candidate-curation-frame` is
-specified in "Frame adapter".
+specified in "Frame adapter". Before the finalist cut, accounts that run the same strategy are grouped so each finalist
+slot is a distinct strategy ("Clone grouping").
 
 ## Types (exported from `src/score/index.ts`)
 ```ts
@@ -32,6 +33,8 @@ export type ScoreInput = {
   history: WindowHistory | null; // month-resolution points older than `month`, from ingest's daily snapshots,
                                  // PnL already in the allTime baseline (see "Snapshots"); null = none stored
   tradeCount: number | null;     // from fills; null = unknown
+  links?: string[];              // addresses known to be the same operator (vault <-> leader from `vaultDetails`,
+                                 // sub-accounts); grouped as clones regardless of correlation. See "Clone grouping".
   // Fill-derived values are copied to the output unchanged. Score does not compute them.
   avgLeverage?: number | null;
   timeInMarket?: number | null;
@@ -80,11 +83,13 @@ export type Candidate = {
   scoreNumerator: number | null;     // integer; null unless ranked
   score: number | null;              // 0..1; null unless ranked
   rank: number | null;               // 1-based within the pool; null unless ranked
+  cloneOf: { address: string; correlation: number | null } | null; // set on a clone; correlation null = linked
+  clones: string[];                  // on a representative: the addresses grouped under it, in cross-pool order
   finalist: boolean;
   passthrough: { avgLeverage: number | null; timeInMarket: number | null; medianHoldHours: number | null; makerShare: number | null };
 };
 
-export type FunnelStage = "universe" | FilterName | "eligible" | "finalists";
+export type FunnelStage = "universe" | FilterName | "eligible" | "distinct" | "finalists";
 export type FunnelStep = { stage: FunnelStage; count: number };
 export type FilterCounts = Record<FilterName, { pass: number; fail: number; unknown: number }>;
 
@@ -98,6 +103,8 @@ export type ScoreConfig = {
   coarseGridDays: number;        // 7
   dustEquityFraction: number;    // 0.01  [tune]
   maxSkippedTimeShare: number;   // 0.20  [tune]
+  cloneCorrelation: number;      // 0.90  [tune]
+  minOverlapDays: number;        // 20
   finalists: number;             // 25
   finalistSplit: "proportional" | { trader: number; vault: number }; // "proportional" [tune]
   allowUnknown: FilterName[];    // []. See "Eligibility".
@@ -244,8 +251,40 @@ Order of values: `"+inf"` is better than every number, `null` is worse than ever
 **Cross-pool order** (used for the finalist list and the output): compare `score` exactly as fractions
 `scoreNumerator / (12(N-1))` (`1/2` for `N == 1`) by cross-multiplying integers; ties by raw `sharpe`, then address.
 
-**Finalist slots.** `F = config.finalists`, `R_trader`, `R_vault` = ranked counts. If `R_trader + R_vault <= F`, every
-ranked candidate is a finalist. Otherwise each pool gets `s_pool` slots and its top `s_pool` by rank are finalists:
+## Clone grouping
+Two accounts running the same strategy (copies, sub-accounts, a vault and its leader's own account) would take several
+finalist slots and concentrate the copy portfolio in one strategy's idiosyncratic risk. Clones are grouped **before**
+the finalist cut, across both pools, so every slot goes to a distinct strategy.
+
+**Daily returns.** For each ranked candidate, take the curve points of its fine intervals (see "Metrics") and sample
+them at every UTC midnight (`ts % 86_400_000 == 0`) inside the fine span, using the last curve value at or before
+the midnight; `d_k = ln(C_k / C_{k-1})` for consecutive midnights. A day whose sample is 0 (after `ruin`) is not
+used (ruined accounts are not ranked anyway).
+
+**Correlation.** For two candidates, use the midnights both have; if there are fewer than `minOverlapDays` daily returns
+in common, or either side has zero variance, the pair has no correlation (`null`) and is not grouped by correlation.
+Otherwise `rho` is the Pearson correlation of the two daily-return lists.
+
+**Greedy grouping** (deterministic). Walk the ranked candidates in cross-pool order. A candidate becomes a **clone**
+of the first earlier **representative** that it is linked to (either side lists the other in `links`, compared
+lower-cased) or with which `rho >= cloneCorrelation`; otherwise it becomes a representative. Comparisons are only
+against representatives, never against clones, so groups cannot chain. A clone gets
+`cloneOf = { address, correlation }` (`correlation: null` for a link); its representative lists it in `clones`.
+Clones keep their percentiles, score and rank (they describe the account), but they are never finalists.
+
+On the fixtures with the prototype (16 ranked), the default 0.9 gives 12 distinct strategies: `addr-06` (rho 0.991)
+and `addr-02` (0.944) -> `addr-04`; `addr-24` (0.931) -> `addr-18`; `addr-17` (0.940) -> `addr-23`. At 0.8 it would
+be 9 (`addr-02`, `-04`, `-06` -> `addr-09` at 0.80-0.88; `addr-16` -> `addr-13`; `addr-19` -> `addr-23`); at 0.7, 8.
+With 30 daily returns a measured rho of 0.9 has a 95% interval of about 0.80-0.95, and 0.8 about 0.62-0.90; the
+overlap, and so the precision, grows as snapshots accumulate.
+
+Grouping removes near-duplicates only. Correlation between distinct finalists (below the threshold) is still the
+agent's job (README 4.6) through the frame's `pairs` correlation matrix.
+
+## Finalists
+**Finalist slots.** `F = config.finalists`, `R_trader`, `R_vault` = the number of **representatives** in each pool.
+If `R_trader + R_vault <= F`, every representative is a finalist. Otherwise each pool gets `s_pool` slots and its top
+`s_pool` representatives by rank are finalists:
 - `"proportional"` (provisional default, **[tune]**): `q = F * R_pool / (R_trader + R_vault)`; `s = floor(q)`; the
   remaining slots go one at a time to the pool with the larger fractional part (`trader` first on a tie); a pool with
   `R_pool > 0` and `s = 0` takes one slot from the other pool.
@@ -257,14 +296,15 @@ addresses in cross-pool order. Addresses are compared case-insensitively; two in
 make `scoreCandidates` throw `Error("duplicate address: ...")`.
 `funnel`, in order: `universe` (all inputs); after each filter in funnel order, the number of candidates that pass that
 filter and all earlier ones (`unknown` counts as passed only for filters in `allowUnknown`); `eligible` (ranked
-candidates); `finalists`. Counts never increase along the funnel.
+candidates); `distinct` (representatives after clone grouping); `finalists`. Counts never increase along the funnel.
 `filterCounts`: for each filter on its own, how many candidates are `pass`, `fail` and `unknown` (shows which filter
 does the work, independent of funnel order).
 Empty input returns empty `candidates` and `finalists`, a `universe` count of 0, zero counts after it and zero
 `filterCounts`.
 
 Invalid config throws, and the error names the field: `finalists`, `minMonthPoints`, `lookbackDays` must be integers
->= 1; `coarseGridDays` > 0; `dustEquityFraction` and `maxSkippedTimeShare` in [0, 1]; the other thresholds finite and
+>= 1; `coarseGridDays` > 0; `dustEquityFraction` and `maxSkippedTimeShare` in [0, 1]; `cloneCorrelation` in
+(0, 1]; `minOverlapDays` an integer >= 3; the other thresholds finite and
 >= 0 (a non-integer `minTrades` is allowed); fixed `finalistSplit` values non-negative integers summing to `finalists`;
 `allowUnknown` entries must be filter names.
 
@@ -281,7 +321,7 @@ tracked address.
 The review workflow consumes `packages/shared/schemas/candidate-curation-frame.schema.json`. Its `oos*` and
 `crossWindowStability` fields mean **out-of-sample** (from the backtest). Score's metrics are in-sample and must not be
 put there. The adapter (`src/score/frame.ts`, `toFrameCandidates`) fills only the fields Score owns; other modules fill
-the rest. This needs schema version `1.1.0` with five new fields:
+the rest. This needs schema version `1.1.0` with seven new fields:
 
 | Frame field | From Score |
 |---|---|
@@ -295,6 +335,8 @@ the rest. This needs schema version `1.1.0` with five new fields:
 | **new** `isSharpe`, `isSortino`, `isCalmar` | the ratio; `"+inf"` -> `null` (the reason is in `scoreFlags`) |
 | **new** `lookbackDays` | `metrics.lookbackDays` |
 | **new** `scoreFlags` | `metrics.flags` |
+| **new** `clones` | `clones` (addresses grouped under this finalist), so the agent sees what was merged |
+| `pairs[].correlation`, `pairs[].linkedSource` | `rho` between finalists (`null` if under `minOverlapDays`) and `links` |
 | `oosWindows`, `oosSharpe`, `oosSortino`, `oosMaxDrawdown`, `crossWindowStability` | not from Score: `0` / `null` until the backtest supplies them |
 
 Consequence: `review/workflow.ts` rejects a candidate with `oosSharpe === null`, so no candidate passes the review
@@ -303,18 +345,16 @@ gate until the backtest supplies out-of-sample values. This is intended.
 ## Code conventions (match `packages/backend`)
 TypeScript strict, ESM, extensionless imports, double quotes, semicolons, trailing commas, `const` arrow-function
 exports, no `any`, tests with `bun:test` in `test/score/*.test.ts`, comments cite the README section.
-Files: `src/score/{types,parse,stitch,returns,metrics,filters,score,frame,index}.ts`.
+Files: `src/score/{types,parse,stitch,returns,metrics,filters,score,clones,frame,index}.ts`.
 
 ## To decide in tuning (2026-10-07)
 - The **[tune]** values: `lookbackDays` 90, `stillActiveDays` 7, `dustEquityFraction` 0.01, `maxSkippedTimeShare`
-  0.20, and the `finalistSplit` between traders and vaults (to be set after seeing how live traders and vaults differ).
+  0.20, `cloneCorrelation` 0.90, and the `finalistSplit` between traders and vaults (to be set after seeing how live traders and vaults differ).
 - **Near-cash accounts rank first.** In the fixture prototype, `addr-21` (+0.4% over 82 days, 0.1% drawdown, R² 0.94)
   ranks #1. All five terms are risk-adjusted or shape-based, so an account with almost no risk and almost no return
   wins. A return hurdle (minimum `annualisedReturn`) or a return term may be needed.
-- **Clones take several slots.** `addr-02`, `-04`, `-06` and `-09` have daily-return correlations of 0.80-0.99
-  (`addr-04`/`-06`: 0.991 and the same account value) and take 4 of the top 6 places in the prototype. The README
-  leaves diversification to the agent, which only sees the ~25 finalists; a correlation cut before the finalist cut
-  would keep slots for distinct strategies.
+- **Clone threshold.** At 0.9, `addr-09` and the `addr-04` group (rho 0.80-0.88 between them) stay separate
+  finalists. Decide with live data whether that cluster is one strategy; 0.8 would merge it.
 - **Old accounts are coarser.** Accounts older than about 2 years have 14-day `allTime` points (flag
   `coarse-history`) until snapshots accumulate.
 
@@ -340,9 +380,10 @@ prototype of this revision (outside the repo).
 | - | Cumulative funnel only | Plus `filterCounts` per filter | Shows which filter does the work. |
 | - | One ranking | Percentiles within pool (traders, vaults) | HyperCore vaults (legacy, profit share, lockups) have different return profiles. |
 | - | Duplicate window: last wins | Throws | A duplicated window is a malformed response. |
+| - | (none) | Clone grouping before the finalist cut: rho >= 0.9 on daily returns, or a known link | `addr-02`, `-04`, `-06`, `-09` (daily-return rho 0.80-0.99; `addr-04`/`-06` 0.991 with the same account value) took 4 of the top 6 places. Duplicates concentrate the copy portfolio in one strategy's idiosyncratic risk; widening the finalist set would only spend more slots on them. |
 
 Prototype funnel on the fixtures (synthetic `closed`/`tradeCount` overlay): 24 -> 23 (account value) -> 23 -> 22 (still
-active) -> 17 (trades) -> 17 -> 17 -> 16 (coverage: `addr-08`) -> 16 ranked.
+active) -> 17 (trades) -> 17 -> 17 -> 16 (coverage: `addr-08`) -> 16 ranked -> 12 distinct -> 12 finalists.
 
 ## Other decisions made without a README basis (unchanged from revision 1)
 - Sortino uses a minimum acceptable return of 0 and per-day normalisation by elapsed time.

@@ -116,7 +116,8 @@
   - risk-adjusted return: **Sharpe** and **Sortino**
   - drawdown: **Calmar** and **−max drawdown**
   - **PnL consistency**: R² of the log equity curve against time (0 if it trends down)
-- **Top ~25 → finalists**, with slots split between traders and vaults (❓ *split set in tuning*). Full definitions: `packages/backend/src/score/SPEC.md`.
+- **Clone grouping before the cut:** accounts whose daily returns correlate ≥ 0.9 (❓ *tuned*), or that are known to be linked (vault ↔ leader, sub-accounts), are grouped and only the best-scoring one can be a finalist. Duplicates would concentrate the portfolio in one strategy's idiosyncratic risk.
+- **Top ~25 distinct strategies → finalists**, with slots split between traders and vaults (❓ *split set in tuning*). Full definitions: `packages/backend/src/score/SPEC.md`.
 - **Also computed** for the agent:
   - annualized return and volatility, all-time max drawdown (reported, not ranked)
   - realized volatility and average leverage
