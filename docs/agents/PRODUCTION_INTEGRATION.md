@@ -4,6 +4,11 @@ Updated 2026-10-06 when the review core (branch `ai-agent-workflow`) and the CRE
 (branch `cre-scaffold`) were merged; `docs/cre/INTEGRATION.md` records what came from where and
 why. Nothing here authorizes real trades.
 
+The [evidence-bound paper review integration](PAPER_LIFECYCLE.md) now connects rich
+specialist inputs, per-node audit, persistent paper freeze and monitoring-only
+reviews. A dry-run integration test follows the merged snapshot/report/executor
+path; the removed parallel preview lane is not restored.
+
 ## Review core (this contribution)
 
 | Component | Ownership and verified behavior |
@@ -31,14 +36,45 @@ HyperEVM freeze consumer and preview tables that were here were replaced by the 
 
 ## Remaining gates for the review core
 
-1. Role/Risk adapters and rich evidence binding are built (above); the Red-Team adapter remains.
-   Post-freeze reviews must remain monitoring-only.
+1. Complete deployed Role/Risk/Red-Team CRE capability adapters. Rich evidence,
+   server provider requests, per-node audit and paper monitoring-only behavior now
+   have integration tests; actual deployed DON committee runs remain a gate.
 2. Run the two-model point-in-time evaluation, select the winner and persist the full
    sanitized prompt/output audit with verified hashes and paper shadow state.
 3. Configure CRE/model secrets; run authenticated LLM simulations and verify deployed
    consensus and request quotas.
 4. Produce the Aggressive LIVE frozen configuration for our account and freeze it
    (`packages/backend/scripts/freeze.ts`).
+
+## Remaining gates for funded execution
+
+The executor now has a durable write-ahead journal for leverage changes and IOC order
+batches. Startup and pre-report recovery detect unresolved journal rows and hold report
+execution; `GET /admin/order-batches` exposes the evidence needed for operator review.
+This is crash containment, not automatic exchange reconciliation or proof that an
+exchange request is idempotent. The operator must reconcile each unresolved action
+against Hyperliquid before resuming.
+
+Before any funded canary, require all of the following:
+
+1. Apply and verify the executor journal migration on the intended Supabase project;
+   exercise the Postgres tests against that schema and confirm persistence across an
+   executor restart.
+2. Run the recovery drill on paper: leave an order batch in `dispatching`, stop the
+   executor, restart it, verify the durable pause and operator listing, reconcile with
+   recorded evidence, and confirm it stays paused until explicit resume. Also test a
+   database outage before journal creation and after exchange dispatch.
+3. During reconciliation, stop/fence every executor instance first. The admin endpoint
+   records an operator attestation; it does not query Hyperliquid or prove the old
+   process has stopped. Never clear a dispatching record while its originating process
+   may still be executing.
+4. Configure CRE and model secrets, run authenticated simulation, validate real DON
+   consensus and report delivery, then complete repeated dry-run/soak and injected
+   failure tests with the deployed services.
+5. Verify the exact account, API-wallet permissions, frozen-configuration hash,
+   workflow name, DON id, exposure/leverage limits, alert delivery, pause/flatten
+   procedures and an operator-reviewed small canary plan. No hosted deployment or
+   funded execution has been verified by local tests.
 
 ## Local checks
 
@@ -49,3 +85,6 @@ Mirror path: `bun test` in each of `packages/backend`, `packages/executor`,
 
 Server code and CRE handlers have separate TypeScript scopes because CRE globally restricts
 Node APIs. Do not import server HTTP, filesystem, SQL, timers or crypto modules into CRE.
+
+Set `TEST_DATABASE_URL` and apply both mirror and order-journal migrations to exercise
+the durable store. The in-memory tests do not validate Postgres transaction behavior.

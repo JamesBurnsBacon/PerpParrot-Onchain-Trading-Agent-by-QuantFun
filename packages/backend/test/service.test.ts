@@ -173,8 +173,10 @@ describe("eligibility", () => {
 
 describe("buildSnapshot", () => {
   test("covers every frozen source, sorted, with eligible positions only", async () => {
-    const snap = await buildSnapshot(configuration, ["BTC", "ETH"], 1_791_281_400, 1_791_281_350, hl);
+    const snap = await buildSnapshot(configuration, ["BTC", "ETH"], 1_791_281_400, () => 1_791_281_350_000, hl);
     expect(snap.snapshotId).toBe("snap-1791281400");
+    expect(snap.startedAt).toBe(1_791_281_350);
+    expect(snap.takenAt).toBe(1_791_281_350);
     expect(snap.configuration).toBe(configuration);
     const addresses = snap.sources.map((s) => s.address);
     expect(addresses).toEqual([...addresses].sort());
@@ -219,6 +221,14 @@ describe("SnapshotService", () => {
     expect(builds()).toBe(1);
     const snap = JSON.parse(a) as PositionsSnapshot;
     expect(snap.takenAt).toBe(Math.floor(NOW / 1000));
+    expect(snap.startedAt).toBe(Math.floor(NOW / 1000));
+  });
+
+  test("records the completed read window instead of its start as the snapshot time", async () => {
+    const times = [1_791_281_340_000, 1_791_281_380_000];
+    const snap = await buildSnapshot(configuration, ["BTC"], 1_791_281_400, () => times.shift()!, hl);
+    expect(snap.startedAt).toBe(1_791_281_340);
+    expect(snap.takenAt).toBe(1_791_281_380);
   });
 
   test("refuses runs too far ahead or long past", async () => {

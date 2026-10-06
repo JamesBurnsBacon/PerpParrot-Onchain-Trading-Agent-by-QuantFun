@@ -102,6 +102,33 @@ describe("capGrossExposure", () => {
   test("leaves exposures under the cap untouched", () => {
     expect(capGrossExposure(exposures, 5_000_000_000n)).toBe(exposures);
   });
+
+  test("preserves signs and never exceeds the cap across generated signed exposures", () => {
+    let seed = 0x51a7e;
+    const next = (): number => {
+      seed = (Math.imul(seed, 1_664_525) + 1_013_904_223) >>> 0;
+      return seed;
+    };
+    const grossOf = (items: { exposureE9: bigint }[]): bigint =>
+      items.reduce((sum, item) => sum + (item.exposureE9 < 0n ? -item.exposureE9 : item.exposureE9), 0n);
+
+    for (let sample = 0; sample < 250; sample++) {
+      const input = Array.from({ length: 1 + next() % 8 }, (_, index) => ({
+        asset: `ASSET-${index}`,
+        exposureE9: BigInt(next() % 200_001 - 100_000),
+      }));
+      const inputGross = grossOf(input);
+      const cap = BigInt(next() % (Number(inputGross) + 1));
+      const output = capGrossExposure(input, cap);
+
+      expect(grossOf(output)).toBeLessThanOrEqual(cap);
+      output.forEach((item, index) => {
+        expect(item.exposureE9 === 0n || (item.exposureE9 < 0n) === (input[index].exposureE9 < 0n)).toBe(true);
+        expect(item.exposureE9 < 0n ? -item.exposureE9 : item.exposureE9)
+          .toBeLessThanOrEqual(input[index].exposureE9 < 0n ? -input[index].exposureE9 : input[index].exposureE9);
+      });
+    }
+  });
 });
 
 describe("deviationBps", () => {

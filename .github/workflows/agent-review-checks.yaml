@@ -4,7 +4,7 @@ name: Agent review checks
 
 on:
   push:
-    branches: [main, ai-agent-workflow]
+    branches: [main, ai-agent-workflow, ai-agent-mainnet-hardening]
   pull_request:
 
 permissions:
@@ -28,6 +28,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm test
+      - run: pnpm paper:lifecycle
       - run: pnpm test:cre
       - name: Check original JSON contracts
         run: |

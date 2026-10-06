@@ -1,5 +1,4 @@
-// Executor service (README §4.8). Runs on Vercel as the `executor` service under
-// /api/executor (vercel.json), dry run only there; locally: bun run dev.
+// Executor service (README §4.8). Runs on Railway; locally: bun run dev.
 import { SQL } from "bun";
 import { waitUntil } from "@vercel/functions";
 import { createPublicClient, http } from "viem";
@@ -31,20 +30,20 @@ const mode: VerifyMode = config.verifyReports
     }
   : { kind: "simulation" };
 
-// Supabase Postgres when DATABASE_URL is set: report dedupe, runs and the kill
-// switch then survive restarts. In memory otherwise (report expiry still bounds replays).
-// On Vercel, a small pool that lets go quickly: Supabase's session pooler allows 15
-// connections across every instance of both services. 3, not fewer: a run holds one
-// for the run lock (lock.ts) while its queries need another.
-const sql = process.env.DATABASE_URL
-  ? new SQL(process.env.DATABASE_URL, config.vercel ? { max: 3, idleTimeout: 5 } : {})
-  : undefined;
+// Supabase Postgres supplies durable report dedupe, runs, controls and action journals.
+// Production configuration rejects a missing DATABASE_URL.
+const sql = process.env.DATABASE_URL ? new SQL(process.env.DATABASE_URL, config.vercel ? { max: 3, idleTimeout: 5 } : {}) : undefined;
 const store = sql ? new PostgresStore(sql) : new MemoryStore();
-if (config.production && !process.env.DATABASE_URL) {
-  console.warn("DATABASE_URL not set: report dedupe, runs and the kill switch won't survive a restart");
-}
-const exchange = createExchange({ privateKey: config.apiWalletKey, dryRun: config.dryRun });
 const alert = createAlert({ botToken: config.telegramBotToken, chatId: config.telegramChatId, log: (m) => log(m) });
+// Recover write-ahead intents before exposing the listener. A crash can leave a
+// batch ambiguous even if the old process never persisted the pause control.
+const unresolvedOnStartup = await store.unresolvedOrderBatches();
+if (unresolvedOnStartup.length > 0) {
+  await store.setControls({ paused: true, updatedAt: Date.now(), updatedBy: `startup-recovery:${unresolvedOnStartup[0].id}` });
+  await alert(`executor held at startup: ${unresolvedOnStartup.length} order action(s) need reconciliation`);
+}
+
+const exchange = createExchange({ privateKey: config.apiWalletKey, dryRun: config.dryRun });
 const runner = new Runner({
   store,
   exchange,
@@ -76,10 +75,11 @@ const app = createApp({
   },
   runner,
   store,
+  lock: sql ? postgresRunLock(sql) : noLock,
   adminToken: config.adminToken,
-  watchdog: cronWatchdog({ store, alert, now: Date.now, afterMs: config.missedRunAlertMinutes * 60_000, everyMs: 5 * 60_000 }),
   cronSecret: config.cronSecret,
-  background: waitUntil,
+  watchdog: cronWatchdog({ store, alert, now: Date.now, afterMs: config.missedRunAlertMinutes * 60_000, everyMs: 5 * 60_000 }),
+  background: config.vercel ? waitUntil : undefined,
   log,
   status: () => ({
     dryRun: config.dryRun,
@@ -88,8 +88,7 @@ const app = createApp({
     apiWallet: exchange.signer,
     frozenConfigurationHash: config.frozenConfigurationHash,
     lastReportAt: runner.lastReportAt || null,
-    // For the pre-deploy check (scripts/predeploy-check.ts).
-    store: process.env.DATABASE_URL ? "postgres" : "memory",
+    store: sql ? "postgres" : "memory",
     pinned: { workflowName: config.workflowName ?? null, donId: config.donId ?? null },
   }),
 });
@@ -98,21 +97,18 @@ const app = createApp({
 const server = Bun.serve({ port: config.port, fetch: app, maxRequestBodySize: 256 * 1024 });
 
 // Missed-run watchdog: mirror runs every 10 min, so no finished run means CRE runs are
-// failing or a run is stuck (README §4.7: alert after 2 consecutive failures). Not on
-// Vercel, where instances stop between requests: Vercel Cron calls /cron/watchdog there.
+// failing or a run is stuck (README §4.7: alert after 2 consecutive failures).
 const startedAt = Date.now();
 let alerted = false;
-if (!config.vercel) {
-  setInterval(() => {
-    const since = Date.now() - (runner.lastFinishedAt || startedAt);
-    if (since > config.missedRunAlertMinutes * 60_000) {
-      if (!alerted) void alert(`no finished run for ${Math.round(since / 60_000)} min (last report accepted ${runner.lastReportAt ? new Date(runner.lastReportAt).toISOString() : "never"})`);
-      alerted = true;
-    } else {
-      alerted = false;
-    }
-  }, 60_000);
-}
+if (!config.vercel) setInterval(() => {
+  const since = Date.now() - (runner.lastFinishedAt || startedAt);
+  if (since > config.missedRunAlertMinutes * 60_000) {
+    if (!alerted) void alert(`no finished run for ${Math.round(since / 60_000)} min (last report accepted ${runner.lastReportAt ? new Date(runner.lastReportAt).toISOString() : "never"})`);
+    alerted = true;
+  } else {
+    alerted = false;
+  }
+}, 60_000);
 
 log("executor listening", {
   port: server.port,

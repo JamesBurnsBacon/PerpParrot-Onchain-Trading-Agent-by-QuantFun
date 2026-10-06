@@ -13,9 +13,10 @@ export const buildSnapshot = async (
   configuration: FrozenConfiguration,
   eligibleAssets: string[],
   runAt: number,
-  takenAt: number,
+  nowMs: () => number,
   hl: HlReader = hlReader,
 ): Promise<PositionsSnapshot> => {
+  const startedAt = Math.floor(nowMs() / 1000);
   const eligible = new Set(eligibleAssets);
   const addresses = configuration.sources.map((s) => s.sourceAddress.toLowerCase()).sort();
   const sources = await Promise.all(
@@ -34,7 +35,8 @@ export const buildSnapshot = async (
       };
     }),
   );
-  return { snapshotId: `snap-${runAt}`, runAt, takenAt, configuration, eligibleAssets, sources };
+  const takenAt = Math.floor(nowMs() / 1000);
+  return { snapshotId: `snap-${runAt}`, runAt, startedAt, takenAt, configuration, eligibleAssets, sources };
 };
 
 // Snapshots are written once per runAt and never changed, so every DON node
