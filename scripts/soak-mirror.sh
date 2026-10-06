@@ -8,6 +8,11 @@
 #   ./scripts/soak-mirror.sh                  # 40 rounds, 90 s apart
 #   ROUNDS=10 INTERVAL=60 ./scripts/soak-mirror.sh
 #   DATABASE_URL=postgres://… ./scripts/soak-mirror.sh   # services on Postgres
+#   TIMING=production ROUNDS=12 ./scripts/soak-mirror.sh # one round per 10-min run, at :x9:57
+#
+# TIMING=production measures the spot-check deviation the DON will see: the snapshot is the
+# one the service's own scheduler prebuilt at ~:x8:30, checked ~90 s later. The default
+# timing re-checks one snapshot as it ages, up to 10 min (deviation grows with age).
 #
 # Stops early if the code under test changes (files edited or HEAD moved), since the
 # running services and each fresh simulation would then disagree.
@@ -17,6 +22,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CRE="${CRE:-$(command -v cre || echo "$HOME/.cre/bin/cre")}"
 ROUNDS="${ROUNDS:-40}"
 INTERVAL="${INTERVAL:-90}"
+TIMING="${TIMING:-repeat}"
 OUT="${SOAK_DIR:-$(mktemp -d)}"
 mkdir -p "$OUT"
 RESULTS="$OUT/results.jsonl"
@@ -52,11 +58,20 @@ for url in http://localhost:8788/health http://localhost:8787/health; do
   curl -sf "$url" >/dev/null || { echo "service at $url didn't start"; cat "$OUT"/*.log; exit 1; }
 done
 
-echo "soak: $ROUNDS rounds, ${INTERVAL}s apart, logs in $OUT"
+if [ "$TIMING" = production ]; then
+  echo "soak: $ROUNDS rounds at :x9:57 (production timing), logs in $OUT"
+else
+  echo "soak: $ROUNDS rounds, ${INTERVAL}s apart, logs in $OUT"
+fi
 for i in $(seq 1 "$ROUNDS"); do
   if [ "$(code_state)" != "$START_STATE" ]; then
     echo "stopping: the code changed during the soak (rounds after this would test a mix of versions)"
     break
+  fi
+  # Production timing: simulate 3 s before the run, so the simulator's run time (the next
+  # :x0) is the one whose snapshot the scheduler prebuilt.
+  if [ "$TIMING" = production ]; then
+    until s=$(( $(date +%s) % 600 )); [ "$s" -ge 597 ]; do sleep 1; done
   fi
   t0=$(date +%s)
   if out=$(cd "$ROOT/packages/cre-workflows" && "$CRE" workflow simulate mirror --target staging-settings --trigger-index 0 --non-interactive 2>&1); then
@@ -70,7 +85,7 @@ for i in $(seq 1 "$ROUNDS"); do
   printf '{"i":%d,"t":"%s","ok":%s,"secs":%d,"snap":"%s","devBps":%s,"err":"%s"}\n' \
     "$i" "$(date -u +%H:%M:%S)" "$([ $rc = 0 ] && echo true || echo false)" "$(( $(date +%s) - t0 ))" \
     "$snap" "${dev:-null}" "$err" | tee -a "$RESULTS"
-  [ "$i" -lt "$ROUNDS" ] && sleep "$INTERVAL"
+  [ "$i" -lt "$ROUNDS" ] && [ "$TIMING" != production ] && sleep "$INTERVAL"
 done
 
 # Summary: pass/fail counts, failure reasons, deviation range, executor run outcomes.
