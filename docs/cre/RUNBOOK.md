@@ -19,7 +19,14 @@ Needs Bun ≥ 1.2.21, the `cre` CLI (logged in) and network access. Nothing here
 ```sh
 ./scripts/e2e-mirror.sh          # backend → cre simulate mirror → executor (dry run), checks the result
 DATABASE_URL=postgres://… ./scripts/e2e-mirror.sh   # same, with both services on Postgres
+./scripts/soak-mirror.sh         # soak: simulate every 90 s for 40 rounds, then a pass/fail summary
 ```
+
+The soak keeps the snapshot service and executor running and simulates the mirror repeatedly
+against live HL data, to catch flakiness, leaks and snapshot-age drift a single run can't
+(`ROUNDS`, `INTERVAL`, `DATABASE_URL` configurable). It stops early if the code changes under it.
+Reference results (2026-10-06): every round on a consistent setup passed; spot-check deviation
+0–30 bps for snapshots under 2 minutes old, ~50 bps at 8 minutes (limit 500).
 
 Unit tests per package: `bun test` in `packages/backend`, `packages/executor`,
 `packages/cre-workflows/mirror`, `packages/cre-workflows/review`. Postgres integration tests run when
