@@ -3,7 +3,8 @@ import {requireConfirmedFreeze, WEIGHT_UNITS} from '../../shared/src/frozen.ts';
 import type {ConfirmedFreeze, FrozenConfiguration} from '../../shared/src/frozen.ts';
 
 /** Monetary fields are canonical decimal micro-USD integers. No binary-float sizing. */
-export interface Position {market: string; notionalMicros: string}
+import type {MirrorPlan, Position} from '../../shared/src/mirror-plan.ts';
+export type {MirrorPlan, Position} from '../../shared/src/mirror-plan.ts';
 export interface AccountState {
   address: string;
   observedAtMs: number;
@@ -29,20 +30,6 @@ export interface MirrorInput {
   nowMs: number;
   maxStateAgeMs: number;
   runId: string;
-}
-export interface MirrorPlan {
-  mode: 'PAPER';
-  runId: string;
-  configurationHash: string;
-  snapshotHash: string;
-  accountHash: string;
-  validationHash: string;
-  asOfMs: number;
-  expiresAtMs: number;
-  targets: Position[];
-  deltas: (Position & {reduceOnly: boolean})[];
-  grossNotionalMicros: string;
-  planHash: string;
 }
 export type MirrorResult = {status: 'HOLD'; reason: string} | {status: 'READY'; plan: MirrorPlan};
 const MONEY_BOUND = 10n ** 24n;
@@ -145,14 +132,30 @@ function compile(input: MirrorInput): MirrorPlan {
     deltas.push({market, notionalMicros: delta.toString(), reduceOnly: reducing || limits.get(market)!.reduceOnly});
   }
   ensure(deltas.length <= 10, 'order capacity exceeded');
+  // Drift gates leave real exposure behind. Check reachable holdings, not only targets.
+  const changes = new Map(deltas.map(delta => [delta.market, money(delta.notionalMicros)]));
+  let projectedGross = 0n;
+  let worstFillGross = 0n;
+  for (const market of new Set([...target.keys(), ...actual.keys()])) {
+    const current = actual.get(market) ?? 0n;
+    const projected = current + (changes.get(market) ?? 0n);
+    ensure(abs(projected) <= money(limits.get(market)!.maxAbsNotionalMicros), 'projected market exposure exceeds limit');
+    projectedGross += abs(projected);
+    // Absolute exposure is convex along an order's fill interval. Independent
+    // endpoint maxima bound any ordering and any combination of partial fills.
+    worstFillGross += abs(current) > abs(projected) ? abs(current) : abs(projected);
+  }
+  ensure(projectedGross * BigInt(WEIGHT_UNITS) <= equity * BigInt(grossLimit), 'projected gross exposure exceeds limit');
+  ensure(worstFillGross * BigInt(WEIGHT_UNITS) <= equity * BigInt(grossLimit), 'partial-fill gross exposure exceeds limit');
   const oldest = Math.min(snapshot.publishedAtMs, input.account.observedAtMs, ...snapshot.sources.map(state => state.observedAtMs), ...input.checks.map(state => state.observedAtMs));
   const report = {
     mode: 'PAPER' as const, runId: input.runId, configurationHash: config.configurationHash,
     snapshotHash: snapshot.snapshotHash, accountHash: commitment('perpparrot:account:v1', input.account),
-    validationHash: commitment('perpparrot:mirror-evidence:v1', {sample:input.sampledAddresses, checks:input.checks, markets:input.markets, maxStateAgeMs:ageMs}),
+    validationHash: commitment('perpparrot:mirror-evidence:v1', {sample:[...input.sampledAddresses].sort(), checks:[...input.checks].sort((a,b)=>a.address<b.address?-1:a.address>b.address?1:0), markets:[...input.markets].sort((a,b)=>a.market<b.market?-1:a.market>b.market?1:0), maxStateAgeMs:ageMs}),
     asOfMs: nowMs, expiresAtMs: oldest + ageMs,
     targets: [...target].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([market, amount]) => ({market, notionalMicros: amount.toString()})),
     deltas, grossNotionalMicros: gross.toString(),
+    projectedGrossNotionalMicros: projectedGross.toString(), worstFillGrossNotionalMicros: worstFillGross.toString(),
   };
   ensure(report.expiresAtMs > nowMs && Number.isSafeInteger(report.expiresAtMs), 'state expired at plan issuance');
   return {...report, planHash: commitment('perpparrot:mirror-plan:v1', report)};

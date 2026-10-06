@@ -26,6 +26,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm test
+      - run: pnpm paper:smoke
       - run: pnpm test:cre
       - name: Check original JSON contracts
         run: |

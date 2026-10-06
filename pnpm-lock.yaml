@@ -34,6 +34,8 @@ importers:
         specifier: 3.25.76
         version: 3.25.76
 
+  packages/executor: {}
+
 packages:
 
   '@adraffy/ens-normalize@1.11.1':

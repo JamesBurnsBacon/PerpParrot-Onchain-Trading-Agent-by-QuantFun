@@ -9,7 +9,8 @@
     "test": "node --test tests/*.test.ts",
     "typecheck": "tsc --noEmit",
     "test:cre": "bun test packages/cre-workflows/tests/*.test.ts",
-    "compile:review-spike": "bun packages/cre-workflows/node_modules/@chainlink/cre-sdk/bin/cre-compile.ts packages/cre-workflows/review-spike/main.ts work/review-spike.wasm"
+    "compile:review-spike": "bun packages/cre-workflows/node_modules/@chainlink/cre-sdk/bin/cre-compile.ts packages/cre-workflows/review-spike/main.ts work/review-spike.wasm",
+    "paper:smoke": "node tests/paper_smoke.ts"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
