@@ -1,8 +1,10 @@
 // Positions snapshot API for the mirror workflow (README §4.7). Runs on Railway;
 // locally: bun run dev (set CONFIGURATION_PATH and FROZEN_CONFIGURATION_HASH).
+import { SQL } from "bun";
 import { EligibilityTracker } from "./eligibility";
 import { FileConfigurationSource } from "./configuration-source";
 import { SnapshotError, SnapshotService } from "./service";
+import { PostgresSnapshotStore } from "./pg-store";
 import { MemorySnapshotStore } from "./snapshot";
 
 const env = process.env;
@@ -12,10 +14,14 @@ const required = (name: string) => {
   return value;
 };
 
+// Supabase Postgres when DATABASE_URL is set (snapshots then survive restarts and
+// are shared between instances); in memory otherwise.
+const store = env.DATABASE_URL ? new PostgresSnapshotStore(new SQL(env.DATABASE_URL)) : new MemorySnapshotStore();
+
 const service = new SnapshotService({
   configurations: new FileConfigurationSource(required("CONFIGURATION_PATH"), required("FROZEN_CONFIGURATION_HASH")),
   eligibility: new EligibilityTracker(),
-  store: new MemorySnapshotStore(),
+  store,
   nowMs: Date.now,
 });
 
@@ -52,4 +58,4 @@ setInterval(() => {
   );
 }, 15_000);
 
-log("snapshot service listening", { port: server.port });
+log("snapshot service listening", { port: server.port, store: env.DATABASE_URL ? "postgres" : "memory" });

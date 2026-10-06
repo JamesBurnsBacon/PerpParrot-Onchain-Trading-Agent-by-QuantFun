@@ -1,4 +1,5 @@
 // Executor service (README §4.8). Runs on Railway; locally: bun run dev.
+import { SQL } from "bun";
 import { createPublicClient, http } from "viem";
 import { mainnet } from "viem/chains";
 import { createAlert } from "./alerts";
@@ -8,6 +9,7 @@ import { createExchange } from "./exchange";
 import { httpInfo } from "./hyperliquid";
 import { Runner } from "./runner";
 import { registrySigners } from "./signers";
+import { PostgresStore } from "./pg-store";
 import { MemoryStore } from "./store";
 import type { VerifyMode } from "./verify";
 
@@ -23,7 +25,9 @@ const mode: VerifyMode = config.verifyReports
     }
   : { kind: "simulation" };
 
-const store = new MemoryStore();
+// Supabase Postgres when DATABASE_URL is set: report dedupe, runs and the kill
+// switch then survive restarts. In memory otherwise (report expiry still bounds replays).
+const store = process.env.DATABASE_URL ? new PostgresStore(new SQL(process.env.DATABASE_URL)) : new MemoryStore();
 const exchange = createExchange({ privateKey: config.apiWalletKey, dryRun: config.dryRun });
 const alert = createAlert({ botToken: config.telegramBotToken, chatId: config.telegramChatId, log: (m) => log(m) });
 const runner = new Runner({
@@ -87,4 +91,5 @@ log("executor listening", {
   dryRun: config.dryRun,
   verify: config.verifyReports ? "registry" : "simulation",
   account: config.account,
+  store: process.env.DATABASE_URL ? "postgres" : "memory",
 });

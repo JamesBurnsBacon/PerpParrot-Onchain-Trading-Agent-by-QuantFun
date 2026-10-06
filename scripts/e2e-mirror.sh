@@ -32,9 +32,13 @@ echo "== cre workflow simulate mirror"
   >"$LOGS/simulate.log" 2>&1 || { cat "$LOGS/simulate.log"; echo "FAIL: simulation failed"; exit 1; }
 grep -E "USER LOG|Simulation Result" -A1 "$LOGS/simulate.log" | grep -v "^--$" || true
 
+RUN_ID="$(grep -A1 "Workflow Simulation Result" "$LOGS/simulate.log" | tail -1 | tr -d '" ')"
+[ -n "$RUN_ID" ] || { echo "FAIL: no runId in the simulation result"; exit 1; }
+
 # The executor answers the DON right away and executes in the background.
-for _ in $(seq 1 50); do
-  RUNS="$(curl -sf 'http://localhost:8787/runs?limit=1')"
+RUNS="[]"
+for _ in $(seq 1 100); do
+  RUNS="$(curl -sf 'http://localhost:8787/runs?limit=50' | RUN_ID="$RUN_ID" bun -e 'console.log(JSON.stringify(JSON.parse(await Bun.stdin.text()).filter((r) => r.runId === process.env.RUN_ID)))')"
   [ "$RUNS" != "[]" ] && break
   sleep 0.2
 done
@@ -42,7 +46,7 @@ done
 echo "== executor run"
 echo "$RUNS" | bun -e '
 const [run] = JSON.parse(await Bun.stdin.text());
-if (!run) { console.log("FAIL: executor recorded no run"); process.exit(1); }
+if (!run) { console.log("FAIL: executor recorded no run for this report"); process.exit(1); }
 const p = run.plan ?? { orders: [], skipped: [] };
 console.log(`run ${run.runId}: ${run.status}, dryRun=${run.dryRun}, equity $${run.equityUsd?.toFixed(2)}, margin scale ${p.marginScale?.toFixed(3)}`);
 console.log(`orders ${p.orders.length} (reduce-only ${p.orders.filter((o) => o.reduceOnly).length}), skipped ${p.skipped.length}`);
