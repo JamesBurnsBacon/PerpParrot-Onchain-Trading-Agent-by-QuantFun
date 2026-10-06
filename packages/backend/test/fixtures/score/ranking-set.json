@@ -4810,6 +4810,7 @@
       "consistency": 1.0
      },
      "scoreNumerator": 24,
+     "makerPenalty": 0,
      "score": 1.0,
      "rank": 1,
      "cloneOf": null,
@@ -4863,6 +4864,7 @@
       "consistency": 0.75
      },
      "scoreNumerator": 40,
+     "makerPenalty": 0,
      "score": 0.8333333333333334,
      "rank": 1,
      "cloneOf": null,
@@ -4916,6 +4918,7 @@
       "consistency": 1.0
      },
      "scoreNumerator": 40,
+     "makerPenalty": 0,
      "score": 0.8333333333333334,
      "rank": 2,
      "cloneOf": null,
@@ -4969,6 +4972,7 @@
       "consistency": 0.5
      },
      "scoreNumerator": 24,
+     "makerPenalty": 0,
      "score": 0.5,
      "rank": 3,
      "cloneOf": null,
@@ -5022,6 +5026,7 @@
       "consistency": 0.0
      },
      "scoreNumerator": 8,
+     "makerPenalty": 0,
      "score": 0.3333333333333333,
      "rank": 2,
      "cloneOf": null,
@@ -5075,6 +5080,7 @@
       "consistency": 0.5
      },
      "scoreNumerator": 4,
+     "makerPenalty": 0,
      "score": 0.16666666666666666,
      "rank": 3,
      "cloneOf": null,
@@ -5128,6 +5134,7 @@
       "consistency": 0.125
      },
      "scoreNumerator": 8,
+     "makerPenalty": 0,
      "score": 0.16666666666666666,
      "rank": 4,
      "cloneOf": null,
@@ -5181,6 +5188,7 @@
       "consistency": 0.125
      },
      "scoreNumerator": 8,
+     "makerPenalty": 0,
      "score": 0.16666666666666666,
      "rank": 5,
      "cloneOf": null,
@@ -5228,6 +5236,7 @@
      },
      "percentiles": null,
      "scoreNumerator": null,
+     "makerPenalty": null,
      "score": null,
      "rank": null,
      "cloneOf": null,
@@ -5259,6 +5268,7 @@
      "metrics": null,
      "percentiles": null,
      "scoreNumerator": null,
+     "makerPenalty": null,
      "score": null,
      "rank": null,
      "cloneOf": null,
@@ -5403,7 +5413,9 @@
     "minOverlapDays": 20,
     "finalists": 3,
     "finalistSplit": "proportional",
-    "allowUnknown": []
+    "allowUnknown": [],
+    "pureTakerMakerShare": 0.05,
+    "pureTakerPenalty": 0.02
    }
   },
   "single": {
@@ -5449,6 +5461,7 @@
       "consistency": 0.5
      },
      "scoreNumerator": 0,
+     "makerPenalty": 0,
      "score": 0.5,
      "rank": 1,
      "cloneOf": null,
@@ -5572,7 +5585,9 @@
     "minOverlapDays": 20,
     "finalists": 25,
     "finalistSplit": "proportional",
-    "allowUnknown": []
+    "allowUnknown": [],
+    "pureTakerMakerShare": 0.05,
+    "pureTakerPenalty": 0.02
    }
   },
   "split": {
@@ -5621,6 +5636,7 @@
       "consistency": 1.0
      },
      "scoreNumerator": 24,
+     "makerPenalty": 0,
      "score": 1.0,
      "rank": 1,
      "cloneOf": null,
@@ -5674,6 +5690,7 @@
       "consistency": 0.75
      },
      "scoreNumerator": 40,
+     "makerPenalty": 0,
      "score": 0.8333333333333334,
      "rank": 1,
      "cloneOf": null,
@@ -5727,6 +5744,7 @@
       "consistency": 1.0
      },
      "scoreNumerator": 40,
+     "makerPenalty": 0,
      "score": 0.8333333333333334,
      "rank": 2,
      "cloneOf": null,
@@ -5780,6 +5798,7 @@
       "consistency": 0.5
      },
      "scoreNumerator": 24,
+     "makerPenalty": 0,
      "score": 0.5,
      "rank": 3,
      "cloneOf": null,
@@ -5833,6 +5852,7 @@
       "consistency": 0.0
      },
      "scoreNumerator": 8,
+     "makerPenalty": 0,
      "score": 0.3333333333333333,
      "rank": 2,
      "cloneOf": null,
@@ -5886,6 +5906,7 @@
       "consistency": 0.5
      },
      "scoreNumerator": 4,
+     "makerPenalty": 0,
      "score": 0.16666666666666666,
      "rank": 3,
      "cloneOf": null,
@@ -5939,6 +5960,7 @@
       "consistency": 0.125
      },
      "scoreNumerator": 8,
+     "makerPenalty": 0,
      "score": 0.16666666666666666,
      "rank": 4,
      "cloneOf": null,
@@ -5992,6 +6014,7 @@
       "consistency": 0.125
      },
      "scoreNumerator": 8,
+     "makerPenalty": 0,
      "score": 0.16666666666666666,
      "rank": 5,
      "cloneOf": null,
@@ -6039,6 +6062,7 @@
      },
      "percentiles": null,
      "scoreNumerator": null,
+     "makerPenalty": null,
      "score": null,
      "rank": null,
      "cloneOf": null,
@@ -6070,6 +6094,7 @@
      "metrics": null,
      "percentiles": null,
      "scoreNumerator": null,
+     "makerPenalty": null,
      "score": null,
      "rank": null,
      "cloneOf": null,
@@ -6217,7 +6242,9 @@
      "trader": 1,
      "vault": 2
     },
-    "allowUnknown": []
+    "allowUnknown": [],
+    "pureTakerMakerShare": 0.05,
+    "pureTakerPenalty": 0.02
    }
   }
  }

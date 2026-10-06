@@ -44,6 +44,7 @@
      "consistency": 1.0
     },
     "scoreNumerator": 178,
+    "makerPenalty": 0,
     "score": 0.9888888888888889,
     "rank": 1,
     "cloneOf": null,
@@ -97,6 +98,7 @@
      "consistency": 0.9333333333333333
     },
     "scoreNumerator": 147,
+    "makerPenalty": 0,
     "score": 0.8166666666666667,
     "rank": 2,
     "cloneOf": null,
@@ -154,6 +156,7 @@
      "consistency": 0.8666666666666667
     },
     "scoreNumerator": 141,
+    "makerPenalty": 0,
     "score": 0.7833333333333333,
     "rank": 3,
     "cloneOf": {
@@ -210,6 +213,7 @@
      "consistency": 0.7333333333333333
     },
     "scoreNumerator": 132,
+    "makerPenalty": 0,
     "score": 0.7333333333333333,
     "rank": 4,
     "cloneOf": {
@@ -266,6 +270,7 @@
      "consistency": 0.8
     },
     "scoreNumerator": 132,
+    "makerPenalty": 0,
     "score": 0.7333333333333333,
     "rank": 5,
     "cloneOf": {
@@ -322,6 +327,7 @@
      "consistency": 0.6
     },
     "scoreNumerator": 114,
+    "makerPenalty": 0,
     "score": 0.6333333333333333,
     "rank": 6,
     "cloneOf": null,
@@ -377,6 +383,7 @@
      "consistency": 0.5333333333333333
     },
     "scoreNumerator": 110,
+    "makerPenalty": 0,
     "score": 0.6111111111111112,
     "rank": 7,
     "cloneOf": null,
@@ -430,6 +437,7 @@
      "consistency": 0.6666666666666666
     },
     "scoreNumerator": 110,
+    "makerPenalty": 0,
     "score": 0.6111111111111112,
     "rank": 8,
     "cloneOf": null,
@@ -485,6 +493,7 @@
      "consistency": 0.4666666666666667
     },
     "scoreNumerator": 96,
+    "makerPenalty": 0,
     "score": 0.5333333333333333,
     "rank": 9,
     "cloneOf": null,
@@ -538,6 +547,7 @@
      "consistency": 0.26666666666666666
     },
     "scoreNumerator": 60,
+    "makerPenalty": 0,
     "score": 0.3333333333333333,
     "rank": 10,
     "cloneOf": {
@@ -594,6 +604,7 @@
      "consistency": 0.3333333333333333
     },
     "scoreNumerator": 58,
+    "makerPenalty": 0,
     "score": 0.32222222222222224,
     "rank": 11,
     "cloneOf": null,
@@ -651,6 +662,7 @@
      "consistency": 0.4
     },
     "scoreNumerator": 48,
+    "makerPenalty": 0,
     "score": 0.26666666666666666,
     "rank": 12,
     "cloneOf": null,
@@ -706,6 +718,7 @@
      "consistency": 0.13333333333333333
     },
     "scoreNumerator": 46,
+    "makerPenalty": 0,
     "score": 0.25555555555555554,
     "rank": 13,
     "cloneOf": null,
@@ -759,6 +772,7 @@
      "consistency": 0.2
     },
     "scoreNumerator": 42,
+    "makerPenalty": 0,
     "score": 0.23333333333333334,
     "rank": 14,
     "cloneOf": {
@@ -815,6 +829,7 @@
      "consistency": 0.06666666666666667
     },
     "scoreNumerator": 26,
+    "makerPenalty": 0,
     "score": 0.14444444444444443,
     "rank": 15,
     "cloneOf": {
@@ -873,6 +888,7 @@
      "consistency": 0.0
     },
     "scoreNumerator": 0,
+    "makerPenalty": 0,
     "score": 0.0,
     "rank": 16,
     "cloneOf": null,
@@ -920,6 +936,7 @@
     },
     "percentiles": null,
     "scoreNumerator": null,
+    "makerPenalty": null,
     "score": null,
     "rank": null,
     "cloneOf": null,
@@ -967,6 +984,7 @@
     },
     "percentiles": null,
     "scoreNumerator": null,
+    "makerPenalty": null,
     "score": null,
     "rank": null,
     "cloneOf": null,
@@ -1014,6 +1032,7 @@
     },
     "percentiles": null,
     "scoreNumerator": null,
+    "makerPenalty": null,
     "score": null,
     "rank": null,
     "cloneOf": null,
@@ -1064,6 +1083,7 @@
     },
     "percentiles": null,
     "scoreNumerator": null,
+    "makerPenalty": null,
     "score": null,
     "rank": null,
     "cloneOf": null,
@@ -1111,6 +1131,7 @@
     },
     "percentiles": null,
     "scoreNumerator": null,
+    "makerPenalty": null,
     "score": null,
     "rank": null,
     "cloneOf": null,
@@ -1158,6 +1179,7 @@
     },
     "percentiles": null,
     "scoreNumerator": null,
+    "makerPenalty": null,
     "score": null,
     "rank": null,
     "cloneOf": null,
@@ -1208,6 +1230,7 @@
     },
     "percentiles": null,
     "scoreNumerator": null,
+    "makerPenalty": null,
     "score": null,
     "rank": null,
     "cloneOf": null,
@@ -1255,6 +1278,7 @@
     },
     "percentiles": null,
     "scoreNumerator": null,
+    "makerPenalty": null,
     "score": null,
     "rank": null,
     "cloneOf": null,
@@ -1658,7 +1682,9 @@
    "minOverlapDays": 20,
    "finalists": 25,
    "finalistSplit": "proportional",
-   "allowUnknown": []
+   "allowUnknown": [],
+   "pureTakerMakerShare": 0.05,
+   "pureTakerPenalty": 0.02
   }
  },
  "permissive": {
@@ -1706,6 +1732,7 @@
      "consistency": 1.0
     },
     "scoreNumerator": 214,
+    "makerPenalty": 0,
     "score": 0.9907407407407407,
     "rank": 1,
     "cloneOf": null,
@@ -1759,6 +1786,7 @@
      "consistency": 0.9444444444444444
     },
     "scoreNumerator": 183,
+    "makerPenalty": 0,
     "score": 0.8472222222222222,
     "rank": 2,
     "cloneOf": null,
@@ -1816,6 +1844,7 @@
      "consistency": 0.8888888888888888
     },
     "scoreNumerator": 177,
+    "makerPenalty": 0,
     "score": 0.8194444444444444,
     "rank": 3,
     "cloneOf": {
@@ -1872,6 +1901,7 @@
      "consistency": 0.7777777777777778
     },
     "scoreNumerator": 168,
+    "makerPenalty": 0,
     "score": 0.7777777777777778,
     "rank": 4,
     "cloneOf": {
@@ -1928,6 +1958,7 @@
      "consistency": 0.8333333333333334
     },
     "scoreNumerator": 168,
+    "makerPenalty": 0,
     "score": 0.7777777777777778,
     "rank": 5,
     "cloneOf": {
@@ -1984,6 +2015,7 @@
      "consistency": 0.6666666666666666
     },
     "scoreNumerator": 150,
+    "makerPenalty": 0,
     "score": 0.6944444444444444,
     "rank": 6,
     "cloneOf": null,
@@ -2039,6 +2071,7 @@
      "consistency": 0.7222222222222222
     },
     "scoreNumerator": 146,
+    "makerPenalty": 0,
     "score": 0.6759259259259259,
     "rank": 7,
     "cloneOf": null,
@@ -2094,6 +2127,7 @@
      "consistency": 0.6111111111111112
     },
     "scoreNumerator": 144,
+    "makerPenalty": 0,
     "score": 0.6666666666666666,
     "rank": 8,
     "cloneOf": null,
@@ -2149,6 +2183,7 @@
      "consistency": 0.5555555555555556
     },
     "scoreNumerator": 132,
+    "makerPenalty": 0,
     "score": 0.6111111111111112,
     "rank": 9,
     "cloneOf": null,
@@ -2202,6 +2237,7 @@
      "consistency": 0.3888888888888889
     },
     "scoreNumerator": 94,
+    "makerPenalty": 0,
     "score": 0.4351851851851852,
     "rank": 10,
     "cloneOf": {
@@ -2258,6 +2294,7 @@
      "consistency": 0.4444444444444444
     },
     "scoreNumerator": 94,
+    "makerPenalty": 0,
     "score": 0.4351851851851852,
     "rank": 11,
     "cloneOf": null,
@@ -2315,6 +2352,7 @@
      "consistency": 0.5
     },
     "scoreNumerator": 80,
+    "makerPenalty": 0,
     "score": 0.37037037037037035,
     "rank": 12,
     "cloneOf": null,
@@ -2371,6 +2409,7 @@
      "consistency": 0.2222222222222222
     },
     "scoreNumerator": 72,
+    "makerPenalty": 0,
     "score": 0.3333333333333333,
     "rank": 13,
     "cloneOf": null,
@@ -2424,6 +2463,7 @@
      "consistency": 0.3333333333333333
     },
     "scoreNumerator": 70,
+    "makerPenalty": 0,
     "score": 0.32407407407407407,
     "rank": 14,
     "cloneOf": {
@@ -2480,6 +2520,7 @@
      "consistency": 0.2777777777777778
     },
     "scoreNumerator": 70,
+    "makerPenalty": 0,
     "score": 0.32407407407407407,
     "rank": 15,
     "cloneOf": {
@@ -2536,6 +2577,7 @@
      "consistency": 0.16666666666666666
     },
     "scoreNumerator": 52,
+    "makerPenalty": 0,
     "score": 0.24074074074074073,
     "rank": 16,
     "cloneOf": {
@@ -2594,6 +2636,7 @@
      "consistency": 0.05555555555555555
     },
     "scoreNumerator": 16,
+    "makerPenalty": 0,
     "score": 0.07407407407407407,
     "rank": 17,
     "cloneOf": null,
@@ -2650,6 +2693,7 @@
      "consistency": 0.05555555555555555
     },
     "scoreNumerator": 14,
+    "makerPenalty": 0,
     "score": 0.06481481481481481,
     "rank": 18,
     "cloneOf": null,
@@ -2703,6 +2747,7 @@
      "consistency": 0.05555555555555555
     },
     "scoreNumerator": 8,
+    "makerPenalty": 0,
     "score": 0.037037037037037035,
     "rank": 19,
     "cloneOf": {
@@ -2753,6 +2798,7 @@
     },
     "percentiles": null,
     "scoreNumerator": null,
+    "makerPenalty": null,
     "score": null,
     "rank": null,
     "cloneOf": null,
@@ -2800,6 +2846,7 @@
     },
     "percentiles": null,
     "scoreNumerator": null,
+    "makerPenalty": null,
     "score": null,
     "rank": null,
     "cloneOf": null,
@@ -2850,6 +2897,7 @@
     },
     "percentiles": null,
     "scoreNumerator": null,
+    "makerPenalty": null,
     "score": null,
     "rank": null,
     "cloneOf": null,
@@ -2897,6 +2945,7 @@
     },
     "percentiles": null,
     "scoreNumerator": null,
+    "makerPenalty": null,
     "score": null,
     "rank": null,
     "cloneOf": null,
@@ -2944,6 +2993,7 @@
     },
     "percentiles": null,
     "scoreNumerator": null,
+    "makerPenalty": null,
     "score": null,
     "rank": null,
     "cloneOf": null,
@@ -3134,7 +3184,9 @@
    "finalistSplit": "proportional",
    "allowUnknown": [
     "minTrades"
-   ]
+   ],
+   "pureTakerMakerShare": 0.05,
+   "pureTakerPenalty": 0.02
   }
  }
 }

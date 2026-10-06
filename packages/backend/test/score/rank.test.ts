@@ -108,6 +108,7 @@ describe("rankPool (SPEC Ranking)", () => {
       address: "a",
       percentiles: { sharpe: 0.5, sortino: 0.5, calmar: 0.5, negMaxDrawdown: 0.5, consistency: 0.5 },
       scoreNumerator: 0,
+      makerPenalty: 0,
       score: 0.5,
       rank: 1,
     }]);
@@ -115,5 +116,57 @@ describe("rankPool (SPEC Ranking)", () => {
 
   test("empty entries produce no ranks", () => {
     expect(rankPool([])).toEqual([]);
+  });
+});
+
+describe("pure-taker penalty (SPEC Ranking)", () => {
+  // Three entries, every term strictly ordered x > y > z: numerators 24, 12, 0 out of 12(N - 1) = 24.
+  const pool = (makerShare: Partial<Record<"x" | "y" | "z", number | null>>) =>
+    (["x", "y", "z"] as const).map((address, i) => ({
+      address,
+      makerShare: makerShare[address],
+      metrics: metricsWith({ sharpe: 3 - i, sortino: 3 - i, calmar: 3 - i, negMaxDrawdown: -i / 10, consistency: 0.9 - i / 10 }),
+    }));
+  const config = (pureTakerPenalty: number) => ({ pureTakerMakerShare: 0.05, pureTakerPenalty });
+  const view = (ranks: ReturnType<typeof rankPool>) =>
+    ranks.map(({ address, scoreNumerator, makerPenalty, rank }) => ({ address, scoreNumerator, makerPenalty, rank }));
+
+  test("takes round(penalty * 12(N - 1)) units off a pure taker; a tie still goes to the higher Sharpe", () => {
+    expect(view(rankPool(pool({ x: 0 }), config(0.5)))).toEqual([
+      { address: "x", scoreNumerator: 12, makerPenalty: 12, rank: 1 },
+      { address: "y", scoreNumerator: 12, makerPenalty: 0, rank: 2 },
+      { address: "z", scoreNumerator: 0, makerPenalty: 0, rank: 3 },
+    ]);
+  });
+
+  test("a large enough penalty reorders the pool; percentiles are unchanged and score uses the net numerator", () => {
+    const ranks = rankPool(pool({ x: 0.01 }), config(0.6)); // 0.6 * 24 = 14.4 -> 14
+    expect(view(ranks)).toEqual([
+      { address: "y", scoreNumerator: 12, makerPenalty: 0, rank: 1 },
+      { address: "x", scoreNumerator: 10, makerPenalty: 14, rank: 2 },
+      { address: "z", scoreNumerator: 0, makerPenalty: 0, rank: 3 },
+    ]);
+    const x = ranks.find(({ address }) => address === "x")!;
+    expect(x.percentiles).toEqual({ sharpe: 1, sortino: 1, calmar: 1, negMaxDrawdown: 1, consistency: 1 });
+    expect(x.score).toBe(10 / 24);
+  });
+
+  test("unknown maker share and a share at the threshold are not penalised; the penalty never goes below 0", () => {
+    expect(view(rankPool(pool({ x: null, y: 0.05, z: 0 }), config(0.5)))).toEqual([
+      { address: "x", scoreNumerator: 24, makerPenalty: 0, rank: 1 },
+      { address: "y", scoreNumerator: 12, makerPenalty: 0, rank: 2 },
+      { address: "z", scoreNumerator: 0, makerPenalty: 0, rank: 3 },
+    ]);
+  });
+
+  test("units round half up, and a small pool can round the default penalty to nothing", () => {
+    const two = pool({ x: 0 }).slice(0, 2);
+    expect(rankPool(two, config(0.125))[0].makerPenalty).toBe(2); // 0.125 * 12 = 1.5 -> 2
+    expect(rankPool(two, config(0.02))[0].makerPenalty).toBe(0); // 0.24 -> 0
+    expect(rankPool(pool({ x: 0 }))[0].makerPenalty).toBe(0); // default 0.02 * 24 = 0.48 -> 0
+  });
+
+  test("a single entry is never penalised", () => {
+    expect(rankPool(pool({ x: 0 }).slice(0, 1), config(1))[0]).toMatchObject({ scoreNumerator: 0, makerPenalty: 0, score: 0.5 });
   });
 });

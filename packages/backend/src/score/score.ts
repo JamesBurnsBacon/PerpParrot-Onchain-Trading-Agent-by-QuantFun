@@ -43,20 +43,41 @@ const rankNumerators = (values: Ratio[]): number[] =>
     return 2 * worse + equal - 1;
   });
 
-export type PoolRank = { address: string; percentiles: Percentiles; scoreNumerator: number; score: number; rank: number };
+export type PoolRank = {
+  address: string; percentiles: Percentiles; scoreNumerator: number; makerPenalty: number; score: number; rank: number;
+};
+
+type PenaltyConfig = Pick<ScoreConfig, "pureTakerMakerShare" | "pureTakerPenalty">;
+
+// The pure-taker penalty in whole numerator units: round half up of penalty * 12(N - 1), with the penalty read on its
+// 0.001 grid, so ranking stays exact integer arithmetic (SPEC "Ranking").
+const penaltyUnits = (penalty: number, count: number): number =>
+  Math.floor((Math.round(penalty * 1000) * 2 * WEIGHT_TOTAL * (count - 1) * 2 + 1000) / 2000);
 
 // Exact integer ranking inside one pool; ties by raw Sharpe, then address (SPEC "Ranking").
-export const rankPool = (entries: { address: string; metrics: Metrics }[]): PoolRank[] => {
+export const rankPool = (
+  entries: { address: string; metrics: Metrics; makerShare?: number | null }[],
+  config: PenaltyConfig = DEFAULT_CONFIG,
+): PoolRank[] => {
   const count = entries.length;
+  const units = count === 1 ? 0 : penaltyUnits(config.pureTakerPenalty, count);
   const numerators = Object.fromEntries(TERMS.map(([term]) =>
     [term, rankNumerators(entries.map(({ metrics }) => termValue(metrics, term)))])) as Record<keyof Percentiles, number[]>;
-  return entries.map(({ address, metrics }, i) => {
+  return entries.map(({ address, metrics, makerShare }, i) => {
     const percentiles = Object.fromEntries(TERMS.map(([term]) =>
       [term, count === 1 ? 0.5 : numerators[term][i] / (2 * (count - 1))])) as Percentiles;
-    const scoreNumerator = count === 1 ? 0 : TERMS.reduce((sum, [term, weight]) => sum + weight * numerators[term][i], 0);
-    return { address, metrics, percentiles, scoreNumerator, score: count === 1 ? 0.5 : scoreNumerator / (2 * WEIGHT_TOTAL * (count - 1)) };
+    const termNumerator = count === 1 ? 0 : TERMS.reduce((sum, [term, weight]) => sum + weight * numerators[term][i], 0);
+    // README §4.2: zero or near-zero maker volume is a slight negative; unknown maker share is neutral.
+    const pureTaker = makerShare !== null && makerShare !== undefined && makerShare < config.pureTakerMakerShare;
+    const makerPenalty = pureTaker ? Math.min(units, termNumerator) : 0;
+    const scoreNumerator = termNumerator - makerPenalty;
+    return {
+      address, metrics, percentiles, scoreNumerator, makerPenalty,
+      score: count === 1 ? 0.5 : scoreNumerator / (2 * WEIGHT_TOTAL * (count - 1)),
+    };
   }).sort((a, b) => b.scoreNumerator - a.scoreNumerator || compareValues(b.metrics.sharpe, a.metrics.sharpe) || compareAddresses(a, b))
-    .map(({ address, percentiles, scoreNumerator, score }, index) => ({ address, percentiles, scoreNumerator, score, rank: index + 1 }));
+    .map(({ address, percentiles, scoreNumerator, makerPenalty, score }, index) =>
+      ({ address, percentiles, scoreNumerator, makerPenalty, score, rank: index + 1 }));
 };
 
 const poolOf = (input: ScoreInput): Pool => input.kind === "trader" ? "trader" : "vault";
@@ -133,6 +154,7 @@ export const scoreCandidates = (inputs: ScoreInput[], overrides: Partial<ScoreCo
       metrics,
       percentiles: null,
       scoreNumerator: null,
+      makerPenalty: null,
       score: null,
       rank: null,
       cloneOf: null,
@@ -153,7 +175,8 @@ export const scoreCandidates = (inputs: ScoreInput[], overrides: Partial<ScoreCo
   for (const pool of ["trader", "vault"] as const) {
     const members = rankable.filter((c) => c.pool === pool);
     const byPoolAddress = new Map(members.map((c) => [c.address, c]));
-    for (const entry of rankPool(members)) {
+    const entries = members.map((c) => ({ address: c.address, metrics: c.metrics, makerShare: c.passthrough.makerShare }));
+    for (const entry of rankPool(entries, config)) {
       ranked.push({ ...byPoolAddress.get(entry.address)!, ...entry, poolSize: members.length });
     }
   }
