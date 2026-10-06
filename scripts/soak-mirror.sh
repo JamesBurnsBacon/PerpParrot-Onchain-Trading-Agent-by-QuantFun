@@ -88,6 +88,12 @@ for i in $(seq 1 "$ROUNDS"); do
   fi
   dev=$(echo "$out" | grep -o "max deviation [0-9]* bps" | grep -o "[0-9]*" | head -1 || true)
   err=$(echo "$out" | grep -o "execution failed: .*" | head -1 | cut -c1-200 | tr '"' "'" || true)
+  if [ "$rc" != 0 ]; then
+    # Keep a failed round's full output; failures before the workflow runs (CLI login, compile,
+    # network) print no "execution failed" line, so record the last line as the error.
+    echo "$out" >"$OUT/round-$i.log"
+    [ -z "$err" ] && err="$(echo "$out" | grep -v '^\s*$' | tail -1 | cut -c1-200 | tr '"' "'" || true) (see round-$i.log)"
+  fi
   snap=$(echo "$out" | grep -o "snap-[0-9]*" | head -1 || true)
   # leadS: run time minus start; about 10 in production timing (600 means it stamped the run after).
   lead=$([ -n "$snap" ] && echo $(( ${snap#snap-} - t0 )) || echo null)
