@@ -4,13 +4,11 @@ import type { ReportEnvelope } from "../../shared/report";
 import { handleReport, type HandlerDeps } from "./handler";
 import type { Runner } from "./runner";
 import type { ExecutorStore } from "./store";
-import { noLock, type RunLock } from "./lock";
 
 export type AppDeps = {
   handler: Omit<HandlerDeps, "accept" | "claim">;
   runner: Runner;
   store: ExecutorStore;
-  lock?: RunLock;
   adminToken?: string;
   watchdog?: () => Promise<Record<string, unknown>>;
   cronSecret?: string;
@@ -104,16 +102,23 @@ export const createApp = (deps: AppDeps) => async (req: Request): Promise<Respon
       if (typeof body?.id !== "string" || body.id.length > 200 || typeof body?.evidence !== "string" || body.evidence.trim().length < 40 || body.evidence.trim().length > 2_000) {
         return json({ error: "batch id and reconciliation evidence (at least 40 characters) are required" }, 400);
       }
-      const release = await (deps.lock ?? noLock).acquire(60_000);
-      let result: { unresolved: number };
-      try { result = await deps.store.withExecutionLock(async () => {
-        await deps.store.setControls({ paused: true, updatedAt: Date.now(), updatedBy: `reconciliation:${by}` });
-        await deps.store.reconcileOrderBatch(body.id as string, by, body.evidence as string, Date.now());
-        const unresolved = await deps.store.unresolvedOrderBatches();
-        return { unresolved: unresolved.length };
-      }); } finally { await release(); }
-      deps.log("order batch reconciled", { id: body.id, by, remaining: result.unresolved });
-      return json({ reconciled: body.id, ...result, paused: true });
+      const id = body.id, evidence = body.evidence;
+      let result: { unresolved: number } | { error: string };
+      try {
+        // Behind any run (same lock); the batch is checked before anything changes, so a wrong id
+        // leaves the controls as they were.
+        result = await deps.runner.exclusive(async () => {
+          if (!(await deps.store.unresolvedOrderBatches()).some((batch) => batch.id === id)) return { error: `order batch ${id} is not unresolved` };
+          await deps.store.reconcileOrderBatch(id, by, evidence, Date.now());
+          await deps.store.setControls({ paused: true, updatedAt: Date.now(), updatedBy: `reconciliation:${by}` });
+          return { unresolved: (await deps.store.unresolvedOrderBatches()).length };
+        });
+      } catch (e) {
+        return json({ error: `a run is in progress; retry: ${(e as Error).message}` }, 409);
+      }
+      if ("error" in result) return json(result, 409);
+      deps.log("order batch reconciled", { id, by, remaining: result.unresolved });
+      return json({ reconciled: id, ...result, paused: true });
     }
     switch (pathname) {
       case "/admin/pause":
@@ -122,24 +127,27 @@ export const createApp = (deps: AppDeps) => async (req: Request): Promise<Respon
         if (paused) {
           // Keep the kill switch prompt: the active run sees this durable flag
           // before its next exchange batch. An already dispatched request cannot
-          // be recalled, and the route must not wait for the execution lock.
+          // be recalled, and the route must not wait for the run lock.
           const controls = { paused: true, updatedAt: Date.now(), updatedBy: by };
           await deps.store.setControls(controls);
           deps.log("controls changed", controls);
           return json(controls);
         }
-        const release = await (deps.lock ?? noLock).acquire(60_000);
         let result: { blocked?: number; controls?: { paused: boolean; updatedAt: number; updatedBy: string } };
-        try { result = await deps.store.withExecutionLock(async () => {
-          const unresolved = await deps.store.unresolvedOrderBatches();
-          if (unresolved.length > 0) {
-            await deps.store.setControls({ paused: true, updatedAt: Date.now(), updatedBy: `unresolved-order-batch:${unresolved[0].id}` });
-            return { blocked: unresolved.length };
-          }
-          const controls = { paused: false, updatedAt: Date.now(), updatedBy: by };
-          await deps.store.setControls(controls);
-          return { controls };
-        }); } finally { await release(); }
+        try {
+          result = await deps.runner.exclusive(async () => {
+            const unresolved = await deps.store.unresolvedOrderBatches();
+            if (unresolved.length > 0) {
+              await deps.store.setControls({ paused: true, updatedAt: Date.now(), updatedBy: `unresolved-order-batch:${unresolved[0].id}` });
+              return { blocked: unresolved.length };
+            }
+            const controls = { paused: false, updatedAt: Date.now(), updatedBy: by };
+            await deps.store.setControls(controls);
+            return { controls };
+          });
+        } catch (e) {
+          return json({ error: `a run is in progress; retry: ${(e as Error).message}` }, 409);
+        }
         if (result.blocked !== undefined) {
           return json({ error: "unresolved order actions must be reconciled before resume", unresolved: result.blocked, paused: true }, 409);
         }

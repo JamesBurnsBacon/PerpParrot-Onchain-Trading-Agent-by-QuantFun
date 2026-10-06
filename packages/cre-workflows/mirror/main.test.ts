@@ -58,6 +58,13 @@ describe("checkSnapshot", () => {
     expect(() => checkSnapshot(snapshot({ startedAt: RUN_AT - 130, takenAt: RUN_AT - 1 }), limits)).toThrow("read window took 129s");
   });
 
+  test("a snapshot without startedAt (built before the backend recorded it) falls back to takenAt", () => {
+    const { startedAt: _, ...old } = snapshot({ takenAt: RUN_AT - 60 });
+    expect(() => checkSnapshot(old as ReturnType<typeof snapshot>, limits)).not.toThrow();
+    const { startedAt: __, ...stale } = snapshot({ takenAt: RUN_AT - 200 });
+    expect(() => checkSnapshot(stale as ReturnType<typeof snapshot>, limits)).toThrow("started 200s before the run");
+  });
+
   test("rejects an invalid read window", () => {
     expect(() => checkSnapshot(snapshot({ startedAt: RUN_AT - 1, takenAt: RUN_AT - 2 }), limits)).toThrow("read window is invalid");
   });

@@ -32,15 +32,29 @@ const mode: VerifyMode = config.verifyReports
 
 // Supabase Postgres supplies durable report dedupe, runs, controls and action journals.
 // Production configuration rejects a missing DATABASE_URL.
+// On Vercel, a small pool that lets go quickly: Supabase's session pooler allows 15 connections
+// across every instance of both services. 3, not fewer: a run holds one for the run lock
+// (lock.ts) while its queries need another, and an operator action may wait on the lock with a third.
 const sql = process.env.DATABASE_URL ? new SQL(process.env.DATABASE_URL, config.vercel ? { max: 3, idleTimeout: 5 } : {}) : undefined;
 const store = sql ? new PostgresStore(sql) : new MemoryStore();
 const alert = createAlert({ botToken: config.telegramBotToken, chatId: config.telegramChatId, log: (m) => log(m) });
 // Recover write-ahead intents before exposing the listener. A crash can leave a
 // batch ambiguous even if the old process never persisted the pause control.
-const unresolvedOnStartup = await store.unresolvedOrderBatches();
-if (unresolvedOnStartup.length > 0) {
-  await store.setControls({ paused: true, updatedAt: Date.now(), updatedBy: `startup-recovery:${unresolvedOnStartup[0].id}` });
-  await alert(`executor held at startup: ${unresolvedOnStartup.length} order action(s) need reconciliation`);
+// Never fatal: every run re-checks unresolved batches before any exchange action, so a database blip
+// at a (serverless) cold start must not take /health, /status or /admin/pause down with it. Alerts
+// once per batch, not once per instance.
+try {
+  const unresolvedOnStartup = await store.unresolvedOrderBatches();
+  if (unresolvedOnStartup.length > 0) {
+    const updatedBy = `startup-recovery:${unresolvedOnStartup[0].id}`;
+    const controls = await store.getControls();
+    if (!(controls.paused && controls.updatedBy === updatedBy)) {
+      await store.setControls({ paused: true, updatedAt: Date.now(), updatedBy });
+      await alert(`executor held at startup: ${unresolvedOnStartup.length} order action(s) need reconciliation`);
+    }
+  }
+} catch (e) {
+  log("startup recovery check failed; runs re-check before trading", { error: (e as Error).message });
 }
 
 const exchange = createExchange({ privateKey: config.apiWalletKey, dryRun: config.dryRun });
@@ -75,7 +89,6 @@ const app = createApp({
   },
   runner,
   store,
-  lock: sql ? postgresRunLock(sql) : noLock,
   adminToken: config.adminToken,
   cronSecret: config.cronSecret,
   watchdog: cronWatchdog({ store, alert, now: Date.now, afterMs: config.missedRunAlertMinutes * 60_000, everyMs: 5 * 60_000 }),

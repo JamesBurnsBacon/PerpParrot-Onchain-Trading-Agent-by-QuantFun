@@ -138,8 +138,9 @@ describe("Runner.executeReport (dry run)", () => {
     runnerDeps.now = () => clock;
     const original = exchange.setLeverage;
     exchange.setLeverage = async (asset, leverage) => {
-      await original(asset, leverage);
+      const outcome = await original(asset, leverage);
       clock = (AS_OF + 301) * 1000;
+      return outcome;
     };
     const run = await new Runner(runnerDeps).executeReport(await verified(), {});
     expect(run.status).toBe("failed");
@@ -151,8 +152,9 @@ describe("Runner.executeReport (dry run)", () => {
     const { runnerDeps, exchange, store } = setup(fakeInfo({ equity: "400" }));
     const original = exchange.setLeverage;
     exchange.setLeverage = async (asset, leverage) => {
-      await original(asset, leverage);
+      const outcome = await original(asset, leverage);
       await store.setControls({ paused: true, updatedAt: AS_OF, updatedBy: "test" });
+      return outcome;
     };
     const run = await new Runner(runnerDeps).executeReport(await verified(), {});
     expect(run.status).toBe("failed");
@@ -279,6 +281,18 @@ describe("Runner.executeReport (dry run)", () => {
     expect(run.error).toBe("Invalid leverage value");
     expect(s.exchange.recorded().filter((r) => (r.payload as { action: { type: string } }).action.type === "order")).toEqual([]);
     expect(await s.store.unresolvedOrderBatches()).toMatchObject([{ kind: "leverage", details: { asset: "BTC", assetId: 0 } }]);
+  });
+
+  test("a definitive leverage refusal skips only that asset; the run continues unpaused", async () => {
+    const s = setup(fakeInfo({ equity: "400", core: [["ETH", "0.1"]] }));
+    const original = s.exchange.setLeverage;
+    s.exchange.setLeverage = async (assetId, lev, expires) => assetId === 0 ? { rejected: "Invalid leverage value" } : original(assetId, lev, expires);
+    const run = await s.runner.executeReport(await verified(), {});
+    expect(run.plan?.skipped).toContainEqual(expect.objectContaining({ asset: "BTC", reason: "LEVERAGE_FAILED" }));
+    expect(run.plan?.orders.map((o) => o.asset)).not.toContain("BTC");
+    expect(run.status).toBe("executed");
+    expect(await s.store.unresolvedOrderBatches()).toEqual([]);
+    expect((await s.store.getControls()).paused).toBe(false);
   });
 
   test("doesn't execute a report that expired while queued", async () => {
@@ -457,8 +471,8 @@ describe("app routes", () => {
     expect((await store.getControls()).paused).toBe(true);
   });
 
-  test("reconciliation waits for the active execution lock", async () => {
-    const { app, store } = make("s3cret");
+  test("reconciliation waits for an active run (the run lock)", async () => {
+    const { app, store, runner } = make("s3cret");
     await store.beginOrderBatch({
       id: "in-flight:0", reportId: "in-flight", createdAt: AS_OF * 1000,
       orders: [], cloids: [], kind: "orders",
@@ -467,7 +481,7 @@ describe("app routes", () => {
     let release!: () => void;
     const locked = new Promise<void>((resolve) => { entered = resolve; });
     const gate = new Promise<void>((resolve) => { release = resolve; });
-    const owner = store.withExecutionLock(async () => { entered(); await gate; });
+    const owner = runner.exclusive(async () => { entered(); await gate; });
     await locked;
     const reconciliation = app(post("/admin/reconcile-batch", {
       headers: { authorization: "Bearer s3cret", "content-type": "application/json" },
@@ -481,13 +495,13 @@ describe("app routes", () => {
     expect(await store.unresolvedOrderBatches()).toEqual([]);
   });
 
-  test("pause does not wait for the active execution lock", async () => {
-    const { app, store } = make("s3cret");
+  test("pause does not wait for an active run", async () => {
+    const { app, store, runner } = make("s3cret");
     let entered!: () => void;
     let release!: () => void;
     const locked = new Promise<void>((resolve) => { entered = resolve; });
     const gate = new Promise<void>((resolve) => { release = resolve; });
-    const owner = store.withExecutionLock(async () => { entered(); await gate; });
+    const owner = runner.exclusive(async () => { entered(); await gate; });
     await locked;
     try {
       const response = await Promise.race([
@@ -500,6 +514,27 @@ describe("app routes", () => {
       release();
       await owner;
     }
+  });
+
+  test("reconciling an unknown batch is a 409 that leaves the controls alone", async () => {
+    const { app, store } = make("s3cret");
+    const before = await store.getControls();
+    const response = await app(post("/admin/reconcile-batch", {
+      headers: { authorization: "Bearer s3cret", "content-type": "application/json" },
+      body: JSON.stringify({ id: "no-such-batch:0", evidence: "Verified exchange status, fills and account positions" }),
+    }));
+    expect(response.status).toBe(409);
+    expect(await store.getControls()).toEqual(before);
+  });
+
+  test("resume answers 409 when another process holds the run lock", async () => {
+    const busy = { acquire: async () => { throw new Error("another executor process held the run lock for 1s"); } };
+    const s = setup(fakeInfo({ equity: "400" }));
+    const runner = new Runner({ ...s.runnerDeps, lock: busy });
+    const app = createApp({ handler: { mode: registry, frozenConfigurationHash: CONFIGURATION, account: ACCOUNT, now: () => AS_OF + 10, maxLeadSeconds: 60, maxTtlSeconds: 300 },
+      runner, store: s.store, adminToken: "s3cret", status: () => ({}), log: () => undefined });
+    const response = await app(post("/admin/resume", { headers: { authorization: "Bearer s3cret" } }));
+    expect(response.status).toBe(409);
   });
 
   test("admin routes are disabled without a configured token", async () => {
