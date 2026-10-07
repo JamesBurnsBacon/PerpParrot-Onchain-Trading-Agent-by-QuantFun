@@ -10,6 +10,7 @@ import { ActiveConfigurationSource, FileConfigurationSource } from "./configurat
 import { MAX_GROSS_LEVERAGE, Pipeline, reviewPolicy, seatLeverage, windDownCaps } from "./pipeline";
 import { SnapshotError, SnapshotService } from "./service";
 import { exposuresFromSnapshot, MemoryPaperStore, PaperService, defaultBooks } from "./paper/service";
+import { exposureBreakdown, type ExposureSource } from "./paper/exposure-breakdown";
 import { targetsFromSnapshot } from "../../shared/copy";
 import type { PositionsSnapshot } from "../../shared/snapshot";
 import { keccakUtf8 } from "./snapshot";
@@ -143,7 +144,7 @@ const readArtifact = sql
 // Vercel Cron sends `Authorization: Bearer $CRON_SECRET` (open locally when unset).
 const cronAuthorized = (req: Request) => !env.CRON_SECRET || req.headers.get("authorization") === `Bearer ${env.CRON_SECRET}`;
 
-let exposuresCache: { runAt: number; exposures: { asset: string; fraction: number }[] } | undefined;
+let exposuresCache: { runAt: number; exposures: { asset: string; fraction: number }[]; sources?: ExposureSource[] } | undefined;
 
 const server = Bun.serve({
   port: Number(env.PORT ?? 8788),
@@ -202,8 +203,14 @@ const server = Bun.serve({
       const { lastRunAt } = await paper.view(Number.MAX_SAFE_INTEGER);
       if (!lastRunAt) return Response.json({ error: "no run yet" }, { status: 404, headers: cors });
       if (exposuresCache?.runAt !== lastRunAt) {
-        const exposures = exposuresFromSnapshot(JSON.parse(await service.get(lastRunAt)));
+        const snapshot = JSON.parse(await service.get(lastRunAt)) as PositionsSnapshot;
+        const exposures = exposuresFromSnapshot(snapshot);
         exposuresCache = { runAt: lastRunAt, exposures: [...exposures].map(([asset, fraction]) => ({ asset, fraction })) };
+        try {
+          exposuresCache.sources = exposureBreakdown(snapshot);
+        } catch (error) {
+          console.error("exposure breakdown failed", { runAt: lastRunAt, error });
+        }
       }
       return Response.json(exposuresCache, { headers: cors });
     }

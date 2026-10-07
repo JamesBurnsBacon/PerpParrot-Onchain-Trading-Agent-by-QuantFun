@@ -317,6 +317,30 @@
   60% { transform: translateY(0) rotate(-2deg); }
 }
 
+/* ---------- exposure flow: source wallet what-if panel ---------- */
+.lp .exposure-flow { min-width: 0; overflow: hidden; }
+.lp .exposure-flow-chart { position: relative; }
+.lp .exposure-flow-wallet {
+  position: absolute; left: 0; transform: translateY(-50%);
+  padding: 6px; min-height: 44px; border: 1px solid var(--ring); border-radius: 14px;
+  background: var(--surface); color: var(--ink); font: inherit; font-size: 12px;
+  text-align: left; cursor: pointer;
+}
+.lp .exposure-flow-wallet-name { display: flex; align-items: center; gap: 5px; font-weight: 600; white-space: nowrap; }
+.lp .exposure-flow-wallet-name i { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.lp .exposure-flow-wallet[aria-pressed="true"] .exposure-flow-wallet-name { opacity: 0.5; text-decoration: line-through; }
+.lp .exposure-flow-wallet:hover { border-color: var(--ink-2); }
+.lp .exposure-flow-wallet:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
+.lp .exposure-flow-weight { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; }
+.lp .exposure-flow-target { position: absolute; transform: translateY(-50%); font-size: 12px; line-height: 1.4; }
+.lp .exposure-flow-asset { display: block; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lp .exposure-flow-target strong { display: block; font-size: 13px; overflow-wrap: anywhere; }
+.lp .exposure-flow-delta { display: block; color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
+.lp .exposure-flow-key { display: flex; flex-wrap: wrap; gap: 6px 16px; color: var(--ink-2); font-size: 11px; }
+.lp .exposure-flow-key span { display: inline-flex; align-items: center; gap: 6px; }
+.lp .exposure-flow-caption { margin: 8px 0 0; color: var(--muted); font-size: 11px; }
+.lp .exposure-flow-sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+
 /* leaf-shaped heartbeat cells, candy-striped bars */
 .lp .lp-cells button { border-radius: 90% 8% 90% 8% !important; height: 26px; transform: rotate(-8deg); }
 .lp .lp-grow { background-image: repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.28) 0 8px, transparent 8px 16px); background-size: 22px 22px; animation: lp-stripe 1.4s linear infinite; }

@@ -120,10 +120,8 @@ export const capGrossExposure = (
   return exposures.map((e) => ({ asset: e.asset, exposureE9: (e.exposureE9 * maxGrossE9) / gross }));
 };
 
-// A run's target exposures (README §4.4): every source must be in the frozen configuration and hold
-// only eligible assets, each contributes at its frozen weight (normalized to the target leverage when
-// the snapshot lists it), at most 15 perps are kept, and gross is capped at the policy's maxGrossLeverage. Used for the executor's targets and the paper books.
-export const targetsFromSnapshot = (snapshot: PositionsSnapshot): { asset: string; exposureE9: bigint }[] => {
+// Validate and weight the snapshot once, shared by targets and their per-source attribution.
+export const weightedSourcesFromSnapshot = (snapshot: PositionsSnapshot): { sources: WeightedSource[]; maxGrossE9: bigint } => {
   const frozen = new Map(snapshot.configuration.sources.map((s) => [s.sourceAddress.toLowerCase(), s]));
   const eligible = new Set(snapshot.eligibleAssets);
   for (const s of snapshot.sources) {
@@ -144,6 +142,14 @@ export const targetsFromSnapshot = (snapshot: PositionsSnapshot): { asset: strin
     caps: caps.get(s.address),
     ...(scales.has(s.address) ? { scaleE6: scales.get(s.address)!, maxGrossE9 } : {}),
   }));
+  return { sources, maxGrossE9 };
+};
+
+// A run's target exposures (README §4.4): every source must be in the frozen configuration and hold
+// only eligible assets, each contributes at its frozen weight (normalized to the target leverage when
+// the snapshot lists it), at most 15 perps are kept, and gross is capped at the policy's maxGrossLeverage. Used for the executor's targets and the paper books.
+export const targetsFromSnapshot = (snapshot: PositionsSnapshot): { asset: string; exposureE9: bigint }[] => {
+  const { sources, maxGrossE9 } = weightedSourcesFromSnapshot(snapshot);
   return capGrossExposure(limitPositions(computeExposures(sources)), maxGrossE9);
 };
 
