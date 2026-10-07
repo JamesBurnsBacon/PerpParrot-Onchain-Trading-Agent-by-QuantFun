@@ -73,11 +73,11 @@ The backend can fail over its Hyperliquid info reads to NOWNodes' copy (`hype.no
 | `NOWNODES_API_KEY` | Required for anything but `official`. Set it as a Vercel env var with `vercel env add` (never in the repo). |
 | `INFO_ROUTING` | `official` (default), `overflow` (a read the official API answers with 429, 5xx or a timeout is retried on NOWNodes), `split` (`INFO_SPLIT_PERCENT`, default 25, of capable reads go to NOWNodes first, failing over to official). |
 | `INFO_SHADOW_PERCENT` | Share of official `clearinghouseState` reads also sent to NOWNodes in the background and compared (account value, position count); nothing waits for it. |
-| `PICK_OVERLAP_GUARD` | `on` (with `NOWNODES_API_KEY`) makes the 10-minute pick read the top 60 candidates' books, **NOWNodes first** (official API as the fallback), and prefer candidates whose book does not overlap one already chosen by more than the policy's `maxExposureOverlap`. Off by default; see below. |
+| `PICK_OVERLAP_GUARD` | `on` (with `NOWNODES_API_KEY`) makes the 10-minute pick read the top 96 candidates' books, **NOWNodes first** (official API as the fallback), and prefer candidates whose book does not overlap one already chosen by more than the policy's `maxExposureOverlap`. Off by default; see below. |
 
 Only `meta`, `perpDexs`, `clearinghouseState`, `spotClearinghouseState`, `webData2`, `userVaultEquities`, `spotMeta` and `vaultSummaries` can go to NOWNodes; `portfolio`, fills and the rest always use the official API (NOWNodes answers 422). The executor is not routed. Three NOWNodes failures in a row pause it for 60 s. `GET /pipeline` returns `routing` (reads, average latency and errors per provider, failovers, shadow matches) and the dashboard's Pipeline panel shows it when NOWNodes is in use.
 
-**Overlap guard.** The pick is Score's top 25. With the guard on, the top 60 are read (about 120 `clearinghouseState` calls, ~2 s in parallel, none of the official API's 1,200 weight/min), the ranking is walked best first, and a candidate whose same-direction overlap (`review/overlap.ts`) with one already chosen is above `maxExposureOverlap` is left out; Score then runs again without the left-out accounts. The pick never shrinks (left-out ones come back in rank order if the pool is short). A single failed read, a paused NOWNodes, or any error leaves Score's own pick, and the guard needs `NOWNODES_API_KEY` (without it nothing runs, so it never turns into a burst on the official API). The run's `finalists.overlapGuard` records what it did and the dashboard shows it. Because a book changes within minutes, turning it on can change the picks more often than today (each change of the 25 triggers an AI review); watch `selection_runs` before leaving it on.
+**Overlap guard.** The pick is Score's top 40. With the guard on, the top 96 are read (up to 192 `clearinghouseState` calls across two dexes; latency at this size is not yet benchmarked), the ranking is walked best first, and a candidate whose same-direction overlap (`review/overlap.ts`) with one already chosen is above `maxExposureOverlap` is left out; Score then runs again without the left-out accounts. The pick never shrinks (left-out ones come back in rank order if the pool is short). A single failed read, a paused NOWNodes, or any error leaves Score's own pick, and the guard needs `NOWNODES_API_KEY` (without it nothing runs, so it never turns into a burst on the official API). The run's `finalists.overlapGuard` records what it did and the dashboard shows it. Because a book changes within minutes, turning it on can change the picks more often than today (each change of the 40 triggers an AI review); watch `selection_runs` before leaving it on.
 
 `split` is slower (NOWNodes measured about 1.7x the official latency), so prefer `overflow` unless a benchmark says otherwise.
 
@@ -89,8 +89,8 @@ Hyperliquid's: open, not a child, ≥ $10k, ≥ 39 days old), about 14k accounts
 (every 5 minutes, 900 weight/min) keeps their portfolios within 12 hours and reads the
 qualified accounts' portfolio and fills every hour, three reads at a time. Primary sources
 (hyperliquidvaults.com's vaults, the leaderboard's top 200) are read first. Once they are fresh
-and 95% of a scan is (or 3.5 hours after the scan), Score qualifies its top 250. Every 10 minutes Score picks 25 from the qualified list, leaving out
-high-frequency traders (> 100 orders a day). When the 25 change, the AI committee reviews them;
+and 95% of a scan is (or 3.5 hours after the scan), Score qualifies its top 250. Every 10 minutes Score picks 40 from the qualified list, leaving out
+high-frequency traders (> 100 orders a day). When the 40 change, the AI committee reviews them;
 the result is frozen for `HL_ACCOUNT` and activated if its sources differ from the active set's
 (otherwise the run is `kept`). The backend serves the active configuration and the executor
 checks targets against its hash.
@@ -120,7 +120,7 @@ leverage, and needs at least 5. `REVIEW_GATE=strict` turns this off.
    - `accounts.qualified` appears once the latest scan is 95% refreshed: from a 200-account
      list right away, from a full 14k scan after ~8 hours;
    - the qualified accounts' fills are read within about an hour, then the next `:x4` run picks
-     25 and reviews them, and `active` shows the sources;
+     40 and reviews them, and `active` shows the sources;
    - the next `:x0` run trades toward them (dry run).
 4. **Operator**: `POST /api/backend/admin/pipeline/scan|refresh|select` with
    `Authorization: Bearer $ADMIN_TOKEN`. An operator's `select` qualifies on partial data and

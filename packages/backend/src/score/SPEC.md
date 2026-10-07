@@ -109,7 +109,7 @@ export type ScoreConfig = {
   maxSkippedTimeShare: number;   // 0.20  [tune]
   cloneCorrelation: number;      // 0.90  [tune]
   minOverlapDays: number;        // 20
-  finalists: number;             // 25
+  finalists: number;             // 40
   finalistSplit: "proportional" | { trader: number; vault: number }; // "proportional" [tune]
   allowUnknown: FilterName[];    // []. See "Eligibility".
   pureTakerMakerShare: number;   // 0.05  [tune] maker share below this is a pure taker. See "Ranking".
@@ -469,7 +469,7 @@ Funnel on the sample (synthetic `closed`/`tradeCount` overlay, default config): 
 ## Other decisions made without a README basis
 - Sortino uses a minimum acceptable return of 0 and per-day normalisation by elapsed time.
 - Arithmetic that overflows to a non-finite number becomes `null`.
-- The thresholds default to the README numbers ($10,000, 30 days, 10 trades, 25 points, top 25).
+- The thresholds default to the README numbers ($10,000, 30 days, 10 trades, 25 points, top 40).
 - A non-finite `accountValue` gives `unknown`. `allTime` with no point above 0 gives `fail` for active days.
 - A candidate with `eligible: true` can still be unranked when its month series is invalid (`allowUnknown` only) or when its compounded curve overflows (`overflow`).
 - Ranking is by exact integer numerators; the order of the input never matters.

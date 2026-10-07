@@ -70,7 +70,7 @@ describe("checkFrozenConfiguration", () => {
   });
 
   test("rejects fewer than 5 sources", () => {
-    expect(pinnedTo(edited({ sources: configuration.sources.slice(0, 4) }))).toThrow("5–25 sources");
+    expect(pinnedTo(edited({ sources: configuration.sources.slice(0, 4) }))).toThrow("5–15 sources");
   });
 
   test("rejects copying our own account", () => {

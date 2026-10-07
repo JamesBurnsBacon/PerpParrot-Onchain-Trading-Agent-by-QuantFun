@@ -156,7 +156,7 @@ export function Funnel({ steps }: { steps: { stage: string; label: string; count
     <div ref={ref} className="min-w-0 overflow-hidden">
       <svg width={width} height={steps.length * 26} role="img" aria-label="Selection funnel">
         {steps.map((s, i) => {
-          // Square-root scale so the last stages (25, then 5–25) stay visible next to ~47k.
+          // Square-root scale so the last stages (40, then 5–15) stay visible next to ~47k.
           const w = Math.max(3, (Math.sqrt(s.count) / Math.sqrt(max)) * (width - labelW - 64));
           return (
             <g key={s.stage}>

@@ -1,5 +1,5 @@
 // Measures the AI review's strict gate on live data (docs/agents/STRICT_GATE_PLAN.md): leaderboard
-// traders + hyperliquidvaults.com vaults → Score's 25 finalists → measured evidence → Role, Risk
+// traders + hyperliquidvaults.com vaults → Score's 40 finalists → measured evidence → Role, Risk
 // and Red-Team (real model calls) → the review core's verdict, with REVIEW_GATE=strict. Prints
 // each finalist's model scores next to its measured evidence. Read-only on Hyperliquid; writes
 // only to the local Postgres you give it (apply supabase/migrations first). Never trades.
@@ -107,7 +107,7 @@ if(cache)await Bun.write(cache,JSON.stringify(inputs));
 const selectedInputs=inputs.filter(input=>!isHighFrequency(input.ordersPerDay??null));
 const highFrequency=inputs.length-selectedInputs.length;
 log('no-HFT screen',{excluded:highFrequency,scored:selectedInputs.length});
-const result = scoreCandidates(selectedInputs, { finalists: 25 });
+const result = scoreCandidates(selectedInputs, { finalists: 40 });
 const pipeline = new Pipeline({
   sql,
   now:()=>now,

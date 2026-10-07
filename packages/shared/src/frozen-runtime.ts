@@ -47,13 +47,13 @@ export function validateFrozenConfiguration(value: FrozenConfiguration): void {
   validateRuntimePolicy(value.policy);
   requireCondition(value.policy.mode === 'LIVE' && value.policy.bucket === 'AGGRESSIVE', 'unsupported live policy');
   requireCondition(value.policyHash === policyCommitment(value.policy), 'frozen policy mismatch');
-  requireCondition(Array.isArray(value.sources) && value.sources.length >= 5 && value.sources.length <= 25, 'freeze requires 5–25 sources');
+  requireCondition(Array.isArray(value.sources) && value.sources.length >= 5 && value.sources.length <= 15, 'freeze requires 5–15 sources');
   requireCondition(Number.isSafeInteger(value.cashUnits) && value.cashUnits >= Math.ceil(value.policy.cashBuffer * WEIGHT_UNITS), 'invalid frozen cash buffer');
   let previousCandidate = -1;
   const addresses = new Set<string>();
   for (const source of value.sources) {
     exactKeys(source, ['candidate','sourceAddress','weightUnits','ceilingUnits']);
-    requireCondition(Number.isSafeInteger(source.candidate) && source.candidate > previousCandidate && source.candidate <= 24 && address.test(source.sourceAddress) && source.sourceAddress !== value.account && !addresses.has(source.sourceAddress), 'invalid frozen source identity/order');
+    requireCondition(Number.isSafeInteger(source.candidate) && source.candidate > previousCandidate && source.candidate <= 39 && address.test(source.sourceAddress) && source.sourceAddress !== value.account && !addresses.has(source.sourceAddress), 'invalid frozen source identity/order');
     requireCondition(Number.isSafeInteger(source.weightUnits) && Number.isSafeInteger(source.ceilingUnits) && source.weightUnits > 0 && source.weightUnits <= source.ceilingUnits && source.ceilingUnits <= Math.floor(value.policy.maxSourceWeight * WEIGHT_UNITS), 'invalid frozen weight');
     previousCandidate = source.candidate;
     addresses.add(source.sourceAddress);

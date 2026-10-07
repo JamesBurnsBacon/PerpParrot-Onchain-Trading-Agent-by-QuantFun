@@ -103,7 +103,7 @@ The [research screening v1 methodology](docs/ingest/RESEARCH_SCREENING_V1.md) do
   - **Daily snapshots:** save each tracked address's `month` points (in the `allTime` PnL baseline). `allTime` is coarse (7–14 days between points for older accounts), so this is the only way to get ~16-hour resolution beyond 30 days.
 - **Fills** (trade count, leverage, holding times, maker share): only for addresses that pass the cheap filters.
 - Cache the leaderboard every few hours and save every snapshot.
-- **Production schedule** (Vercel Cron, state in Supabase): a scan every 12 h (~14k accounts), a rate-limited refresh every 5 min, a qualified list of ~250, and 25 picked every 10 min (high-frequency traders left out). See [docs/ingest/PIPELINE.md](docs/ingest/PIPELINE.md).
+- **Production schedule** (Vercel Cron, state in Supabase): a scan every 12 h (~14k accounts), a rate-limited refresh every 5 min, a qualified list of ~250, and 40 picked every 10 min (high-frequency traders left out). See [docs/ingest/PIPELINE.md](docs/ingest/PIPELINE.md).
 
 ### 4.2 Score (backend)
 - **Hard filters:**
@@ -127,7 +127,7 @@ The [research screening v1 methodology](docs/ingest/RESEARCH_SCREENING_V1.md) do
   - Near-zero maker accounts had about twice the drawdowns, mostly because they trade more of their equity.
   - Evidence: `scripts/research/maker-share/`.
 - **Clone grouping before the cut:** accounts whose daily returns correlate ≥ 0.9 (❓ *tuned*), or that are known to be linked (vault ↔ leader, sub-accounts), are grouped and only the best-scoring one can be a finalist. Duplicates would concentrate the portfolio in one strategy's idiosyncratic risk.
-- **Top ~25 distinct strategies → finalists**, with slots split between traders and vaults (❓ *split set in tuning*). Full definitions: `packages/backend/src/score/SPEC.md`.
+- **Top ~40 distinct strategies → finalists**, with slots split between traders and vaults (❓ *split set in tuning*). Full definitions: `packages/backend/src/score/SPEC.md`.
 - **Also computed** for the agent:
   - annualized return and volatility, all-time max drawdown (reported, not ranked)
   - realized volatility and average leverage
@@ -166,7 +166,7 @@ The buckets differ **only by that fixed multiplier** (owner, 2026-10-07): same w
 ### 4.5 Source-set changes
 **Hackathon: the set is fully frozen at go-live.** The agent only monitors.
 
-**Production** (25 sources picked **every 10 minutes** from a qualified list rebuilt every 12 h; a reviewed set whose wallets changed, or whose weights moved by more than 5 points, goes live automatically at the next `:x0` run: [docs/ingest/PIPELINE.md](docs/ingest/PIPELINE.md)):
+**Production** (40 finalists picked **every 10 minutes** from a qualified list rebuilt every 12 h; at most 15 approved sources go live when the reviewed set changes, or its weights move by more than 5 points, at the next `:x0` run: [docs/ingest/PIPELINE.md](docs/ingest/PIPELINE.md)):
 
 | Type | Trigger | Handling |
 |---|---|---|
@@ -191,7 +191,7 @@ weights. The largest of five trading risks (excluding evidence risk) sets reject
 and allocation caps. At least five sources are still required for freezing; the basic
 gate remains the fallback.
 
-- **Before go-live:** the agent picks **5–15 sources from ~25 finalists**, assigns weights, and writes a rationale and red flags (martingale, wash-like behavior, concentration, near-liquidation). It also judges:
+- **Before go-live:** the agent picks **5–15 sources from ~40 finalists**, assigns weights, and writes a rationale and red flags (martingale, wash-like behavior, concentration, near-liquidation). It also judges:
   - **diversification**, from the correlation matrix and vault ↔ leader links
   - **time in market** (avoid often-flat sources)
   - **holding time** (too fast to copy at a 10-minute delay?)
@@ -204,7 +204,7 @@ gate remains the fallback.
   - time in market
   - maker/taker split
   - plus the correlation matrix
-  - **Budget:** ≈ 25 × ≤ 4 KB per request, well inside the model's context.
+  - **Budget:** ≈ 40 × ≤ 4 KB per request, well inside the model's context.
 - **Models:** two (≥ 1 from OpenAI; ❓ which). The backtest winner selects the live set, and the loser is **shadow-tracked on paper**. Output is structured JSON. API keys are server-side environment variables.
 - **Calling the model:** one request per stage with a strict JSON schema. Several independent observations (other models or providers) can each be a "node"; the committee takes the per-field median (the `*-consensus` schemas).
 - **Output format:** ❓ *a weight grid (0–3 units), continuous weights with median consensus, or a ranking plus a formula.*
@@ -359,7 +359,7 @@ Budget ~1 h of testing per 2 h of features. Integrate only tested modules.
 - [x] Live bucket: **Aggressive** (team decision 2026-10-06); enforced in the review core and the frozen-configuration checks
 - [x] Freeze confirmation: `configurationHash` pinned in the backend and executor environment; no HyperEVM contract. With automatic go-live it moves to an `active` row in Supabase ([docs/ingest/PIPELINE.md](docs/ingest/PIPELINE.md))
 - [x] Orchestration: **no Chainlink CRE** (2026-10-07); Vercel Cron and our own services, AWS if a job outgrows a function
-- [x] Scheduled AI reviews and the ingest: **Vercel Cron**, 12-hour scans, 25 picked every 10 minutes, automatic go-live ([docs/ingest/PIPELINE.md](docs/ingest/PIPELINE.md))
+- [x] Scheduled AI reviews and the ingest: **Vercel Cron**, 12-hour scans, 40 picked every 10 minutes, automatic go-live ([docs/ingest/PIPELINE.md](docs/ingest/PIPELINE.md))
 - [ ] ❓ Our account mode: **unified** is simplest (one USDC balance margins core and `xyz`); standard mode needs USDC moved into each dex. Equity is read the same way either way
 
 ---
@@ -411,7 +411,7 @@ Budget ~1 h of testing per 2 h of features. Integrate only tested modules.
 - **Available integrations** (opt-in and off by default; each needs `NOWNODES_API_KEY` plus the flag named in its bullet; with nothing set the backend uses Hyperliquid only, as before):
   - **Failover**: with `INFO_ROUTING=overflow`, an official-API read that fails (429, 5xx, timeout) is retried on NOWNodes for the eight methods it serves (`packages/backend/src/pipeline/info-router.ts`).
   - **Shadow check**: `INFO_SHADOW_PERCENT=N` compares N% of official `clearinghouseState` reads with NOWNodes in the background (account value, position count).
-  - **First choice for bulk reads**: with `PICK_OVERLAP_GUARD=on`, the top 60 candidates' positions are read NOWNodes first (in a local benchmark on 2026-10-07, about 120 reads took ~2 s, all on NOWNodes, so none of the official API's 1,200 weight/min; a read that falls back to the official API does count against it) so the pick can leave out candidates that overlap one already chosen (`packages/backend/src/pipeline/overlap-pick.ts`).
+  - **First choice for bulk reads**: with `PICK_OVERLAP_GUARD=on`, the top 96 candidates' positions are read NOWNodes first (the earlier 60-candidate benchmark on 2026-10-07 took ~2 s for about 120 reads, all on NOWNodes; the 96-candidate pool has not been benchmarked). A read that falls back to the official API counts against its 1,200 weight/min limit. The guard can leave out candidates that overlap one already chosen (`packages/backend/src/pipeline/overlap-pick.ts`).
   - **Dashboard**: the Pipeline panel shows reads, latency and failovers per provider when NOWNodes is in use, and the overlap guard's summary above the finalists table.
   - **Limits, stated plainly**: NOWNodes is slower per read (below) and does not serve `portfolio` or fills, so the existing paths stay on Hyperliquid; the defaults are Hyperliquid only; the guard's effect on returns is not measured.
 - `hype.nownodes.io` has two parts (key in the `api-key` header; measured 2026-10-07):

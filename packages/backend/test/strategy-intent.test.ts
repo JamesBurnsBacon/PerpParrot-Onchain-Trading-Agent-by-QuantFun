@@ -116,7 +116,7 @@ describe("simulation preview compiler", () => {
       for (const diversification of ["low", "medium", "high"] as const)
         for (const leverageComfort of ["low", "medium", "high"] as const)
           for (const requestedLeverage of leverageRequests) {
-            const result = intentToPreview({ ...valid, maxSources: 25, riskStyle, diversification, leverageComfort, requestedLeverage }, policyBase);
+            const result = intentToPreview({ ...valid, maxSources: 15, riskStyle, diversification, leverageComfort, requestedLeverage }, policyBase);
             expect(result.policy.mode).toBe("SIMULATION");
             expect(result.policy.maxSourceWeight).toBeLessThanOrEqual(policyBase.maxSourceWeight);
             expect(result.policy.maxGrossLeverage).toBeLessThanOrEqual(policyBase.maxGrossLeverage);

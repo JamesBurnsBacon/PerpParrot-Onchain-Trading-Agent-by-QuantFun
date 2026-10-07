@@ -2,8 +2,8 @@
 //   scan:    every leaderboard trader and HyperCore vault with ≥ $10k (~14k; every 12 h)
 //   refresh: portfolios of the scan within 12 h; portfolio + fills of the qualified list hourly
 //            (every 5 min, within a weight budget)
-//   select:  every 10 min: Score qualifies ~250 once the scan is refreshed, picks 25 from them
-//            (high-frequency traders left out) → AI review (Role, Risk, Red-Team) when the 25
+//   select:  every 10 min: Score qualifies ~250 once the scan is refreshed, picks 40 from them
+//            (high-frequency traders left out) → AI review (Role, Risk, Red-Team) when the 40
 //            change → the bench: the wallets the AI approves, with their hold measures
 //   roster:  every 10 min (docs/ingest/ROSTER.md): seats with a minimum tenure, released at exits,
 //            filled from the bench → freeze → activate when the seats change
@@ -40,8 +40,8 @@ const HOUR = 3_600_000;
 export const MAX_GROSS_LEVERAGE = 5;
 const LEADERBOARD = "https://stats-data.hyperliquid.xyz/Mainnet/leaderboard";
 const QUALIFIED = 250; // Score's top distinct accounts over the scan
-const PICKS = 25; // picked every 10 minutes from the qualified list, and reviewed
-const GUARD_POOL = 60; // candidates whose books the overlap guard reads (PICK_OVERLAP_GUARD=on)
+const PICKS = 40; // picked every 10 minutes from the qualified list, and reviewed
+const GUARD_POOL = 96; // preserves the guard's 2.4x candidate pool when enabled
 const CLAIMS = 200; // accounts one refresh claims; unprocessed ones are released
 const WORKERS = 3; // concurrent Hyperliquid reads in one refresh, sharing its weight budget
 // Qualifying waits for 95% of the scan, or this long after it with what is fresh (cold start).
@@ -205,7 +205,7 @@ export class Pipeline {
     return { accounts: counts, selections: runs, active: active ?? null, latest: latest ?? null, roster: await this.rosterStatus(), routing: routingStats() };
   }
 
-  // Every 10 minutes: qualify when due, then pick 25 and review them if they changed. `force`
+  // Every 10 minutes: qualify when due, then pick 40 and review them if they changed. `force`
   // (operator) qualifies on partial data and reviews an unchanged pick.
   async select(force = false): Promise<{ id?: number; status: string; reason?: string }> {
     const { sql, log } = this.o;
@@ -227,12 +227,12 @@ export class Pipeline {
     const guard = await this.guarded(inputs, result);
     if (guard) result = guard.result;
 
-    // The AI review runs when the 25 change, and at least every 12 h so the roster's bench of approvals
+    // The AI review runs when the 40 change, and at least every 12 h so the roster's bench of approvals
     // stays fresh (ROSTER.md §4.1). A rejected set isn't reviewed again within that time.
     const [last] = await sql`select finalists -> 'finalists' as finalists, started_at, status from selection_runs
       where status <> 'failed' and finalists is not null and (finalists ->> 'scope') is distinct from 'seats' order by started_at desc limit 1`;
     const lastPicks = ((last?.finalists ?? []) as { address: string }[]).map((f) => f.address);
-    // Only a review that produced a bench (or rejected the 25) counts: one from before the roster has none.
+    // Only a review that produced a bench (or rejected the 40) counts: one from before the roster has none.
     const fresh = last && (last.status === "benched" || last.status === "rejected") &&
       this.now() - new Date(last.started_at as string | Date).getTime() < ROSTER.approvalFreshHours * HOUR;
     if (!force && fresh && sameAddresses(lastPicks, result.finalists)) return { status: "unchanged" };
@@ -302,7 +302,7 @@ export class Pipeline {
     return { accounts: fresh.length, qualified: result.finalists.length };
   }
 
-  // `scope`: "picks" reviews Score's 25 and fills the bench; "seats" is the roster's 12-hourly
+  // `scope`: "picks" reviews Score's 40 and fills the bench; "seats" is the roster's 12-hourly
   // review of the wallets holding seats (its verdicts; never the admission bench).
   private async review(id: number, inputs: ScoreInput[], result: ScoreResult, highFrequency: number, guard?: GuardSummary, scope: "picks" | "seats" = "picks"): Promise<{ status: string; reason?: string }> {
     const { sql, log, policy } = this.o;
