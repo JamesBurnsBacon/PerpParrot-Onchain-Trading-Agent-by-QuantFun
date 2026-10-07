@@ -103,7 +103,7 @@
 /* ---------- hero ---------- */
 .lp-journey { position: relative; scroll-margin-top: var(--dh-h); }
 .lp-journey.lp-moving { height: 300svh; }
-.lp-stage { height: calc(100svh - var(--dh-h)); min-height: 540px; padding: 20px; position: relative; }
+.lp-stage { height: calc(100svh - var(--dh-h)); min-height: calc(540px - var(--dh-h)); padding: 20px; position: relative; }
 .lp-surface {
   position: relative;
   height: 100%;
@@ -184,7 +184,7 @@
   .lp-cta-wrap { bottom: 7%; }
 }
 @media (max-width: 600px) {
-  .lp-stage { padding: 10px; min-height: 560px; }
+  .lp-stage { padding: 10px; min-height: calc(560px - var(--dh-h)); }
   .lp-surface { border-radius: 28px; }
   .lp-field { inset: 9px; border-radius: 22px; }
   .lp-copy { top: 14%; left: 4%; width: 92%; }
