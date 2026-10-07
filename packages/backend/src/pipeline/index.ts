@@ -7,7 +7,9 @@
 //            change → freeze → activate when the sources change
 // The active configuration is what the 10-minute mirror loop copies from its next run on.
 import type { SQL } from "bun";
-import { fillStats, isHighFrequency, pickLeaderboard, sameAddresses, scoringWindows, type Fill, type LeaderboardRow, type Tracked } from "./derive";
+import { FILLS_PAGE, fillStats, isHighFrequency, pickLeaderboard, sameAddresses, scoringWindows, type Fill, type LeaderboardRow, type Tracked } from "./derive";
+import { EVIDENCE_DAYS, exposureOverlap, measure, type HlFill, type Measured } from "./evidence";
+import { ENTER_OI_USD, fetchOpenInterest } from "../eligibility";
 import { PacedInfo, getJson } from "./hl";
 import { pickVaults } from "./vaults";
 import { parsePortfolio, scoreCandidates, toFrameCandidates, type ScoreInput, type ScoreResult } from "../score";
@@ -254,7 +256,25 @@ export class Pipeline {
       positions.set(address.toLowerCase(), positionsFromStates(states));
       equity.set(address.toLowerCase(), states.reduce((sum, s) => sum + Number(s.marginSummary.accountValue), 0));
     }
-    const built = buildReviewInput({ score, inputs, positions, policy, asOfMs: this.now(), ttlMs: policy.maxFrameAgeMs });
+    // Measured evidence (evidence.ts): fills over the last 30 days, paged forward (2,000 a page),
+    // and which markets the copy loop can trade.
+    const eligible = new Set([...(await fetchOpenInterest())].filter(([, usd]) => usd >= ENTER_OI_USD).map(([asset]) => asset));
+    const byInput = new Map(inputs.map((input) => [input.address.toLowerCase(), input]));
+    const measured = new Map<string, Measured>();
+    for (const address of score.addresses.map((a) => a.toLowerCase())) {
+      const fills: HlFill[] = [];
+      let startTime = this.now() - EVIDENCE_DAYS * 24 * HOUR;
+      for (let page = 0; page < 5; page++) {
+        const rows = await hl.post<HlFill[]>({ type: "userFillsByTime", user: address, startTime, aggregateByTime: true }, 20, (f) => f.length);
+        fills.push(...rows);
+        if (rows.length < FILLS_PAGE) break;
+        startTime = rows[rows.length - 1]!.time + 1;
+      }
+      measured.set(address, measure({ input: byInput.get(address)!, fills, positions: positions.get(address) ?? [], eligible, nowMs: this.now() }));
+    }
+    const overlap = (a: string, b: string) => exposureOverlap(positions.get(a) ?? [], positions.get(b) ?? []);
+    await sql`update selection_runs set finalists = finalists || ${{ measured: Object.fromEntries(measured) }}::jsonb where id = ${id}`;
+    const built = buildReviewInput({ score, inputs, positions, policy, asOfMs: this.now(), ttlMs: policy.maxFrameAgeMs, measured, overlap });
 
     // Gross leverage if every chosen source keeps today's book (README §4.6 policy check).
     const assess = (sources: readonly { sourceAddress: string; weight: number }[]): Assessment => {

@@ -32,9 +32,13 @@ export function positionsFromStates(states:{assetPositions:{position:{coin:strin
   }));
   return rows.sort((a,b)=>Math.abs(b.signedNotionalUsd)-Math.abs(a.signedNotionalUsd)||(a.market<b.market?-1:1));
 }
+/** Measured frame fields per finalist (lower-case address), from the selection pipeline
+ * (src/pipeline/evidence.ts). Absent fields keep Score's value or stay unknown (null). */
+export type MeasuredMetrics=Partial<Pick<Frame['candidates'][number]['metrics'],'averageLeverage'|'timeInMarket'|'medianHoldMinutes'|'oosWindows'|'oosSharpe'|'oosSortino'|'oosMaxDrawdown'|'crossWindowStability'|'executionCoverage'|'executionFit'|'concentration'|'liquidationDistance'>>;
 /** Score finalists -> validated frame + evidence. Positions must be read for every kept finalist (by
- * lower-case address); a missing read is an error, never an empty book. */
-export function buildReviewInput(args:{score:ScoreFrame;inputs:ScoreInput[];positions:ReadonlyMap<string,LivePosition[]>;policy:Policy;asOfMs:number;ttlMs:number}):ReviewInput {
+ * lower-case address); a missing read is an error, never an empty book. `measured` and `overlap`
+ * (today's shared exposure of two finalists) fill fields Score doesn't produce. */
+export function buildReviewInput(args:{score:ScoreFrame;inputs:ScoreInput[];positions:ReadonlyMap<string,LivePosition[]>;policy:Policy;asOfMs:number;ttlMs:number;measured?:ReadonlyMap<string,MeasuredMetrics>;overlap?:(a:string,b:string)=>number|null}):ReviewInput {
   const {score,policy,asOfMs}=args;
   if(!Number.isSafeInteger(asOfMs)||!Number.isSafeInteger(args.ttlMs)||args.ttlMs<=0)throw new Error('invalid review clock');
   const inputs=new Map(args.inputs.map(input=>[input.address.toLowerCase(),input]));
@@ -51,13 +55,14 @@ export function buildReviewInput(args:{score:ScoreFrame;inputs:ScoreInput[];posi
   });
   if(!kept.length)throw new Error('review input: no reviewable finalists');
   const index=new Map(kept.map(({from},to)=>[from,to]));
-  const candidates:Frame['candidates']=kept.map(({from},to)=>{
+  const candidates:Frame['candidates']=kept.map(({from,address},to)=>{
     const {kind,clones,metrics}=score.candidates[from]!;
-    return {candidate:to,kind,clones:clones.map(address=>address.toLowerCase()),metrics:{...metrics,survivorshipQuality:'UNKNOWN',executionCoverage:null,executionFit:null,concentration:null,liquidationDistance:null,btcBeta:null}};
+    const measured=Object.fromEntries(Object.entries(args.measured?.get(address)??{}).filter(([,value])=>value!==undefined));
+    return {candidate:to,kind,clones:clones.map(address=>address.toLowerCase()),metrics:{...metrics,survivorshipQuality:'UNKNOWN',executionCoverage:null,executionFit:null,concentration:null,liquidationDistance:null,btcBeta:null,...measured}};
   });
   const pairs:Frame['pairs']=score.pairs.filter(p=>index.has(p.a)&&index.has(p.b)).map(p=>{
     const [a,b]=[index.get(p.a)!,index.get(p.b)!].sort((x,y)=>x-y);
-    return {a:a!,b:b!,correlation:p.correlation,currentExposureOverlap:null,linkedSource:p.linkedSource};
+    return {a:a!,b:b!,correlation:p.correlation,currentExposureOverlap:args.overlap?.(kept[a!]!.address,kept[b!]!.address)??null,linkedSource:p.linkedSource};
   }).sort((x,y)=>x.a-y.a||x.b-y.b);
   const finalists:Evidence['finalists']=kept.map(({curve,positions},to)=>{
     const {kind,metrics}=candidates[to]!;
