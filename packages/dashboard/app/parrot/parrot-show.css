@@ -332,3 +332,7 @@ html:has(.parrot-show), body:has(.parrot-show) { height: 100%; overflow: hidden;
 .parrot-show .parrot-live-status { max-width: 150px; }
 /* Reserve the receipt's space from the start (the dock is top-aligned), so the buttons do not jump up when the first audited sentence appears. */
 .parrot-show .voice-dock { min-height: 196px; justify-content: flex-start; }
+
+/* The result first, then the audit bar underneath ("Audited by [OpenAI] Decisions"). */
+.parrot-show .compact-receipt-row { border-top: 0 !important; border-bottom: 1px dashed #b7bda6 !important; }
+.parrot-show .compact-receipt .compact-receipt-header { min-height: 32px; background: #f1ecdb; font-size: 11px; }

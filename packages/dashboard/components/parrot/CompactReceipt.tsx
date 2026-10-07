@@ -28,7 +28,6 @@ export function CompactReceipt({ active, status, rows, latest, calls, cost }: Co
   const open = (opener: HTMLButtonElement) => setSelection({ row: latest, opener });
   return <>
     <div className="compact-receipt">
-      <button type="button" className="compact-receipt-header" aria-label="Audited by OpenAI Decisions" aria-haspopup="dialog" aria-controls="parrot-decisions-drawer" onClick={e => open(e.currentTarget)}><span>Audited by</span><OpenAIMark /><b>Decisions</b></button>
       <button type="button" className="compact-receipt-row" aria-haspopup="dialog" aria-controls="parrot-decisions-drawer" onClick={e => open(e.currentTarget)}>
         <span className="compact-receipt-sentence" title={latest.claim}>“{latest.claim}”</span>
         <span className="compact-receipt-verdict">
@@ -40,6 +39,7 @@ export function CompactReceipt({ active, status, rows, latest, calls, cost }: Co
         </>}
         </span>
       </button>
+      <button type="button" className="compact-receipt-header" aria-label="Audited by OpenAI Decisions" aria-haspopup="dialog" aria-controls="parrot-decisions-drawer" onClick={e => open(e.currentTarget)}><span>Audited by</span><OpenAIMark /><b>Decisions</b></button>
     </div>
     <span className="sr-only" aria-live="polite" aria-atomic="true">{announcement}</span>
     {selection && <DecisionsDrawer rows={rows} initial={selection.row} calls={calls} cost={cost} opener={selection.opener} onClose={() => setSelection(undefined)} />}
