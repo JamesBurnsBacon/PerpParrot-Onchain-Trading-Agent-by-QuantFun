@@ -1,5 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {runReview, riskDecision, MAX_SOURCES} from '../packages/backend/review/workflow.ts';
 import type {Dependencies} from '../packages/backend/review/workflow.ts';
 import type {Frame, Policy, Row, Observation} from '../packages/shared/src/contracts.ts';
@@ -10,7 +11,7 @@ const H='0x'+'a'.repeat(64);
 const NOW=1000000;
 function fixture() {
   const frame: Frame={schemaVersion:'1.1.0',snapshotHash:H,policyHash:H,asOfMs:NOW-1000,expiresAtMs:NOW+10000,candidates:[0,1,2].map(candidate=>({candidate,kind:'TRADER',clones:[],metrics:{historyDays:90,oosWindows:2,oosSharpe:1,oosSortino:1,oosMaxDrawdown:0.1,crossWindowStability:0.8,survivorshipQuality:'CURRENT_SNAPSHOT',medianHoldMinutes:400,averageLeverage:1,maxDrawdown:0.1,timeInMarket:0.8,makerShare:0.5,executionCoverage:1,executionFit:90,concentration:0.1,liquidationDistance:0.5,btcBeta:0.4,pnlConsistency:0.8,isSharpe:1,isSortino:1,isCalmar:1,lookbackDays:90,scoreFlags:[],cloneCount:0}})),pairs:[{a:0,b:1,correlation:0.2,currentExposureOverlap:0.1,linkedSource:false},{a:0,b:2,correlation:0.2,currentExposureOverlap:0.1,linkedSource:false},{a:1,b:2,correlation:0.2,currentExposureOverlap:0.1,linkedSource:false}]};
-  const policy: Policy={bucket:'BALANCED',mode:'SIMULATION',capitalUsd:150,minOrderUsd:10,minExecutableTargets:1,maxSourceWeight:0.5,maxGrossLeverage:2,cashBuffer:0.2,maxPairCorrelation:0.7,maxExposureOverlap:0.5,minHistoryDays:30,maxFrameAgeMs:10000,minExecutionFit:60,riskRejectThreshold:80,riskWatchThreshold:50,minConfidence:60,redTeamRebuildThreshold:60,redTeamExcludeThreshold:60};
+  const policy: Policy={bucket:'BALANCED',mode:'SIMULATION',capitalUsd:150,minOrderUsd:10,minExecutableTargets:1,maxSourceWeight:0.5,maxGrossLeverage:2,cashBuffer:0.2,maxPairCorrelation:0.7,maxExposureOverlap:0.5,minHistoryDays:30,maxFrameAgeMs:10000,minExecutionFit:60,riskRejectThreshold:80,riskWatchThreshold:50,minConfidence:40,redTeamRebuildThreshold:60,redTeamExcludeThreshold:60};
   const addresses=new Map([0,1,2].map(id=>[id,'0x'+String(id+1).repeat(40)]));
   const roleKeys=['preserver','compounder','diversifier','directional','opportunistic','convexity','reject','conservativeFit','balancedFit','aggressiveFit','confidence'];
   const riskKeys=['drawdownRisk','leverageRisk','concentrationRisk','pathRisk','executionRisk','evidenceRisk','confidence'];
@@ -175,8 +176,46 @@ test('a crowded field keeps its best 15 sources (owner range 5–15), not a capa
 function seal(f: ReturnType<typeof fixture>) {f.frame.policyHash=policyCommitment(f.policy);f.frame.snapshotHash=snapshotCommitment(f.frame,f.addresses);}
 function review(f: ReturnType<typeof fixture>) {seal(f);return runReview(f.frame,f.policy,f.addresses,NOW,f.deps);}
 test('even-node confidence medians round down rather than manufacture eligibility',async()=>{
-  const f=fixture();f.deps.role=async()=>{const o=f.observe('role').slice(0,2);o[0].results.forEach(r=>r.confidence=59);o[1].results.forEach(r=>r.confidence=60);return o;};
+  const f=fixture();f.deps.role=async()=>{const o=f.observe('role').slice(0,2);o[0].results.forEach(r=>r.confidence=39);o[1].results.forEach(r=>r.confidence=40);return o;};
   const m=await review(f);assert.equal(m.reason,'INSUFFICIENT_EVIDENCE');
+});
+test('evidence risk stays advisory; each trading risk still binds at the exact reject threshold',()=>{
+  const f=fixture(),row=f.observe('risk')[0].results[0];
+  const baseline=riskDecision(row,f.policy);
+  row.evidenceRisk=100;
+  assert.deepEqual(riskDecision(row,f.policy),baseline);
+  for(const field of ['drawdownRisk','leverageRisk','concentrationRisk','pathRisk','executionRisk']) {
+    const watch=riskDecision({...row,[field]:f.policy.riskWatchThreshold},f.policy);
+    assert.equal(watch.status,'WATCHLIST');assert.equal(watch.bindingConstraint,field);
+    assert.equal(riskDecision({...row,[field]:80},f.policy).status,'REJECT');
+  }
+});
+test('either specialist below 40 excludes; exactly 40 passes even with evidence risk 100',async()=>{
+  for(const agent of ['role','risk'] as const) for(const confidence of [39,40]) {
+    const f=fixture();
+    f.deps.role=async()=>f.observe('role').map(o=>({...o,results:o.results.map(r=>({...r,confidence:agent==='role'?confidence:90}))}));
+    f.deps.risk=async()=>f.observe('risk').map(o=>({...o,results:o.results.map(r=>({...r,evidenceRisk:100,confidence:agent==='risk'?confidence:90}))}));
+    const m=await review(f);assert.equal(m.status,confidence===40?'VALID':'INVALID_BUCKET');
+  }
+});
+test('lower of Role/Risk confidence scales relative weights, and caps leave surplus cash',async()=>{
+  const f=fixture();
+  f.deps.role=async()=>f.observe('role').map(o=>({...o,results:o.results.map(r=>({...r,confidence:r.candidate===0?40:80}))}));
+  f.deps.risk=async()=>f.observe('risk').map(o=>({...o,results:o.results.map(r=>({...r,confidence:r.candidate===2?40:80}))}));
+  const m=await review(f);assert.equal(m.status,'VALID');assert.deepEqual(m.sources.map(s=>s.candidate),[1,0,2]);
+  assert.deepEqual(m.sources.map(s=>s.weight),[0.4,0.2,0.2]);
+  f.policy.maxSourceWeight=0.3;
+  const capped=await review(f);assert.ok(Math.abs(capped.sources[0].weight-0.24)<1e-10);
+  assert.ok(Math.abs(capped.cashWeight-0.36)<1e-10);
+});
+test('scheduled policy changes only confidence without rewriting the pinned frozen policy',()=>{
+  const frozen=JSON.parse(readFileSync(new URL('../packages/backend/fixtures/frozen-configuration.json',import.meta.url),'utf8'));
+  const scheduled=JSON.parse(readFileSync(new URL('../packages/backend/fixtures/review-policy.json',import.meta.url),'utf8'));
+  validate('bucket-policy',scheduled.policy);
+  assert.deepEqual(scheduled.policy,{...frozen.policy,minConfidence:40});
+  assert.equal(frozen.policy.minConfidence,60);
+  assert.equal(frozen.policyHash,policyCommitment(frozen.policy));
+  assert.equal(frozen.configurationHash,'0x088fe80aef2b0d1d58a2e483073105c141fcf4d13ef80f934dfe811c81e6e1dd');
 });
 test('freshness is checked at manifest issuance, including expiry on the final clock read',async()=>{
   const f=fixture();let reads=0;f.deps.clock=()=>++reads>=5?f.frame.expiresAtMs:NOW;
