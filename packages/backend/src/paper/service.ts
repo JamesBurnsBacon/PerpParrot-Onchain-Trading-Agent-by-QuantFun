@@ -99,7 +99,8 @@ export class PaperService {
   ) {}
 
   // Steps every book once per mirror run; repeated or older runs are ignored.
-  async step(runAt: number, snapshotJson: string): Promise<PaperPoint[]> {
+  // pendingCloses: perps at 0 whose close isn't confirmed yet (shared/copy.ts), kept like the executor keeps them.
+  async step(runAt: number, snapshotJson: string, pendingCloses: readonly string[] = []): Promise<PaperPoint[]> {
     const state = (await this.deps.store.load()) ?? { books: [], lastRunAt: 0 };
     if (runAt <= state.lastRunAt) {
       this.invalidate(); // another instance stepped it: our view may predate that
@@ -117,7 +118,7 @@ export class PaperService {
     for (const book of state.books) {
       accrueFunding(book, markets, hours);
       if (book.kind === "btc") stepBtcBook(book, markets, this.deps.cfg);
-      else stepCopyBook(book, exposures, markets, this.deps.cfg);
+      else stepCopyBook(book, exposures, markets, this.deps.cfg, new Set(pendingCloses));
       recordMarks(book, markets);
     }
     const points = state.books.map((b) => ({ bookId: b.id, t: runAt, equityUsd: equityOf(b, markets) }));

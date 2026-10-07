@@ -23,7 +23,7 @@ const snapshot = (runAt: number): string =>
   } satisfies PositionsSnapshot);
 
 const marketsAt = (btc: number) => async () => new Map<string, Market>([["BTC", { markPx: btc, maxLeverage: 40, feeBps: 0 }]]);
-const cfg = { minOrderUsd: 10, driftFraction: 0.1, marginCap: 0.95, slippageBps: 0 };
+const cfg = { minOrderUsd: 10, driftFraction: 0.1, equityBandFraction: 0, marginCap: 0.95, slippageBps: 0 };
 
 describe("exposuresFromSnapshot", () => {
   test("matches the copy math: weights 0.75 invested × 0.5× each = 0.375 BTC", () => {
@@ -38,10 +38,13 @@ describe("exposuresFromSnapshot: the mirror's checks", () => {
     expect(() => exposuresFromSnapshot(s)).toThrow("ineligible asset");
   });
 
-  test("refuses a run where one active source would exceed its ceiling", () => {
+  test("a run where every source but one has exited follows that one at its own weight", () => {
     const s = JSON.parse(snapshot(600)) as PositionsSnapshot;
     s.sources = s.sources.map((src, i) => (i === 0 ? src : { ...src, positions: [] }));
-    expect(() => exposuresFromSnapshot(s)).toThrow();
+    const full = exposuresFromSnapshot(JSON.parse(snapshot(600)) as PositionsSnapshot);
+    const one = exposuresFromSnapshot(s);
+    expect([...one.keys()].every((asset) => s.sources[0].positions.some((p) => p.asset === asset))).toBe(true);
+    for (const [asset, fraction] of one) expect(Math.abs(fraction)).toBeLessThanOrEqual(Math.abs(full.get(asset) ?? Infinity) + 1e-9);
   });
 });
 

@@ -1,16 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import {
   capGrossExposure,
-  checkActiveCeilings,
   computeExposures,
   decToE6,
   type WeightedSource,
 } from "../../shared/copy";
 
-const src = (address: string, weightE6: number, equityE6: string, positions: [string, string][], ceilingE6 = 1_000_000): WeightedSource => ({
+const src = (address: string, weightE6: number, equityE6: string, positions: [string, string][]): WeightedSource => ({
   address,
   weightE6,
-  ceilingE6,
   equityE6,
   positions: positions.map(([asset, notionalE6]) => ({ asset, notionalE6 })),
 });
@@ -47,13 +45,13 @@ describe("computeExposures", () => {
     expect(exp).toEqual([{ asset: "BTC", exposureE9: 800_000_000n }]);
   });
 
-  test("redistributes flat sources' weight over active ones, cash unchanged", () => {
-    // 0.4 + 0.4 invested (0.2 cash); B is flat, so A carries the full 0.8.
+  test("a flat wallet's exit is followed: its weight is not spread over the others", () => {
+    // 0.4 + 0.4 invested; B exited, so only A's 0.4 is exposed and the rest waits as cash.
     const exp = computeExposures([
       src("0xa", 400_000, "1000000000", [["BTC", "1000000000"]]),
       src("0xb", 400_000, "1000000000", []),
     ]);
-    expect(exp).toEqual([{ asset: "BTC", exposureE9: 800_000_000n }]);
+    expect(exp).toEqual([{ asset: "BTC", exposureE9: 400_000_000n }]);
   });
 
   test("ignores sources with zero equity", () => {
@@ -61,26 +59,11 @@ describe("computeExposures", () => {
       src("0xa", 500_000, "0", [["BTC", "1000000000"]]),
       src("0xb", 500_000, "1000000000", [["ETH", "1000000000"]]),
     ]);
-    expect(exp).toEqual([{ asset: "ETH", exposureE9: 1_000_000_000n }]);
+    expect(exp).toEqual([{ asset: "ETH", exposureE9: 500_000_000n }]);
   });
 
   test("is empty when every source is flat", () => {
     expect(computeExposures([src("0xa", 1_000_000, "1000000000", [])])).toEqual([]);
-  });
-});
-
-describe("checkActiveCeilings", () => {
-  test("allows renormalization within the ceilings", () => {
-    // 0.2 + 0.2 invested; B flat → A carries 0.4, ceiling 0.4.
-    expect(() =>
-      checkActiveCeilings([src("0xa", 200_000, "1000000000", [["BTC", "1"]], 400_000), src("0xb", 200_000, "1000000000", [], 400_000)]),
-    ).not.toThrow();
-  });
-
-  test("rejects renormalization that pushes a source past its ceiling", () => {
-    expect(() =>
-      checkActiveCeilings([src("0xa", 200_000, "1000000000", [["BTC", "1"]], 250_000), src("0xb", 200_000, "1000000000", [], 250_000)]),
-    ).toThrow("active-source concentration exceeds ceiling: 0xa");
   });
 });
 
