@@ -195,6 +195,19 @@ describe.skipIf(!url)("Pipeline on Postgres", async () => {
     expect(baseline.finalists).toHaveLength(8);
   });
 
+  test("a failed book read leaves the pick exactly as Score made it", async () => {
+    await sql`update selection_runs set status = 'failed', started_at = now() - interval '2 hours'`;
+    const make = (positions: (a: string) => Promise<never>) =>
+      new Pipeline({ sql, account: address(999), policy: { maxExposureOverlap: 0.5 } as Policy, log: () => {}, now: () => NOW, info: (perMinute) => new PacedInfo(perMinute, info, async () => {}), overlapGuard: true, positions, picks: 8 });
+    const run = await make(async () => Promise.reject(new Error("down"))).select(true);
+    const [row] = await sql`select finalists from selection_runs where id = ${run.id!}`;
+    expect(row.finalists.overlapGuard).toBeUndefined();
+    await sql`update selection_runs set status = 'failed', started_at = now() - interval '2 hours'`;
+    const plain = await new Pipeline({ sql, account: address(999), policy: { maxExposureOverlap: 0.5 } as Policy, log: () => {}, now: () => NOW, info: (perMinute) => new PacedInfo(perMinute, info, async () => {}), overlapGuard: false, picks: 8 }).select(true);
+    const [base] = await sql`select finalists from selection_runs where id = ${plain.id!}`;
+    expect(row.finalists.finalists).toEqual(base.finalists.finalists);
+  });
+
   test("recording the picks' overlap adds one field and leaves the saved pick untouched", async () => {
     const saved = { finalists: [{ address: "0xa", rank: 1 }], funnel: [{ stage: "scored", count: 3 }], highFrequency: 2 };
     const [{ id }] = await sql`insert into selection_runs (started_at, status, finalists) values (now(), 'rejected', ${saved}::jsonb) returning id`;

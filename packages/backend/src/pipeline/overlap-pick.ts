@@ -1,19 +1,19 @@
 // Optional overlap guard for the 10-minute pick (PICK_OVERLAP_GUARD=on): read the top candidates' live
 // positions, NOWNodes first (it answers clearinghouseState and costs none of the official API's
 // 1,200 weight/min), and prefer candidates that don't hold the same book as one already chosen.
-// Any doubt (too many failed reads, breaker open) returns null and the pick stays as Score made it.
+// Any doubt (a failed read, breaker open) returns null and the pick stays as Score made it.
 import { positionsFromStates, type LivePosition } from "../../review/input.ts";
 import { exposureOverlap } from "../../review/overlap.ts";
 import { ELIGIBLE_DEXES } from "../../../shared/snapshot";
 import { bulkFetch, bulkRoutingStats } from "./info-router";
 
 const INFO_URL = "https://api.hyperliquid.xyz/info";
-const MAX_FAILED_SHARE = 0.2;
 
 export type PositionReader = (address: string) => Promise<LivePosition[]>;
 
 export const readPositionsBulk: PositionReader = async (address) => {
-  const states = await Promise.all(
+  // allSettled: a failed dex must not release the worker while its sibling request is still in flight.
+  const settled = await Promise.allSettled(
     ELIGIBLE_DEXES.map(async (dex) => {
       const res = await bulkFetch(INFO_URL, {
         method: "POST",
@@ -25,7 +25,9 @@ export const readPositionsBulk: PositionReader = async (address) => {
       return (await res.json()) as Parameters<typeof positionsFromStates>[0][number];
     }),
   );
-  return positionsFromStates(states);
+  const failure = settled.find((r): r is PromiseRejectedResult => r.status === "rejected");
+  if (failure) throw failure.reason;
+  return positionsFromStates(settled.map((r) => (r as PromiseFulfilledResult<Parameters<typeof positionsFromStates>[0][number]>).value));
 };
 
 // Walk `ranked` best first. A candidate whose book overlaps (strictly above the threshold) with one already
@@ -50,11 +52,14 @@ export const pickWithoutOverlap = (ranked: readonly string[], books: ReadonlyMap
 
 export type GuardSummary = { pool: number; reads: number; failed: number; excluded: number; toppedUp: number; threshold: number; ms: number; provider: { nownodes: number; official: number; fallbacks: number } };
 
-const inPool = async <T,>(items: readonly string[], size: number, fn: (item: string) => Promise<T>): Promise<T[]> => {
-  const out: T[] = new Array(items.length);
+// Runs `fn` over `items` with at most `size` in flight. Once `halted()` is true no new item starts; the ones
+// not started stay `null`.
+const inPool = async <T,>(items: readonly string[], size: number, halted: () => boolean, fn: (item: string) => Promise<T>): Promise<(T | null)[]> => {
+  const out: (T | null)[] = new Array(items.length).fill(null);
   let next = 0;
-  await Promise.all(Array.from({ length: Math.min(size, items.length) }, async () => {
-    while (next < items.length) {
+  const workers = Math.max(1, Math.min(Number.isFinite(size) ? Math.floor(size) : 20, items.length));
+  await Promise.all(Array.from({ length: workers }, async () => {
+    while (next < items.length && !halted()) {
       const i = next++;
       out[i] = await fn(items[i]!);
     }
@@ -68,26 +73,30 @@ export const overlapGuard = async (o: {
   threshold: number;
   read?: PositionReader;
   concurrency?: number;
+  halted?: () => boolean; // default: the bulk router's circuit breaker is open (NOWNodes paused)
   now?: () => number;
 }): Promise<{ picks: string[]; excluded: string[]; summary: GuardSummary } | null> => {
   const read = o.read ?? readPositionsBulk;
   const now = o.now ?? Date.now;
   const started = now();
-  if (bulkRoutingStats().breakerOpen) return null; // NOWNodes is paused: do not turn this into a burst on the official API
+  const halted = o.halted ?? (() => bulkRoutingStats().breakerOpen);
+  if (halted()) return null; // NOWNodes is paused: do not turn this into a burst on the official API
   const counts = () => {
     const s = bulkRoutingStats();
     return { nownodes: s.nownodes.requests, official: s.official.requests, fallbacks: s.fallbacks };
   };
   const before = counts();
-  const results = await inPool(o.ranked, o.concurrency ?? 20, async (address) => {
+  const results = await inPool(o.ranked, o.concurrency ?? 20, halted, async (address) => {
     try {
       return await read(address);
     } catch {
       return null;
     }
   });
+  // One missing book is enough to leave the pick as Score made it: a read that fails now and then would
+  // otherwise flip exclusions (and the AI review) from one run to the next.
   const failed = results.filter((r) => r === null).length;
-  if (o.ranked.length === 0 || failed / o.ranked.length > MAX_FAILED_SHARE) return null;
+  if (o.ranked.length === 0 || failed > 0 || halted()) return null;
   const books = new Map(o.ranked.map((a, i) => [a, results[i]!] as const));
   const { picks, excluded, toppedUp } = pickWithoutOverlap(o.ranked, books, o.want, o.threshold);
   const after = counts();

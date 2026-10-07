@@ -65,15 +65,32 @@ describe("overlapGuard", () => {
     expect(g!.summary).toMatchObject({ pool: 30, reads: 60, failed: 0, excluded: 1, toppedUp: 0, threshold: 0.5 });
   });
 
-  test("gives up (null) when too many reads fail, and tolerates a few", async () => {
+  test("gives up (null) when any read fails, so the pick stays as Score made it", async () => {
     const failing = (n: number) => async (a: string) => {
       if (Number(a.slice(2)) < n) throw new Error("down");
       return book(`M${a}`);
     };
-    expect(await overlapGuard({ ranked, want: 25, threshold: 0.5, read: failing(7) })).toBeNull(); // 7/30 > 20%
-    const ok = await overlapGuard({ ranked, want: 25, threshold: 0.5, read: failing(3) });
-    expect(ok!.summary.failed).toBe(3);
-    expect(ok!.picks).toHaveLength(25);
+    expect(await overlapGuard({ ranked, want: 25, threshold: 0.5, read: failing(1) })).toBeNull();
+    expect(await overlapGuard({ ranked, want: 25, threshold: 0.5, read: failing(0) })).not.toBeNull();
+  });
+
+  test("stops starting reads once NOWNodes is paused, and gives up", async () => {
+    let started = 0;
+    const read = async () => {
+      started++;
+      return book("BTC");
+    };
+    expect(await overlapGuard({ ranked, want: 25, threshold: 0.5, read, halted: () => started >= 5, concurrency: 1 })).toBeNull();
+    expect(started).toBe(5);
+    expect(await overlapGuard({ ranked, want: 25, threshold: 0.5, read, halted: () => true })).toBeNull();
+  });
+
+  test("a nonsense concurrency still reads everything", async () => {
+    for (const concurrency of [0, -3, Number.NaN]) {
+      const g = await overlapGuard({ ranked: ["0xa", "0xb"], want: 2, threshold: 0.5, read: async (a) => book(a), concurrency });
+      expect(g!.summary.failed).toBe(0);
+      expect(g!.picks).toHaveLength(2);
+    }
   });
 
   test("an empty pool is null", async () => {

@@ -244,7 +244,7 @@ export class Pipeline {
       const pool = scoreCandidates(inputs, { finalists: GUARD_POOL });
       const g = await overlapGuard({ ranked: pool.finalists, want: this.o.picks ?? PICKS, threshold, read: this.o.positions ?? readPositionsBulk, now: this.now });
       if (!g) {
-        log("overlap guard skipped", { reason: "too many failed reads or NOWNodes paused" });
+        log("overlap guard skipped", { reason: "a read failed or NOWNodes paused" });
         return undefined;
       }
       const dropped = new Set(g.excluded);
