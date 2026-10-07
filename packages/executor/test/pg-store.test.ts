@@ -95,14 +95,16 @@ describe.skipIf(!url)("PostgresStore", async () => {
       price: order ? "100500" : null, reduceOnly: order ? false : null, notionalUsd: order ? 1500 : null, cloid: order ? `0x${"02".repeat(16)}` : null,
       resultStatus: order ? "filled" : null, filledSize: order ? "0.015" : null, avgPx: order ? "100020.5" : null, resultError: null,
     });
-    const base = Date.parse("2099-01-01T00:00:00Z") + Math.floor(Math.random() * 1e9);
+    const base = Date.now() + 1e9;
     const older = [row(`mirror-a-${unique}`, base, "BTC", true)];
     const newer = [row(`mirror-b-${unique}`, base + 600_000, "BTC", true), row(`mirror-b-${unique}`, base + 600_000, "xyz:CL", false)];
     await store.saveTargets(older);
     await store.saveTargets(newer);
     await store.saveTargets(newer); // a re-save is a no-op
     await store.saveTargets([]);
-    expect(await store.recentTargets(3)).toEqual([...newer, ...older]);
+    // Only this test's rows: the database may hold others (earlier runs of this suite).
+    const mine = (await store.recentTargets(1_000)).filter((r) => r.runId.endsWith(unique));
+    expect(mine).toEqual([...newer, ...older]);
   });
 
   test("persists the kill switch", async () => {
