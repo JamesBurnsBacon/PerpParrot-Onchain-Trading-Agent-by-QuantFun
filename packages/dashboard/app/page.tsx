@@ -7,7 +7,6 @@ import { ExposureFlow } from "../components/ExposureFlow";
 import { DashHeader } from "../components/lp/DashHeader";
 import { Hero } from "../components/lp/Hero";
 import { Parrot, ParrotSymbols } from "../components/lp/ParrotSymbols";
-import { ScrollBuddy } from "../components/lp/ScrollBuddy";
 import { useDashMotion } from "../components/lp/useDashMotion";
 import { Pipeline } from "../components/Pipeline";
 import { Roster } from "../components/Roster";
@@ -43,7 +42,6 @@ export default function Page() {
   return (
     <div className="lp">
       <ParrotSymbols />
-      <ScrollBuddy />
       <DashHeader alert={alert} />
       <Hero />
       <div className="lp-dash-wrap" ref={dash}>
@@ -113,7 +111,6 @@ export default function Page() {
           </div>
         </main>
         <footer className="lp-foot">
-          {data?.recent?.length && !live ? "Dry run · " : ""}Perpetuals carry liquidation risk · Not investment advice
           <div className="lp-foot-brand">
             <Parrot />
             <b>PerpParrot</b>

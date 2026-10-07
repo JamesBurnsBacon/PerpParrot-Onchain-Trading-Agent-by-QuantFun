@@ -1,4 +1,5 @@
 import { Parrot } from "./ParrotSymbols";
+import { ScrollBuddy } from "./ScrollBuddy";
 import { DemoModal } from "./DemoModal";
 import { DEMO_VIDEO } from "../../lib/demo-video";
 
@@ -8,6 +9,8 @@ import { DEMO_VIDEO } from "../../lib/demo-video";
 export function DashHeader({ alert }: { alert?: string }) {
   return (
     <div className="lp-dh">
+      {/* Inside the sticky bar, so the progress bar moves with it (including the overscroll bounce at the page ends). */}
+      <ScrollBuddy />
       <a className="lp-dbrand" href="#top">
         <Parrot />
         <b>PerpParrot</b>

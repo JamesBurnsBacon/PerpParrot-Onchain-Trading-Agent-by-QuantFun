@@ -60,16 +60,21 @@
   overflow: hidden;
 }
 
-/* ---------- scroll progress bar with the riding parrot ---------- */
+/* ---------- scroll progress bar ---------- */
 .lp-pbar {
   position: fixed;
-  /* on the bottom edge of the always-visible bar, so the riding parrot does not sit on the logo */
-  top: calc(var(--dh-h) - 10px);
+  top: 0;
   left: 0;
   width: 100%;
   height: 10px;
   z-index: 80;
   pointer-events: none;
+}
+/* In the page's sticky bar it sits on the bar's bottom edge and moves with the bar, not with the viewport. */
+.lp-dh .lp-pbar {
+  position: absolute;
+  top: auto;
+  bottom: -3px; /* over the bar's 3px bottom border, as before */
 }
 .lp-pbar-fill {
   height: 100%;
