@@ -83,8 +83,8 @@ const pipeline = sql
   ? new Pipeline({
       sql,
       account: env.HL_ACCOUNT ?? "",
-      // Keep the scheduled review policy separate from the frozen fixture, while following the live gross cap.
-      policy: { ...reviewPolicy(await Bun.file(resolve(import.meta.dir, "..", "fixtures/review-policy.json")).json()), maxGrossLeverage: MAX_GROSS_LEVERAGE },
+      // The fixture's Aggressive policy, with the owner's gross cap (2026-10-07: 5× equity).
+      policy: { ...reviewPolicy(await Bun.file(resolve(import.meta.dir, "..", "fixtures/frozen-configuration.json")).json()), maxGrossLeverage: MAX_GROSS_LEVERAGE },
       openAiKey: env.OPENAI_API_KEY,
       model: env.REVIEW_MODEL,
       gate: env.REVIEW_GATE === "strict" ? "strict" : "basic",

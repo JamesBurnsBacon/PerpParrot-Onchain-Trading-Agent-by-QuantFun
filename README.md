@@ -12,7 +12,7 @@
 
 **TL;DR**
 - Score Hyperliquid addresses (traders, HyperCore vaults, ERC-4626 vaults) on risk-adjusted performance.
-- An LLM agent picks **5–25 source wallets**. Two models are compared in the backtest, and the winner runs live.
+- An LLM agent picks **5–15 source wallets**. Two models are compared in the backtest, and the winner runs live.
 - Every 10 minutes the backend reads the sources' positions and turns them into target exposures; the executor trades toward them.
 - An executor holds the **weighted, netted** copy of those positions in our own Hyperliquid account (5 HYPE ≈ $470).
 - **The backtest is the proof:** out-of-sample results over 2 weeks, 1 month, 6 weeks and 3 months vs. holding BTC. The ~5 h live run proves the machinery.
@@ -43,7 +43,7 @@
 ## 2. Terminology
 | Term | Meaning |
 |---|---|
-| **Source wallet** | An address we copy: a trader, a HyperCore vault, or the HyperCore account behind an ERC-4626 vault. We copy 5–25 of them. |
+| **Source wallet** | An address we copy: a trader, a HyperCore vault, or the HyperCore account behind an ERC-4626 vault. We copy 5–15 of them. |
 | **Slice** | Our scaled copy of one source's position in one asset, kept in a **virtual ledger** per (source, asset). |
 | **Position** | Our actual net holding per asset, i.e. the sum of its slices. **The bottleneck:** ≈ $470 and a $10 minimum order allow ~5–10 net positions. |
 | **Bucket** | A risk tier: a source universe, weights, and a leverage policy. |
@@ -61,7 +61,7 @@
  AI REVIEW (backend scripts; Vercel Cron or AWS once scheduled)
  ┌──────────────────────────────┐
  │ Role / Risk / Red-Team LLMs  │
- │ pick 5–25 sources + weights  │──> frozen configuration (hash pinned in both services)
+ │ pick 5–15 sources + weights  │──> frozen configuration (hash pinned in both services)
  └──────────────────────────────┘
  EVERY 10 MIN (Vercel Cron)
  ┌──────────────────────────────┐
@@ -182,13 +182,16 @@ auditing every model output; see [production integration status](docs/agents/PRO
 a frozen configuration, is the only execution authority (§4.7). A real-provider run, the two-model evaluation and a
 schedule (Vercel Cron or AWS) remain.
 
-The scheduled review uses `packages/backend/fixtures/review-policy.json`, separate from the
-pinned frozen configuration. Minimum Role/Risk confidence is 40; fit × latency × confidence
-sets relative weights. The largest of five trading risks (excluding evidence risk) sets
-rejection and allocation caps. At least five sources are still required for freezing;
-the basic gate remains the fallback.
+The scheduled review uses the pinned fixture's Aggressive policy, with the owner's
+5× gross cap applied at backend startup. Its minimum Role/Risk confidence is 60.
+`packages/backend/fixtures/review-policy.json` is a separate **local research policy**
+with a 40 confidence floor; `strict-gate-check.ts` uses it for measured comparisons,
+but the deployed pipeline does not load it. Fit × latency × confidence sets relative
+weights. The largest of five trading risks (excluding evidence risk) sets rejection
+and allocation caps. At least five sources are still required for freezing; the basic
+gate remains the fallback.
 
-- **Before go-live:** the agent picks **5–25 sources from ~25 finalists**, assigns weights, and writes a rationale and red flags (martingale, wash-like behavior, concentration, near-liquidation). It also judges:
+- **Before go-live:** the agent picks **5–15 sources from ~25 finalists**, assigns weights, and writes a rationale and red flags (martingale, wash-like behavior, concentration, near-liquidation). It also judges:
   - **diversification**, from the correlation matrix and vault ↔ leader links
   - **time in market** (avoid often-flat sources)
   - **holding time** (too fast to copy at a 10-minute delay?)
