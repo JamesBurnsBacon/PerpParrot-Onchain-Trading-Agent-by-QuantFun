@@ -128,6 +128,9 @@ if (process.env.DATABASE_URL) {
     const have = new Set(rows.map((r: { table_name: string }) => r.table_name));
     const missing = want.filter((t) => !have.has(t));
     check(missing.length === 0, `all ${want.length} tables present`, `missing tables: ${missing.join(", ")} (run supabase/migrations)`);
+    // The tail of 20261007090000_rename_mirror_tables.sql: without it every run fails to save.
+    const [kinds] = await sql`select pg_get_constraintdef(oid) as def from pg_constraint where conname = 'executor_runs_kind_check'`;
+    check(/'mirror'/.test(kinds?.def ?? ""), "executor_runs accepts mirror runs", `executor_runs_kind_check is ${kinds?.def ?? "missing"} (run the end of 20261007090000_rename_mirror_tables.sql)`);
     const policies = await sql`select tablename from pg_policies where 'anon' = any(roles) and cmd = 'SELECT'`;
     const readable = new Set(policies.map((p: { tablename: string }) => p.tablename));
     const closed = ["executor_runs", "run_snapshots", "paper_points", "dashboard_artifacts"].filter((t) => !readable.has(t));
