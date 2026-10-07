@@ -68,7 +68,7 @@ function Tile({ label, children, note }: { label: string; children: React.ReactN
   );
 }
 
-// scan ~14k accounts every 12 h → refresh every 5 min → Score qualifies ~250 → every 10 min pick 25
+// scan ~14k accounts every 12 h → refresh every 5 min → Score qualifies ~250 → every 10 min pick 40
 // (no high-frequency traders) → AI review when they change → freeze → activate when the sources change.
 export function Pipeline({ view }: { view: PipelineView }) {
   const { accounts, selections, active, latest, routing, verification } = view;

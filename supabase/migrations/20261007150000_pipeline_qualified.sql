@@ -1,5 +1,5 @@
 -- The pipeline's qualified list and 10-minute picks (docs/ingest/PIPELINE.md): a 12-hour scan
--- tracks ~14k accounts, Score qualifies ~250 of them, and 25 are picked every 10 minutes.
+-- tracks ~14k accounts, Score qualifies ~250 of them, and 40 are picked every 10 minutes.
 -- Safe to run twice.
 
 alter table pipeline_accounts add column if not exists qualified_at timestamptz;   -- set: on the qualified list

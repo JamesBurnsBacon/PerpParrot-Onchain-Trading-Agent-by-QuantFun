@@ -27,6 +27,18 @@ test('valid review uses independent specialists and produces bounded manifest',a
   assert.equal(m.status,'VALID');assert.equal(f.calls(),1);assert.equal(m.rebuildCount,0);
   assert.ok(m.sources.every(s=>s.weight<=s.maxAllocation));assert.ok(m.cashWeight>=f.policy.cashBuffer-1e-9);
 });
+test('committee reviews candidate 39 among 40 finalists but admits at most 15 sources',async()=>{
+  const f=fixture();
+  f.frame.candidates=Array.from({length:40},(_,candidate)=>({...structuredClone(f.frame.candidates[0]),candidate}));
+  f.frame.pairs=Array.from({length:40},(_,a)=>Array.from({length:39-a},(_,offset)=>({a,b:a+offset+1,correlation:0.2,currentExposureOverlap:0.1,linkedSource:false}))).flat();
+  f.addresses=new Map(f.frame.candidates.map(({candidate})=>[candidate,'0x'+(candidate+1).toString(16).padStart(40,'0')]));
+  f.deps.risk=async()=>f.observe('risk').map(output=>({...output,results:output.results.map(row=>({...row,drawdownRisk:row.candidate<25?90:20}))}));
+  const manifest=await review(f);
+  assert.equal(manifest.status,'VALID');
+  assert.equal(manifest.sources.length,MAX_SOURCES);
+  assert.ok(manifest.sources.some(source=>source.candidate===39));
+  assert.ok(manifest.sources.every(source=>source.candidate<=39));
+});
 test('short holds excluded deterministically despite excellent role scores',async()=>{
   const f=fixture();f.frame.candidates[0].metrics.medianHoldMinutes=20;
   const m=await review(f);assert.ok(!m.sources.some(s=>s.candidate===0));
@@ -221,7 +233,7 @@ test('local 40-floor research policy changes only confidence without rewriting t
 test('a valid committee draft below five sources still cannot be frozen',async()=>{
   const f=fixture();f.policy.mode='LIVE';f.policy.bucket='AGGRESSIVE';
   const manifest=await review(f);assert.equal(manifest.status,'VALID');assert.equal(manifest.sources.length,3);
-  assert.throws(()=>proposeFreeze(manifest,'0x'+'f'.repeat(40),999,NOW),/5–25 sources/);
+  assert.throws(()=>proposeFreeze(manifest,'0x'+'f'.repeat(40),999,NOW),/5–15 sources/);
 });
 test('freshness is checked at manifest issuance, including expiry on the final clock read',async()=>{
   const f=fixture();let reads=0;f.deps.clock=()=>++reads>=5?f.frame.expiresAtMs:NOW;

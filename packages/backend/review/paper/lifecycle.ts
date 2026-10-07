@@ -11,7 +11,7 @@ import {commitment} from '../../../shared/src/commitments.ts';
 import type {Frame,Policy} from '../../../shared/src/contracts.ts';
 import type {PaperStore} from './types.ts';
 const monitoringSchema=z.object({evidenceHash:z.string().regex(/^0x[0-9a-f]{64}$/),
-  concerns:z.array(z.object({candidate:z.number().int().min(0).max(24),kind:z.enum(['MARTINGALE','WASH_LIKE','CONCENTRATION','NEAR_LIQUIDATION','OFTEN_FLAT','TOO_FAST','MISSING_EVIDENCE']),severity:z.number().int().min(0).max(100)}).strict()).max(175),
+  concerns:z.array(z.object({candidate:z.number().int().min(0).max(39),kind:z.enum(['MARTINGALE','WASH_LIKE','CONCENTRATION','NEAR_LIQUIDATION','OFTEN_FLAT','TOO_FAST','MISSING_EVIDENCE']),severity:z.number().int().min(0).max(100)}).strict()).max(105),
 }).strict();
 export type MonitoringOutput=z.infer<typeof monitoringSchema>;
 export interface PaperReviewInput {session:string;frame:Frame;policy:Policy;addresses:ReadonlyMap<number,string>;rich:unknown;nowMs:number}

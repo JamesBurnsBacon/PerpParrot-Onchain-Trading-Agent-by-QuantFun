@@ -23,7 +23,7 @@ export const STRATEGY_INTENT_JSON_SCHEMA = {
     required: ["riskStyle", "maxSources", "diversification", "leverageComfort", "requestedLeverage", "avoidClones", "horizon", "clarify", "reply"],
     properties: {
       riskStyle: { type: "string", enum: ["aggressive", "balanced", "conservative"] },
-      maxSources: { type: "integer", minimum: 5, maximum: 25 },
+      maxSources: { type: "integer", minimum: 5, maximum: 15 },
       diversification: { type: "string", enum: ["low", "medium", "high"] },
       leverageComfort: { type: "string", enum: ["low", "medium", "high"] },
       requestedLeverage: { type: ["number", "null"], exclusiveMinimum: 0, maximum: 1000 },
@@ -84,8 +84,8 @@ function validateIntentFields(value: Record<string, unknown>, initialProblems: s
   oneOf("diversification", ["low", "medium", "high"]);
   oneOf("leverageComfort", ["low", "medium", "high"]);
   oneOf("horizon", ["short", "medium"]);
-  if (typeof value.maxSources !== "number" || !Number.isSafeInteger(value.maxSources) || value.maxSources < 5 || value.maxSources > 25) {
-    problems.push("maxSources must be an integer from 5 to 25");
+  if (typeof value.maxSources !== "number" || !Number.isSafeInteger(value.maxSources) || value.maxSources < 5 || value.maxSources > 15) {
+    problems.push("maxSources must be an integer from 5 to 15");
   }
   if (value.requestedLeverage !== null && (typeof value.requestedLeverage !== "number" || !Number.isFinite(value.requestedLeverage) || value.requestedLeverage <= 0 || value.requestedLeverage > 1000)) {
     problems.push("requestedLeverage must be null or a finite number in (0, 1000]");

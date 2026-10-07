@@ -76,7 +76,7 @@ export const checkFrozenConfiguration = (
   ensure(typeof policy.maxGrossLeverage === "number" && Number.isFinite(policy.maxGrossLeverage) && policy.maxGrossLeverage > 0, "invalid frozen policy");
   ensure(value.policyHash === commitment(keccakUtf8, "perpparrot:policy:v1", policy), "frozen policy mismatch");
 
-  ensure(Array.isArray(value.sources) && value.sources.length >= 5 && value.sources.length <= 25, "freeze requires 5–25 sources");
+  ensure(Array.isArray(value.sources) && value.sources.length >= 5 && value.sources.length <= 15, "freeze requires 5–15 sources");
   ensure(Number.isSafeInteger(value.cashUnits) && value.cashUnits >= Math.ceil(policy.cashBuffer * WEIGHT_UNITS), "invalid frozen cash buffer");
   let previousCandidate = -1;
   const addresses = new Set<string>();

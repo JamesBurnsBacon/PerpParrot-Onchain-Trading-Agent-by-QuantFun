@@ -175,7 +175,7 @@
           "candidate": {
             "type": "integer",
             "minimum": 0,
-            "maximum": 24
+            "maximum": 39
           },
           "sourceAddress": {
             "type": "string",
@@ -201,7 +201,7 @@
         "additionalProperties": false
       },
       "minItems": 0,
-      "maxItems": 25
+      "maxItems": 15
     },
     "cashWeight": {
       "type": "number",

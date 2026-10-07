@@ -5,7 +5,7 @@ import {localReviewDb} from '../packages/backend/scripts/local-review-db.ts';
 test('isolated review harness stores exact JSON and rolls back failed transactions',async()=>{
   const sql=await localReviewDb('memory://');
   try {
-    const [r]=await sql`insert into selection_runs(started_at,status,accounts) values(${new Date(0)},'running',25) returning id`;
+    const [r]=await sql`insert into selection_runs(started_at,status,accounts) values(${new Date(0)},'running',40) returning id`;
     const payload={measured:{sample:{btcBeta:0.3}},additional:{sample:{patterns:{observedFills:0}}}};
     await sql`update selection_runs set finalists=${JSON.stringify(payload)}::text::jsonb where id=${r.id}`;
     assert.deepEqual((await sql`select finalists from selection_runs where id=${r.id}`)[0].finalists,payload);

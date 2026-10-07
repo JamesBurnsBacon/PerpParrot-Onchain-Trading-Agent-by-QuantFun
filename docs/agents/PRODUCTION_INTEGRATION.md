@@ -9,7 +9,7 @@ Nothing here authorizes real trades.
 Current review work: the scheduled pipeline now supplies measured evidence and local
 real-provider rehearsals exercise its strict review and configuration path. See
 [measurement definitions](STRICT_EVIDENCE.md) for scope and reproduction. Local success
-does not establish production deployment or the strict gate's 12/25 acceptance target;
+does not establish production deployment or the strict gate's 12/40 acceptance target;
 the basic fallback remains available.
 
 The [evidence-bound paper review integration](PAPER_LIFECYCLE.md) now connects rich
@@ -46,7 +46,7 @@ HyperEVM freeze consumer and preview tables that were here were replaced by the 
 ## Remaining gates for the review core
 
 1. Reach the strict gate's acceptance target on repeated real-provider observations:
-   at least 12/25 candidate passes in most runs and a VALID manifest with at least five
+   at least 12/40 candidate passes in most runs and a VALID manifest with at least five
    sources. Local real calls and audit persistence have been exercised; production
    deployment and reliability remain separate checks. Keep the basic fallback.
 2. Run the two-model point-in-time evaluation, select the winner and persist the full

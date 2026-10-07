@@ -70,7 +70,7 @@ The active configuration becomes a **roster**: a set of seats, each holding one 
 ## 4. Seat lifecycle
 
 ### 4.1 Admission: filling an open seat
-- **The bench.** The top approved candidates are kept as a ranked bench: Score's 25, reviewed by the AI, filtered by the copyability gates of §5. It holds every wallet a review of the picks approved in the last 12 h, as of that wallet's latest review (a later review that didn't approve it takes it off).
+- **The bench.** The top approved candidates are kept as a ranked bench: Score's 40, reviewed by the AI, filtered by the copyability gates of §5. It holds every wallet a review of the picks approved in the last 12 h, as of that wallet's latest review (a later review that didn't approve it takes it off).
 - **Filling a seat.** When a seat is open, the highest-fit bench candidate whose approval is fresh (reviewed within 12 h) is admitted at the next 10-minute select. A fresh approval needs no new AI call.
 - **Rate limit:** at most **2 admissions per hour** and **8 per day**. The cap keeps the roster from turning over in a burst, as it did this morning. Below 5 seats the limit doesn't apply, so the roster can always be frozen.
 - **Cooldown:** a released wallet can't be re-admitted for 24 h, so a wallet can't ping-pong in and out.
@@ -178,7 +178,7 @@ That is the intended shift: toward wallets whose trades we can follow from a 10-
    - probation flat for 6 h → `released`;
    - seated flat for 3 runs → `released`;
    - winding down with no cap left, flat, or past 48 h → `released`.
-4. **Review:** review the bench when Score's 25 change, and every seat every 12 h (warning signs, approval, weight refresh).
+4. **Review:** review the bench when Score's 40 change, and every seat every 12 h (warning signs, approval, weight refresh).
 5. **Fill:** open seats from the fresh bench, within the pace limits.
 6. **Freeze and activate:** if any seat or weight changed and at least 5 seats are active.
 
