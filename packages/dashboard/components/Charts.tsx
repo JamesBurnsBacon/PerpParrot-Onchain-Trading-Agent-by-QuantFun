@@ -260,9 +260,9 @@ export function PaperTable({ books, series, live }: { books: PaperView["books"];
   // The live Aggressive account has no paper book, so it is its own row (in the chart's order); the costs below stay paper-only.
   const lines = series.flatMap((s) => {
     const b = books.find((x) => x.id === s.bookId);
-    if (b) return [{ key: b.id, s, equityUsd: b.equityUsd, returnPct: b.returnPct, positions: b.openPositions as number | null }];
+    if (b) return [{ key: b.id, s, equityUsd: b.equityUsd, returnPct: b.returnPct, positions: b.openPositions as number | null, live: false }];
     const last = s.points.at(-1)?.[1];
-    return s.id === "aggressive" && live && last !== undefined ? [{ key: "live-aggressive", s, equityUsd: live.equityUsd, returnPct: last, positions: live.positions }] : [];
+    return s.id === "aggressive" && live && last !== undefined ? [{ key: "live-aggressive", s, equityUsd: live.equityUsd, returnPct: last, positions: live.positions, live: true }] : [];
   });
   const cost = (v: number, start: number) => `${usd(v)} (${((v / start) * 100).toFixed(2)}%)`;
   return (
@@ -277,7 +277,7 @@ export function PaperTable({ books, series, live }: { books: PaperView["books"];
           </tr>
         </thead>
         <tbody>
-          {lines.map(({ key, s, equityUsd, returnPct, positions }) => {
+          {lines.map(({ key, s, equityUsd, returnPct, positions, live: isLive }) => {
             return (
               <tr key={key} className="border-t" style={{ borderColor: "var(--grid)" }}>
                 <td className="py-1.5" style={{ color: "var(--ink)" }}>
@@ -290,14 +290,14 @@ export function PaperTable({ books, series, live }: { books: PaperView["books"];
                 </td>
                 <td className="py-1.5 pl-3 text-right" style={{ color: "var(--ink)" }}>{usd(equityUsd)}</td>
                 <td className="py-1.5 pl-3 text-right font-semibold" style={{ color: "var(--ink)" }}>{pct(returnPct)}</td>
-                <td className="py-1.5 pl-3 text-right" style={{ color: "var(--ink-2)" }}>{positions ?? "—"}</td>
+                <td className="py-1.5 pl-3 text-right" style={{ color: "var(--ink-2)" }} title={isLive ? "Positions the last executed live run traded toward" : undefined}>{positions ?? "—"}</td>
               </tr>
             );
           })}
         </tbody>
       </table>
       {/* The cost diagnostics stay one tap away. */}
-      <details className="lp-details mt-3">
+      {rows.length ? <details className="lp-details mt-3">
         <summary>Costs</summary>
         <table className="tabular w-full whitespace-nowrap text-xs">
           <thead style={{ color: "var(--muted)" }}>
@@ -326,7 +326,7 @@ export function PaperTable({ books, series, live }: { books: PaperView["books"];
         <div className="mt-2 text-xs" style={{ color: "var(--muted)" }}>
           Paper fills at mark ± slippage with taker fees and the live trading rules; funding at HL&apos;s hourly rate. Relative to starting capital.
         </div>
-      </details>
+      </details> : null}
     </div>
   );
 }

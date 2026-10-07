@@ -47,3 +47,28 @@ test("liveBookRow: latest equity, and the nonzero targets of the last executed l
   expect(liveBookRow({ runs: 0, points: [] }, null)).toBeNull();
   expect(liveBookRow(null, null)).toBeNull();
 });
+
+test("a flat live run counts zero positions; a newer dry run does not hide the older live run", () => {
+  const equity = { runs: 2, points: [[1, 470], [2, 470.41]] as [number, number][] };
+  const flat = (exposures: { asset: string; exposureE9: string }[]) => ({ snapshotHash: "h", configurationHash: "c", exposures });
+  expect(liveBookRow(equity, [run({ evidence: flat([]) })])?.positions).toBe(0);
+  expect(liveBookRow(equity, [run({ evidence: flat([{ asset: "BTC", exposureE9: "0" }, { asset: "ETH", exposureE9: "-0" }]) })])?.positions).toBe(0);
+  const older = run({ id: "old", evidence: flat([{ asset: "BTC", exposureE9: "5" }]) });
+  expect(liveBookRow(equity, [run({ id: "new", dryRun: true, evidence: flat([{ asset: "BTC", exposureE9: "5" }, { asset: "ETH", exposureE9: "7" }]) }), older])?.positions).toBe(1);
+});
+
+test("a paper-backed Aggressive line keeps its paper row, and the live prop does not replace it", () => {
+  const paperAggressive = [book("aggressive-470", 480, 2.1, 7), ...books];
+  const paperSeries = [line("aggressive", "Aggressive", "aggressive-470", 2.1), line("balanced", "Balanced ×0.5", "balanced-470", 0)];
+  const html = renderToStaticMarkup(<PaperTable books={paperAggressive} series={paperSeries} live={{ equityUsd: 470.41, positions: 5 }} />);
+  expect(html).toContain("$480");
+  expect(html).not.toContain("$470.41");
+});
+
+test("with no paper books at all the live row still renders, and there is no empty costs table", () => {
+  const html = renderToStaticMarkup(<PaperTable books={[]} series={series.slice(0, 1)} live={{ equityUsd: 470.41, positions: 5 }} />);
+  expect(html).toContain("Aggressive");
+  expect(html).toContain("Positions the last executed live run traded toward");
+  expect(html).not.toContain("<summary>Costs</summary>");
+});
+

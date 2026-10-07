@@ -24,6 +24,7 @@ export default function Page() {
   const lastPlanned = data?.recent?.find((r) => r.kind === "mirror" && r.status === "executed" && r.plan);
   const btc = lastReturn(series, "btc");
   const live = liveIsReal(data?.recent ?? null, data?.equity ?? null);
+  const liveRow = live ? liveBookRow(data?.equity ?? null, data?.recent ?? null) : null;
   const executed = data?.equity?.points.length ?? 0; // live runs (the equity curve is live runs only)
   // The heartbeat starts one run window (10 min) before the paper books' current start.
   const booksStart = Math.min(...(data?.paper?.books ?? []).map((b) => b.startedAt ?? Infinity));
@@ -63,9 +64,9 @@ export default function Page() {
               ) : (
                 <Waiting what="No runs yet" source="Curves start with the first mirror run" />
               )}
-              {series.some((s) => s.bookId) && data?.paper ? (
+              {(series.some((s) => s.bookId) && data?.paper) || liveRow ? (
                 <div className="mt-4">
-                  <PaperTable books={data.paper.books} series={series} live={live ? liveBookRow(data.equity ?? null, data.recent ?? null) : null} />
+                  <PaperTable books={data?.paper?.books ?? []} series={series} live={liveRow} />
                 </div>
               ) : null}
             </Panel>
