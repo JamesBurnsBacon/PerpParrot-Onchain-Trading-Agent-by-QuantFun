@@ -79,6 +79,7 @@ describe("runConfirmTool", () => {
     expect(ok.saved?.requestId).toBe("req-9");
     expect(ok.card).toMatchObject({ kind: "request", stage: "saved", requestId: "req-9" });
     expect(ok.facts).toContain("PENDING");
+    expect(ok.facts).toContain("do not read them aloud");
     expect(ok.facts).toContain("No orders were placed");
     expect(r.posts.find(p => p.path === "/live/request")!.body).toEqual({ intent: INTENT, previewHash: HASH });
   });

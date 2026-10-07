@@ -74,7 +74,8 @@ async function save(ctx: ConfirmContext, p: Pending): Promise<ConfirmOutcome> {
   const { requestId, preview: { previewHash } } = saved.data;
   ctx.setPending(null);
   return {
-    facts: cap(`Saved: request ${requestId} is PENDING with hash ${previewHash.slice(0, 10)}…, awaiting operator review and freeze. No orders were placed and nothing was applied. ${planSentence(p.plan)}`),
+    // The id and hash are on screen; reading hex aloud is noise, so the facts tell the model not to.
+    facts: cap(`Saved: the request is PENDING, awaiting operator review and freeze (its reference ${requestId.slice(0, 8)}… and hash ${previewHash.slice(0, 10)}… are shown on screen; do not read them aloud). No orders were placed and nothing was applied. ${planSentence(p.plan)}`),
     card: { kind: "request", stage: "saved", plan: p.plan, previewHash, requestId, sources: p.sources },
     saved: saved.data,
   };
