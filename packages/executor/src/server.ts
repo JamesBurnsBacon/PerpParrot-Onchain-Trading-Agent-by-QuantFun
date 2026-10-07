@@ -27,20 +27,13 @@ const log = (msg: string, extra: Record<string, unknown> = {}) =>
 const sql = process.env.DATABASE_URL ? new SQL(process.env.DATABASE_URL, config.vercel ? { max: 3, idleTimeout: 5 } : {}) : undefined;
 const store = sql ? new PostgresStore(sql) : new MemoryStore();
 const alert = createAlert({ botToken: config.telegramBotToken, chatId: config.telegramChatId, log: (m) => log(m) });
-// Recover write-ahead intents before exposing the listener. A crash can leave a
-// batch ambiguous even if the old process never persisted the pause control.
-// Never fatal: every run re-checks unresolved batches before any exchange action, so a database blip
-// at a (serverless) cold start must not take /health, /status or /admin/pause down with it. Alerts
-// once per batch, not once per instance.
+// Report write-ahead intents a crash left without a recorded outcome. Nothing is paused: the next
+// run reconciles them from Hyperliquid automatically (reconcile.ts). Never fatal, so a database
+// blip at a (serverless) cold start can't take /health, /status or /admin/pause down with it.
 try {
   const unresolvedOnStartup = await store.unresolvedOrderBatches();
   if (unresolvedOnStartup.length > 0) {
-    const updatedBy = `startup-recovery:${unresolvedOnStartup[0].id}`;
-    const controls = await store.getControls();
-    if (!(controls.paused && controls.updatedBy === updatedBy)) {
-      await store.setControls({ paused: true, updatedAt: Date.now(), updatedBy });
-      await alert(`executor held at startup: ${unresolvedOnStartup.length} order action(s) need reconciliation`);
-    }
+    log("unresolved order actions at startup; the next run reconciles them", { batches: unresolvedOnStartup.map((b) => b.id) });
   }
 } catch (e) {
   log("startup recovery check failed; runs re-check before trading", { error: (e as Error).message });

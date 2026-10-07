@@ -49,7 +49,8 @@ export type PlannedOrder = {
 
 export type SkippedLeg = {
   asset: string;
-  reason: "BELOW_DRIFT" | "BELOW_MIN_ORDER" | "UNKNOWN_MARKET" | "SIZE_ROUNDS_TO_ZERO" | "NOT_TRADABLE" | "LEVERAGE_FAILED";
+  // IN_FLIGHT: an earlier order action for this perp may still land (runner.ts, reconcile.ts).
+  reason: "BELOW_DRIFT" | "BELOW_MIN_ORDER" | "UNKNOWN_MARKET" | "SIZE_ROUNDS_TO_ZERO" | "NOT_TRADABLE" | "LEVERAGE_FAILED" | "IN_FLIGHT";
   targetUsd: number;
   currentUsd: number;
 };
