@@ -21,10 +21,11 @@ const log = (msg: string, extra: Record<string, unknown> = {}) =>
 
 // Supabase Postgres supplies durable run claims, runs, controls and action journals.
 // Production configuration rejects a missing DATABASE_URL.
-// On Vercel, a small pool that lets go quickly: Supabase's session pooler allows 15 connections
-// across every instance of both services. 3, not fewer: a run holds one for the run lock
-// (lock.ts) while its queries need another, and an operator action may wait on the lock with a third.
-const sql = process.env.DATABASE_URL ? new SQL(process.env.DATABASE_URL, config.vercel ? { max: 3, idleTimeout: 5 } : {}) : undefined;
+// Small pools: Supabase's session pooler allows 15 connections across every instance of the
+// executor (the backend uses the transaction pooler). 3, not fewer: a run holds one for the run
+// lock (lock.ts) while its queries need another, and an operator action may wait on the lock with
+// a third. On Vercel they let go quickly; the long-running executor (Railway) keeps 4.
+const sql = process.env.DATABASE_URL ? new SQL(process.env.DATABASE_URL, config.vercel ? { max: 3, idleTimeout: 5 } : { max: 4 }) : undefined;
 const store = sql ? new PostgresStore(sql) : new MemoryStore();
 const alert = createAlert({ botToken: config.telegramBotToken, chatId: config.telegramChatId, log: (m) => log(m) });
 // Report write-ahead intents a crash left without a recorded outcome. Nothing is paused: the next

@@ -297,7 +297,7 @@ Status: built (`packages/dashboard`): live account vs paper books vs BTC, target
 
 ### 4.14 Hosting and scheduling
 - **One Vercel project, three services** (root `vercel.json`): dashboard at `/`, backend at `/api/backend/*`, executor at `/api/executor/*`. The executor reaches the backend over a service binding (`BACKEND_URL`). Supabase Postgres holds all state. Deploy and operations: [docs/ops/DEPLOY.md](docs/ops/DEPLOY.md), [docs/ops/RUNBOOK.md](docs/ops/RUNBOOK.md).
-- **Vercel Cron** (production deployments only): `:x9` snapshot pre-build, `:x0` executor run, every 5 min the missed-run watchdog. Cron routes require `CRON_SECRET`.
+- **Vercel Cron** (production deployments only): `:x9` snapshot pre-build, every 5 min the missed-run watchdog, and the selection pipeline. The `:x0` run is triggered by the long-running executor itself (Railway). Cron routes require `CRON_SECRET`.
 - **Live trading** needs one long-running executor process (one HL nonce sequence, no function timeout): the `Dockerfile` + `railway.json` build it; it triggers its own runs at `:x0`. The executor refuses `DRY_RUN=false` on Vercel.
 - **Ingest, scoring and scheduled AI reviews**: Vercel Cron as well (decided 2026-10-07; [docs/ingest/PIPELINE.md](docs/ingest/PIPELINE.md)). If Hyperliquid rate-limits Vercel's IPs, only the refresh job moves to one long-running process (Railway, same code).
 - **CI:** `.github/workflows/service-checks.yml` (backend and executor against Postgres, dashboard build) and `.github/workflows/agent-review-checks.yaml` (AI review core). No secrets in CI.
