@@ -614,7 +614,11 @@ export class Pipeline {
 
     // 4. Fill open seats from the fresh bench, within the pace limits.
     const active = seats.filter((s) => ACTIVE.includes(s.state));
-    const [counts] = await sql`select count(*) filter (where at > ${new Date(now - HOUR).toISOString()})::int as hour, count(*)::int as day
+    // The pace limits count admissions since the latest fresh start at most (ROSTER.md §4.6): the
+    // new roster's first 5 count, the old roster's admissions don't.
+    const [{ resetAt }] = await sql`select max(at) as "resetAt" from roster_events where kind = 'released' and detail ->> 'reason' = 'fresh start'`;
+    const paceFrom = (span: number) => new Date(Math.max(now - span, resetAt ? new Date(resetAt as Date).getTime() : 0)).toISOString();
+    const [counts] = await sql`select count(*) filter (where at >= ${paceFrom(HOUR)})::int as hour, count(*) filter (where at >= ${paceFrom(24 * HOUR)})::int as day
       from roster_events where kind = 'admitted' and at > ${new Date(now - 24 * HOUR).toISOString()}`;
     const admissions = freshStartWaiting ? [] : planAdmissions({
       active, bench, cooling, admittedLastHour: counts.hour, admittedLastDay: counts.day, nowMs: now,
@@ -717,14 +721,17 @@ export class Pipeline {
   // after `sinceMs`, when given), as of its latest review. A later review that didn't approve it takes it off.
   private async freshBench(nowMs: number, sinceMs?: number): Promise<(BenchEntry & { runId: number })[]> {
     const from = Math.max(nowMs - ROSTER.approvalFreshHours * HOUR, sinceMs ?? 0);
-    const runs = await this.o.sql`select id, review -> 'bench' as bench, review -> 'verdicts' as verdicts from selection_runs
+    const runs = await this.o.sql`select id, review -> 'bench' as bench, review -> 'verdicts' as verdicts, review -> 'manifest' as manifest from selection_runs
       where status in ('benched', 'rejected') and (review ->> 'scope') is distinct from 'seats'
         and started_at > ${new Date(from).toISOString()}
       order by started_at desc`;
     const decided = new Set<string>();
     const bench: (BenchEntry & { runId: number })[] = [];
-    for (const run of runs as { id: string | number; bench: BenchEntry[] | null; verdicts: { address: string }[] | null }[]) {
-      const approved = new Map((run.bench ?? []).map((b) => [b.address, b]));
+    for (const run of runs as { id: string | number; bench: BenchEntry[] | null; verdicts: { address: string }[] | null; manifest: Pick<Manifest, "status" | "reason"> | null }[]) {
+      // An invalid committee run (e.g. POLICY_VIOLATION) approves no one, even with a bench recorded
+      // before that rule (#94); its verdicts still take earlier approvals off.
+      const valid = !run.manifest || reviewGate(run.manifest, this.o.gate) !== "none";
+      const approved = new Map((valid ? run.bench ?? [] : []).map((b) => [b.address, b]));
       const reviewed = run.verdicts?.length ? run.verdicts.map((v) => v.address) : [...approved.keys()];
       for (const address of reviewed) {
         if (decided.has(address)) continue;
