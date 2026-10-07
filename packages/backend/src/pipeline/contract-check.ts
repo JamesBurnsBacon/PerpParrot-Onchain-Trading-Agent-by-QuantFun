@@ -1,9 +1,11 @@
 // Which of the picks are contracts on HyperEVM? (CONTRACT_CHECK=on, needs NOWNODES_API_KEY; evidence only.)
 //
-// The leaderboard lists every account the same way, but an address that has code on HyperEVM is a contract
-// (an ERC-4626 vault, a router, a protocol account) that trades on HyperCore through CoreWriter; it is not a
-// person's wallet, and its history says little about a strategy we could copy. `eth_getCode` on NOWNodes'
-// HyperEVM endpoint (hype.nownodes.io/evm) tells them apart, one read per address.
+// The leaderboard lists every account the same way, but an address that has code on HyperEVM is a contract (a
+// vault, a router, a protocol account, a smart wallet). A contract can have a HyperCore account at the same
+// address. This only reports which picks have code; it says nothing about whether they trade. On 2026-10-07 the
+// 7 such addresses checked held no perp positions at that check, so this is a watch, not a known problem
+// (issue #84). `eth_getCode` on NOWNodes' HyperEVM endpoint (hype.nownodes.io/evm) tells them apart, one read
+// per address.
 //
 // Nothing here selects or excludes: the result is recorded with the run and shown on the dashboard. A read
 // that fails is "unread", never "not a contract".
