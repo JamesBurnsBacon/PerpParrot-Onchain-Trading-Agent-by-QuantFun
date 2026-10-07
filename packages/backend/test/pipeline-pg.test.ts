@@ -237,7 +237,7 @@ describe.skipIf(!url)("Pipeline on Postgres", async () => {
     await sql`update pipeline_accounts set primary_source = true where address = ${smallest}`;
     users.length = 0;
     await pipeline.refresh(Date.now() + 240_000);
-    const value = new Map((await sql`select address, account_value from pipeline_accounts`).map((r: { address: string; account_value: number }) => [r.address, r.account_value]));
+    const value = new Map<string, number>((await sql`select address, account_value from pipeline_accounts`).map((r: { address: string; account_value: number }) => [r.address, r.account_value]));
     expect(users[0]).toBe(smallest); // the primary source, though the smallest
     const rest = users.slice(1).map((u) => value.get(u)!);
     expect(rest).toEqual([...rest].sort((x, y) => y - x)); // then by account value, largest first
