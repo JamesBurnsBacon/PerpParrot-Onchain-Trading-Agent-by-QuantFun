@@ -95,6 +95,10 @@ describe("get_backtest", () => {
     expect(showsCard(buildBacktest(null).card)).toBe(false);
     expect(showsCard(buildRunStatus({ runs: null, status: null, exposures: null }).card)).toBe(true);
     expect(showsCard(buildBacktest(artifact).card)).toBe(true);
+    // A run status whose latest run sent no orders is spoken only; one with orders still gets its card.
+    const mkRun = (orders: number) => run({ plan: { orders: Array.from({ length: orders }, () => ({ asset: "BTC", isBuy: true, notionalUsd: 12, targetUsd: 30, currentUsd: 18 })), skipped: [] } });
+    expect(showsCard(buildRunStatus({ runs: [mkRun(0)], status: status(), exposures: null }).card)).toBe(false);
+    expect(showsCard(buildRunStatus({ runs: [mkRun(2)], status: status(), exposures: null }).card)).toBe(true);
   });
   test("an unpublished backtest is unavailable", () => {
     expect(buildBacktest(null).card.kind).toBe("unavailable");

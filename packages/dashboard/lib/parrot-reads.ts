@@ -27,9 +27,10 @@ const pctText = (v: number, digits = 1) => `${signed(v, digits)}%`;
 const fraction = (v: number | null | undefined) => (v == null || !Number.isFinite(v) ? "unavailable" : `${Number((v * 100).toFixed(2))}%`);
 const shortAddress = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
-// An unavailable backtest (not published yet, or unreadable; the source does not tell them apart) is not worth a screen:
-// the facts still go to the parrot, which says so in one line, and the page stays as it was.
-export const showsCard = (card: LiveCard): boolean => !(card.kind === "unavailable" && card.tool === "get_backtest");
+// Some answers are better only spoken, so no card takes the screen: an unavailable backtest (not published yet, or unreadable; the
+// source does not tell them apart) and a run status whose latest run sent no orders (the facts still go to the parrot, which says so).
+export const showsCard = (card: LiveCard): boolean =>
+  !(card.kind === "unavailable" && card.tool === "get_backtest") && !(card.kind === "run" && card.runs[0] !== undefined && ordersOf(card.runs[0]) === 0);
 const unavailable = (tool: ReadToolName, what: string, facts: string): ReadResult => ({ facts: cap(facts), card: { kind: "unavailable", tool, what } });
 
 // ---- get_run_status -------------------------------------------------------------------------------------------
