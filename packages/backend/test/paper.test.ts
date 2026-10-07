@@ -18,6 +18,18 @@ describe("stepCopyBook: confirmed closes and the equity band", () => {
     expect(book.positions.BTC).toBeUndefined();
   });
 
+  test("a bucket's equity band scales with its multiplier, so it trades like Aggressive scaled down", () => {
+    // $1,000 equity, 5% band: Aggressive (×1) skips a $40 gap; Conservative (×0.25) needs only $12.50.
+    const aggressive = newBook("a", "A", "copy", 1_000, 0);
+    const conservative = newBook("c", "C", "copy", 1_000, 0, 0.25);
+    stepCopyBook(conservative, new Map([["ETH", 0.4]]), markets(), cfg); // $100 at ×0.25
+    stepCopyBook(conservative, new Map([["ETH", 0.6]]), markets(), { ...cfg, equityBandFraction: 0.05 }); // → $150: a $50 gap > $12.50
+    expect(conservative.positions.ETH.szi).toBeCloseTo(0.0375, 9);
+    stepCopyBook(aggressive, new Map([["ETH", 0.1]]), markets(), cfg);
+    stepCopyBook(aggressive, new Map([["ETH", 0.14]]), markets(), { ...cfg, equityBandFraction: 0.05 }); // $40 gap < $50
+    expect(aggressive.positions.ETH.szi).toBeCloseTo(0.025, 9);
+  });
+
   test("skips gaps under the equity share", () => {
     const book = newBook("a", "A", "copy", 1_000, 0);
     stepCopyBook(book, new Map([["ETH", 0.1]]), markets(), cfg);

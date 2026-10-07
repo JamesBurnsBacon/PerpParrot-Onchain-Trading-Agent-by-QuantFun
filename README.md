@@ -139,8 +139,10 @@ The [research screening v1 methodology](docs/ingest/RESEARCH_SCREENING_V1.md) do
 | Bucket | Source universe | Exposure | Hackathon mode |
 |---|---|---|---|
 | **Aggressive** | Traders + vaults | Mirrored exactly, subject to the 95% margin rule (§4.8) | **Live** |
-| **Balanced** | Same set as Aggressive | Aggressive × `m < 1`. ❓ *`m` is tuned from the backtest to a target vol/drawdown.* | Backtest + paper |
-| **Conservative** | **Separate low-risk universe: vaults + lending only** | Copies the sources' perp **and lending/yield** positions. ❓ *How do we read lending positions, now and historically?* | Backtest + paper |
+| **Balanced** | Same set as Aggressive | Aggressive's targets **× 0.5** | Paper |
+| **Conservative** | Same set as Aggressive | Aggressive's targets **× 0.25** | Paper |
+
+The buckets differ **only by that fixed multiplier** (owner, 2026-10-07): same wallets, same perps, same direction, same moments. The 5× gross cap applies to Aggressive's targets first, so Balanced tops out at 2.5× and Conservative at 1.25×. Each book's equity band scales with its multiplier; only the exchange's $10 minimum order stays fixed, so a smaller multiplier needs proportionally more capital to place the same legs.
 
 ### 4.4 Copy model
 - **Slice:** `slice_i,c = wᵢ × (nᵢ,c / Eᵢ) × E_ours`.
@@ -205,7 +207,7 @@ One run per 10-minute slot (`mirror-<runAt>`). Code: `packages/backend` (snapsho
    - **Equity = HL's live account value** from the `portfolio` request (last point of the `day` window, live), not Σ per-dex `accountValue`. Most leaderboard traders use unified or portfolio-margin accounts (23 + 5 of 40 sampled), where per-dex `accountValue` is only the margin set aside on that dex; summing it understated equity, and so overstated leverage, by 2–10×. The portfolio value is also what the backtest's returns use.
    - The backend only builds real run times (`:x0`) within 120 s of now, so nobody can pre-build a stale snapshot for a future run through the public endpoint.
 2. **Targets** (backend, `GET /api/backend/targets/:runAt`): `exposure_c = Σᵢ wᵢ · nᵢ,c / Eᵢ` per asset in bigint math (`targetsFromSnapshot`, `packages/shared/copy.ts`), with the snapshot's hash, configuration hash and account. The paper books step from the same snapshot.
-   - Weights are the frozen `weightUnits`; cash stays cash, and a flat source's weight stays uninvested (its exit is followed). Gross exposure is capped at the policy's `maxGrossLeverage`. Every source must be in the frozen configuration and hold only eligible assets.
+   - Weights are the frozen `weightUnits`; cash stays cash, and a flat source's weight stays uninvested (its exit is followed). Gross exposure (Σ |exposure| over perps) is capped at the policy's `maxGrossLeverage`, **5×** (owner, 2026-10-07), by scaling every perp down pro-rata. Long BTC and short ETH count fully toward it, the same as long both: only positions in the **same** perp net out. Every source must be in the frozen configuration and hold only eligible assets.
 3. **Execute** (executor): Vercel Cron calls `/api/executor/cron/run` at `:x0` (a long-running executor uses its own timer). The executor claims the run (a second trigger is a no-op), fetches the targets over the `BACKEND_URL` service binding, rejects them unless the configuration hash and account match its pinned `FROZEN_CONFIGURATION_HASH` and `HL_ACCOUNT`, then plans and trades (§4.8).
 - **Frozen configuration = execution authority.** The review turns a VALID/LIVE review into a `FrozenConfiguration`: sources with integer weight and ceiling units, cash units, **our account**, the policy, and a `configurationHash` (keccak over canonical JSON, domain `perpparrot:frozen:v1`). `packages/shared/frozen.ts` checks it without dependencies.
 - **Freeze commitment:** the `configurationHash` is pinned in both services' environment (`FROZEN_CONFIGURATION_HASH`); the backend refuses to build from another configuration and the executor refuses targets from one. **No onchain contract:** everything trades in our own HL account. Freezing = `packages/backend/scripts/freeze.ts --write` (saves `frozen/live.json`, prints the variables), set the variables, redeploy.
@@ -221,7 +223,7 @@ Code: `packages/executor`. A Bun service. Dry run deploys as the `executor` serv
   - **margin rule:** if `Σ |N_c| / maxLev_c` would exceed **95% of equity**, scale **all** targets down pro-rata
   - **drift rule:** trade a leg only if the gap is ≥ $10 and ≥ 10% of the target; full closes are always allowed (reduce-only)
   - reductions first; reduce-only whenever an order only shrinks a position
-  - **sanity bound:** reject the targets if gross exposure > 10× (the policy caps it at `maxGrossLeverage`, 3× in the fixture)
+  - **sanity bound:** reject a run's targets if their gross exposure (Σ |target notional| ÷ our equity) is over 10× (`MAX_GROSS_LEVERAGE`). The policy already caps it at 5×, so this only trips on a corrupted or misconfigured target; the run fails and the positions are held.
   - **own eligibility check:** never open, add to or flip a position in a market that isn't cross-margin with ≥ $15M OI by the executor's own reading, whatever the snapshot's list says (reductions still follow the sources)
   - the $10 minimum is checked at the IOC limit price
 - **Orders:** IOC limit at mark ± 50 bps, prices and sizes rounded to HL tick/lot rules, ≤ 20 orders per action, a deterministic `cloid` per run and asset. Remainders are retried on the next run.
@@ -256,7 +258,7 @@ Code: `packages/executor`. A Bun service. Dry run deploys as the `executor` serv
 
 ### 4.10 Paper books (backend only)
 
-Status: built (`packages/backend/src/paper/`), stepped from every run's snapshot and served at `GET /paper`. Running now: Aggressive at $470 (live size), its $10k twin, Balanced at $470 (Aggressive's weights × 0.5, `PAPER_BALANCED_MULTIPLIER`) and BTC buy & hold. Books hold on runs whose targets the executor would get none for, and pay funding between runs at HL's current hourly rate. Conservative, the shadow model and the $10k Balanced book wait for the review core to emit their configurations; adding one is a `BookSpec` in `defaultBooks`.
+Status: built (`packages/backend/src/paper/`), stepped from every run's snapshot and served at `GET /paper`. Running now: Aggressive, Balanced (× 0.5, `PAPER_BALANCED_MULTIPLIER`) and Conservative (× 0.25, `PAPER_CONSERVATIVE_MULTIPLIER`), each at $470 (live size) and as a $10k twin, and BTC buy & hold. Books hold on runs whose targets the executor would get none for, and pay funding between runs at HL's current hourly rate. The shadow model waits for the review core; adding a book is a `BookSpec` in `defaultBooks`.
 - **Books:** Balanced, Conservative, the shadow model, and a $10k twin of live Aggressive.
 - **Sizes:** each at **~$470 and $10k**, to show the strategy both with and without the minimum-order effect.
 - **Fills:** at HL mark price, plus the taker fee, plus the backtest slippage, with the $10 minimum applied.
@@ -341,8 +343,6 @@ Budget ~1 h of testing per 2 h of features. Integrate only tested modules.
 - [ ] ❓ Which two models (≥ 1 OpenAI)
 - [ ] ❓ Agent output format: weight grid, continuous weights, or ranking
 - [x] Maker share: **neither**. Zero or near-zero maker volume (< 5%) is a slight score penalty (§4.2); a high share earns nothing. Evidence: `scripts/research/maker-share/`
-- [ ] ❓ Balanced multiplier `m` (from the backtest)
-- [ ] ❓ How to read sources' lending positions for Conservative
 - [ ] ❓ Per-tier type-B threshold N (production)
 - [x] Backend → executor: **exposures** (§4.13); `rebalance-report.schema.json` (orders) is kept as a contract document only
 - [x] Live bucket: **Aggressive** (team decision 2026-10-06); enforced in the review core and the frozen-configuration checks

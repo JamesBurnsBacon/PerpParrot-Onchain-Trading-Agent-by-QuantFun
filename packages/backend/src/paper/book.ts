@@ -130,7 +130,9 @@ export const stepCopyBook = (
     const gapUsd = targetUsd - currentSz * market.markPx;
     if (gapUsd === 0) continue;
     const fullClose = targetUsd === 0 && currentSz !== 0;
-    if (legSkip({ targetUsd, currentUsd: currentSz * market.markPx, equityUsd: equity, closePending: pendingCloses.has(asset) }, cfg)) continue;
+    // The equity band scales with the multiplier, so a bucket trades like Aggressive scaled down
+    // (only the exchange's $10 minimum stays fixed).
+    if (legSkip({ targetUsd, currentUsd: currentSz * market.markPx, equityUsd: equity * book.multiplier, closePending: pendingCloses.has(asset) }, cfg)) continue;
     const isBuy = gapUsd > 0;
     const fillPx = market.markPx * (1 + ((isBuy ? 1 : -1) * cfg.slippageBps) / 10_000);
     const delta = fullClose ? -currentSz : gapUsd / market.markPx;
