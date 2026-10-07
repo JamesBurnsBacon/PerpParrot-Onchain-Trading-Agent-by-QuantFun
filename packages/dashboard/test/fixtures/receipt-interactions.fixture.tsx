@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { mock } from "bun:test";
+mock.module("../../components/parrot/ParrotEffects", () => ({ useParrotEffects: () => null }));
 import { hookHost, fakeClock, nodes } from "./receipt-hook-host";
 import { row } from "./receipt-data";
 const host = hookHost(), clock = fakeClock();
@@ -45,7 +47,7 @@ for (const mode of ["close", "escape", "unmount"]) {
   // Real browsers fire `close` asynchronously: after a StrictMode effect replay the event arrives while the dialog is open again and must not dismiss it.
   native.open = true; dialogTree.props.onClose(); assert.equal(dismissed, 0, "a stale close event while open must be ignored");
   const select = nodes(dialogTree).find(n => n.type === "select"); select.props.onChange({ target: { value: "1" } }); draw();
-  assert.equal(nodes(dialogTree).find(n => n.props?.className === "decisions-sentence").props.children, row(1).claim);
+  assert.equal(nodes(dialogTree).find(n => n.props?.label === "The claim").props.text, row(1).claim);
   rows = [row(4), ...rows]; draw(); assert.equal(shows, 1, "new speech never reopens the modal or changes selection");
   assert.equal(nodes(dialogTree).find(n => n.type === "select").props.value, 1);
   if (mode === "close") nodes(dialogTree).find(n => n.type === "button").props.onClick();

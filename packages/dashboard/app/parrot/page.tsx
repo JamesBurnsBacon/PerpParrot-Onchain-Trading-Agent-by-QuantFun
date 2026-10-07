@@ -6,9 +6,11 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Badge } from "../../components/parrot/Badge";
 import { ParrotAvatar, type AvatarState } from "../../components/parrot/ParrotAvatar";
-import { StepRail, type Step } from "../../components/parrot/StepRail";
+import { ExecutePanel } from "../../components/parrot/ExecutePanel";
+import { StageFlock } from "../../components/parrot/StageFlock";
+import { DryBird, Icon, StageBurst } from "../../components/parrot/StageBits";
+import { WalletBird } from "../../components/parrot/WalletBird";
 import { Parrot, ParrotSymbols } from "../../components/lp/ParrotSymbols";
-import { ScrollBuddy } from "../../components/lp/ScrollBuddy";
 import { LiveTalk } from "../../components/parrot/LiveTalk";
 import { LiveCards } from "../../components/parrot/LiveCards";
 import type { LiveCard } from "../../lib/parrot-reads";
@@ -18,15 +20,11 @@ import { useLiveTalk } from "../../components/parrot/useLiveTalk";
 import { canDemo, post, type Failure } from "../../components/parrot/api";
 import { isPreviewResponse, type ChatResponse, type PreviewResponse } from "../../lib/parrot";
 import { PARROT_PRESETS, type ParrotPreset } from "../../lib/parrot-presets";
-import { ParrotEffectsProvider, useParrotEffects, FunControls, Fever } from "../../components/parrot/ParrotEffects";
+import { ParrotEffectsProvider, useParrotEffects } from "../../components/parrot/ParrotEffects";
 import { diffWallets } from "../../lib/wallet-board";
-import { WaitingFlock } from "../../components/parrot/WalletBoard";
-import "../lp.css"; // the landing theme's shared bits: progress bar, click feathers, peeking parrot
-import "./parrot.css";
+import "../lp.css"; // shared landing palette and symbols
+import "./parrot-show.css";
 import "./parrot-lp.css"; // the landing page's soft theme on this page (light only)
-
-// Drifting leaves behind the stage (decorative; positions and timings are fixed so server and client agree).
-const LEAVES = Array.from({ length: 12 }, (_, i) => ({ left: (i * 37) % 92, delay: -((i * 1.3) % 9), duration: 8 + (i % 4) }));
 
 // Development-only: the whole module is behind a constant condition, so production builds contain neither the import nor its chunk.
 const EffectsLab = process.env.NODE_ENV !== "production"
@@ -41,7 +39,7 @@ function ParrotContent() {
   const [chat, setChat] = useState<ChatResponse | null>(null);
   const [preview, setPreview] = useState<PreviewResponse | null>(null);
   const [demo, setDemo] = useState<ParrotPreset | null>(null);
-  const [step, setStep] = useState<Step>(0);
+  const [step, setStep] = useState<0 | 2>(0);
   const [previewError, setPreviewError] = useState<Failure | null>(null);
   const [busy, setBusy] = useState(false);
   const [stale, setStale] = useState(false);
@@ -95,48 +93,59 @@ function ParrotContent() {
 
   const state: AvatarState = live.view.phase === "connecting" ? "thinking" : live.active ? live.view.avatar : busy ? "thinking" : "idle";
 
-  return <main data-calm={fx.quiet} className="parrot-page px-4 py-5 sm:px-7 sm:py-7">
+  return <main data-calm={fx.quiet} className="parrot-page parrot-show">
     <ParrotSymbols />
-    <ScrollBuddy />
     <div className="parrot-awning" aria-hidden="true" />
-    <div className="parrot-shell mx-auto max-w-[1240px]">
+    <div className="parrot-shell">
       <header className="parrot-top">
-        <a href="/" className="parrot-back">← Dashboard</a>
-        <h1 className="parrot-brand"><Parrot />PerpParrot<span className="sr-only"> · Talk with PerpParrot</span></h1>
-        <span className="parrot-top-spacer" aria-hidden="true" />
-      </header>
-      <div className="parrot-layout parrot-layout--result">
-        {/* The card and its scenery wrap the stage: the <section> itself stays byte-identical to the frozen
-            pre-integration markup that test/fixtures/parrot-off.fixture.tsx guards. */}
-        <div className="parrot-stage-card min-w-0">
-          <div className="parrot-scenery" aria-hidden="true">
-            {LEAVES.map((l, i) => <i key={i} className="parrot-leaf" style={{ left: `${l.left}%`, animationDelay: `${l.delay}s`, animationDuration: `${l.duration}s` }} />)}
-            <div className="parrot-hill back" /><div className="parrot-hill" />
-          </div>
-        <section className="parrot-stage min-w-0" aria-label="Talk with PerpParrot">
-          <div className="parrot-scene"><ParrotAvatar state={state} stream={live.remoteStream} live={live.view.phase === "live" && !live.view.playbackBlocked} /></div>
-          <LiveTalk live={live} disabled={busy} />
-          <CompactReceipt active={live.view.phase === "live"} {...receipts} />
-          <FunControls />
-          {stale && <p className="parrot-live-status" role="status">Our last change did not finish, so I cleared the plan. Talk live again to redo it.</p>}
-          {!live.active && !demo && canDemo(live.view.failure) && <button type="button" className="parrot-button mt-3" onClick={playDemo}>Play the cached demo</button>}
-          {demo && <div className="mt-4"><Badge kind="CACHED DEMO" /></div>}
-        </section>
+        <a href="/" className="parrot-back" aria-label="Back to Dashboard"><Icon kind="back" /></a>
+        <h1 className="parrot-brand"><Parrot />PerpParrot</h1>
+        <div className="show-controls">
+          <button type="button" aria-label={`Sound effects ${fx.sound ? "on" : "off"}`} aria-pressed={fx.sound} onClick={fx.toggleSound}><Icon kind="sound" /></button>
+          <button type="button" aria-label="Calm mode" aria-pressed={fx.calm} onClick={fx.toggleCalm}><Icon kind="moon" /></button>
         </div>
-        {chat && <div className="parrot-result min-w-0" data-fever={fx.celebration?.animated || undefined}>
-          <div className="wallet-board-heading">{chat.shortlist.dataSource === "sample" && <Badge kind="SAMPLE DATA" />}<small>No orders are placed.</small></div>
-          <Fever />
-          <p className="sr-only" role="status">Strategy ready. Review Select, Verify, and Execute.</p>
-          <StepRail chat={chat} demo={!!demo} step={step} setStep={setStep} preview={preview} busy={busy} executionDisabled={live.active} failure={previewError} onConfirm={() => void confirm()} />
-        </div>}
-        {!chat && <WaitingFlock />}
+      </header>
+      <div className="show-floor">
+        <section className="parrot-stage" aria-label="Talk with PerpParrot">
+          <div className="parrot-scene">
+            <span className="show-shout" aria-hidden="true">SQUAWK!</span>
+            <div className="show-rosette" aria-hidden="true">ALL<br />BEAK</div>
+            <ParrotAvatar state={state} stream={live.remoteStream} live={live.view.phase === "live" && !live.view.playbackBlocked} />
+            {state === "thinking" && <div className="thinking-seeds" aria-hidden="true"><i /><i /><i /><i /><i /></div>}
+          </div>
+          <div className="voice-dock">
+            <LiveTalk live={live} disabled={busy} />
+            <CompactReceipt active={live.view.phase === "live"} {...receipts} />
+            {stale && <p className="stage-error" role="status">Plan cleared</p>}
+            {!live.active && !demo && canDemo(live.view.failure) && <button type="button" className="parrot-button demo-button" onClick={playDemo}>Cached demo</button>}
+          </div>
+        </section>
+        <div className="show-screen" data-kind={card?.kind ?? (preview ? "saved" : chat ? "flock" : "idle")}>
+          <div className="screen-label"><span>THE BEAK SHOW</span>{demo && <Badge kind="CACHED DEMO" />}{(card || step === 2) && chat?.shortlist.dataSource === "sample" && <Badge kind="SAMPLE DATA" />}</div>
+          <StageBurst />
+          {chat && <div className="flock-stage" hidden={!!card || step === 2}>
+            <span className="strategy-style">{chat.intent.riskStyle}</span>
+            <StageFlock chat={chat} />
+            <button type="button" className="parrot-button parrot-button--primary" disabled={!chat.shortlist.addresses.length} onClick={() => setStep(2)}><DryBird />{preview ? "Saved" : "Lock it?"}</button>
+            {!card && step === 0 && <p className="sr-only" role="status">Strategy ready. Review the flock and hold to save a pending request.</p>}
+          </div>}
+          {card ? <LiveCards card={card} onClose={() => setCard(null)} onConfirm={() => void live.confirmNow()} />
+          : chat ? step === 2 ? <>
+            <button type="button" className="stage-close" aria-label="Back to flock" onClick={() => setStep(0)}><Icon kind="back" /></button>
+            <ExecutePanel chat={chat} demo={!!demo} result={preview} busy={busy} failure={previewError} onConfirm={() => void confirm()} executionDisabled={live.active} />
+          </> : null : <div className="show-idle">
+            <span className="leaf-chip">Voice powered</span>
+            <h2>YOUR<br /><em>FLOCK.</em></h2>
+            <div className="waiting-wire" aria-hidden="true"><WalletBird vibe="calm" /><WalletBird vibe="wild" /><WalletBird vibe="steady" /></div>
+            <p>Say something.</p>
+          </div>}
+        </div>
       </div>
-      <LiveCards card={card} onClose={() => setCard(null)} onConfirm={() => void live.confirmNow()} />
       {lab && EffectsLab && <Suspense fallback={null}><EffectsLab onCard={setCard}
         onPreset={preset => { setStale(false); setDemo(preset); setChat(preset.chat); setPreview(null); setPreviewError(null); setStep(0); }}
-        onLock={() => { const p = demo ?? PARROT_PRESETS[0]; if (!demo) { setDemo(p); setChat(p.chat); } setPreview(p.preview); }}
+        onLock={() => { const p = demo ?? PARROT_PRESETS[0]; if (!demo) { setDemo(p); setChat(p.chat); } setPreview(p.preview); setStep(2); }}
         onReset={() => { setChat(null); setDemo(null); setPreview(null); setStep(0); lastChat.current = null; }} /></Suspense>}
-      <footer className="parrot-privacy">Parrot&apos;s opinion, not advice. Receipts check words, not markets. Voice is processed by OpenAI; when receipts are on, sentences and their turn facts are too. The parrot cannot trade.</footer>
+      <footer className="parrot-privacy">not advice · the parrot cannot trade</footer>
     </div>
   </main>;
 }

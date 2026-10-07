@@ -11,7 +11,9 @@ test("review-10: cached demo consistently describes simulation and live still de
   })) as string;
   const html = render(true, preview);
   expect(html).toContain("Simulated request. Nothing was saved; no operator will review it.");
-  expect(html).toContain("CACHED DEMO · SIMULATED");
+  expect(html).toContain("CACHED DEMO");
+  expect(html).toContain("SIMULATED");
+  expect(html).toContain("Not saved");
   for (const value of [html, render(true, null), render(true, null, true)]) {
     expect(value).not.toContain("Awaiting operator freeze");
     expect(value).not.toContain("PENDING");

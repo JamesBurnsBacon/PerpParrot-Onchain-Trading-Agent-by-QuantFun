@@ -1,4 +1,4 @@
-// Frozen pre-integration live-stage markup, captured at 84ded11. No browser or network.
+// Frozen single-screen redesign markup. Receipt-off cases must remain identical. No browser or network.
 import { mock } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { readFileSync } from "node:fs";

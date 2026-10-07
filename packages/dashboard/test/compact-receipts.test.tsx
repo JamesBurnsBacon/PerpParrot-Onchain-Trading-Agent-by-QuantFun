@@ -16,7 +16,9 @@ for (const [relation, support, label] of [
   expect(html).toContain("compact-receipt-meter");
   expect(html.match(/class="compact-receipt-row"/g)).toHaveLength(1);
   const header = html.match(/class="compact-receipt-header"[^]*?<\/button>/)![0];
-  expect(header).toEndWith(">Audited by OpenAI Decisions</button>");
+  expect(header).toContain('aria-label="Audited by OpenAI Decisions"');
+  expect(header).toContain('role="img" aria-label="OpenAI"');
+  expect(header).not.toContain(">Audited by OpenAI Decisions</button>");
   expect(html).not.toMatch(/\bms\b|17 calls|0\.00085|<dialog|Show the call/);
 });
 test("checking replaces the prior sentence's verdict", () => {
@@ -38,16 +40,16 @@ test("hidden when never worked and outside an active call", () => {
   expect(render(row(), "ready", false)).toBe("");
   expect(render(row(), "paused", false)).toBe("");
 });
-test("drawer includes exact evidence, both disagreement cases, banter and ten judged choices", () => {
+test("drawer retains sentences, turn facts, disagreement and ten judged choices without JSON viewers", () => {
   const rows = [row(14, "faithful", .24), row(13, "contradicted", .81), row(12, "faithful", .98, .1), ...Array.from({ length: 11 }, (_, i) => row(11 - i))];
   const html = renderToStaticMarkup(<DecisionsDrawer rows={rows} initial={rows[0]} calls={14} cost={.0007} opener={{} as never} onClose={() => {}} />);
-  for (const text of ["OpenAI Decisions API · gpt-6-luna · beta", "states_a_fact", "supported_by_facts", "faithful", "contradicted", "unestablished", "ambiguous", "Round trip: 450 ms", "Server: 400 ms", "Input tokens:", "Estimated cost:", "Visit: 14 calls", "Show the call", "Request", "Response", "input_tokens", rows[0].facts, rows[0].claim]) expect(html).toContain(text);
+  for (const text of ["Decisions", "Grounding", "24%", "UNCLEAR", "450 ms", "Calls", "Turn facts", rows[0].facts.slice(0, 180), rows[0].claim]) expect(html).toContain(text);
   expect(html.match(/<option /g)).toHaveLength(10);
   expect(html).toContain(rows[1].claim); expect(html).toContain(rows[2].claim);
   expect(html).toContain('aria-modal="true"'); expect(html).toContain('aria-labelledby="parrot-decisions-title"');
   expect(html).not.toContain("<dialog open");
-  const escaped = (value: unknown) => renderToStaticMarkup(<pre>{JSON.stringify(value, null, 2)}</pre>);
-  expect(html).toContain(escaped(rows[0].decision!.request)); expect(html).toContain(escaped(rows[0].decision!.response));
+  expect(html).not.toContain("<pre>");
+  expect(html).not.toContain("Show the call");
 });
 for (const [fixture, marker] of [["sentence-receipts.fixture.ts", "sentence receipts all GREEN"], ["receipt-interactions.fixture.tsx", "receipt interactions GREEN"], ["parrot-off.fixture.tsx", "off markup GREEN"]]) test(`isolated real-component/hook regression: ${fixture}`, () => {
   const result = Bun.spawnSync([process.execPath, "run", `test/fixtures/${fixture}`], { cwd: new URL("..", import.meta.url).pathname, stdout: "pipe", stderr: "pipe" });
@@ -61,9 +63,9 @@ test("production uses the shared observer silently; scoped CSS keeps 44px/12px a
   const page = source("app/parrot/page.tsx");
   expect(page).toContain("receipts.begin()"); expect(page).toContain("receipts.observers");
   expect(page.indexOf("<CompactReceipt")).toBeGreaterThan(page.indexOf("<LiveTalk"));
-  expect(page.indexOf("<CompactReceipt")).toBeLessThan(page.indexOf("<WaitingFlock"));
-  expect(page).toContain("Receipts check words, not markets.");
-  const css = source("app/parrot/parrot.css").split("/* A2:")[1];
+  expect(page.indexOf("<CompactReceipt")).toBeLessThan(page.indexOf("<StageFlock"));
+  expect(page).toContain("not advice · the parrot cannot trade");
+  const css = source("app/parrot/parrot-show.css").split("/* A2:")[1];
   for (const text of ["max-width: 320px", "min-height: 44px", "font-size: 12px", "text-overflow: ellipsis", "prefers-reduced-motion", "animation: none"]) expect(css).toContain(text);
   expect(css).not.toMatch(/@keyframes|animation:(?! none)/);
 });
