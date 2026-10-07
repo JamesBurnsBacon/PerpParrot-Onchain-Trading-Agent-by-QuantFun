@@ -1,6 +1,6 @@
 import {test,expect} from 'bun:test';
 import {PGlite} from '@electric-sql/pglite';
-import {StrategyAgent,agentOptions,validateAnalysis,type Query,type AgentInput,type AgentOptions} from '../src/pipeline/strategy-agent';
+import {StrategyAgent,agentOptions,validateAnalysis,hash,type Query,type AgentInput,type AgentOptions} from '../src/pipeline/strategy-agent';
 import type {PacedInfo} from '../src/pipeline/hl';
 import sample from './fixtures/score/portfolio-sample.json';
 
@@ -72,6 +72,7 @@ test('PGlite queue: overlapping workers call the model once, persist provenance,
     expect((c.positions as {market:string}[]).some(p=>p.market==='xyz:GOLD')).toBe(false); // still covered by aggregate
     expect(calls[0].candidates.filter(c=>c.kind==='hypercore-vault').length).toBe(1);
     const [saved]=await f.query('select * from strategy_analyses');expect(saved.input_hash).toHaveLength(64);
+    expect(hash(saved.input)).toBe(saved.input_hash); // JSONB may reorder keys; provenance must survive a round-trip
     expect(saved.result.economicAuthority).toBe(false);expect(saved.result.provider).toBe('openai');
     expect(saved.result.inputHash).toBe(saved.input_hash);expect(saved.result.usage.total_tokens).toBe(300);
     const picks=Array.from({length:25},(_,i)=>({address:address(25-i)}));
@@ -110,7 +111,12 @@ test('PGlite queue: data is frozen at enqueue; catch-up finds a pick that missed
 });
 
 test('strict output: null/incorrect references, duplicate IDs, unknown fields and missing candidates reject',()=>{
-  const input:AgentInput={selectedAt:new Date().toISOString(),candidates:Array.from({length:25},(_,candidate)=>({candidate,fillStats:{makerShare:0.5},missing:null}))};
+  const input:AgentInput={selectedAt:new Date().toISOString(),candidates:Array.from({length:25},(_,candidate)=>({candidate,fillStats:{makerShare:0.5},pnlCurve:[[1,2]],missing:null}))};
+  const bracket=modelRows(input);bracket.candidates[0].evidence[0]={field:'pnlCurve[0][1]',valueJson:'2',observation:'Exact nested array value'};
+  expect(validateAnalysis(bracket,input).candidates.length).toBe(25);
+  bracket.candidates[0].evidence[0].field='pnlCurve[99][1]';expect(()=>validateAnalysis(bracket,input)).toThrow();
+  bracket.candidates[0].evidence[0].field='pnlCurve[-1][1]';expect(()=>validateAnalysis(bracket,input)).toThrow();
+  bracket.candidates[0].evidence[0].field='__proto__.polluted';expect(()=>validateAnalysis(bracket,input)).toThrow();
   const missing=modelRows(input);missing.candidates[0].evidence[0].field='missing';expect(()=>validateAnalysis(missing,input)).toThrow();
   const duplicate=modelRows(input);duplicate.candidates[0].candidate=1;expect(()=>validateAnalysis(duplicate,input)).toThrow('candidate mismatch');
   expect(()=>validateAnalysis({...modelRows(input),weights:[]},input)).toThrow();

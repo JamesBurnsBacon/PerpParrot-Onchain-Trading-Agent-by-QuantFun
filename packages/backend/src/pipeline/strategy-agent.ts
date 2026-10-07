@@ -39,7 +39,9 @@ const schema={type:'object',additionalProperties:false,required:['candidates'],p
   required:['candidate','strategy','confidence','evidence','risks','unknowns'],properties:{candidate:{type:'integer',minimum:0,maximum:24},strategy:{type:'string',minLength:1,maxLength:2000},confidence:{type:'string',enum:['low','medium','high']},
     evidence:{type:'array',minItems:1,maxItems:8,items:{type:'object',additionalProperties:false,required:['field','valueJson','observation'],properties:{
       field:{type:'string',minLength:1,maxLength:160},valueJson:{type:'string',maxLength:3000},observation:{...string,minLength:1}}}},risks:strings,unknowns:{...strings,minItems:1}}}}}};
-export const hash=(value:unknown)=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
+const canonical=(v:any):any=>Array.isArray(v)?v.map(canonical):v&&typeof v==='object'
+  ?Object.fromEntries(Object.keys(v).sort().map(k=>[k,canonical(v[k])])):v;
+export const hash=(value:unknown)=>createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex');
 export function pickHash(addresses:string[]) {
   const sorted=addresses.map(a=>a.toLowerCase()).sort();
   if(sorted.length!==25||new Set(sorted).size!==25||sorted.some(a=>!/^0x[0-9a-f]{40}$/.test(a)))throw new Error('Expected 25 distinct finalist addresses');
@@ -54,8 +56,10 @@ export function validateAnalysis(value:unknown,input:AgentInput) {
   const result=output.parse(value),ids=input.candidates.map(c=>c.candidate).sort((a,b)=>a-b);
   if(ids.length!==25||new Set(ids).size!==25||JSON.stringify(result.candidates.map(c=>c.candidate).sort((a,b)=>a-b))!==JSON.stringify(ids))throw new Error('Agent candidate mismatch');
   for(const candidate of result.candidates)for(const ref of candidate.evidence) {
+    const path=ref.field.replace(/\[(\d+)\]/g,'.$1');
+    if(!/^[A-Za-z_$][\w$]*(?:\.(?:[A-Za-z_$][\w$]*|0|[1-9]\d*))*$/.test(path))throw new Error('Invalid evidence path');
     let v:unknown=input.candidates.find(c=>c.candidate===candidate.candidate);
-    for(const key of ref.field.split('.'))v=v&&typeof v==='object'&&Object.hasOwn(v,key)&&!['__proto__','prototype','constructor'].includes(key)?(v as Record<string,unknown>)[key]:undefined;
+    for(const key of path.split('.'))v=v&&typeof v==='object'&&Object.hasOwn(v,key)&&!['__proto__','prototype','constructor'].includes(key)?(v as Record<string,unknown>)[key]:undefined;
     if(v===null||v===undefined||JSON.stringify(v)!==ref.valueJson)throw new Error('Agent cited missing or incorrect evidence');
   }
   return result;

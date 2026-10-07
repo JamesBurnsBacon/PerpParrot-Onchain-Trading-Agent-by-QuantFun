@@ -39,6 +39,8 @@ Each finalist receives an English strategy hypothesis, confidence, evidence,
 risks and unknowns. Every evidence reference must exactly match a non-null input
 value. Schema and ID checks reject missing/duplicate candidates or extra fields.
 This validates citations, not the truth of the model's interpretation.
+Input hashes use SHA-256 over JSON with recursively sorted object keys so they
+remain reproducible after Postgres JSONB reorders keys; arrays retain their order.
 
 ## Deploy and operate
 
