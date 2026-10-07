@@ -7,7 +7,7 @@ import sample from './fixtures/score/portfolio-sample.json';
 const address=(i:number)=>`0x${i.toString(16).padStart(40,'0')}`;
 async function setup() {
   const db=new PGlite();const query:Query=async(q,p)=>(await db.query(q,p)).rows as Record<string,any>[];
-  for(const file of ['20261007120000_pipeline.sql','20261007150000_pipeline_qualified.sql','20261007160000_strategy_analyses.sql','20261007160000_strategy_analyses.sql']) {
+  for(const file of ['20261007120000_pipeline.sql','20261007150000_pipeline_qualified.sql','20261007160000_pipeline_primary.sql','20261007170000_strategy_analyses.sql','20261007170000_strategy_analyses.sql']) {
     await db.exec(await Bun.file(new URL(`../../../supabase/migrations/${file}`,import.meta.url)).text());
   }
   for(let i=1;i<=26;i++)await query(`insert into pipeline_accounts(address,source,kind,account_value,listed_at,portfolio,refreshed_at,trade_count,maker_share,orders_per_day,fills_at)

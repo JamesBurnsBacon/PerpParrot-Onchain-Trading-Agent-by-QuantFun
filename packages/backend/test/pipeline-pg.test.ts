@@ -19,6 +19,8 @@ describe.skipIf(!url)("Pipeline on Postgres", async () => {
   await sql.unsafe(await migration("20261007120000_pipeline.sql"));
   await sql.unsafe(await migration("20261007150000_pipeline_qualified.sql"));
   await sql.unsafe(await migration("20261007150000_pipeline_qualified.sql")); // safe to run twice
+  await sql.unsafe(await migration("20261007160000_pipeline_primary.sql"));
+  await sql.unsafe(await migration("20261007160000_pipeline_primary.sql"));
 
   // Leaderboard: every sample account (≥ $10k ones pass the scan). No vaults from either list.
   const leaderboardRows = sample.map((s, i) => ({
@@ -52,21 +54,24 @@ describe.skipIf(!url)("Pipeline on Postgres", async () => {
     return Response.json(Array.from({ length: n }, (_, k) => ({ coin: "BTC", oid: k, px: "100", sz: "1", crossed: k % 2 === 0, time: NOW - span + (k * span) / n })));
   }) as unknown as typeof fetch;
 
-  const pipeline = new Pipeline({
-    sql,
-    account: address(999),
-    policy: {} as Policy,
-    log: () => {},
-    now: () => NOW,
-    info: (perMinute) => new PacedInfo(perMinute, info, async () => {}),
-  });
+  const pipelineAt = (nowMs: number) =>
+    new Pipeline({
+      sql,
+      account: address(999),
+      policy: {} as Policy,
+      log: () => {},
+      now: () => nowMs,
+      info: (perMinute) => new PacedInfo(perMinute, info, async () => {}),
+    });
+  const pipeline = pipelineAt(NOW);
   const passing = sample.filter((s) => s.accountValue >= 10_000).length;
 
   test("scan lists every ≥ $10k leaderboard account once, and is safe to repeat", async () => {
     expect(await pipeline.scan()).toEqual({ leaderboard: passing, vaults: 0 });
     expect(await pipeline.scan()).toEqual({ leaderboard: passing, vaults: 0 });
-    const [{ n }] = await sql`select count(*)::int as n from pipeline_accounts`;
+    const [{ n, primary }] = await sql`select count(*)::int as n, count(*) filter (where primary_source)::int as primary from pipeline_accounts`;
     expect(n).toBe(passing);
+    expect(primary).toBe(passing); // all within the leaderboard's top 200
   });
 
   test("refresh stores the scoring windows only, without fills, and releases nothing it finished", async () => {
@@ -76,6 +81,25 @@ describe.skipIf(!url)("Pipeline on Postgres", async () => {
     const rows = await sql`select portfolio, attempted_at, fills_at from pipeline_accounts`;
     expect(rows.every((r: { portfolio: [string][] }) => r.portfolio.every(([w]) => w === "month" || w === "allTime"))).toBe(true);
     expect(rows.every((r: { attempted_at: Date | null; fills_at: Date | null }) => r.attempted_at === null && r.fills_at === null)).toBe(true);
+  });
+
+  test("qualifying waits for every primary source, and for 95% of the scan unless it is 3.5 h old", async () => {
+    const [primary, ...others] = (await sql`select address from pipeline_accounts order by address`).map((r: { address: string }) => r.address);
+    await sql`update pipeline_accounts set primary_source = false where address <> ${primary}`;
+    await sql`update pipeline_accounts set portfolio = null, refreshed_at = null where address in ${sql(others.slice(0, 3))}`; // < 95% fresh
+    const qualifiedCount = async () => (await sql`select count(*)::int as n from pipeline_accounts where qualified_at is not null`)[0].n;
+    expect(await pipeline.select()).toEqual({ status: "waiting", reason: "no qualified list yet" });
+    await sql`update pipeline_accounts set portfolio = null, refreshed_at = null where address = ${primary}`;
+    const later = pipelineAt(NOW + 3.6 * 3_600_000);
+    expect((await later.select()).reason).toBe("no qualified list yet"); // the primary isn't fresh
+    expect(await qualifiedCount()).toBe(0);
+    await pipeline.refresh(Date.now() + 240_000); // reads the 4 accounts back
+    await sql`update pipeline_accounts set portfolio = null, refreshed_at = null where address in ${sql(others.slice(0, 3))}`;
+    expect((await later.select()).reason).toMatch(/qualified accounts have fresh fills$/); // qualified on what is fresh
+    expect(await qualifiedCount()).toBeGreaterThan(0);
+    // Back to a fully refreshed scan for the steps below.
+    await sql`update pipeline_accounts set qualified_at = null, primary_source = true`;
+    await pipeline.refresh(Date.now() + 240_000);
   });
 
   test("select qualifies the scan, then waits for the qualified list's fills", async () => {

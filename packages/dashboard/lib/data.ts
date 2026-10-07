@@ -54,6 +54,15 @@ export type Exposures = { runAt: number; exposures: { asset: string; fraction: n
 // Backend GET /pipeline (src/pipeline status()); timestamps are ISO strings.
 export type SelectionStatus = "running" | "activated" | "kept" | "rejected" | "failed";
 export type PipelineView = {
+  // Hyperliquid read routing of the serving backend instance (absent on older backends).
+  routing?: {
+    mode: string;
+    official: { requests: number; errors: number; totalMs: number };
+    nownodes: { requests: number; errors: number; totalMs: number };
+    fallbacks: number;
+    shadow: { compared: number; mismatches: number };
+    breakerOpen: boolean;
+  };
   accounts: { listed: number; fresh: number; errors: number; listed_at: string | null; qualified?: number; high_frequency?: number; qualified_at?: string | null };
   selections: {
     id: number;

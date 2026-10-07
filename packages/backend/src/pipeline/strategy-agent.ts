@@ -5,6 +5,7 @@ import {parsePortfolio} from '../score';
 import {positionsFromStates} from '../../review/input.ts';
 import {ELIGIBLE_DEXES} from '../../../shared/snapshot';
 import {PacedInfo} from './hl';
+import {routedFetch} from './info-router';
 
 export type Query = (text:string,params?:unknown[])=>Promise<Record<string,any>[]>;
 export type AgentOptions = {apiKey:string;model:string;fetcher?:typeof fetch};
@@ -143,7 +144,7 @@ export class StrategyAgent {
     try {
       const input=structuredClone(job.input) as AgentInput,addresses=job.addresses as string[];
       if(pickHash(addresses)!==job.set_hash||input.candidates.length!==25||input.candidates.some((c,i)=>c.candidate!==i))throw new Error('Invalid strategy job mapping');
-      const hl=this.info?.(signal)??new PacedInfo(300,((url,init)=>fetch(url,{...init,
+      const hl=this.info?.(signal)??new PacedInfo(300,((url,init)=>routedFetch(String(url),{...init,
         signal:AbortSignal.any([signal,...(init?.signal?[init.signal]:[])])})) as typeof fetch);
       for(let i=0;i<25;i++) {
         signal.throwIfAborted();const states=[];const observedFrom=new Date().toISOString();

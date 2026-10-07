@@ -70,7 +70,7 @@ function Tile({ label, children, note }: { label: string; children: React.ReactN
 // scan ~14k accounts every 12 h → refresh every 5 min → Score qualifies ~250 → every 10 min pick 25
 // (no high-frequency traders) → AI review when they change → freeze → activate when the sources change.
 export function Pipeline({ view }: { view: PipelineView }) {
-  const { accounts, selections, active, latest } = view;
+  const { accounts, selections, active, latest, routing } = view;
   const run = selections[0];
   const freshShare = accounts.listed ? accounts.fresh / accounts.listed : 0;
   const sources = [...(active?.sources ?? [])].sort((a, b) => b.weightUnits - a.weightUnits);
@@ -118,6 +118,25 @@ export function Pipeline({ view }: { view: PipelineView }) {
           )}
         </Tile>
       </div>
+
+      {routing && (routing.mode !== "official" || routing.nownodes.requests > 0) && (
+        <Tile
+          label="Hyperliquid data providers"
+          note={`mode ${routing.mode}${routing.breakerOpen ? " · NOWNodes paused (circuit breaker)" : ""}${routing.shadow.compared ? ` · shadow check: ${routing.shadow.compared - routing.shadow.mismatches}/${routing.shadow.compared} match` : ""}`}
+        >
+          <div className="tabular flex flex-wrap items-baseline gap-x-6 gap-y-1 text-sm">
+            {(["official", "nownodes"] as const).map((p) => (
+              <span key={p}>
+                <span className="font-semibold">{p === "official" ? "Hyperliquid" : "NOWNodes"}</span>{" "}
+                {routing[p].requests} reads
+                {routing[p].requests ? ` · avg ${Math.round(routing[p].totalMs / routing[p].requests)} ms` : ""}
+                {routing[p].errors ? ` · ${routing[p].errors} errors` : ""}
+              </span>
+            ))}
+            <span style={{ color: "var(--ink-2)" }}>{routing.fallbacks} failovers</span>
+          </div>
+        </Tile>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="min-w-0">

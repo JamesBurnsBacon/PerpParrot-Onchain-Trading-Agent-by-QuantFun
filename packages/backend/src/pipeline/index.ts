@@ -9,6 +9,7 @@
 import type { SQL } from "bun";
 import { fillStats, isHighFrequency, pickLeaderboard, sameAddresses, scoringWindows, type Fill, type LeaderboardRow, type Tracked } from "./derive";
 import { PacedInfo, getJson } from "./hl";
+import { routingStats } from "./info-router";
 import { pickVaults } from "./vaults";
 import { parsePortfolio, scoreCandidates, toFrameCandidates, type ScoreInput, type ScoreResult } from "../score";
 import { buildReviewInput, positionsFromStates, type LivePosition } from "../../review/input.ts";
@@ -29,6 +30,9 @@ const LEADERBOARD = "https://stats-data.hyperliquid.xyz/Mainnet/leaderboard";
 const QUALIFIED = 250; // Score's top distinct accounts over the scan
 const PICKS = 25; // picked every 10 minutes from the qualified list, and reviewed
 const CLAIMS = 200; // accounts one refresh claims; unprocessed ones are released
+const WORKERS = 3; // concurrent Hyperliquid reads in one refresh, sharing its weight budget
+// Qualifying waits for 95% of the scan, or this long after it with what is fresh (cold start).
+const QUALIFY_AFTER = 3.5 * HOUR;
 
 export type PipelineOptions = {
   sql: SQL;
@@ -87,20 +91,22 @@ export class Pipeline {
     // One row per address: an upsert can't touch the same row twice.
     const rows = [...new Map(([...vaults, ...traders] as Tracked[]).map((t) => [t.address, t])).values()].map((t) => ({
       address: t.address, source: t.source, kind: t.kind, name: t.name, account_value: t.accountValue, closed: t.closed, listed_at: listedAt,
+      primary_source: t.primary,
     }));
     for (let i = 0; i < rows.length; i += 1000) {
       await sql`
         insert into pipeline_accounts ${sql(rows.slice(i, i + 1000))}
         on conflict (address) do update set source = excluded.source, kind = excluded.kind, name = excluded.name,
-          account_value = excluded.account_value, closed = excluded.closed, listed_at = excluded.listed_at`;
+          account_value = excluded.account_value, closed = excluded.closed, listed_at = excluded.listed_at,
+          primary_source = excluded.primary_source`;
     }
     log("pipeline scanned", { leaderboard: traders.length, vaults: vaults.length });
     return { leaderboard: traders.length, vaults: vaults.length };
   }
 
-  // Refreshes until `deadlineMs`: first the qualified accounts whose fills are an hour old
-  // (portfolio + fills), then the scan's accounts not refreshed for 11 h (portfolio only). Scans
-  // first when the latest scan is over 12 h old.
+  // Refreshes until `deadlineMs`, three reads at a time: first the qualified accounts whose fills
+  // are an hour old (portfolio + fills), then the scan's accounts not refreshed for 11 h
+  // (portfolio only), primary sources first. Scans first when the latest scan is over 12 h old.
   async refresh(deadlineMs: number): Promise<{ scanned: boolean; refreshed: number; failed: number }> {
     const { sql, log } = this.o;
     const [{ listed }] = await sql`select max(listed_at) as listed from pipeline_accounts`;
@@ -118,40 +124,43 @@ export class Pipeline {
           and ((qualified_at is not null and (fills_at is null or fills_at < now() - interval '1 hour'))
             or (listed_at >= (select max(listed_at) from pipeline_accounts) - interval '10 minutes'
               and (refreshed_at is null or refreshed_at < now() - interval '11 hours')))
-        order by qualified_at is null, refreshed_at nulls first limit ${CLAIMS} for update skip locked)
-      returning address, qualified_at is not null as qualified, refreshed_at`) as { address: string; qualified: boolean; refreshed_at: Date | null }[];
-    claimed.sort((a, b) => Number(b.qualified) - Number(a.qualified) || (a.refreshed_at?.getTime() ?? 0) - (b.refreshed_at?.getTime() ?? 0));
+        order by qualified_at is null, not primary_source, refreshed_at nulls first limit ${CLAIMS} for update skip locked)
+      returning address, qualified_at is not null as qualified, primary_source, refreshed_at`) as { address: string; qualified: boolean; primary_source: boolean; refreshed_at: Date | null }[];
+    claimed.sort((a, b) => Number(b.qualified) - Number(a.qualified) || Number(b.primary_source) - Number(a.primary_source) || (a.refreshed_at?.getTime() ?? 0) - (b.refreshed_at?.getTime() ?? 0));
     const hl = this.info(900);
     let refreshed = 0;
     let failed = 0;
-    let done = 0;
-    for (const { address, qualified } of claimed) {
-      if (this.now() > deadlineMs - 10_000) break;
-      done++;
-      try {
-        const portfolio = scoringWindows(await hl.post<unknown>({ type: "portfolio", user: address }));
-        parsePortfolio(portfolio); // reject a malformed response now, not at selection
-        if (qualified) {
-          const fills = await hl.post<Fill[]>(
-            { type: "userFillsByTime", user: address, startTime: this.now() - 30 * 24 * HOUR, aggregateByTime: true },
-            20,
-            (f) => f.length,
-          );
-          const { tradeCount, makerShare, ordersPerDay } = fillStats(fills, this.now());
-          await sql`
-            update pipeline_accounts set portfolio = ${portfolio}::jsonb, trade_count = ${tradeCount}, maker_share = ${makerShare},
-              orders_per_day = ${ordersPerDay}, refreshed_at = now(), fills_at = now(), attempted_at = null, error = null
-            where address = ${address}`;
-        } else {
-          await sql`update pipeline_accounts set portfolio = ${portfolio}::jsonb, refreshed_at = now(), attempted_at = null, error = null where address = ${address}`;
+    let next = 0;
+    // Workers take the next claimed account until the claims or the time run out.
+    const work = async () => {
+      while (next < claimed.length && this.now() <= deadlineMs - 10_000) {
+        const { address, qualified } = claimed[next++];
+        try {
+          const portfolio = scoringWindows(await hl.post<unknown>({ type: "portfolio", user: address }));
+          parsePortfolio(portfolio); // reject a malformed response now, not at selection
+          if (qualified) {
+            const fills = await hl.post<Fill[]>(
+              { type: "userFillsByTime", user: address, startTime: this.now() - 30 * 24 * HOUR, aggregateByTime: true },
+              20,
+              (f) => f.length,
+            );
+            const { tradeCount, makerShare, ordersPerDay } = fillStats(fills, this.now());
+            await sql`
+              update pipeline_accounts set portfolio = ${portfolio}::jsonb, trade_count = ${tradeCount}, maker_share = ${makerShare},
+                orders_per_day = ${ordersPerDay}, refreshed_at = now(), fills_at = now(), attempted_at = null, error = null
+              where address = ${address}`;
+          } else {
+            await sql`update pipeline_accounts set portfolio = ${portfolio}::jsonb, refreshed_at = now(), attempted_at = null, error = null where address = ${address}`;
+          }
+          refreshed++;
+        } catch (e) {
+          failed++;
+          await sql`update pipeline_accounts set error = ${(e as Error).message} where address = ${address}`;
         }
-        refreshed++;
-      } catch (e) {
-        failed++;
-        await sql`update pipeline_accounts set error = ${(e as Error).message} where address = ${address}`;
       }
-    }
-    const unprocessed = claimed.slice(done).map((c) => c.address);
+    };
+    await Promise.all(Array.from({ length: WORKERS }, work));
+    const unprocessed = claimed.slice(next).map((c) => c.address);
     if (unprocessed.length) await sql`update pipeline_accounts set attempted_at = null where address in ${sql(unprocessed)}`;
     log("pipeline refreshed", { scanned, claimed: claimed.length, refreshed, failed, released: unprocessed.length });
     return { scanned, refreshed, failed };
@@ -179,7 +188,7 @@ export class Pipeline {
       try { latest.strategy = await this.agent.view(latest.finalists?.finalists ?? []); }
       catch { latest.strategy = null; } // An advisory-table outage must not hide the main pipeline.
     }
-    return { accounts: counts, selections: runs, active: active ?? null, latest: latest ?? null };
+    return { accounts: counts, selections: runs, active: active ?? null, latest: latest ?? null, routing: routingStats() };
   }
 
   // Every 10 minutes: qualify when due, then pick 25 and review them if they changed. `force`
@@ -223,18 +232,23 @@ export class Pipeline {
     }
   }
 
-  // The qualified list: once ≥ 95% of the latest scan is refreshed within 12 h and the list is
-  // older than that scan, Score's top 250 distinct accounts over the scan. Accounts never
+  // The qualified list: Score's top 250 distinct accounts over the latest scan, once the list is
+  // older than that scan, every primary source is refreshed within 12 h, and either ≥ 95% of the
+  // scan is or the scan is 3.5 h old (then over the accounts refreshed so far). Accounts never
   // qualified have no fills yet, so the trade count may be unknown here; the pick requires it.
   private async qualify(force: boolean): Promise<{ accounts: number; qualified: number } | undefined> {
     const { sql } = this.o;
     const [{ listed, qualified }] = await sql`select max(listed_at) as listed, max(qualified_at) as qualified from pipeline_accounts`;
     if (!listed || (qualified && (qualified as Date) >= (listed as Date))) return undefined;
     const rows = (await sql`
-      select address, kind, account_value, closed, portfolio, trade_count, maker_share, orders_per_day, refreshed_at
-      from pipeline_accounts where listed_at >= ${listed} ::timestamptz - interval '10 minutes'`) as (AccountRow & { refreshed_at: Date | null })[];
-    const fresh = rows.filter((r) => r.portfolio !== null && r.refreshed_at !== null && this.now() - r.refreshed_at.getTime() < 12 * HOUR);
-    if (fresh.length === 0 || (!force && fresh.length / rows.length < 0.95)) return undefined;
+      select address, kind, account_value, closed, portfolio, trade_count, maker_share, orders_per_day, refreshed_at, primary_source, error
+      from pipeline_accounts where listed_at >= ${listed} ::timestamptz - interval '10 minutes'`) as (AccountRow & { refreshed_at: Date | null; primary_source: boolean; error: string | null })[];
+    const isFresh = (r: (typeof rows)[number]) => r.portfolio !== null && r.refreshed_at !== null && this.now() - r.refreshed_at.getTime() < 12 * HOUR;
+    const fresh = rows.filter(isFresh);
+    // A primary source whose last read failed doesn't hold the list up.
+    const primariesFresh = rows.every((r) => !r.primary_source || isFresh(r) || r.error !== null);
+    const ready = fresh.length / rows.length >= 0.95 || this.now() - (listed as Date).getTime() >= QUALIFY_AFTER;
+    if (fresh.length === 0 || (!force && !(primariesFresh && ready))) return undefined;
     const result = scoreCandidates(fresh.map(toInput), { finalists: QUALIFIED, allowUnknown: ["minTrades"] });
     await sql.begin(async (tx) => {
       await tx`update pipeline_accounts set qualified_at = null where qualified_at is not null`;

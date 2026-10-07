@@ -17,6 +17,8 @@ queries for 25 finalists. It does not re-fetch fills or portfolio history. It se
 anonymous candidate IDs, at most 48 month PnL points and the largest 12 positions
 per candidate to one OpenAI Responses request. PnL is cumulative dollars, not NAV
 or deposit-adjusted return. Position times can be later than the selection time.
+State reads use main's provider router: official by default, with the existing
+optional NOWNodes failover settings respected.
 
 Crypto, gold and oil are explicitly assessed. All observed positions contribute to
 class totals before the 12-position detail cap:
@@ -40,8 +42,8 @@ This validates citations, not the truth of the model's interpretation.
 
 ## Deploy and operate
 
-1. After the two pipeline migrations, apply
-   `supabase/migrations/20261007160000_strategy_analyses.sql`. It is additive and
+1. After the pipeline migrations (including `20261007160000_pipeline_primary.sql`), apply
+   `supabase/migrations/20261007170000_strategy_analyses.sql`. It is additive and
    safe to run twice. Do not reset the shared database.
 2. Use the existing server-only `DATABASE_URL`, `CRON_SECRET`, `ADMIN_TOKEN` and
    `OPENAI_API_KEY`. Optional `OPENAI_STRATEGY_MODEL` defaults to `gpt-6-astra` with
