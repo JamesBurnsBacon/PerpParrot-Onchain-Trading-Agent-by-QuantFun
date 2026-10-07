@@ -7,7 +7,8 @@ import { resolve } from "node:path";
 import { SQL } from "bun";
 import { waitUntil } from "@vercel/functions";
 import { EligibilityTracker, MemoryEligibilityStore } from "./eligibility";
-import { FileConfigurationSource } from "./configuration-source";
+import { ActiveConfigurationSource, FileConfigurationSource } from "./configuration-source";
+import { Pipeline, reviewPolicy } from "./pipeline";
 import { SnapshotError, SnapshotService } from "./service";
 import { exposuresFromSnapshot, MemoryPaperStore, PaperService, defaultBooks } from "./paper/service";
 import { targetsFromSnapshot } from "../../shared/copy";
@@ -67,11 +68,26 @@ const paper = new PaperService({
   cfg: { minOrderUsd: 10, driftFraction: 0.1, marginCap: 0.95, slippageBps: envNumber("PAPER_SLIPPAGE_BPS", 5, 0, 100) },
 });
 
-const configurations = new FileConfigurationSource(resolve(import.meta.dir, "..", required("CONFIGURATION_PATH")), required("FROZEN_CONFIGURATION_HASH"));
+// The pinned file (the fixture) until the pipeline activates a configuration in Supabase.
+const fileConfiguration = new FileConfigurationSource(resolve(import.meta.dir, "..", required("CONFIGURATION_PATH")), required("FROZEN_CONFIGURATION_HASH"));
+
+// The selection pipeline (src/pipeline): needs Postgres. Reviews run under the fixture's
+// Aggressive policy, for our account (HL_ACCOUNT).
+const pipeline = sql
+  ? new Pipeline({
+      sql,
+      account: env.HL_ACCOUNT ?? "",
+      policy: reviewPolicy(await Bun.file(resolve(import.meta.dir, "..", "fixtures/frozen-configuration.json")).json()),
+      openAiKey: env.OPENAI_API_KEY,
+      model: env.REVIEW_MODEL,
+      gate: env.REVIEW_GATE === "strict" ? "strict" : "basic",
+      log,
+    })
+  : undefined;
 
 const service = new SnapshotService({
   // Relative to packages/backend, wherever the process starts (vercel.json bundles fixtures/ and frozen/).
-  configurations,
+  configurations: sql ? new ActiveConfigurationSource(sql, fileConfiguration) : fileConfiguration,
   eligibility: new EligibilityTracker(sql ? new PostgresEligibilityStore(sql) : new MemoryEligibilityStore(), undefined, (m) =>
     log("eligibility refused", { reason: m }),
   ),
@@ -126,7 +142,7 @@ const chatStores = {
 };
 const liveEnv = readLiveEnv(env);
 let chatDeps: Promise<ChatDeps> | undefined;
-const loadChatDeps = (): Promise<ChatDeps> => chatDeps ??= configurations.load(Date.now()).then(
+const loadChatDeps = (): Promise<ChatDeps> => chatDeps ??= fileConfiguration.load(Date.now()).then(
   ({ policy }): ChatDeps => {
     // The snapshot source types only the mirror's subset; chat needs the full policy.
     validateRuntimePolicy(policy);
@@ -206,8 +222,30 @@ const server = Bun.serve({
         return Response.json({ error: (e as Error).message }, { status: 502 });
       }
     }
+    // The selection pipeline: Vercel Cron (vercel.json), or an operator with ADMIN_TOKEN
+    // (POST /admin/pipeline/discover|refresh|select; select runs even when not due).
+    const step = /^\/(?:cron|admin)\/pipeline\/(discover|refresh|select)$/.exec(pathname);
+    if (step && pipeline) {
+      const admin = req.method === "POST" && pathname.startsWith("/admin/");
+      if (admin ? !env.ADMIN_TOKEN || req.headers.get("authorization") !== `Bearer ${env.ADMIN_TOKEN}` : req.method !== "GET" || !cronAuthorized(req))
+        return Response.json({ error: "unauthorized" }, { status: 401 });
+      try {
+        const started = Date.now();
+        const result =
+          step[1] === "discover" ? await pipeline.discover()
+          : step[1] === "refresh" ? await pipeline.refresh(started + 240_000)
+          : await pipeline.select(admin);
+        return Response.json(result);
+      } catch (e) {
+        log(`pipeline ${step[1]} failed`, { error: (e as Error).message });
+        return Response.json({ error: (e as Error).message }, { status: 502 });
+      }
+    }
     // Public, for the dashboard.
     const cors = { "Access-Control-Allow-Origin": "*" };
+    if (req.method === "GET" && pathname === "/pipeline" && pipeline) {
+      return Response.json(await pipeline.status(), { headers: cors });
+    }
     if (req.method === "GET" && pathname === "/paper") {
       const since = Number(searchParams.get("since") ?? 0) || 0;
       return Response.json(await paper.view(since), { headers: cors });

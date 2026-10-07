@@ -55,12 +55,24 @@ const runner = new Runner({
   now: Date.now,
   lock: sql ? postgresRunLock(sql) : noLock,
   targets: backendTargets(config.backendUrl),
+  // The table is absent until the pipeline migration runs: then the pinned hash applies.
+  activeConfigurationHash: sql
+    ? async () => {
+        try {
+          const [row] = await sql`select hash from configurations where status = 'active'`;
+          return row?.hash as string | undefined;
+        } catch {
+          return undefined;
+        }
+      }
+    : undefined,
   config: {
     account: config.account,
     frozenConfigurationHash: config.frozenConfigurationHash,
     maxGrossLeverage: config.maxGrossLeverage,
     runTtlSeconds: config.runTtlSeconds,
     runTimeoutMs: config.runTimeoutMs,
+    dryRunEquityUsd: config.dryRunEquityUsd,
     plan: {
       minOrderUsd: config.minOrderUsd,
       driftFraction: config.driftFraction,

@@ -62,6 +62,37 @@ vault standing in for ours; the services only *read* it.
 Going live (`DRY_RUN=false`, API wallet, funding, a long-running executor) is RUNBOOK § Deploy
 step 5 and is not part of this rehearsal.
 
+## Selection pipeline (basic flow, 2026-10-07)
+
+The backend discovers 100 leaderboard traders (≥ $10k, positive month and all-time PnL, by month
+PnL) and 100 vaults (hyperliquidvaults.com's top by its score, else Hyperliquid's vault list).
+It refreshes their portfolio and fills every 5 minutes. Twice a day (06:00 and 18:00 UTC, and
+once right after the first full refresh) it scores them, has the AI committee review the
+finalists, freezes the result for `HL_ACCOUNT` and activates it. The backend then serves the
+active configuration and the executor checks targets against its hash.
+
+**Basic gate (default):** the review core can't pass anyone yet, because the frame has no
+measured out-of-sample or execution evidence. When it rejects, the pipeline keeps finalists the
+Role model doesn't reject and that have no Risk score above the reject threshold (evidence risk
+aside). It weights them by Aggressive fit, within the per-source cap, cash buffer and gross
+leverage, and needs at least 5. `REVIEW_GATE=strict` turns this off.
+
+1. **Supabase**: run `supabase/migrations/20261007120000_pipeline.sql` (new tables only; safe
+   before the deploy).
+2. **Vercel variables**:
+   - `HL_ACCOUNT` = our account (`0x7269502c48c582768ee38e4e71e7572e6ebf70f7`).
+   - `DRY_RUN_EQUITY_USD=10000`.
+   - `OPENAI_API_KEY` (already set).
+
+   Until the first configuration activates, mirror runs fail with "account mismatch": the
+   fixture still names the stand-in account. That's expected and nothing trades.
+3. **Merge** and wait for Ready. Watch `GET /api/backend/pipeline`:
+   - accounts `fresh` climbs to 200 in about 20–25 minutes;
+   - then the next `:x4` selection runs, and `active` shows the sources;
+   - the next `:x0` run trades toward them (dry run).
+4. **Operator**: `POST /api/backend/admin/pipeline/select` with `Authorization: Bearer $ADMIN_TOKEN`
+   forces a selection. `discover` and `refresh` work the same way.
+
 ## Upgrading a deployment from before 2026-10-07 (Chainlink CRE removed)
 
 The executor no longer receives signed reports: it runs the backend's targets itself, and some
