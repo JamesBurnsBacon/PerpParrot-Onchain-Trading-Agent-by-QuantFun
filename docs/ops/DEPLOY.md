@@ -62,14 +62,18 @@ vault standing in for ours; the services only *read* it.
 Going live (`DRY_RUN=false`, API wallet, funding, a long-running executor) is RUNBOOK § Deploy
 step 5 and is not part of this rehearsal.
 
-## Selection pipeline (basic flow, 2026-10-07)
+## Selection pipeline (2026-10-07; [docs/ingest/PIPELINE.md](../ingest/PIPELINE.md))
 
-The backend discovers 100 leaderboard traders (≥ $10k, positive month and all-time PnL, by month
-PnL) and 100 vaults (hyperliquidvaults.com's top by its score, else Hyperliquid's vault list).
-It refreshes their portfolio and fills every 5 minutes. Twice a day (06:00 and 18:00 UTC, and
-once right after the first full refresh) it scores them, has the AI committee review the
-finalists, freezes the result for `HL_ACCOUNT` and activates it. The backend then serves the
-active configuration and the executor checks targets against its hash.
+Every 12 hours (00:15 and 12:15 UTC) the backend scans every leaderboard trader (≥ $10k, positive
+month and all-time PnL) and HyperCore vault (hyperliquidvaults.com's list first, then
+Hyperliquid's: open, not a child, ≥ $10k, ≥ 39 days old), about 14k accounts. The refresh
+(every 5 minutes, 900 weight/min) keeps their portfolios within 12 hours and reads the
+qualified accounts' portfolio and fills every hour. Once 95% of a scan is refreshed, Score
+qualifies its top 250. Every 10 minutes Score picks 25 from the qualified list, leaving out
+high-frequency traders (> 100 orders a day). When the 25 change, the AI committee reviews them;
+the result is frozen for `HL_ACCOUNT` and activated if its sources differ from the active set's
+(otherwise the run is `kept`). The backend serves the active configuration and the executor
+checks targets against its hash.
 
 **Basic gate (default):** the review core can't pass anyone yet, because the frame has no
 measured out-of-sample or execution evidence. When it rejects, the pipeline keeps finalists the
@@ -77,21 +81,23 @@ Role model doesn't reject and that have no Risk score above the reject threshold
 aside). It weights them by Aggressive fit, within the per-source cap, cash buffer and gross
 leverage, and needs at least 5. `REVIEW_GATE=strict` turns this off.
 
-1. **Supabase**: run `supabase/migrations/20261007120000_pipeline.sql` (new tables only; safe
-   before the deploy).
+1. **Supabase**: run `supabase/migrations/20261007120000_pipeline.sql`, then
+   `20261007150000_pipeline_qualified.sql`, **before** the deploy. Both only add tables, columns
+   and a wider status check, and are safe to run twice. The new code reads the new columns, so
+   until they exist the pipeline routes fail.
 2. **Vercel variables**:
    - `HL_ACCOUNT` = our account (`0x7269502c48c582768ee38e4e71e7572e6ebf70f7`).
    - `DRY_RUN_EQUITY_USD=10000`.
    - `OPENAI_API_KEY` (already set).
-
-   Until the first configuration activates, mirror runs fail with "account mismatch": the
-   fixture still names the stand-in account. That's expected and nothing trades.
 3. **Merge** and wait for Ready. Watch `GET /api/backend/pipeline`:
-   - accounts `fresh` climbs to 200 in about 20–25 minutes;
-   - then the next `:x4` selection runs, and `active` shows the sources;
+   - `accounts.qualified` appears once the latest scan is 95% refreshed: from a 200-account
+     list right away, from a full 14k scan after ~8 hours;
+   - the qualified accounts' fills are read within about an hour, then the next `:x4` run picks
+     25 and reviews them, and `active` shows the sources;
    - the next `:x0` run trades toward them (dry run).
-4. **Operator**: `POST /api/backend/admin/pipeline/select` with `Authorization: Bearer $ADMIN_TOKEN`
-   forces a selection. `discover` and `refresh` work the same way.
+4. **Operator**: `POST /api/backend/admin/pipeline/scan|refresh|select` with
+   `Authorization: Bearer $ADMIN_TOKEN`. An operator's `select` qualifies on partial data and
+   reviews an unchanged pick.
 
 ## Upgrading a deployment from before 2026-10-07 (Chainlink CRE removed)
 

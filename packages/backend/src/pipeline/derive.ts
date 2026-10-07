@@ -1,16 +1,24 @@
 // Pure parts of the selection pipeline (docs/ingest/PIPELINE.md): which accounts to track, what
-// a refresh derives from fills, and when a selection is due.
+// a refresh keeps and derives from fills, and who counts as a high-frequency trader.
 
 export type Fill = { coin: string; oid: number; px: string; sz: string; crossed: boolean; time: number };
 
 const DAY_MS = 86_400_000;
+// The most fills one userFillsByTime request returns.
+export const FILLS_PAGE = 2_000;
 
-// Score's inputs from one read of fills (newest up to 2,000; README §4.1):
+// Score's inputs from one userFillsByTime read of the last 30 days. A full page is the *oldest*
+// 2,000 fills from the start time, and Hyperliquid keeps only the 10,000 newest, so a full page
+// means at least 2,000 fills in its own span (README §4.1):
 // - tradeCount: distinct filled (coin, oid), partial fills once (Score SPEC `minTrades`). With a
 //   full page it is a lower bound, which is enough for a minimum.
-// - makerShare: maker notional / notional over the last 30 days; null without fills then.
-export const fillStats = (fills: Fill[], nowMs: number): { tradeCount: number; makerShare: number | null } => {
+// - makerShare: maker notional / notional over the fills read; null without fills.
+// - ordersPerDay: distinct orders per day over the span the fills cover: 30 days, or the page's
+//   own span when it is full. null without fills.
+export const fillStats = (fills: Fill[], nowMs: number): { tradeCount: number; makerShare: number | null; ordersPerDay: number | null } => {
   const orders = new Set(fills.map((f) => `${f.coin}:${f.oid}`));
+  const times = fills.map((f) => f.time);
+  const spanDays = fills.length >= FILLS_PAGE ? Math.max((Math.max(...times) - Math.min(...times)) / DAY_MS, 1 / 24) : 30;
   let maker = 0;
   let total = 0;
   for (const f of fills) {
@@ -20,7 +28,21 @@ export const fillStats = (fills: Fill[], nowMs: number): { tradeCount: number; m
     total += notional;
     if (!f.crossed) maker += notional;
   }
-  return { tradeCount: orders.size, makerShare: total > 0 ? maker / total : null };
+  return { tradeCount: orders.size, makerShare: total > 0 ? maker / total : null, ordersPerDay: fills.length ? orders.size / spanDays : null };
+};
+
+// A 10-minute copy loop can't follow a source that places more orders than this a day.
+export const MAX_ORDERS_PER_DAY = 100;
+export const isHighFrequency = (ordersPerDay: number | null): boolean => ordersPerDay !== null && ordersPerDay > MAX_ORDERS_PER_DAY;
+
+// The portfolio windows Score reads (score/parse.ts); the other six are dropped before storing.
+export const scoringWindows = (portfolio: unknown): unknown =>
+  Array.isArray(portfolio) ? portfolio.filter((w) => Array.isArray(w) && (w[0] === "month" || w[0] === "allTime")) : portfolio;
+
+// Same addresses, in any order.
+export const sameAddresses = (a: readonly string[], b: readonly string[]): boolean => {
+  const set = new Set(a.map((x) => x.toLowerCase()));
+  return set.size === new Set(b.map((x) => x.toLowerCase())).size && b.every((x) => set.has(x.toLowerCase()));
 };
 
 export type LeaderboardRow = {
@@ -39,8 +61,8 @@ export type Tracked = {
   closed: boolean | null;
 };
 
-// The leaderboard's top `count` traders: ≥ $10k account value, positive month and all-time PnL,
-// ranked by month PnL (active, currently profitable traders; README §4.1 cheap filters).
+// Leaderboard traders with ≥ $10k account value and positive month and all-time PnL, by month
+// PnL (README §4.1 cheap filters). The scan keeps all of them (~13k).
 export const pickLeaderboard = (rows: LeaderboardRow[], count: number, exclude: ReadonlySet<string>): Tracked[] => {
   const pnl = (row: LeaderboardRow, window: string) => Number(row.windowPerformances.find(([w]) => w === window)?.[1].pnl ?? NaN);
   return rows
@@ -56,20 +78,4 @@ export const pickLeaderboard = (rows: LeaderboardRow[], count: number, exclude: 
       accountValue: value,
       closed: false,
     }));
-};
-
-// Twice a day (06:00 and 18:00 UTC): the latest slot at or before now.
-export const SELECTION_HOURS_UTC = [6, 18];
-export const latestSlot = (nowMs: number): number => {
-  const day = Math.floor(nowMs / DAY_MS) * DAY_MS;
-  const slots = [-1, 0].flatMap((d) => SELECTION_HOURS_UTC.map((h) => day + d * DAY_MS + h * 3_600_000));
-  return Math.max(...slots.filter((s) => s <= nowMs));
-};
-
-// A selection is due once per slot. The first run after deploy counts for the slot it's in, and a
-// failed run (not a rejection) is retried after 30 minutes.
-export const selectionDue = (nowMs: number, runs: { startedAt: number; status: string }[]): boolean => {
-  const slot = latestSlot(nowMs);
-  if (runs.some((r) => r.startedAt >= slot && r.status !== "failed")) return false;
-  return !runs.some((r) => r.startedAt > nowMs - 30 * 60_000);
 };

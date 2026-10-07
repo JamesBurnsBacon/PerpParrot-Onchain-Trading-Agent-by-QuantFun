@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { fillStats, latestSlot, pickLeaderboard, selectionDue, type LeaderboardRow } from "../src/pipeline/derive";
+import { FILLS_PAGE, fillStats, isHighFrequency, pickLeaderboard, sameAddresses, scoringWindows, type Fill, type LeaderboardRow } from "../src/pipeline/derive";
 import { decodeSeroval } from "../src/pipeline/vaults";
 import { basicSources } from "../src/pipeline";
 import type { Policy, Row } from "../../shared/src/contracts.ts";
@@ -21,10 +21,21 @@ describe("fillStats", () => {
     );
     expect(stats.tradeCount).toBe(3);
     expect(stats.makerShare).toBeCloseTo(200 / 500);
+    expect(stats.ordersPerDay).toBeCloseTo(3 / 30); // a partial page covers the 30 days asked for
+  });
+
+  test("a full page is the oldest 2,000 fills: orders per day over the page's own span", () => {
+    // 2,000 fills, one order each, over 2 days: 1,000 orders a day, a high-frequency trader.
+    const fills: Fill[] = Array.from({ length: FILLS_PAGE }, (_, i) => ({ coin: "BTC", oid: i, px: "1", sz: "1", crossed: true, time: NOW - 10 * DAY + (i * 2 * DAY) / (FILLS_PAGE - 1) }));
+    const { ordersPerDay } = fillStats(fills, NOW);
+    expect(ordersPerDay).toBeCloseTo(1_000);
+    expect(isHighFrequency(ordersPerDay)).toBe(true);
+    expect(isHighFrequency(45)).toBe(false);
+    expect(isHighFrequency(null)).toBe(false); // unknown isn't high-frequency; Score's minTrades decides
   });
 
   test("no recent fills: maker share unknown", () => {
-    expect(fillStats([], NOW)).toEqual({ tradeCount: 0, makerShare: null });
+    expect(fillStats([], NOW)).toEqual({ tradeCount: 0, makerShare: null, ordersPerDay: null });
   });
 });
 
@@ -47,21 +58,16 @@ describe("pickLeaderboard", () => {
   });
 });
 
-describe("selection schedule", () => {
-  test("slots at 06:00 and 18:00 UTC", () => {
-    expect(new Date(latestSlot(Date.parse("2026-10-07T05:59:00Z"))).toISOString()).toBe("2026-10-06T18:00:00.000Z");
-    expect(new Date(latestSlot(Date.parse("2026-10-07T06:00:00Z"))).toISOString()).toBe("2026-10-07T06:00:00.000Z");
-    expect(new Date(latestSlot(Date.parse("2026-10-07T23:00:00Z"))).toISOString()).toBe("2026-10-07T18:00:00.000Z");
-  });
+test("scoringWindows keeps only month and allTime", () => {
+  const window = { accountValueHistory: [], pnlHistory: [] };
+  expect(scoringWindows([["day", window], ["month", window], ["perpMonth", window], ["allTime", window]])).toEqual([["month", window], ["allTime", window]]);
+});
 
-  test("once per slot; a failed run retries after 30 minutes; a rejection waits for the next slot", () => {
-    const at = (iso: string) => Date.parse(iso);
-    expect(selectionDue(at("2026-10-07T03:00:00Z"), [])).toBe(true);
-    expect(selectionDue(at("2026-10-07T03:00:00Z"), [{ startedAt: at("2026-10-07T02:00:00Z"), status: "rejected" }])).toBe(false);
-    expect(selectionDue(at("2026-10-07T03:00:00Z"), [{ startedAt: at("2026-10-07T02:40:00Z"), status: "failed" }])).toBe(false);
-    expect(selectionDue(at("2026-10-07T03:00:00Z"), [{ startedAt: at("2026-10-07T02:20:00Z"), status: "failed" }])).toBe(true);
-    expect(selectionDue(at("2026-10-07T06:05:00Z"), [{ startedAt: at("2026-10-07T02:00:00Z"), status: "activated" }])).toBe(true);
-  });
+test("sameAddresses ignores order and case", () => {
+  expect(sameAddresses(["0xAA", "0xbb"], ["0xbb", "0xaa"])).toBe(true);
+  expect(sameAddresses(["0xaa", "0xbb"], ["0xaa"])).toBe(false);
+  expect(sameAddresses(["0xaa", "0xbb"], ["0xaa", "0xcc"])).toBe(false);
+  expect(sameAddresses([], [])).toBe(true);
 });
 
 test("decodeSeroval: the site's object/array/number/string/constant nodes", () => {

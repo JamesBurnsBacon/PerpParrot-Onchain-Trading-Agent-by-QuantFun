@@ -52,9 +52,9 @@ export type Status = { dryRun: boolean; account: string; controls: { paused: boo
 export type Exposures = { runAt: number; exposures: { asset: string; fraction: number }[] };
 
 // Backend GET /pipeline (src/pipeline status()); timestamps are ISO strings.
-export type SelectionStatus = "running" | "activated" | "rejected" | "failed";
+export type SelectionStatus = "running" | "activated" | "kept" | "rejected" | "failed";
 export type PipelineView = {
-  accounts: { listed: number; fresh: number; errors: number; listed_at: string | null };
+  accounts: { listed: number; fresh: number; errors: number; listed_at: string | null; qualified?: number; high_frequency?: number; qualified_at?: string | null };
   selections: {
     id: number;
     started_at: string;

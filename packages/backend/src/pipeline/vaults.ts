@@ -1,6 +1,6 @@
-// The vault half of the tracked set: hyperliquidvaults.com's "qualified" HyperCore vaults
-// (~180, screened by TVL and age, ranked by its hv_score), with Hyperliquid's own vault list as
-// the fallback. The site has no public API: its page loads the list from a TanStack server
+// The vault half of the scan: hyperliquidvaults.com's "qualified" HyperCore vaults (~180,
+// screened by TVL and age, ranked by its hv_score) first, then the rest of Hyperliquid's own vault
+// list under the same screen (open, not a child, TVL ≥ $10k, at least 39 days old). The site has no public API: its page loads the list from a TanStack server
 // function whose ID changes when the site redeploys, so a stale ID is re-found in its bundle.
 import { getJson } from "./hl";
 import type { Tracked } from "./derive";
@@ -75,22 +75,22 @@ type StatsVault = {
   summary: { name: string; vaultAddress: string; tvl: string; isClosed: boolean; relationship?: { type: string }; createTimeMillis: number };
 };
 
-export const pickVaults = async (count: number, nowMs: number, log: (msg: string, data?: Record<string, unknown>) => void): Promise<Tracked[]> => {
-  try {
-    const vaults = await siteVaults();
-    return vaults
-      .filter((v) => v.current_tvl >= 10_000)
-      .sort((a, b) => b.hv_score - a.hv_score)
-      .slice(0, count)
-      .map((v) => ({ address: v.vault_address.toLowerCase(), source: "vault", kind: "hypercore-vault", name: v.name, accountValue: v.current_tvl, closed: false }));
-  } catch (e) {
-    // Approximates the site's screen: open, not a child vault, TVL ≥ $10k, at least 39 days old.
-    log("hyperliquidvaults.com unavailable, using Hyperliquid's vault list", { error: (e as Error).message });
-    const vaults = await getJson<StatsVault[]>("https://stats-data.hyperliquid.xyz/Mainnet/vaults", 60_000);
-    return vaults
-      .filter(({ summary: s }) => !s.isClosed && s.relationship?.type !== "child" && Number(s.tvl) >= 10_000 && nowMs - s.createTimeMillis >= 39 * 86_400_000)
-      .sort((a, b) => Number(b.summary.tvl) - Number(a.summary.tvl))
-      .slice(0, count)
-      .map(({ summary: s }) => ({ address: s.vaultAddress.toLowerCase(), source: "vault", kind: "hypercore-vault", name: s.name, accountValue: Number(s.tvl), closed: false }));
+export const pickVaults = async (nowMs: number, log: (msg: string, data?: Record<string, unknown>) => void): Promise<Tracked[]> => {
+  const site = await siteVaults().catch((e) => {
+    log("hyperliquidvaults.com unavailable, using Hyperliquid's vault list only", { error: (e as Error).message });
+    return [] as SiteVault[];
+  });
+  const picked: Tracked[] = site
+    .filter((v) => v.current_tvl >= 10_000)
+    .sort((a, b) => b.hv_score - a.hv_score)
+    .map((v) => ({ address: v.vault_address.toLowerCase(), source: "vault", kind: "hypercore-vault", name: v.name, accountValue: v.current_tvl, closed: false }));
+  const seen = new Set(picked.map((v) => v.address));
+  const vaults = await getJson<StatsVault[]>("https://stats-data.hyperliquid.xyz/Mainnet/vaults", 60_000);
+  for (const { summary: s } of vaults) {
+    const address = s.vaultAddress.toLowerCase();
+    if (seen.has(address) || s.isClosed || s.relationship?.type === "child" || Number(s.tvl) < 10_000 || nowMs - s.createTimeMillis < 39 * 86_400_000) continue;
+    seen.add(address);
+    picked.push({ address, source: "vault", kind: "hypercore-vault", name: s.name, accountValue: Number(s.tvl), closed: false });
   }
+  return picked;
 };

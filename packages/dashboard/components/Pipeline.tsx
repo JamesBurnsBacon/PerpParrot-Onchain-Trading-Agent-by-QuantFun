@@ -13,6 +13,7 @@ const ago = (iso: string | null | undefined) => {
 export const SELECTION_STATUS: Record<SelectionStatus, { color: string; icon: string; label: string }> = {
   running: { color: "var(--series-1)", icon: "◌", label: "Running" },
   activated: { color: "var(--good)", icon: "●", label: "Activated" },
+  kept: { color: "var(--good)", icon: "○", label: "Kept" },
   rejected: { color: "var(--warning)", icon: "◐", label: "Rejected" },
   failed: { color: "var(--critical)", icon: "✕", label: "Failed" },
 };
@@ -66,7 +67,8 @@ function Tile({ label, children, note }: { label: string; children: React.ReactN
   );
 }
 
-// discover 100 traders + 100 vaults → refresh every 5 min → Score → AI review → freeze → activate.
+// scan ~14k accounts every 12 h → refresh every 5 min → Score qualifies ~250 → every 10 min pick 25
+// (no high-frequency traders) → AI review when they change → freeze → activate when the sources change.
 export function Pipeline({ view }: { view: PipelineView }) {
   const { accounts, selections, active, latest } = view;
   const run = selections[0];
@@ -84,7 +86,7 @@ export function Pipeline({ view }: { view: PipelineView }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="grid gap-3 md:grid-cols-3">
-        <Tile label="Accounts refreshed" note={`${accounts.errors ? `${accounts.errors} errors · ` : ""}discovered ${when(accounts.listed_at)}`}>
+        <Tile label="Accounts refreshed" note={`${accounts.errors ? `${accounts.errors} errors · ` : ""}${accounts.qualified ? `${accounts.qualified} qualified${accounts.high_frequency ? ` (${accounts.high_frequency} high-frequency)` : ""} · ` : ""}scanned ${when(accounts.listed_at)}`}>
           <div className="mb-1.5 flex items-baseline gap-1 text-lg font-semibold tabular">
             {accounts.fresh}
             <span className="text-sm font-normal" style={{ color: "var(--muted)" }}>/ {accounts.listed}</span>
@@ -92,7 +94,7 @@ export function Pipeline({ view }: { view: PipelineView }) {
           </div>
           <Bar value={freshShare} color={freshShare >= 0.95 ? "var(--good)" : "var(--series-1)"} />
         </Tile>
-        <Tile label="Latest selection" note={run ? (run.error ?? run.manifest?.reason ?? `${run.accounts ?? "—"} accounts scored`) : "none yet · twice a day"}>
+        <Tile label="Latest selection" note={run ? (run.error ?? run.manifest?.reason ?? `${run.accounts ?? "—"} accounts scored`) : "none yet · every 10 min"}>
           {run ? (
             <div className="flex items-center gap-2">
               <Badge status={run.status} />
