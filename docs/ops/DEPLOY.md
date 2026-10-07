@@ -31,6 +31,8 @@ vault standing in for ours; the services only *read* it.
    ADMIN_TOKEN=<openssl rand -hex 32; keep it in a password manager>
    CRON_SECRET=<openssl rand -hex 32>
    DATABASE_URL=<service-role connection string>
+   BACKEND_DATABASE_URL=<transaction pooler connection string, port 6543>  # backend only; the
+   # session pooler (DATABASE_URL) allows 15 clients in all, and the executor's run lock needs it
    ```
    Don't set `BACKEND_URL` (the binding injects it), `DRY_RUN`, `HL_API_WALLET_KEY` or the
    `NEXT_PUBLIC_*` URLs (the executor runs production rules on Vercel and refuses `DRY_RUN=false`

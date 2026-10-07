@@ -93,7 +93,7 @@ export class Pipeline {
     const listedAt = new Date(this.now());
     // One row per address: an upsert can't touch the same row twice.
     const rows = [...new Map(([...vaults, ...traders] as Tracked[]).map((t) => [t.address, t])).values()].map((t) => ({
-      address: t.address, source: t.source, kind: t.kind, name: t.name, account_value: t.accountValue, closed: t.closed, listed_at: listedAt,
+      address: t.address, source: t.source, kind: t.kind, name: t.name, account_value: t.accountValue, closed: t.closed, listed_at: listedAt.toISOString(),
       primary_source: t.primary,
     }));
     for (let i = 0; i < rows.length; i += 1000) {
@@ -149,11 +149,11 @@ export class Pipeline {
             );
             const { tradeCount, makerShare, ordersPerDay } = fillStats(fills, this.now());
             await sql`
-              update pipeline_accounts set portfolio = ${portfolio}::jsonb, trade_count = ${tradeCount}, maker_share = ${makerShare},
+              update pipeline_accounts set portfolio = ${JSON.stringify(portfolio)}::jsonb, trade_count = ${tradeCount}, maker_share = ${makerShare},
                 orders_per_day = ${ordersPerDay}, refreshed_at = now(), fills_at = now(), attempted_at = null, error = null
               where address = ${address}`;
           } else {
-            await sql`update pipeline_accounts set portfolio = ${portfolio}::jsonb, refreshed_at = now(), attempted_at = null, error = null where address = ${address}`;
+            await sql`update pipeline_accounts set portfolio = ${JSON.stringify(portfolio)}::jsonb, refreshed_at = now(), attempted_at = null, error = null where address = ${address}`;
           }
           refreshed++;
         } catch (e) {
@@ -222,7 +222,7 @@ export class Pipeline {
       where status = 'running' or (status = 'failed' and started_at > now() - interval '30 minutes') limit 1`;
     if (busy && (busy.status === "running" || !force)) return { status: "waiting", reason: busy.status === "running" ? "a review is running" : "a review failed in the last 30 minutes" };
 
-    const [{ id }] = await sql`insert into selection_runs (started_at, status, accounts) values (${new Date(this.now())}, 'running', ${inputs.length}) returning id`;
+    const [{ id }] = await sql`insert into selection_runs (started_at, status, accounts) values (${new Date(this.now()).toISOString()}, 'running', ${inputs.length}) returning id`;
     try {
       const outcome = await this.review(id as number, inputs, result, highFrequency, guard?.summary);
       return { id, ...outcome };
@@ -267,7 +267,7 @@ export class Pipeline {
     if (!listed || (qualified && (qualified as Date) >= (listed as Date))) return undefined;
     const rows = (await sql`
       select address, kind, account_value, closed, portfolio, trade_count, maker_share, orders_per_day, refreshed_at, primary_source, error
-      from pipeline_accounts where listed_at >= ${listed} ::timestamptz - interval '10 minutes'`) as (AccountRow & { refreshed_at: Date | null; primary_source: boolean; error: string | null })[];
+      from pipeline_accounts where listed_at >= ${(listed as Date).toISOString()}::timestamptz - interval '10 minutes'`) as (AccountRow & { refreshed_at: Date | null; primary_source: boolean; error: string | null })[];
     const isFresh = (r: (typeof rows)[number]) => r.portfolio !== null && r.refreshed_at !== null && this.now() - r.refreshed_at.getTime() < 12 * HOUR;
     const fresh = rows.filter(isFresh);
     // A primary source whose last read failed doesn't hold the list up.
@@ -288,7 +288,7 @@ export class Pipeline {
     const byAddress = new Map(result.candidates.map((c) => [c.address, c]));
     const finalists = result.finalists.map((address) => ({ address, kind: byAddress.get(address)?.kind, score: byAddress.get(address)?.score, rank: byAddress.get(address)?.rank }));
     const funnel = result.funnel;
-    await sql`update selection_runs set finalists = ${{ finalists, funnel, highFrequency, ...(guard ? { overlapGuard: guard } : {}) }}::jsonb where id = ${id}`;
+    await sql`update selection_runs set finalists = ${JSON.stringify({ finalists, funnel, highFrequency, ...(guard ? { overlapGuard: guard } : {}) })}::jsonb where id = ${id}`;
     if (score.candidates.length === 0) throw new Error(`no frame candidates (${result.finalists.length} finalists)`);
 
     // Live positions and equity of each finalist (the review's evidence and the leverage check).
@@ -304,7 +304,7 @@ export class Pipeline {
     // Each pick's largest same-direction overlap with another pick. Evidence only: nothing here selects.
     try {
       const overlap = summarizeOverlap(score.addresses, positions, policy.maxExposureOverlap);
-      await sql`update selection_runs set finalists = coalesce(finalists, '{}'::jsonb) || ${{ overlap }}::jsonb where id = ${id}`;
+      await sql`update selection_runs set finalists = coalesce(finalists, '{}'::jsonb) || ${JSON.stringify({ overlap })}::jsonb where id = ${id}`;
     } catch (e) {
       log("overlap not recorded", { id, error: String((e as Error)?.message ?? e) });
     }
@@ -358,7 +358,7 @@ export class Pipeline {
       receiptHash: receipt.receiptHash,
       audit,
     };
-    await sql`update selection_runs set review = ${review}::jsonb where id = ${id}`;
+    await sql`update selection_runs set review = ${JSON.stringify(review)}::jsonb where id = ${id}`;
     let payload: Omit<FrozenConfiguration, "configurationHash">;
     if (manifest.status === "VALID") {
       // Freeze for our account (as freezePaperSession: bound to the review receipt).
@@ -371,7 +371,7 @@ export class Pipeline {
         log("selection rejected", { id, reason: manifest.reason, basicSources: basic.length });
         return { status: "rejected", reason: `${manifest.reason}; basic gate kept ${basic.length}` };
       }
-      await sql`update selection_runs set review = review || ${{ gate: "basic", basicSources: basic }}::jsonb where id = ${id}`;
+      await sql`update selection_runs set review = review || ${JSON.stringify({ gate: "basic", basicSources: basic })}::jsonb where id = ${id}`;
       payload = {
         schemaVersion: "1.0.0",
         account: this.o.account.toLowerCase(),
@@ -401,7 +401,7 @@ export class Pipeline {
     await sql.begin(async (tx) => {
       await tx`update configurations set status = 'retired' where status = 'active'`;
       await tx`insert into configurations (hash, configuration, status, selection_id, activated_at)
-        values (${configuration.configurationHash}, ${configuration}::jsonb, 'active', ${id}, now())
+        values (${configuration.configurationHash}, ${JSON.stringify(configuration)}::jsonb, 'active', ${id}, now())
         on conflict (hash) do update set status = 'active', activated_at = now()`;
       await tx`update selection_runs set status = 'activated', configuration_hash = ${configuration.configurationHash}, finished_at = now() where id = ${id}`;
     });
