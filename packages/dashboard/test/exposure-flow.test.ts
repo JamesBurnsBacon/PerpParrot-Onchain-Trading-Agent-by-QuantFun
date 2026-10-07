@@ -50,6 +50,14 @@ describe("exposure flow", () => {
     assert.equal(target([]).net, 0.25);
   });
 
+  test("the returned targets stay the baseline even if the attribution does not add up to them", () => {
+    const skewed: Exposures = { ...response, exposures: [{ asset: "BTC", fraction: 0.3 }, { asset: "ETH", fraction: -0.375 }] };
+    const rows = targetsWithMutes(buildExposureFlow(skewed), new Set<string>());
+    assert.deepEqual(rows.find((row) => row.asset === "BTC"), { asset: "BTC", net: 0.3, delta: 0 });
+    const muted = targetsWithMutes(buildExposureFlow(skewed), new Set([first])).find((row) => row.asset === "BTC")!;
+    assert.deepEqual(muted, { asset: "BTC", net: 0.3 - 0.5, delta: -0.5 });
+  });
+
   test("wallet matching is case insensitive and unknown mutes have no effect", () => {
     assert.deepEqual(target([first.toUpperCase()]), target([first]));
     assert.deepEqual(target(["unknown"]), target([]));
@@ -75,7 +83,7 @@ describe("exposure flow", () => {
   });
 
   test("opposing signs cancel and asset ordering stays fixed when muted", () => {
-    const model = buildExposureFlow({ ...response, sources: response.sources!.map((source) => ({ ...source,
+    const model = buildExposureFlow({ ...response, exposures: [{ asset: "BTC", fraction: 0 }, { asset: "ETH", fraction: -0.375 }], sources: response.sources!.map((source) => ({ ...source,
       contributions: [{ asset: "BTC", fraction: source.address === first ? 0.5 : -0.5 }],
     })) });
     assert.equal(targetsWithMutes(model, new Set()).find((row) => row.asset === "BTC")!.net, 0);

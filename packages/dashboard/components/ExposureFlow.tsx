@@ -77,6 +77,11 @@ export function ExposureFlow({ exposures }: { exposures: Exposures }) {
             <thead><tr><th scope="col">Asset</th><th scope="col">Net target</th><th scope="col">Change from all wallets</th></tr></thead>
             <tbody>{targets.map(({ asset, net, delta }) => <tr key={asset}><th scope="row">{asset}</th><td>{signedExposure(net)}%</td><td>{signedExposure(delta)} percentage points</td></tr>)}</tbody>
           </table>
+          <table>
+            <caption>Contribution of each wallet to each net target, as a percentage of equity</caption>
+            <thead><tr><th scope="col">Wallet</th><th scope="col">Asset</th><th scope="col">Contribution</th><th scope="col">Status</th></tr></thead>
+            <tbody>{model.bands.map((band) => <tr key={`${band.wallet}:${band.asset}`}><th scope="row">{band.wallet}</th><td>{band.asset}</td><td>{signedExposure(band.fraction)}%</td><td>{muted.has(band.wallet) ? "muted" : "counted"}</td></tr>)}</tbody>
+          </table>
           {!targets.length && <p>No nonzero targets in this run.</p>}
         </div>
       </div>

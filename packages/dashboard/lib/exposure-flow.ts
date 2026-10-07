@@ -15,14 +15,18 @@ export function buildExposureFlow(response: Exposures) {
     label: walletLabel(source.address),
     weightPct: source.weight * 100,
   }));
-  const assets = new Map(response.exposures.map(({ asset }) => [asset, 0]));
+  // The returned targets are the authority; the contributions only attribute them. An asset only the
+  // contributions mention (not expected) falls back to their sum.
+  const baseline = new Map(response.exposures.map(({ asset, fraction }) => [asset, fraction]));
+  const attributed = new Map<string, number>();
   const bands = wallets.flatMap((wallet) => wallet.contributions.map(({ asset, fraction }) => {
-    assets.set(asset, (assets.get(asset) ?? 0) + fraction);
+    attributed.set(asset, (attributed.get(asset) ?? 0) + fraction);
     return { wallet: wallet.id, asset, fraction };
   })).filter(({ fraction }) => fraction !== 0);
+  for (const [asset, sum] of attributed) if (!baseline.has(asset)) baseline.set(asset, sum);
   return {
     wallets,
-    assets: [...assets].map(([asset, net]) => ({ asset, net }))
+    assets: [...baseline].map(([asset, net]) => ({ asset, net }))
       .sort((a, b) => Math.abs(b.net) - Math.abs(a.net) || a.asset.localeCompare(b.asset)),
     bands,
     maxContribution: Math.max(0, ...bands.map(({ fraction }) => Math.abs(fraction))),
@@ -33,13 +37,14 @@ export type ExposureFlowModel = ReturnType<typeof buildExposureFlow>;
 
 export function targetsWithMutes(model: ExposureFlowModel, muted: ReadonlySet<string>) {
   const excluded = new Set([...muted].map((address) => address.toLowerCase()));
-  const nets = new Map(model.assets.map(({ asset }) => [asset, 0]));
+  // The what-if removes the muted wallets' contributions from the returned target.
+  const removed = new Map<string, number>();
   for (const band of model.bands) {
-    if (!excluded.has(band.wallet)) nets.set(band.asset, (nets.get(band.asset) ?? 0) + band.fraction);
+    if (excluded.has(band.wallet)) removed.set(band.asset, (removed.get(band.asset) ?? 0) + band.fraction);
   }
   return model.assets.map(({ asset, net: baseline }) => {
-    const net = nets.get(asset) ?? 0;
-    return { asset, net, delta: net - baseline };
+    const cut = removed.get(asset) ?? 0;
+    return { asset, net: baseline - cut, delta: cut === 0 ? 0 : -cut };
   });
 }
 

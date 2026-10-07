@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import configurationFixture from "../fixtures/frozen-configuration.json";
 import type { FrozenConfiguration } from "../../shared/frozen";
 import type { PositionsSnapshot } from "../../shared/snapshot";
-import { capGrossExposure, computeExposures, limitPositions, targetsFromSnapshot, weightedSourcesFromSnapshot } from "../../shared/copy";
+import { capGrossExposure, computeExposures, countedGross, limitPositions, targetsFromSnapshot, weightedSourcesFromSnapshot } from "../../shared/copy";
 import { exposureBreakdown } from "../src/paper/exposure-breakdown";
 
 const snapshot = (): PositionsSnapshot => ({
@@ -86,6 +86,9 @@ describe("exposureBreakdown", () => {
     s.sources[2].positions[0].notionalE6 = "5000000000000";
     const rows = reconcile(s);
     expect(targetsFromSnapshot(s)).toEqual([{ asset: "BTC", exposureE9: 909_090_909n }, { asset: "ETH", exposureE9: -181_818_181n }]);
+    // The policy counts the majority side plus half the minority side (countedGross), not the sum of absolutes:
+    // 0.909 long + 0.182 / 2 short = 1.0, which is exactly the cap.
+    expect(countedGross(targetsFromSnapshot(s).map((e) => e.exposureE9))).toBeLessThanOrEqual(1_000_000_000n);
     expect(rows[0].contributions[0].fraction).toBeCloseTo(0.909090909 / 3, 12);
   });
 
