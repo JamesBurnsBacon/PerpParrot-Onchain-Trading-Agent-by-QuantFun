@@ -12,11 +12,13 @@
 
 **TL;DR**
 - Score Hyperliquid addresses (traders, HyperCore vaults, ERC-4626 vaults) on risk-adjusted performance.
-- An LLM agent picks **5–25 source wallets**. Two models are compared in the backtest, and the winner runs live.
+- An AI committee reviews source wallets; the roster admits approved wallets and activates the frozen copy configuration.
 - Every 10 minutes the backend reads the sources' positions and turns them into target exposures; the executor trades toward them.
 - An executor holds the **weighted, netted** copy of those positions in our own Hyperliquid account (5 HYPE ≈ $470).
-- **The backtest is the proof:** out-of-sample results over 2 weeks, 1 month, 6 weeks and 3 months vs. holding BTC. The ~5 h live run proves the machinery.
+- **Evidence boundary:** operational runs demonstrate the machinery. Multi-window backtests against BTC are an evaluation goal; the checked-in research does not establish predictive edge.
 
+> **Documentation:** [current system, research and historical material](docs/README.md).
+>
 > **Where things are:** AI review: [architecture](docs/agents/ARCHITECTURE.md), [system prompts](docs/agents/SYSTEM_PROMPTS.md), [acceptance cases](docs/agents/EVALUATION.md), [JSON contracts](packages/shared/schemas), [integration guide](docs/agents/INTEGRATION.md); checks: `pnpm test`, `pnpm typecheck`. Mirror runs and executor: README §4.7–4.8, [runbook](docs/ops/RUNBOOK.md), [deploy](docs/ops/DEPLOY.md); checks: `bun test` per package, `./scripts/e2e-mirror.sh all`. Agents working in this repo: [AGENTS.md](AGENTS.md). **Live bucket: Aggressive** (§4.3).
 
 ---
@@ -58,10 +60,10 @@
  └──┬───────────────────────────┘
     │ finalists
     v
- AI REVIEW (backend scripts; Vercel Cron or AWS once scheduled)
+ AI REVIEW (backend pipeline; Vercel Cron selection + roster)
  ┌──────────────────────────────┐
  │ Role / Risk / Red-Team LLMs  │
- │ pick 5–25 sources + weights  │──> frozen configuration (hash pinned in both services)
+ │ review → approved bench     │──> roster → frozen configuration (validated hash)
  └──────────────────────────────┘
  EVERY 10 MIN (Vercel Cron)
  ┌──────────────────────────────┐
@@ -175,32 +177,29 @@ The buckets differ **only by that fixed multiplier** (owner, 2026-10-07): same w
 
 ### 4.6 AI layer: the review committee
 
-Status: the review core (`packages/backend/review/workflow.ts`, a Role/Risk/Red-Team committee) runs server-side.
-`packages/backend/scripts/review-input.ts` builds its input from Score's finalists (frame 1.1.0, live positions),
-and `packages/backend/scripts/review-run.ts` runs it with one model provider (`review/models/openai-paper.ts`),
-auditing every model output; see [production integration status](docs/agents/PRODUCTION_INTEGRATION.md). Its output,
-a frozen configuration, is the only execution authority (§4.7). A real-provider run, the two-model evaluation and a
-schedule (Vercel Cron or AWS) remain.
+The production pipeline invokes the Role/Risk/Red-Team committee through
+`packages/backend/src/pipeline/index.ts`. Vercel Cron selects candidates at `:x4`;
+reviews persist evidence, model output audit and an approved **bench** in
+`selection_runs`. The `:x6` roster job admits eligible wallets into seats and activates
+a validated frozen configuration when seats change. See
+[PIPELINE.md](docs/ingest/PIPELINE.md), [ROSTER.md](docs/ingest/ROSTER.md) and the
+[integration map](docs/agents/PRODUCTION_INTEGRATION.md).
 
-- **Before go-live:** the agent picks **5–25 sources from ~25 finalists**, assigns weights, and writes a rationale and red flags (martingale, wash-like behavior, concentration, near-liquidation). It also judges:
-  - **diversification**, from the correlation matrix and vault ↔ leader links
-  - **time in market** (avoid often-flat sources)
-  - **holding time** (too fast to copy at a 10-minute delay?)
-- **After go-live:** monitoring and commentary only.
-- **Inputs per finalist:**
-  - metrics and kind
-  - an equity-curve summary (the `month` window: 26–48 points)
-  - current positions (size, leverage, distance to liquidation)
-  - trade patterns
-  - time in market
-  - maker/taker split
-  - plus the correlation matrix
-  - **Budget:** ≈ 25 × ≤ 4 KB per request, well inside the model's context.
-- **Models:** two (≥ 1 from OpenAI; ❓ which). The backtest winner selects the live set, and the loser is **shadow-tracked on paper**. Output is structured JSON. API keys are server-side environment variables.
-- **Calling the model:** one request per stage with a strict JSON schema. Several independent observations (other models or providers) can each be a "node"; the committee takes the per-field median (the `*-consensus` schemas).
-- **Output format:** ❓ *a weight grid (0–3 units), continuous weights with median consensus, or a ranking plus a formula.*
-- **Logging:** full prompts and outputs go to Supabase with their hashes.
-- **Next:** a real-provider run of `review-run.ts`, the offline eval, and the point-in-time backtest harness.
+- **Inputs:** Score finalists, month equity/PnL curves, current positions, measured
+  fill/holding/leverage evidence and exposure overlap.
+- **Models:** server-side `openAIPaperCommittee`, configured by `REVIEW_MODEL` and
+  `OPENAI_API_KEY`. The provider adapter validates structured output; model prose
+  does not authorize orders.
+- **Approval:** the strict core's manifest and the default basic gate have different
+  requirements (`REVIEW_GATE`). Approved picks populate the bench; roster admission
+  and deterministic configuration checks control activation.
+- **Execution:** mirror runs consume the frozen configuration and snapshot targets.
+  They do not call a model while placing orders. Later reviews can affect future
+  roster configurations through the same controlled pipeline.
+- **Operator tools:** `backend/scripts/review-input.ts`, `review-run.ts` and `freeze.ts`
+  remain available for explicit runs. They are not the production cron entrypoints.
+- **Research boundary:** multi-model comparison and multi-window out-of-sample replay
+  are evaluation work, not proven benefits of a working production loop.
 
 ### 4.7 Mirror runs (every 10 min, at :x0)
 One run per 10-minute slot (`mirror-<runAt>`). Code: `packages/backend` (snapshot, targets), `packages/executor` (run), `packages/shared`.
@@ -413,7 +412,7 @@ Budget ~1 h of testing per 2 h of features. Integrate only tested modules.
   - **HyperEVM JSON-RPC** at `/evm` (`eth_blockNumber` answers; `/` is a 404).
   - **A copy of HL's Info API** at `/info`. It serves `meta`, `perpDexs`, `clearinghouseState`, `spotClearinghouseState`, `webData2`, `userVaultEquities`, `spotMeta` and `vaultSummaries`.
 - It answers 422 for `portfolio`, `userFillsByTime`, `userFunding`, `metaAndAssetCtxs`, `vaultDetails`, `allMids`, `l2Book` and `candleSnapshot`, so the selection pipeline's heavy reads (`portfolio`, fills) stay on Hyperliquid. No `/exchange`, so orders go to HL directly.
-- About 1.7x slower than the official API per read (median 0.36 s vs 0.21 s). The backend therefore keeps Hyperliquid as the primary and uses NOWNodes only as a failover (`INFO_ROUTING=overflow`), see `docs/ops/DEPLOY.md`.
+- In the recorded benchmark, NOWNodes was about 1.7x slower per read (median 0.36 s vs 0.21 s). Routing is configurable: `official` is the default, `overflow` retries supported failed reads, and `split` with `INFO_SPLIT_PERCENT=100` makes supported reads NOWNodes-first with official fallback. Check deployed settings and `/pipeline` metrics; see `docs/ops/DEPLOY.md`.
 - Paid plans advertise unlimited requests per second. It needs an API key. [Docs](https://docs.nownodes.io/hype)
 
 ### Coinbase AgentKit

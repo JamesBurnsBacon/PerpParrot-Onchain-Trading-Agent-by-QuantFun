@@ -20,11 +20,11 @@ mirror loop (README §4.7).
 - **Pick 25 every 10 minutes** from the qualified list, with fresh portfolios and fills.
   **High-frequency traders are left out**: more than 100 distinct orders a day in the fills read.
   A 10-minute copy loop can't follow them.
-- **Review and automatic go-live**: the AI committee (Role, Risk, Red-Team) reviews the 25. It
-  runs only when the 25 changed since the last review.
-  A reviewed set that passes the freeze checks becomes the active configuration. It switches only
-  when its sources differ from the active set's, so the executor and paper books don't see a new
-  configuration hash every 10 minutes. Pause and revert stay with the operator.
+- **Review, bench and automatic go-live**: the AI committee (Role, Risk, Red-Team) reviews
+  changed picks and writes approved wallets to the bench. The separate roster job admits wallets
+  into available seats, applies the seat lifecycle, and activates a validated frozen configuration
+  when the seats change. Selection itself does not activate a configuration. Existing seats also
+  receive scheduled reviews; see [ROSTER.md](ROSTER.md). Pause and revert stay with the operator.
 - **All on Vercel Cron**, state in Supabase through `DATABASE_URL`. No SQLite, local disk, raw
   archives, receipts, proofs or CRE. Row claims (`for update skip locked`) stop two invocations
   doing the same work. If Hyperliquid rate-limits Vercel's IPs, only the refresh job moves to one

@@ -1,56 +1,47 @@
-# Production integration status
+# Production integration map
 
-Updated 2026-10-07 after the review core and the mirror path were merged: the mirror is
-the backend and executor services on Vercel, and the review committee runs server-side
-in `packages/backend/review`.
-[Runbook](../ops/RUNBOOK.md) and [deploy guide](../ops/DEPLOY.md) cover operations.
-Nothing here authorizes real trades.
+Checked against repository code on 2026-10-07. This page describes implemented paths;
+it is not a live deployment attestation. Read current status and run evidence to
+establish what a particular deployment actually executed.
 
-The [evidence-bound paper review integration](PAPER_LIFECYCLE.md) now connects rich
-specialist inputs, per-node audit, persistent paper freeze and monitoring-only
-reviews. A dry-run integration test follows the merged snapshot/targets/executor
-path; the removed parallel preview lane is not restored.
+## Production path
 
-## Review core (this contribution)
-
-| Component | Ownership and verified behavior |
+| Stage | Entrypoint and persisted result |
 | --- | --- |
-| Anonymous rich review evidence | `shared/src/committee-evidence.ts` binds the summary frame, full curve/positions/patterns and matrix, rejects contradictions, and bounds the combined finalist at 4 KB. It does not turn the spike's scores into specialist judgments. |
-| Audit persistence | `backend/review/audit.ts` persists bound prompt/evidence and strictly validated committee output through a service-only idempotent RPC (`persist_review_audit`, `supabase/migrations/20261006130000_review_audit.sql`). Real provider output has not been persisted yet. |
-| Review core | `backend/review/workflow.ts` (`runReview`) and `backend/review/committee/`: Role/Risk/Red-Team over the bound evidence, per-node structured output, per-field median aggregation when there are several observations. |
-| Review input from Score | `backend/review/input.ts` (`buildReviewInput`, run by `backend/scripts/review-input.ts`): Score finalists -> a candidate-curation-frame **1.1.0** (adds `isSharpe`, `isSortino`, `isCalmar`, `lookbackDays`, `scoreFlags`, `cloneCount`; clone addresses stay at candidate level for audit) and the anonymous evidence (month PnL curve, up to 12 live positions, fill patterns `null` until fills are ingested). Fields no module supplies yet are `null` = unknown, and `compile` rejects candidates without OOS and execution evidence, so no candidate can pass yet. |
-| Server-side model provider | `backend/review/models/openai-paper.ts` (`openAIPaperCommittee`): Role, Risk and Red-Team over the bound committee evidence, one honest provider node (quorum 1), strict output schemas, the evidence's contract version on every output. Prompts default to `shared/src/prompts.ts` (byte-identical to `SYSTEM_PROMPTS.md` v1.1.0); `endpoint` takes any OpenAI-compatible URL. `backend/scripts/review-run.ts` runs it through `runCommitteeReview` with an append-only local audit file. Not yet: a real-provider run, or a schedule for reviews. |
-| Frozen configuration | `shared/src/frozen.ts` (`proposeFreeze`): the review's output that becomes the mirror's only execution authority. LIVE is **Aggressive** only (README §4.3). |
+| Ingest and Score | `backend/src/pipeline/index.ts`: scan/refresh populate `pipeline_accounts`; qualification and selection call `scoreCandidates`. |
+| AI review | Pipeline selection reads positions and fills, measures evidence, calls `openAIPaperCommittee` and `runCommitteeReview`, and writes summaries, model output audit, receipt hash, gate and approved bench into `selection_runs`. |
+| Roster and freeze | The roster job applies admission, tenure, exit and exposure rules, then validates and activates a `FrozenConfiguration` in `configurations` when seats change. See [ROSTER.md](../ingest/ROSTER.md). |
+| Snapshot and targets | `backend/src/service.ts` stores immutable positions snapshots in `run_snapshots`; `targetsFromSnapshot` (`shared/copy.ts`) derives the targets served at `GET /targets/:runAt`. The same snapshot feeds the paper books. |
+| Executor | One long-running process triggers each `:x0`, fetches targets, checks the active/pinned configuration hash and account, claims the run, plans and records results. Vercel hosts dry-run/read endpoints and the watchdog. |
+| Dashboard and evidence | Backend pipeline/roster/snapshot/paper endpoints and executor status/runs/equity expose the state. Runs carry `snapshotHash`, `configurationHash` and exposures for reconciliation. |
 
-## Mirror path
+The root `vercel.json` schedules scan twice daily, refresh every five minutes,
+selection at `:x4`, roster at `:x6`, snapshots at `:x9` and the executor watchdog every
+five minutes. It does **not** schedule executor `/cron/run`; the long-running executor
+owns that trigger. Deployment variables and recovery procedures are in
+[DEPLOY.md](../ops/DEPLOY.md) and [RUNBOOK.md](../ops/RUNBOOK.md).
 
-The paper mirror, execution preview compiler, recovery/nonce store, chain-authority adapter,
-HyperEVM freeze consumer and preview tables that were here were replaced by the mirror run:
+## Review and data boundaries
 
-| Need | Where it is now |
-| --- | --- |
-| Snapshot producer at `:x9` | `packages/backend` (Vercel Cron pre-builds each run's immutable positions snapshot from Hyperliquid; eligibility, Postgres) |
-| Target exposures | `targetsFromSnapshot` (`packages/shared/copy.ts`), served by the backend at `GET /targets/:runAt`; the same function feeds the paper books |
-| Trigger and delivery | Vercel Cron calls the executor's `/cron/run` at `:x0`; it fetches the targets over the service binding (`BACKEND_URL`). Live trading needs one long-running executor process with its own timer |
-| Execution | `packages/executor`: configurationHash and account check, per-run claim (`executor_run_claims`), planner (HL lot/tick rounding via `@nktkas/hyperliquid`, $10 minimum at the limit price, 95% margin rule, reduce-only), dry run by default |
-| Freeze confirmation | `configurationHash` pinned in both services' env (`FROZEN_CONFIGURATION_HASH`; no onchain contract) |
-| Run evidence | `executor_runs.evidence` = `{snapshotHash, configurationHash, exposures}`; the snapshot is public at `/api/backend/snapshots/<runAt>` and its keccak256 can be recomputed |
-| Health and alerts | executor watchdog + Telegram |
+- The strict review core and the pipeline's default basic gate are distinct. Missing
+  strict evidence can reject a core manifest; it does not mean the entire scheduled
+  pipeline is unimplemented. See [PIPELINE.md](../ingest/PIPELINE.md#review-gate) for
+  `REVIEW_GATE`, measured evidence and approval rules.
+- `backend/review/audit.ts` and its `persist_review_audit` RPC support the separate
+  [paper lifecycle](PAPER_LIFECYCLE.md). Production pipeline audit is stored in
+  `selection_runs.review`; do not use the RPC's status as a proxy for pipeline usage.
+- `backend/scripts/review-input.ts`, `review-run.ts` and `freeze.ts` are operator
+  entrypoints. The scheduled path calls the shared review components directly.
+- NOWNodes routing supports selected backend Info reads, including positions, with
+  official-API fallback. Portfolio and fills remain on the official API; executor
+  exchange submission is separate. Defaults are official-only. See
+  [DEPLOY.md](../ops/DEPLOY.md) for routing switches and `GET /pipeline` metrics.
+- Local tests, model responses and a successful deployment do not by themselves prove
+  funded execution or predictive edge. Validate a deployed run's time, configuration,
+  snapshot hash, dry-run flag and order results. Multi-window strategy evaluation
+  remains separate research evidence.
 
-## Remaining gates for the review core
-
-1. Run the committee against a real provider. Rich evidence, server provider
-   requests, per-node audit and paper monitoring-only behavior have integration
-   tests; no billable model run has been made or persisted.
-2. Run the two-model point-in-time evaluation, select the winner and persist the full
-   sanitized prompt/output audit with verified hashes and paper shadow state.
-3. Decide whether and where reviews run on a schedule (Vercel Cron or AWS) and store
-   the model key as a server-only secret there.
-4. Produce the Aggressive LIVE frozen configuration for our account and freeze it
-   (`packages/backend/scripts/freeze.ts`, then set `FROZEN_CONFIGURATION_HASH` in both
-   services).
-
-## Remaining gates for funded execution
+## Deployment and recovery verification
 
 The executor now has a durable write-ahead journal for leverage changes and IOC order
 batches. Each run first reconciles unresolved journal rows automatically
@@ -62,7 +53,8 @@ order is final; otherwise that run leaves its perps alone and trades the rest. N
 automatically: only a human pauses or flattens. `GET /admin/order-batches` and
 `POST /admin/reconcile-batch` remain for manual review.
 
-Before any funded canary, require all of the following:
+For a new deployment or funded canary, verify the following against that environment.
+This checklist is not a statement that an existing deployment has or has not passed:
 
 1. Apply and verify the executor journal migration on the intended Supabase project;
    exercise the Postgres tests against that schema and confirm persistence across an

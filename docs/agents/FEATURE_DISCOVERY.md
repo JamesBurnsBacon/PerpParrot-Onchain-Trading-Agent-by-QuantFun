@@ -49,8 +49,10 @@ count, net funding/equity, settlement count/PnL, and public transfer-network mea
 
 The exploratory analysis calculated Spearman correlations against later source
 returns, 20,000 two-sided wallet-label permutations per feature, and Benjamini-Hochberg
-q-values across the tested features. Results are in the immutable raw output
-[`active-feature-exploration-20261006-v2.json`](../../work/backtests/active-feature-exploration-20261006-v2.json).
+q-values across the tested features. The original output is local-only at
+`work/backtests/active-feature-exploration-20261006-v2.json` (ignored by Git).
+It is not shipped with this repository; the historical numerical results below
+require that capture for independent reproduction.
 
 | Training feature | Sources | Spearman rho | Permutation p | BH q | Reading |
 | --- | ---: | ---: | ---: | ---: | --- |
@@ -155,10 +157,10 @@ relationship only to prioritize data collection and falsification.
 ## Reproduce the analysis from captured files
 
 The raw research files are local, ignored artifacts under `work/backtests/`. Given
-matching cohort, backtest, and event JSON files, run:
+matching cohort, backtest, and event JSON files, run from the repository root:
 
 ```sh
-pnpm --filter @perpparrot/backend exec bun src/backtest/explore-active-cohort.ts \
+bun run packages/backend/src/backtest/explore-active-cohort.ts \
   work/backtests/active-quality-cohort-20261006.json \
   work/backtests/active-quality-backtest-20261006.json \
   work/backtests/active-quality-ledger-features-20261006.json \

@@ -3,17 +3,19 @@
 ## Current score
 
 `packages/backend/src/score/score.ts` applies eligibility filters, computes month-window
-metrics, and ranks eligible addresses by the average percentile of Sortino, Calmar,
-negative maximum drawdown, and positive-PnL-day consistency. Exact integer midranks
-make ties deterministic. This is a **relative shortlist**, not a probability of future
-profit or a live allocation weight. `avgLeverage`, time in market, holding time, and
-maker share are carried through; they do not affect this score. The later review and
-portfolio policy must evaluate them separately.
+metrics, and ranks eligible addresses by weighted percentiles of Sharpe, Sortino,
+Calmar, negative maximum drawdown and positive-PnL-day consistency (weights 1, 1, 1,
+1, 2). A known maker share below the configured threshold incurs the configured
+pure-taker penalty; unknown maker share is neutral. Integer ranking and deterministic
+tie-breaking are implemented in `score.ts`. This is a **relative shortlist**, not a
+probability of future profit or a live allocation weight. Leverage and holding-time
+evidence also feed the later review and roster checks.
 
-The scoring implementation is still a pure library. No backend service currently calls
-`scoreCandidates` (only the on-demand `scripts/review-input.ts` does), and no persistent
-point-in-time candidate table feeds the review. Passing unit tests therefore proves formula and contract behavior, not that
-live sources are ingested, historically replayed, or selected well.
+`packages/backend/src/pipeline/index.ts` calls `scoreCandidates` for qualification
+and selection. It reads persisted `pipeline_accounts`, writes `selection_runs`, and
+feeds measured evidence to the committee. Vercel Cron schedules these jobs; see
+[the production pipeline](../ingest/PIPELINE.md). These operational tables do not
+constitute an immutable historical universe or prove predictive performance.
 
 ## Evidence limits to respect
 
@@ -80,6 +82,9 @@ allocation.
   malformed trade counts.
 - A score run over test fixtures is a regression check only. It is not a real-time
   leaderboard run, a point-in-time backtest, or a deployment check.
-- A scheduled score-to-review run, point-in-time history store, challenger replay,
-  and a real-provider review run remain unbuilt or unverified. Do not describe the
-  agent-selection path as live until those pieces have tests and run artifacts.
+- Scheduled score-to-review orchestration and persistence are implemented in the
+  backend pipeline. Verify deployment health from current pipeline/roster status and
+  run evidence; unit tests alone cannot establish that a deployed cron ran.
+- An immutable historical universe and multi-window challenger replay remain separate
+  research evidence requirements. A working production pipeline does not establish
+  investment quality.

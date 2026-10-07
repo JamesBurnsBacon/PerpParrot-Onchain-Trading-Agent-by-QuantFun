@@ -1,4 +1,8 @@
-# Pressure-test findings and fixes
+# Historical review-core pressure test
+
+This records the original local contribution before production pipeline integration.
+The findings below retain their original test scope and counts. For current behavior
+and deployment checks, use [PRODUCTION_INTEGRATION.md](PRODUCTION_INTEGRATION.md).
 
 Scope: the local ai-agent-workflow contribution, including strict contracts, review
 orchestration, commitments and persisted-manifest authorization. No live trades,
@@ -28,7 +32,11 @@ Keccak empty-input vector, insertion-order/domain separation and tampered commit
 The position-replay assessment remains mocked in unit tests; these results do not
 prove trading feasibility or risk-model quality.
 
-## Remaining implementation gates
+## Open items at the time of this review
+
+This is historical context, not the current implementation checklist. Subsequent
+work added pipeline review, persistence and executor reconciliation; see the current
+integration map above. Research validation remains separate from implementation.
 
 - A real-provider review run and request-size/latency checks against the chosen
   provider are still absent.
@@ -44,19 +52,3 @@ prove trading feasibility or risk-model quality.
 - Cancellation cannot preempt synchronous CPU work.
 - Node identity is attached by the trusted adapter that makes the model calls. The
   core rejects duplicates but cannot authenticate a fabricated node ID.
-
-## GitHub authentication diagnosis
-
-The connector identifies as badjiallan053-boop. Repository metadata reports push=true
-for that account. Nevertheless, GitHub write endpoints returned 403 “Resource not
-accessible by integration”; the account's collaborator rights and the application's
-credential grants are separate. No GH_TOKEN, GITHUB_TOKEN or GITHUB_PAT was found in
-the process environment. Git's repository credential lookup returned no stored GitHub
-token. No token values were printed or saved.
-
-The remedy is to reconnect/authorize the GitHub integration with Contents write for
-this repository, or configure an authorized local Git credential/SSH account. A
-collaborator having push access, or creating a branch in the browser, does not grant
-an application's credential write permissions. See GitHub's official
-[API troubleshooting](https://docs.github.com/en/rest/using-the-rest-api/troubleshooting-the-rest-api)
-and [Git commit permission requirements](https://docs.github.com/en/rest/git/commits).

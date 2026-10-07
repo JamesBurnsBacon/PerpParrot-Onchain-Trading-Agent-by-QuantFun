@@ -17,14 +17,17 @@ holdout returns, and an unselected source was among the best performers. Treat t
 as a useful warning against promoting current score output, not as a statistically
 meaningful estimate of future performance.
 
-The reproducibility artifact is [`public-20261006-v2.json`](../../work/backtests/public-20261006-v2.json).
+The original capture is local-only at `work/backtests/public-20261006-v2.json`
+(ignored by Git). It is not included in a fresh clone, so the reported historical
+numbers cannot be independently reproduced from this repository alone.
 It contains the sampled addresses, raw monthly series, request hashes, rejected
 requests, methodology, and per-source training/test results. It is a point-in-time
 capture of public data, not a historical candidate-universe snapshot.
 
 ## Run it again
 
-From the repository root, run `pnpm --filter @perpparrot/backend backtest:public`.
+From the repository root, run `bun run packages/backend/src/backtest/fetch-public.ts`.
+This collects a new public-data sample; it does not recreate the historical capture.
 Optional environment variables are `BACKTEST_SAMPLE_SIZE` (7–100, default 40),
 `BACKTEST_FINALISTS` (default 5), `BACKTEST_SEED` (default `20261006`), and
 `BACKTEST_OUTPUT`. The collector only calls the public leaderboard and Hyperliquid
