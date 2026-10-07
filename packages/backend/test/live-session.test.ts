@@ -243,7 +243,7 @@ test("handler retains its base facts and safety at the 1200-char context budget"
   const previous = (await deps().finalists()).finalists.slice(10, 20).map(f => f.address);
   const baseline = await check(await handleLiveStrategy(request({ intent: args, previous }), deps()), 200);
   const d = deps();
-  d.context = { activeSources: async () => [], paperPoints: async () => ["aggressive-470", "aggressive-10k", "balanced-470"].flatMap(bookId => [
+  d.context = { activeSources: async () => [], paperPoints: async () => ["aggressive-470", "balanced-470", "conservative-470"].flatMap(bookId => [
     { bookId, t: 0, equityUsd: 100 }, { bookId, t: 86400, equityUsd: 123.45 }]), liveExposures: async () => [{ asset: "ETH", fraction: .9 }] };
   const body = await check(await handleLiveStrategy(request({ intent: args, previous }), d), 200);
   expect(body.facts.startsWith(baseline.facts)).toBe(true);
