@@ -29,9 +29,16 @@ Score evaluated all 10,987 addresses in 17.9 seconds and selected 250. Of those,
 40 had over 100 distinct orders per day in their saved fills; the second Score
 evaluated the remaining 210 in 0.16 seconds and selected 40 (39 traders, one
 HyperCore vault). These are selection counts, not approval or return results.
-The live OpenAI rehearsal reads new public positions and fills and is reported
-separately; saved score histories and live review evidence have different
-observation times.
+The isolated live review then read public positions and fills and called the
+configured GPT-6 Sol OpenAI API for Role, Risk and Red-Team. All three calls
+returned HTTP 200 with structured responses (235,487 total tokens). The
+existing basic fallback approved five of the 40 finalists for its bench; four
+passed the subsequent hold gate. The strict candidate gate passed one of 40,
+and its manifest was `INVALID_BUCKET` (`CAPACITY`), so this is **not** a
+verified freeze or a live-trading authorization. Saved score histories and
+the review's live evidence have different observation times. Raw public reads,
+model outputs and account-level review details remain in ignored local files,
+not in Git; this document records only aggregate counts and outcomes.
 
 Deploy in order: apply
 `supabase/migrations/20261008040000_regular_screened_cohort.sql`, ensure the
