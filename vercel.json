@@ -43,6 +43,7 @@
     { "path": "/api/executor/cron/watchdog", "schedule": "*/5 * * * *" },
     { "path": "/api/backend/cron/pipeline/scan", "schedule": "15 0,12 * * *" },
     { "path": "/api/backend/cron/pipeline/refresh", "schedule": "2,7,12,17,22,27,32,37,42,47,52,57 * * * *" },
-    { "path": "/api/backend/cron/pipeline/select", "schedule": "4,14,24,34,44,54 * * * *" }
+    { "path": "/api/backend/cron/pipeline/select", "schedule": "4,14,24,34,44,54 * * * *" },
+    { "path": "/api/backend/cron/pipeline/agent", "schedule": "8,18,28,38,48,58 * * * *" }
   ]
 }

@@ -71,6 +71,11 @@ export type PipelineView = {
     id: number;
     finalists: { finalists: { address: string; kind?: string; score?: number; rank?: number }[]; funnel: { stage: string; count: number }[] } | null;
     summary: { candidate: number; address?: string; aggressiveFit: number | null; reject: number | null; leverageRisk: number | null; evidenceRisk: number | null }[] | null;
+    strategy?: {
+      id: number; runId: number; status: "queued" | "running" | "complete" | "failed";
+      createdAt: string; completedAt: string | null; model: string | null; economicAuthority: false;
+      candidates: { address: string; strategy: string; confidence: string; risks: string[]; unknowns: string[] }[];
+    } | null;
   } | null;
 };
 

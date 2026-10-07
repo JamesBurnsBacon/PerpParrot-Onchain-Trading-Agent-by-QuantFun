@@ -79,6 +79,7 @@ export function Pipeline({ view }: { view: PipelineView }) {
   // Latest run's finalists joined with the AI verdicts; picked = in that run's manifest.
   const picked = new Map((run?.manifest?.sources ?? []).map((s) => [s.address.toLowerCase(), s.weight]));
   const verdicts = new Map((latest?.summary ?? []).filter((s) => s.address).map((s) => [s.address!.toLowerCase(), s]));
+  const strategies = new Map((latest?.strategy?.candidates ?? []).map((s) => [s.address.toLowerCase(), s]));
   const finalists = [...(latest?.finalists?.finalists ?? [])].sort((a, b) => (a.rank ?? 1e9) - (b.rank ?? 1e9));
   const funnel = latest?.finalists?.funnel ?? [];
   const funnelMax = Math.max(...funnel.map((f) => f.count), 1);
@@ -179,6 +180,11 @@ export function Pipeline({ view }: { view: PipelineView }) {
             <h3 className="mb-1 text-xs font-semibold" style={{ color: "var(--ink-2)" }}>
               Finalists · AI verdicts <span className="font-normal" style={{ color: "var(--muted)" }}>0–100 · red = concern</span>
             </h3>
+            <p className="mb-2 text-xs" style={{ color: "var(--muted)" }}>
+              Strategy research · advisory only · {latest?.strategy?.status ?? "not queued"}
+              {latest?.strategy?.completedAt && ` · ${when(latest.strategy.completedAt)} · ${latest.strategy.model}`}
+              {latest?.strategy && String(latest.strategy.runId) !== String(latest.id) && ` · reused from selection #${latest.strategy.runId}`}
+            </p>
             <table className="tabular w-full whitespace-nowrap text-xs">
               <thead style={{ color: "var(--muted)" }}>
                 <tr>
@@ -191,12 +197,14 @@ export function Pipeline({ view }: { view: PipelineView }) {
                   <th className="py-1 pl-2 text-right font-normal" title="Risk: leverage">Lev</th>
                   <th className="py-1 pl-2 text-right font-normal" title="Risk: evidence">Evid</th>
                   <th className="py-1 pl-2 text-right font-normal">Weight</th>
+                  <th className="py-1 pl-3 text-left font-normal">Strategy hypothesis</th>
                 </tr>
               </thead>
               <tbody>
                 {finalists.map((f, i) => {
                   const v = verdicts.get(f.address.toLowerCase());
                   const w = picked.get(f.address.toLowerCase());
+                  const strategy = strategies.get(f.address.toLowerCase());
                   return (
                     <tr key={f.address} className="border-t" style={{ borderColor: "var(--grid)" }}>
                       <td className="py-1" style={{ color: "var(--muted)" }}>{f.rank ?? i + 1}</td>
@@ -209,6 +217,14 @@ export function Pipeline({ view }: { view: PipelineView }) {
                       <Heat v={v?.evidenceRisk ?? null} bad="high" />
                       <td className="py-1 pl-2 text-right font-semibold" style={{ color: w ? "var(--series-1)" : "var(--muted)" }}>
                         {w ? `${(w * 100).toFixed(1)}%` : "—"}
+                      </td>
+                      <td className="min-w-64 max-w-md whitespace-normal py-2 pl-3" style={{ color: "var(--ink-2)" }}>
+                        {strategy ? <details>
+                          <summary className="cursor-pointer"><span className="line-clamp-2">{strategy.strategy}</span><span style={{ color: "var(--muted)" }}>{strategy.confidence} confidence · expand</span></summary>
+                          <p className="mt-1">{strategy.strategy}</p>
+                          <p className="mt-1">Risks: {strategy.risks.join("; ") || "—"}</p>
+                          <p className="mt-1">Unknowns: {strategy.unknowns.join("; ") || "—"}</p>
+                        </details> : <span style={{ color: "var(--muted)" }}>{latest?.strategy?.status ?? "Not analysed"}</span>}
                       </td>
                     </tr>
                   );

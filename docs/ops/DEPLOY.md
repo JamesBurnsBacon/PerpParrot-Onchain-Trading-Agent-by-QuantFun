@@ -95,9 +95,15 @@ leverage, and needs at least 5. `REVIEW_GATE=strict` turns this off.
    - the qualified accounts' fills are read within about an hour, then the next `:x4` run picks
      25 and reviews them, and `active` shows the sources;
    - the next `:x0` run trades toward them (dry run).
-4. **Operator**: `POST /api/backend/admin/pipeline/scan|refresh|select` with
+4. **Operator**: `POST /api/backend/admin/pipeline/scan|refresh|select|agent` with
    `Authorization: Bearer $ADMIN_TOKEN`. An operator's `select` qualifies on partial data and
    reviews an unchanged pick.
+
+For advisory strategy notes, also apply `20261007160000_strategy_analyses.sql` before
+deploying. The agent uses the same `OPENAI_API_KEY`; `OPENAI_STRATEGY_MODEL` defaults
+to `gpt-6-astra`. Its `:x8` cron fills the dashboard's strategy column without changing
+the committee or configuration. See [STRATEGY_ANALYSIS.md](../agents/STRATEGY_ANALYSIS.md)
+for deduplication, failure handling and the private/public data boundary.
 
 ## Upgrading a deployment from before 2026-10-07 (Chainlink CRE removed)
 

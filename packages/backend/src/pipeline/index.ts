@@ -22,6 +22,7 @@ import type { Policy, Row } from "../../../shared/src/contracts.ts";
 import { checkFrozenConfiguration, type FrozenConfiguration } from "../../../shared/frozen";
 import { ELIGIBLE_DEXES } from "../../../shared/snapshot";
 import { keccakUtf8 } from "../snapshot";
+import { StrategyAgent, type AgentOptions } from "./strategy-agent";
 
 const HOUR = 3_600_000;
 const LEADERBOARD = "https://stats-data.hyperliquid.xyz/Mainnet/leaderboard";
@@ -35,6 +36,7 @@ export type PipelineOptions = {
   policy: Policy; // the bucket policy reviews run under (the fixture's Aggressive LIVE policy)
   openAiKey?: string;
   model?: string;
+  strategy?: AgentOptions;
   log: (msg: string, data?: Record<string, unknown>) => void;
   now?: () => number;
   info?: (perMinute: number) => PacedInfo; // Hyperliquid info client (tests)
@@ -66,10 +68,12 @@ const toInput = (r: AccountRow): ScoreInput => ({
 });
 
 export class Pipeline {
+  readonly agent: StrategyAgent;
   private readonly now: () => number;
   private readonly info: (perMinute: number) => PacedInfo;
 
   constructor(private readonly o: PipelineOptions) {
+    this.agent = new StrategyAgent(async (q, p) => o.sql.unsafe(q, p ?? []), o.strategy);
     this.now = o.now ?? Date.now;
     this.info = o.info ?? ((perMinute) => new PacedInfo(perMinute));
   }
@@ -171,6 +175,10 @@ export class Pipeline {
     const [active] = await sql`select hash, activated_at, configuration -> 'sources' as sources from configurations where status = 'active'`;
     // The latest run's finalists, funnel and per-candidate AI verdicts (dashboard).
     const [latest] = await sql`select id, finalists, review -> 'summary' as summary from selection_runs order by started_at desc limit 1`;
+    if (latest) {
+      try { latest.strategy = await this.agent.view(latest.finalists?.finalists ?? []); }
+      catch { latest.strategy = null; } // An advisory-table outage must not hide the main pipeline.
+    }
     return { accounts: counts, selections: runs, active: active ?? null, latest: latest ?? null };
   }
 
@@ -239,9 +247,11 @@ export class Pipeline {
     const { sql, log, policy } = this.o;
     const score = toFrameCandidates(result);
     const byAddress = new Map(result.candidates.map((c) => [c.address, c]));
-    const finalists = result.finalists.map((address) => ({ address, kind: byAddress.get(address)?.kind, score: byAddress.get(address)?.score, rank: byAddress.get(address)?.rank }));
+    const finalists = result.finalists.map((address) => ({ address, kind: byAddress.get(address)?.kind, score: byAddress.get(address)?.score, rank: byAddress.get(address)?.rank, metrics: byAddress.get(address)?.metrics }));
     const funnel = result.funnel;
     await sql`update selection_runs set finalists = ${{ finalists, funnel, highFrequency }}::jsonb where id = ${id}`;
+    try { await this.agent.enqueue(id); }
+    catch { log("strategy enqueue deferred", { id }); } // The agent cron catches up independently.
     if (score.candidates.length === 0) throw new Error(`no frame candidates (${result.finalists.length} finalists)`);
 
     // Live positions and equity of each finalist (the review's evidence and the leverage check).

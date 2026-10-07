@@ -36,6 +36,7 @@ All are backend routes protected by `CRON_SECRET`. Operators can call them with 
 | `/cron/pipeline/scan` | 00:15, 12:15 UTC | Leaderboard file (~40 MB): ≥ $10k, positive month and all-time PnL. hyperliquidvaults.com's vault list (its TanStack server function), plus Hyperliquid's own vault list (open, not a child, ≥ $10k TVL, ≥ 39 days old). File reads only, no per-account calls. | `pipeline_accounts` (upsert, `listed_at`) |
 | `/cron/pipeline/refresh` | every 5 min, ≤ 240 s | First, qualified accounts whose data is over 1 h old: `portfolio` + `userFillsByTime` (30 days, newest 2,000) → trade count, maker share, orders per day. Then accounts not refreshed since the latest scan: `portfolio` only. Keeps only the `month` and `allTime` windows. Unfinished claims are released. | `pipeline_accounts` |
 | `/cron/pipeline/select` | every 10 min (`:x4`) | 1. **Qualify** when ≥ 95% of the scan is refreshed and the qualified list is older than the scan: Score the population (trade count may be unknown here) and keep its top 250. 2. **Pick**: Score the qualified accounts with fresh fills, high-frequency traders left out, keep 25. 3. **Review** the 25 if they changed, freeze, and **activate** if the sources changed. | `pipeline_accounts.qualified_at`, `selection_runs`, `configurations` |
+| `/cron/pipeline/agent` | every 10 min (`:x8`) | One advisory OpenAI analysis per distinct set of 25; queued inputs plus live core/xyz positions. Unchanged picks reuse the result. Crypto, gold and oil exposure included. | `strategy_analyses` only |
 
 **Hyperliquid budget**: the limit is 1,200 weight per minute per IP. Most info calls cost 20;
 fills cost 20 plus 1 per 20 fills; `clearinghouseState` costs 2. The refresh paces itself to 900
@@ -62,8 +63,10 @@ gross leverage, and require ≥ 5 sources. `REVIEW_GATE=strict` turns it off.
 - **Gradual exit** for sources that leave the set (README §4.5: reduce-only legs, then DCA out).
   The first version switches targets directly.
 - **Stored month history** per account (denser than `allTime` beyond 30 days; README §4.1).
-- **Advisory strategy analysis** of the picks (#38's `strategy-agent.ts`): it has no authority
-  over configuration or orders.
+
+Advisory strategy notes are integrated separately from the review gate. See
+[setup, data scope and queue behavior](../agents/STRATEGY_ANALYSIS.md). They have no
+authority over configuration or orders and do not block the review if unavailable.
 
 **Not carried over** from #11, #31, #33 and #38: the SQLite worker and its HTTP server,
 receipts, leases and publication endpoints, the CRE workflow, `night-shift-integration/` and its
