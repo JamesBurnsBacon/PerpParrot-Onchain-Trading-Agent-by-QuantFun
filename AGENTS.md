@@ -22,7 +22,7 @@ The product is one pipeline on our own infrastructure:
 
 Hosting: one Vercel project with three services (root `vercel.json`) and Vercel Cron for the
 schedule, ingest and AI reviews included. The ingest → qualify → pick → review → automatic
-go-live pipeline (12-hour scans, ~250 qualified, 25 picked every 10 minutes, all state in
+go-live pipeline (12-hour scans, ~250 qualified, 40 picked every 10 minutes, all state in
 Supabase, no SQLite or local disk) is `docs/ingest/PIPELINE.md`; build to it. Older commits, issues, PR threads and branches
 that mention CRE, the DON, `cre-workflows`, `review-spike`, signed reports or `docs/cre/` describe
 the removed design: don't follow them, and update anything still pointing at it.

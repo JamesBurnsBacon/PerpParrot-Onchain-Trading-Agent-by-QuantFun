@@ -36,14 +36,14 @@ rel=Path('packages/shared/src/contracts.ts');s=(out/rel).read_text();assert s.co
 write(rel,s.replace("CONTRACT_VERSION = '1.1.0'",f"CONTRACT_VERSION = '{version}'"))
 rel=Path('packages/shared/src/review-evidence.ts');s=(out/rel).read_text();assert s.count(f'.max({base-1})')==3 and s.count(f'.max({base})')==1 and s.count(f'.max({base*(base-1)//2})')==1
 write(rel,s.replace(f'.max({base-1})',f'.max({count-1})').replace(f'.max({base})',f'.max({count})').replace(f'.max({base*(base-1)//2})',f'.max({count*(count-1)//2})'))
-rel=Path('packages/backend/review/workflow.ts');s=(out/rel).read_text();assert s.count('deps.agentTimeoutMs<=60000')==1
-write(rel,s.replace('deps.agentTimeoutMs<=60000',f'deps.agentTimeoutMs<={deadline}'))
+rel=Path('packages/backend/review/workflow.ts');s=(out/rel).read_text();bounds=re.findall(r'deps.agentTimeoutMs<=(\d+)',s);assert len(bounds)==1
+production_deadline=int(bounds[0]);write(rel,re.sub(r'deps.agentTimeoutMs<=\d+',f'deps.agentTimeoutMs<={deadline}',s))
 rel=Path('packages/backend/fixtures/review-policy.json');s=json.loads((out/rel).read_text());s['policy']['mode']='SIMULATION';write(rel,json.dumps(s,indent=2)+'\n')
 rel=Path('packages/backend/scripts/strict-gate-check.ts');s=(out/rel).read_text();marker='const url=process.env.DATABASE_URL;';assert s.count(marker)==1
-s,n=re.subn(r'MAX_RESEARCH_FINALISTS=\d+,MAX_RESEARCH_TIMEOUT_MS=60000',f'MAX_RESEARCH_FINALISTS={count},MAX_RESEARCH_TIMEOUT_MS={deadline}',s);assert n==1
+s,n=re.subn(r'MAX_RESEARCH_FINALISTS=\d+,MAX_RESEARCH_TIMEOUT_MS=\d+',f'MAX_RESEARCH_FINALISTS={count},MAX_RESEARCH_TIMEOUT_MS={deadline}',s);assert n==1
 s=s.replace(marker,f"if(!values['local-dir']||!values.offline||values.finalists!=='{count}'||values.gate!=='strict')throw new Error('research runtime requires local, offline, strict Top{count}');\n"+marker)
 s=s.replace('const report={provider:',f"const report={{researchOnly:true,economicAuthority:false,researchContract:'{version}',provider:");write(rel,s)
 manifest={'baseHead':subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip(),'generatorSha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),'sourceFileHashes':source_hashes,
  'researchOnly':True,'economicAuthority':False,'changes':changes,'unchangedRules':['candidateGate','riskDecision','compile/weights/pair checks','Red-Team rebuild/exclusion','five-source minimum','assessment closure','system prompts'],
- 'limits':{'candidateCount':count,'candidateIds':f'0..{count-1}','pairs':count*(count-1)//2,'allowedDeadlineMs':deadline,'mode':'SIMULATION','schemaVersion':version}}
+ 'sourceProductionDeadlineMs':production_deadline,'limits':{'candidateCount':count,'candidateIds':f'0..{count-1}','pairs':count*(count-1)//2,'allowedDeadlineMs':deadline,'mode':'SIMULATION','schemaVersion':version}}
 (out/'research-runtime.json').write_text(json.dumps(manifest,indent=2)+'\n');print(json.dumps({'runtime':str(out),'patchedFiles':len(changes),'researchOnly':True,'finalists':count}))
