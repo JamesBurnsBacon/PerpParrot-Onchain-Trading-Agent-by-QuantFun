@@ -1,0 +1,22 @@
+{
+  "policy": {
+    "bucket": "AGGRESSIVE",
+    "mode": "LIVE",
+    "capitalUsd": 470,
+    "minOrderUsd": 10,
+    "minExecutableTargets": 3,
+    "maxSourceWeight": 0.3,
+    "maxGrossLeverage": 3,
+    "cashBuffer": 0.1,
+    "maxPairCorrelation": 0.8,
+    "maxExposureOverlap": 0.5,
+    "minHistoryDays": 30,
+    "maxFrameAgeMs": 3600000,
+    "minExecutionFit": 50,
+    "riskRejectThreshold": 80,
+    "riskWatchThreshold": 60,
+    "minConfidence": 40,
+    "redTeamRebuildThreshold": 70,
+    "redTeamExcludeThreshold": 85
+  }
+}

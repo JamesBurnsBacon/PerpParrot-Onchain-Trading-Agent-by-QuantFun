@@ -5,7 +5,8 @@ import type {Binding, Frame, Policy, Row, Observation, Critique, Manifest, Sourc
 
 const ROLE = ['preserver','compounder','diversifier','directional','opportunistic','convexity','reject','conservativeFit','balancedFit','aggressiveFit','confidence'];
 const RISK = ['drawdownRisk','leverageRisk','concentrationRisk','pathRisk','executionRisk','evidenceRisk','confidence'];
-const DIMENSIONS = RISK.filter(k => k !== 'confidence').sort();
+// Evidence uncertainty belongs in confidence, not a second risk veto or allocation cap.
+const DIMENSIONS = RISK.filter(k => k !== 'confidence' && k !== 'evidenceRisk').sort();
 /** Most sources a bucket keeps (owner: 5–15; the freeze itself needs at least 5). */
 export const MAX_SOURCES = 15;
 export interface Assessment {
@@ -63,7 +64,8 @@ function compile(frame: Frame, policy: Policy, role: Row[], risk: Row[], address
     if (m.historyDays < policy.minHistoryDays || m.oosWindows < 1 || m.oosSharpe === null || m.oosSortino === null || m.oosMaxDrawdown === null || m.crossWindowStability === null || m.averageLeverage === null || m.medianHoldMinutes === null || m.medianHoldMinutes < 60 || m.executionFit === null || m.executionFit < policy.minExecutionFit || m.executionCoverage === null || m.executionCoverage <= 0 || r.confidence < policy.minConfidence || k.confidence < policy.minConfidence || r.reject >= policy.riskRejectThreshold || decision.status === 'REJECT') return [];
     // Stronger latency penalty for 1–3h and softer for 3–6h; replay-calibrate.
     const latency = m.medianHoldMinutes < 180 ? 0.5 : m.medianHoldMinutes < 360 ? 0.75 : 1;
-    const score = r[fitKey] * latency;
+    const confidence = Math.min(r.confidence, k.confidence);
+    const score = r[fitKey] * latency * confidence / 100;
     if (score <= 0) return [];
     return [{candidate:c.candidate, score, ceiling:decision.ceiling}];
   }).sort((a,b)=>b.score-a.score || a.candidate-b.candidate);
