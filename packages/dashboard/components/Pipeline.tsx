@@ -82,6 +82,7 @@ export function Pipeline({ view }: { view: PipelineView }) {
   const finalists = [...(latest?.finalists?.finalists ?? [])].sort((a, b) => (a.rank ?? 1e9) - (b.rank ?? 1e9));
   const funnel = latest?.finalists?.funnel ?? [];
   const overlap = latest?.finalists?.overlap;
+  const guard = latest?.finalists?.overlapGuard;
   const funnelMax = Math.max(...funnel.map((f) => f.count), 1);
 
   return (
@@ -199,6 +200,12 @@ export function Pipeline({ view }: { view: PipelineView }) {
             <h3 className="mb-1 text-xs font-semibold" style={{ color: "var(--ink-2)" }}>
               Finalists · AI verdicts <span className="font-normal" style={{ color: "var(--muted)" }}>0–100 · red = concern</span>
             </h3>
+            {guard && (
+              <p className="mb-1 text-xs" style={{ color: "var(--ink-2)" }}>
+                Overlap guard: read {guard.reads} books ({guard.provider.nownodes} via NOWNodes, {guard.provider.official} via Hyperliquid) in {(guard.ms / 1000).toFixed(1)} s · left out {guard.excluded} overlapping candidate{guard.excluded === 1 ? "" : "s"} above {guard.threshold}
+                {guard.failed ? ` · ${guard.failed} reads failed` : ""}
+              </p>
+            )}
             <table className="tabular w-full whitespace-nowrap text-xs">
               <thead style={{ color: "var(--muted)" }}>
                 <tr>

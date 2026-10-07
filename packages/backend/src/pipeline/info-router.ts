@@ -210,3 +210,8 @@ export const makeRoutedFetch = (o: RouterOptions = {}) => {
 // The process-wide router: reads INFO_ROUTING / NOWNODES_API_KEY from the environment on every call.
 export const routedFetch = makeRoutedFetch();
 export const routingStats = () => routedFetch.stats();
+
+// Large batches of position reads (the overlap pick): NOWNodes first, the official API as the fallback.
+// A separate instance, so it keeps its own counters and circuit breaker. Needs NOWNODES_API_KEY.
+export const bulkFetch = makeRoutedFetch({ env: () => ({ ...process.env, INFO_ROUTING: "split", INFO_SPLIT_PERCENT: "100", INFO_SHADOW_PERCENT: "0" }) });
+export const bulkRoutingStats = () => bulkFetch.stats();
