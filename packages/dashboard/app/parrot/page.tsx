@@ -102,11 +102,14 @@ function ParrotContent() {
         <span className="parrot-top-spacer" aria-hidden="true" />
       </header>
       <div className="parrot-layout parrot-layout--result">
-        <section className="parrot-stage min-w-0" aria-label="Talk with PerpParrot">
+        {/* The card and its scenery wrap the stage: the <section> itself stays byte-identical to the frozen
+            pre-integration markup that test/fixtures/parrot-off.fixture.tsx guards. */}
+        <div className="parrot-stage-card min-w-0">
           <div className="parrot-scenery" aria-hidden="true">
             {LEAVES.map((l, i) => <i key={i} className="parrot-leaf" style={{ left: `${l.left}%`, animationDelay: `${l.delay}s`, animationDuration: `${l.duration}s` }} />)}
             <div className="parrot-hill back" /><div className="parrot-hill" />
           </div>
+        <section className="parrot-stage min-w-0" aria-label="Talk with PerpParrot">
           <div className="parrot-scene"><ParrotAvatar state={state} stream={live.remoteStream} live={live.view.phase === "live" && !live.view.playbackBlocked} /></div>
           <LiveTalk live={live} disabled={busy} />
           <CompactReceipt active={live.view.phase === "live"} {...receipts} />
@@ -115,6 +118,7 @@ function ParrotContent() {
           {!live.active && !demo && canDemo(live.view.failure) && <button type="button" className="parrot-button mt-3" onClick={playDemo}>Play the cached demo</button>}
           {demo && <div className="mt-4"><Badge kind="CACHED DEMO" /></div>}
         </section>
+        </div>
         {chat && <div className="parrot-result min-w-0" data-fever={fx.celebration?.animated || undefined}>
           <div className="wallet-board-heading">{chat.shortlist.dataSource === "sample" && <Badge kind="SAMPLE DATA" />}<small>No orders are placed.</small></div>
           <Fever />

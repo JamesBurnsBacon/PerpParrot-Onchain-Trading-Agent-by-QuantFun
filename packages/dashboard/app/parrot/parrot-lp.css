@@ -38,8 +38,9 @@
 .parrot-page .parrot-brand svg { width: 28px; height: 30px; }
 
 /* stage: a cream card with the hill, drifting leaves and a ringed, sparkling mascot */
-.parrot-page .parrot-stage { position: relative; overflow: hidden; isolation: isolate; background: var(--surface); border: 3px solid #fff; border-radius: 34px; box-shadow: 0 10px 0 rgba(63, 154, 58, .14), 0 28px 60px rgba(48, 41, 27, .1); padding: 24px 24px 104px; }
-.parrot-page .parrot-stage::before { content: ""; position: absolute; inset: 14px; z-index: -3; border-radius: 24px; background: radial-gradient(ellipse at 50% 35%, #fffcf5 0%, #fffcf580 28%, transparent 65%), var(--parrot-stage); }
+.parrot-page .parrot-stage-card { position: relative; overflow: hidden; isolation: isolate; background: var(--surface); border: 3px solid #fff; border-radius: 34px; box-shadow: 0 10px 0 rgba(63, 154, 58, .14), 0 28px 60px rgba(48, 41, 27, .1); }
+.parrot-page .parrot-stage-card::before { content: ""; position: absolute; inset: 14px; z-index: -3; border-radius: 24px; background: radial-gradient(ellipse at 50% 35%, #fffcf5 0%, #fffcf580 28%, transparent 65%), var(--parrot-stage); }
+.parrot-page .parrot-stage-card > .parrot-stage { padding: 24px 24px 104px; }
 .parrot-page .parrot-scenery { position: absolute; inset: 0; z-index: -1; pointer-events: none; }
 .parrot-page .parrot-hill { position: absolute; left: -25%; width: 150%; height: 120px; bottom: -64px; border-radius: 50% 50% 0 0; background: #6cc04a; box-shadow: 0 -13px 0 #8bcd69, 0 -26px 0 #b4dc92; transform: rotate(-7deg); transform-origin: center bottom; }
 .parrot-page .parrot-hill.back { bottom: -58px; left: -55%; background: #3f9a3a; box-shadow: none; transform: rotate(12deg); }
@@ -48,13 +49,12 @@
 .parrot-page .parrot-leaf:nth-child(3n + 1) { background: #6cc04a; }
 .parrot-page .parrot-leaf:nth-child(3n + 2) { background: #3f9a3a; }
 @keyframes parrot-fall { from { transform: translateY(-50px) rotate(-30deg); } to { transform: translateY(640px) rotate(80deg); } }
-.parrot-page .parrot-ring { position: absolute; inset: -8%; z-index: -1; border: 9px solid transparent; border-top-color: #eac744; border-right-color: #9683bf; border-bottom-color: #f29a2e; border-left-color: #639ec4; border-radius: 50%; transform: rotate(-25deg); animation: parrot-spin 18s linear infinite; }
+/* The rainbow ring and the four sparkles are pseudo-elements of the avatar, so its markup is untouched. */
+.parrot-page .parrot-avatar::before { content: ""; position: absolute; inset: -8%; z-index: -1; pointer-events: none; border: 9px solid transparent; border-top-color: #eac744; border-right-color: #9683bf; border-bottom-color: #f29a2e; border-left-color: #639ec4; border-radius: 50%; transform: rotate(-25deg); animation: parrot-spin 18s linear infinite; }
 @keyframes parrot-spin { to { transform: rotate(335deg); } }
-.parrot-page .parrot-twinkle { position: absolute; width: 24px; height: 24px; background: #eac744; clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); animation: parrot-twinkle 2.6s ease-in-out infinite; }
-.parrot-page .parrot-twinkle.b { background: #9683bf; width: 16px; height: 16px; animation-delay: .8s; }
-.parrot-page .parrot-twinkle.c { background: #f29a2e; width: 20px; height: 20px; animation-delay: 1.5s; }
-.parrot-page .parrot-twinkle.d { background: #639ec4; width: 14px; height: 14px; animation-delay: 2.1s; }
-@keyframes parrot-twinkle { 0%, 100% { transform: scale(.55) rotate(0); opacity: .55; } 50% { transform: scale(1.1) rotate(25deg); opacity: 1; } }
+.parrot-page .parrot-avatar::after { content: ""; position: absolute; inset: -14%; pointer-events: none; animation: parrot-twinkle 2.6s ease-in-out infinite;
+  background: center / 100% 100% no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath fill='%23eac744' d='M8 10.8L8.77 13.23L11.2 14L8.77 14.77L8 17.2L7.23 14.77L4.8 14L7.23 13.23Z'/%3E%3Cpath fill='%239683bf' d='M93 33.9L93.5 35.5L95.1 36L93.5 36.5L93 38.1L92.5 36.5L90.9 36L92.5 35.5Z'/%3E%3Cpath fill='%23f29a2e' d='M6 81.3L6.65 83.35L8.7 84L6.65 84.65L6 86.7L5.35 84.65L3.3 84L5.35 83.35Z'/%3E%3Cpath fill='%23639ec4' d='M95 90.2L95.43 91.57L96.8 92L95.43 92.43L95 93.8L94.57 92.43L93.2 92L94.57 91.57Z'/%3E%3C/svg%3E"); }
+@keyframes parrot-twinkle { 0%, 100% { transform: scale(.94); opacity: .55; } 50% { transform: scale(1.04); opacity: 1; } }
 
 /* the talk button: the landing page's chunky green candy */
 .parrot-page .parrot-talk { border: 2px solid var(--parrot-navy); box-shadow: 0 7px 0 var(--parrot-deep); }
@@ -100,14 +100,14 @@
 /* a parrot peeks over the top edge of a panel */
 .parrot-page .parrot-rail .lp-peek { top: -40px; }
 
-@media (max-width: 899px) { .parrot-page .parrot-stage { padding: 12px 12px 96px; } }
+@media (max-width: 899px) { .parrot-page .parrot-stage-card > .parrot-stage { padding: 12px 12px 96px; } }
 @media (max-width: 600px) {
   .parrot-page .parrot-brand { font-size: 18px; }
   .parrot-page .parrot-top-spacer { min-width: 40px; }
   .parrot-page .parrot-rail .lp-peek { width: 44px; height: 48px; top: -32px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .parrot-page .parrot-leaf, .parrot-page .parrot-ring, .parrot-page .parrot-twinkle, .parrot-page .wallet-risk > i { animation: none !important; }
+  .parrot-page .parrot-leaf, .parrot-page .parrot-avatar::before, .parrot-page .parrot-avatar::after, .parrot-page .wallet-risk > i { animation: none !important; }
   .parrot-page .wallet-card:hover, .parrot-page .parrot-talk:hover, .parrot-page .parrot-talk:active { transform: none; }
 }
 /* Calm mode (the page's own motion switch) holds the hover lift too. */
