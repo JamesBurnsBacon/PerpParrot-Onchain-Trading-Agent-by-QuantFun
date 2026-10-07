@@ -186,7 +186,7 @@ The owner chose **on as soon as built**: we're in dry run, so there is no flag g
 | 0 | #63, #64 and #65 (done) |
 | 1 | §5 measures, roster tables, seat lifecycle (§4.1–4.3), pace limits, the 50% loss removal, roster status on `/pipeline` |
 | 2 | Winding down with caps (§4.4), warning signs (§4.5), 12-hourly re-review |
-| 3 | Dashboard roster panel; paper turnover and fees |
+| 3 | Dashboard roster panel (#69); paper turnover (#77); churn replay `scripts/replay-churn.ts` and the record in [CHURN.md](CHURN.md) |
 
 ## 10. Decisions (owner, 2026-10-07)
 
