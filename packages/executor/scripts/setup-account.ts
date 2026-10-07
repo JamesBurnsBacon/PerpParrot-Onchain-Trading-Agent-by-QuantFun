@@ -1,5 +1,5 @@
 // One-time go-live setup of our HL account, signed with the MASTER key by a human
-// (docs/cre/RUNBOOK.md "Go live"). Read-only unless --apply is given.
+// (docs/ops/RUNBOOK.md "Go live"). Read-only unless --apply is given.
 //
 //   HL_ACCOUNT=0x… bun run scripts/setup-account.ts                 # status only
 //   HL_ACCOUNT=0x… HL_API_WALLET_ADDRESS=0x… HL_MASTER_KEY=0x… \

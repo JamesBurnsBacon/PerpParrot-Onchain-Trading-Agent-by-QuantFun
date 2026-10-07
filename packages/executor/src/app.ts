@@ -1,23 +1,32 @@
 // HTTP routes, separate from server startup so tests can drive them directly.
 import { timingSafeEqual } from "node:crypto";
-import type { ReportEnvelope } from "../../shared/report";
-import { handleReport, type HandlerDeps } from "./handler";
 import type { Runner } from "./runner";
+import { summarize } from "./store";
+import { dueRunAt, RUN_INTERVAL_SECONDS } from "./targets";
 import type { ExecutorStore } from "./store";
 
 export type AppDeps = {
-  handler: Omit<HandlerDeps, "accept" | "claim">;
   runner: Runner;
   store: ExecutorStore;
   adminToken?: string;
   watchdog?: () => Promise<Record<string, unknown>>;
   cronSecret?: string;
-  background?: (work: Promise<unknown>) => void;
   status: () => Record<string, unknown>;
   log: (msg: string, extra?: Record<string, unknown>) => void;
+  // Unix ms (tests pin it).
+  now?: () => number;
 };
 
-// BigInts (report exposures) don't serialize natively.
+// Starts runAt's run unless another trigger (cron retry, a second instance, the timer) already
+// claimed it, and waits for it: the cron request, or the operator, gets the outcome.
+export const triggerRun = async (deps: Pick<AppDeps, "runner" | "store" | "log">, runAt: number) => {
+  if (!(await deps.store.claimRun(`mirror-${runAt}`))) return { status: "duplicate" as const, runId: `mirror-${runAt}` };
+  const run = await deps.runner.executeRun(runAt);
+  deps.log("run finished", { runId: run.runId, status: run.status, orders: run.plan?.orders.length, error: run.error });
+  return summarize(run);
+};
+
+// BigInts (target exposures) don't serialize natively.
 const json = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(body, (_, v) => (typeof v === "bigint" ? v.toString() : v)), {
     status,
@@ -44,7 +53,7 @@ export const createApp = (deps: AppDeps) => async (req: Request): Promise<Respon
   if (req.method === "GET" && pathname === "/status") {
     return json({ ...deps.status(), controls: await deps.store.getControls() }, 200, PUBLIC);
   }
-  // Public run log: plans, order results and raw signed reports (README §4.11).
+  // Public run log: plans, order results and what each run traded toward (README §4.11).
   if (req.method === "GET" && pathname === "/runs") {
     const summary = searchParams.get("summary") === "1";
     const limit = Math.min(Math.max(Number(searchParams.get("limit") ?? 20) || 20, 1), summary ? 500 : 200);
@@ -60,26 +69,12 @@ export const createApp = (deps: AppDeps) => async (req: Request): Promise<Respon
     return json(cached.body, 200, PUBLIC);
   }
 
-  if (req.method === "POST" && pathname === "/reports") {
-    let payload: unknown;
-    try {
-      payload = await req.json();
-    } catch {
-      return json({ error: "invalid JSON" }, 400);
-    }
-    const result = await handleReport(payload, {
-      ...deps.handler,
-      claim: (id) => deps.store.claimReport(id),
-      accept: (report, envelope: ReportEnvelope) => {
-        const work = deps.runner.executeReport(report, envelope).then(
-          (run) => deps.log("run finished", { runId: run.runId, status: run.status, orders: run.plan?.orders.length, error: run.error }),
-          (e) => deps.log("run crashed", { runId: report.body.runId, error: (e as Error).message }),
-        );
-        deps.background?.(work);
-      },
-    });
-    deps.log("report", { status: result.status, ...result.body });
-    return json(result.body, result.status);
+  // Vercel Cron at :x0 (vercel.json); a timer does the same on a long-running host (server.ts).
+  if (req.method === "GET" && pathname === "/cron/run") {
+    if (!authorized(req, deps.cronSecret)) return json({ error: "unauthorized" }, 401);
+    const runAt = dueRunAt((deps.now ?? Date.now)());
+    if (runAt === null) return json({ status: "no run due" });
+    return json(await triggerRun(deps, runAt));
   }
 
   if (req.method === "GET" && pathname === "/cron/watchdog" && deps.watchdog) {
@@ -95,6 +90,19 @@ export const createApp = (deps: AppDeps) => async (req: Request): Promise<Respon
   if (req.method === "POST" && pathname.startsWith("/admin/")) {
     if (!authorized(req, deps.adminToken)) return json({ error: "unauthorized" }, 401);
     const by = req.headers.get("x-operator") ?? "admin";
+    // A run for a given slot: a missed run, or a local end-to-end test that asks for the next
+    // :x0 ahead of time (the backend only builds a snapshot near its run time).
+    if (pathname === "/admin/run") {
+      let payload: unknown;
+      try { payload = await req.json(); } catch { return json({ error: "invalid JSON" }, 400); }
+      const runAt = (payload as { runAt?: unknown })?.runAt;
+      const now = Math.floor((deps.now ?? Date.now)() / 1000);
+      if (!Number.isSafeInteger(runAt) || (runAt as number) % RUN_INTERVAL_SECONDS !== 0 || Math.abs((runAt as number) - now) > RUN_INTERVAL_SECONDS + 300) {
+        return json({ error: "runAt must be a :x0 run time within 15 minutes of now" }, 400);
+      }
+      deps.log("run requested", { runAt, by });
+      return json(await triggerRun(deps, runAt as number));
+    }
     if (pathname === "/admin/reconcile-batch") {
       let payload: unknown;
       try { payload = await req.json(); } catch { return json({ error: "invalid JSON" }, 400); }
@@ -155,7 +163,7 @@ export const createApp = (deps: AppDeps) => async (req: Request): Promise<Respon
         return json(result.controls);
       }
       case "/admin/flatten": {
-        // Pause first so the next report doesn't reopen what we're closing.
+        // Pause first so the next run doesn't reopen what we're closing.
         await deps.store.setControls({ paused: true, updatedAt: Date.now(), updatedBy: by });
         const run = await deps.runner.flatten(by);
         deps.log("flatten", { status: run.status, orders: run.plan?.orders.length, error: run.error });

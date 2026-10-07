@@ -27,7 +27,7 @@ export type PaperView = {
 export type Run = {
   id: string;
   runId: string;
-  kind: "report" | "flatten";
+  kind: "mirror" | "flatten";
   status: "executed" | "skipped_paused" | "failed";
   dryRun: boolean;
   startedAt: number;
@@ -41,20 +41,21 @@ export type Run = {
     marginScale?: number;
   };
   results?: { status: string }[];
-  envelope?: { report: string; context: string; signatures: string[] };
+  // What the run traded toward (full records only).
+  evidence?: { snapshotHash: string; configurationHash: string; exposures: { asset: string; exposureE9: string }[] };
 };
 
 export const ordersOf = (r: Run) => r.orders ?? r.plan?.orders.length ?? 0;
 
 export type Equity = { runs: number; points: [tMs: number, equityUsd: number][] };
-export type Status = { dryRun: boolean; account: string; controls: { paused: boolean }; lastReportAt: number | null };
+export type Status = { dryRun: boolean; account: string; controls: { paused: boolean }; lastRunAt: number | null };
 export type Exposures = { runAt: number; exposures: { asset: string; fraction: number }[] };
 
 export type DashboardData = {
   paper: PaperView | null;
   runs: Run[] | null; // summaries of the last day's runs
   equity: Equity | null; // the live account at every executed run since the start
-  recent: Run[] | null; // full records with signed reports, newest first
+  recent: Run[] | null; // full records with plans and evidence, newest first
   status: Status | null;
   exposures: Exposures | null;
   backtest: BacktestArtifact | null;

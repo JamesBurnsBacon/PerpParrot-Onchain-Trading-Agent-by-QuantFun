@@ -1,5 +1,5 @@
 import {validate} from '../../shared/src/validate.ts';
-import {validateEvidence,byteLength,type Evidence} from '../../shared/src/review-wire.ts';
+import {validateEvidence,byteLength,type Evidence} from '../../shared/src/review-evidence.ts';
 import {bindCommitteeEvidence,type CommitteeEvidence} from '../../shared/src/committee-evidence.ts';
 import {policyCommitment,snapshotCommitment} from '../../shared/src/commitments.ts';
 import {CONTRACT_VERSION,type Frame,type Policy} from '../../shared/src/contracts.ts';

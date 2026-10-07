@@ -10,9 +10,9 @@ profit or a live allocation weight. `avgLeverage`, time in market, holding time,
 maker share are carried through; they do not affect this score. The later review and
 portfolio policy must evaluate them separately.
 
-The scoring implementation is still a pure library. No backend runtime currently calls
-`scoreCandidates`, and no persistent point-in-time candidate table feeds the CRE review
-workflow. Passing unit tests therefore proves formula and contract behavior, not that
+The scoring implementation is still a pure library. No backend service currently calls
+`scoreCandidates` (only the on-demand `scripts/review-input.ts` does), and no persistent
+point-in-time candidate table feeds the review. Passing unit tests therefore proves formula and contract behavior, not that
 live sources are ingested, historically replayed, or selected well.
 
 ## Evidence limits to respect
@@ -62,16 +62,11 @@ Do not tune weights using the same windows used to report performance. Keep the 
 budget and every tested variant: repeated experimentation creates selection bias even
 when the final formula looks simple.
 
-## Engineering lessons from the videos
+## Engineering lessons
 
-The official [Chainlink CRE Bootcamp Day 1](https://www.youtube.com/watch?v=pLAttM7-UTA)
-and [Day 2](https://www.youtube.com/watch?v=4uFkjHgucEE) teach the workflow/capability,
-simulation, and end-to-end project shape. Those videos are useful integration guides;
-their demo outcomes do not validate this score's investment value. The repo already
-uses the safer separation they illustrate: CRE handles bounded orchestration and
-consensus, while local deterministic code validates and allocates.
-
-For agent quality, follow the task-specific evaluation principle in Anthropic's
+The repo keeps bounded model judgment separate from allocation: models score evidence,
+while local deterministic code validates and allocates. For agent quality, follow the
+task-specific evaluation principle in Anthropic's
 [Building Effective Agents](https://www.anthropic.com/engineering/building-effective-agents):
 use focused, composable steps and evaluate against clear outcomes. In this project,
 LLMs can assess qualitative source evidence, but deterministic score logic, constraints,
@@ -85,6 +80,6 @@ allocation.
   malformed trade counts.
 - A score run over test fixtures is a regression check only. It is not a real-time
   leaderboard run, a point-in-time backtest, or a deployment check.
-- The operational score-to-CRE adapter, point-in-time history store, challenger replay,
-  and authenticated CRE execution remain unbuilt or unverified. Do not describe the
+- A scheduled score-to-review run, point-in-time history store, challenger replay,
+  and a real-provider review run remain unbuilt or unverified. Do not describe the
   agent-selection path as live until those pieces have tests and run artifacts.

@@ -1,6 +1,6 @@
 // Runs the committee review (Role, Risk, then Red-Team on a draft) on a review input from
 // scripts/review-input.ts (README §4.6). Calls the model API: one request per stage, so up to 3.
-// Off-chain there is one honest provider node (quorum 1); deployed CRE runs one call per DON node.
+// One honest provider node (quorum 1): one model call per stage.
 // Every validated model output is appended to an audit file before the review counts it.
 // Writes the receipt; never freezes, signs or trades (the receipt has no economic authority).
 //
@@ -9,7 +9,7 @@
 import { appendFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { openAIPaperCommittee } from "../review/models/openai-paper.ts";
-import { runCommitteeReview } from "../../cre-workflows/review/committee/workflow.ts";
+import { runCommitteeReview } from "../review/committee/workflow.ts";
 import { commitment } from "../../shared/src/commitments.ts";
 import { PROMPT_VERSION } from "../../shared/src/prompts.ts";
 import type { Frame, Policy, Row } from "../../shared/src/contracts.ts";

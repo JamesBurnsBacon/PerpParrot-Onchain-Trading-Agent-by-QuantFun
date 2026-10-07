@@ -2,7 +2,7 @@
 -- dispatching after a restart is ambiguous and must pause the executor.
 create table if not exists executor_order_batches (
   id          text primary key,
-  report_id   text not null,
+  run_id      text not null,
   created_at  timestamptz not null,
   kind        text not null check (kind in ('orders', 'leverage')),
   details     jsonb,

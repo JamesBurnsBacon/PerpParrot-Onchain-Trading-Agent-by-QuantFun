@@ -1,15 +1,15 @@
-import config from '../../packages/cre-workflows/review-spike/config.simulation.json' with {type:'json'};
+import evidenceFixture from '../fixtures/review-evidence.json' with {type:'json'};
 import {fixture} from './review-fixture.ts';
-import {validateEvidence} from '../../packages/shared/src/review-wire.ts';
+import {validateEvidence} from '../../packages/shared/src/review-evidence.ts';
 import {policyCommitment,snapshotCommitment,commitment} from '../../packages/shared/src/commitments.ts';
 import {committeeAudit} from '../../packages/backend/review/committee-audit.ts';
 import type {Frame,Observation,Critique,Row} from '../../packages/shared/src/contracts.ts';
-import type {CommitteeDependencies,EvidenceObservation,EvidenceCritique} from '../../packages/cre-workflows/review/committee/types.ts';
+import type {CommitteeDependencies,EvidenceObservation,EvidenceCritique} from '../../packages/backend/review/committee/types.ts';
 import type {Rpc} from '../../packages/backend/review/supabase.ts';
 export const NOW=6030000;
 export function paperFixture(rpc:Rpc){
   const base=fixture(),policy=base.configuration.policy,addresses=new Map(base.configuration.sources.map(s=>[s.candidate,s.sourceAddress]));
-  const original=config.evidence.finalists[0];
+  const original=evidenceFixture.finalists[0];
   const rich=validateEvidence({asOfMs:NOW-1000,finalists:Array.from({length:5},(_,candidate)=>({...structuredClone(original),candidate,equityCurve:original.equityCurve.map((point,i)=>({...point,atMs:NOW-27000+i*1000}))})),pairs:Array.from({length:5},(_,a)=>Array.from({length:4-a},(_,j)=>({a,b:a+j+1,correlation:0.2,linkedSource:false}))).flat()});
   const frame:Frame={schemaVersion:'1.1.0',snapshotHash:'0x'+'0'.repeat(64),policyHash:policyCommitment(policy),asOfMs:rich.asOfMs,expiresAtMs:NOW+10000,candidates:rich.finalists.map(f=>({candidate:f.candidate,kind:f.kind,clones:[],metrics:{historyDays:f.historyDays,timeInMarket:f.timeInMarket!,medianHoldMinutes:f.medianHoldMinutes,makerShare:f.makerShare,maxDrawdown:f.maxDrawdown!,oosWindows:2,oosSharpe:1,oosSortino:1,oosMaxDrawdown:0.1,crossWindowStability:0.8,survivorshipQuality:'CURRENT_SNAPSHOT',averageLeverage:1,executionCoverage:1,executionFit:90,concentration:0.1,liquidationDistance:0.5,btcBeta:0.4,pnlConsistency:0.8,isSharpe:1,isSortino:1,isCalmar:1,lookbackDays:90,scoreFlags:[],cloneCount:0}})),pairs:rich.pairs.map(p=>({...p,currentExposureOverlap:0.1}))};
   frame.snapshotHash=snapshotCommitment(frame,addresses);

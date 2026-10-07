@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {openAIPaperCommittee} from '../packages/backend/review/models/openai-paper.ts';
-import {runCommitteeReview} from '../packages/cre-workflows/review/committee/workflow.ts';
+import {runCommitteeReview} from '../packages/backend/review/committee/workflow.ts';
 import {paperFixture,NOW} from './support/paper-lifecycle-fixture.ts';
 const model='gpt-4.1-mini-2025-04-14',prompts={role:'role',risk:'risk',redteam:'critique'};
 const roleFields=['preserver','compounder','diversifier','directional','opportunistic','convexity','reject','conservativeFit','balancedFit','aggressiveFit','confidence'];

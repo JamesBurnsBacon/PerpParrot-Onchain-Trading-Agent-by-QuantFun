@@ -1,8 +1,8 @@
 import {validate} from './validate.ts';
-import {validateEvidence,byteLength} from './review-wire.ts';
+import {validateEvidence,byteLength} from './review-evidence.ts';
 import {commitment,verifyInputCommitments} from './commitments.ts';
 import type {Binding,Frame,Policy} from './contracts.ts';
-import type {Evidence} from './review-wire.ts';
+import type {Evidence} from './review-evidence.ts';
 export interface CommitteeEvidence {
   schemaVersion:Binding['schemaVersion'];snapshotHash:string;policyHash:string;asOfMs:number;
   finalists:({candidate:number;kind:Frame['candidates'][number]['kind'];metrics:Frame['candidates'][number]['metrics']} & Pick<Evidence['finalists'][number],'equityCurve'|'positions'|'patterns'>)[];

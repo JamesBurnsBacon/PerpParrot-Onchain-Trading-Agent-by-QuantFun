@@ -1,14 +1,17 @@
 # Running and integrating the review core
 
-For the real-SDK review spike, see [CRE_SPIKE.md](CRE_SPIKE.md). The mirror path (frozen
-configuration → snapshot → CRE mirror → executor) is in README §4.7–4.14 and
-`docs/cre/`. The actual model simulation and deployed adapters remain integration gates.
+The mirror path (frozen configuration → snapshot → target exposures → executor) is in
+the README and [docs/ops](../ops/RUNBOOK.md). A real-provider review run and a review
+schedule remain integration gates.
 
-This repository now has an offline TypeScript review implementation, independent of
-CRE networking and exchange submission. Requires Node 24+ and pnpm. Run `pnpm install
+This repository has a server-side TypeScript review implementation, independent of
+exchange submission. Requires Node 24+ and pnpm. Run `pnpm install
 --frozen-lockfile`, `pnpm test`, and `pnpm typecheck` from the repository root.
+`packages/backend/scripts/review-input.ts` builds the frame and evidence;
+`packages/backend/scripts/review-run.ts` runs the committee through
+`packages/backend/review/models/openai-paper.ts`.
 
-Entrypoint: `packages/cre-workflows/review/workflow.ts::runReview`.
+Entrypoint: `packages/backend/review/workflow.ts::runReview`.
 Shared TypeScript types: `packages/shared/src/contracts.ts`.
 Strict JSON Schema validator: `packages/shared/src/validate.ts`.
 The runtime rejects extra fields, nonfinite numbers, identity mismatches, missing
@@ -22,21 +25,23 @@ there is no permissive adapter implementation. Strict shape validation and commi
 | Dependency | Integration responsibility |
 |---|---|
 | clock / agentTimeoutMs | Monotonic epoch-millisecond clock and a bounded per-stage deadline (1–60,000ms) |
-| quorum / nodeIds | Actual DON quorum and authenticated node allowlist, never model-provided IDs |
+| quorum / nodeIds | Configured quorum and node allowlist (today one provider node, quorum 1), never model-provided IDs |
 | prompt/model hashes | Exact versioned prompt and model configuration commitment |
 | role / risk | Separate isolated model contexts, approved system prompts, deadlines and response size limits; return per-node observations |
 | redTeam | Fresh context, numeric draft projection without source addresses; match draftHash |
 | assess | Deterministic eligible-position replay/netting/drift/minimum-order capacity and worst-case active-source exposure validation |
 
-The three model adapters must return observations from distinct authenticated DON
-nodes. The core rejects duplicate/unknown node IDs and checks quorum against the configured
-roster. IDs are transport metadata, not model output; the CRE adapter must authenticate
-that each ID actually belongs to the node supplying the observation. IDs alone are
+The three model adapters must return observations from distinct configured nodes. A
+node is one independent model observation; the current adapter supplies one honest
+provider node (quorum 1), and several observations would be aggregated by median. The
+core rejects duplicate/unknown node IDs and checks quorum against the configured
+roster. IDs are transport metadata, not model output; the adapter must ensure that
+each ID actually belongs to the call supplying the observation. IDs alone are
 not a cryptographic proof. Shared model parameters
-must be identical in a consensus group. `role` and `risk` are invoked independently
+must be identical in an aggregation group. `role` and `risk` are invoked independently
 in parallel, not sequentially with each other's answers. Return only rows from the
 model and attach binding metadata in trusted orchestration code. The core bounds asynchronous stages and passes AbortSignal to adapters. Adapters must
-honor cancellation and bound capability request sizes; the offline deadline cannot
+honor cancellation and bound provider request sizes; the offline deadline cannot
 interrupt synchronous CPU loops. Inputs are copied before awaiting models, and
 freshness is rechecked through manifest issuance.
 
@@ -64,24 +69,21 @@ UTF-8 canonical JSON `{domain,payload}`. Policy and snapshot commitments are rec
 before inference; address mapping is part of the snapshot commitment. Use these exact
 helpers in producers, not a different JSON/string/hash convention.
 
-## CRE rollout boundary
+## Rollout boundary
 
-No SDK or network provider is fabricated here: the upstream repository had no
-installed CRE SDK, workflow config, runtime credentials, snapshots or executor code.
-Before connecting this core, pin the SDK, compile the validator for the target
-runtime (Ajv's compilation may require build-time standalone generation in WASM),
-implement capability adapters with the installed APIs, and test production quotas.
-The offline core relies on structuredClone, AbortController, setTimeout/clearTimeout,
-JSON imports and Ajv compilation. CRE compatibility requires explicit build/runtime
-adaptation and simulation; tests run under Node 24. This is not proof of CRE/WASM compatibility.
+The core runs under Node 24 and Bun on the server. It relies on structuredClone,
+AbortController, setTimeout/clearTimeout, JSON imports and Ajv compilation. It runs
+outside the 10-minute loop; if reviews are automated, the schedule (Vercel Cron or
+AWS) is a separate, not yet decided integration step.
 
 Persist valid review results to the existing `reviews`/`buckets` boundary only after
-successful verification. A separate freeze adapter commits the live manifest/hash.
+successful verification. A separate freeze step (`packages/backend/scripts/freeze.ts`)
+writes the live configuration and its hash, which both services pin.
 After freeze, hourly review output is commentary-only. Mirror must accept only the
 frozen VALID live manifest and fresh state; it must never call `runReview`, model
 adapters or narrative generation. Simulated manifests cannot authorize execution.
-The existing signed `RebalanceReport`/execute interface remains an integration gate:
-no report signing, orders, capital movement or transport changes are implemented.
+The mirror's targets/execute interface is unchanged by the review core: it
+implements no orders, capital movement or transport changes.
 
 Use SYSTEM_PROMPTS.md in adapters; model outputs never provide execution authority.
 Narrative is optional dashboard content and is deliberately absent from this core.
@@ -89,4 +91,4 @@ Narrative is optional dashboard content and is deliberately absent from this cor
 Persisted manifests should pass `validateManifest`; mirror must call
 `requireFrozenLiveManifest(manifest, nowMs, trustedFrozenHash)` before accepting it.
 This helper rejects simulation, invalid status, mismatched freeze hashes, expired
-manifests and semantic inconsistencies; it is not a DON signature verifier.
+manifests and semantic inconsistencies; it is not a signature verifier.

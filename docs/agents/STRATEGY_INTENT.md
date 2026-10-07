@@ -60,7 +60,7 @@ object shapes and accessors, proxy traps, immutable snapshots, base-policy valid
 monotonic risk limits, leverage clamps, exact feasibility, clarification stops,
 deterministic shortlist order, duplicate addresses, exclusions, clone handling, and
 input limits. The module is typechecked with the backend package. This build does not
-replace or modify the Score ranking implementation, CRE review/freeze workflows, or
+replace or modify the Score ranking implementation, the review/freeze steps, or
 executor authorization.
 
 The typed bridge is implemented in `packages/backend/src/strategy-intent-adapter.ts`.

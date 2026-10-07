@@ -1,8 +1,8 @@
 # Pressure-test findings and fixes
 
 Scope: the local ai-agent-workflow contribution, including strict contracts, review
-orchestration, commitments and persisted-manifest authorization. No live trades or
-CRE deployment were used. This is a targeted adversarial review, not a proof that
+orchestration, commitments and persisted-manifest authorization. No live trades,
+deployment or real model calls were used. This is a targeted adversarial review, not a proof that
 all possible defects have been found.
 
 | Finding | Fix and evidence |
@@ -30,21 +30,20 @@ prove trading feasibility or risk-model quality.
 
 ## Remaining implementation gates
 
-- Real CRE capability adapters, authenticated node provenance and installed-SDK
-  production-limit/WASM simulation are still absent from upstream.
+- A real-provider review run and request-size/latency checks against the chosen
+  provider are still absent.
 - Real position replay, active-source renormalization stress, asset eligibility,
   drift and minimum-order capacity must implement assess. A synthetic pass is not
   acceptable in a live adapter.
-- Signing, nonce persistence, cloid reconciliation, report signature verification
-  and transport remain executor work. This contribution does not implement them.
+- Signing, nonce persistence, cloid reconciliation and transport remain executor
+  work. This contribution does not implement them.
 - Backtest cut integrity, survivorship disclosures and latency/policy calibration
   need real datasets and replay. Unit fixtures cannot establish investment quality.
 - Freeze persistence must be authoritative. Checking a manifest hash supplied by an
   untrusted caller does not establish it as frozen.
-- Offline timers/AbortController and Ajv compilation must be adapted for CRE's
-  runtime. Cancellation cannot preempt synchronous CPU work.
-- Node identity is attached by the trusted adapter. The core rejects duplicates but
-  cannot authenticate a fabricated node ID without real DON provenance.
+- Cancellation cannot preempt synchronous CPU work.
+- Node identity is attached by the trusted adapter that makes the model calls. The
+  core rejects duplicates but cannot authenticate a fabricated node ID.
 
 ## GitHub authentication diagnosis
 

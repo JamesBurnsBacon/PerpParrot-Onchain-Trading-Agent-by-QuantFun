@@ -72,4 +72,4 @@ for value, accepted in [(0.49, False), (0.5, True), (1, True), (1.01, False)]:
     payload['penalties'] = [row]
     assert (not list(Draft202012Validator(schema).iter_errors(payload))) == accepted
     checks += 1
-print(f'{checks} contract shape checks passed across 7 schemas; semantic/compiler/CRE checks remain integration gates.')
+print(f'{checks} contract shape checks passed across 7 schemas; semantic and integration checks live in the TypeScript tests.')

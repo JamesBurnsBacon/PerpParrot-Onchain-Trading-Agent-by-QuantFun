@@ -1,7 +1,7 @@
 import {commitment} from '../../shared/src/commitments.ts';
 import {validate} from '../../shared/src/validate.ts';
 import type {CommitteeEvidence} from '../../shared/src/committee-evidence.ts';
-import type {CritiqueInput} from '../../cre-workflows/review/committee/types.ts';
+import type {CritiqueInput} from './committee/types.ts';
 import type {Rpc} from './supabase.ts';
 /** Persist prompt content and validated output, never HTTP headers/provider keys.
  * This is server-side audit plumbing; successful persistence is not freeze authority. */

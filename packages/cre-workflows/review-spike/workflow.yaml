@@ -1,7 +1,0 @@
-simulation-settings:
-  user-workflow:
-    workflow-name: perpparrot-review-spike-simulation
-  workflow-artifacts:
-    workflow-path: ./main.ts
-    config-path: ./config.simulation.json
-    secrets-path: ./secrets.yaml

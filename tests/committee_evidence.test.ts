@@ -1,13 +1,13 @@
 import {test} from 'node:test';
 import {persistCommitteeAudit} from '../packages/backend/review/audit.ts';
 import assert from 'node:assert/strict';
-import config from '../packages/cre-workflows/review-spike/config.simulation.json' with {type:'json'};
-import {validateEvidence} from '../packages/shared/src/review-wire.ts';
+import evidenceFixture from './fixtures/review-evidence.json' with {type:'json'};
+import {validateEvidence} from '../packages/shared/src/review-evidence.ts';
 import {bindCommitteeEvidence} from '../packages/shared/src/committee-evidence.ts';
 import {policyCommitment,snapshotCommitment,commitment} from '../packages/shared/src/commitments.ts';
 import type {Frame} from '../packages/shared/src/contracts.ts';
 import {fixture} from './support/review-fixture.ts';
-function setup(){const evidence=validateEvidence(structuredClone(config.evidence)),policy=fixture().configuration.policy,addresses=new Map(evidence.finalists.map(f=>[f.candidate,'0x'+String(f.candidate+1).repeat(40)]));
+function setup(){const evidence=validateEvidence(structuredClone(evidenceFixture)),policy=fixture().configuration.policy,addresses=new Map(evidence.finalists.map(f=>[f.candidate,'0x'+String(f.candidate+1).repeat(40)]));
  const frame:Frame={schemaVersion:'1.1.0',snapshotHash:'0x'+'0'.repeat(64),policyHash:policyCommitment(policy),asOfMs:evidence.asOfMs,expiresAtMs:evidence.asOfMs+10000,candidates:evidence.finalists.map(f=>({candidate:f.candidate,kind:f.kind,clones:[],metrics:{historyDays:f.historyDays,timeInMarket:f.timeInMarket!,medianHoldMinutes:f.medianHoldMinutes,makerShare:f.makerShare,maxDrawdown:f.maxDrawdown!,oosWindows:2,oosSharpe:1,oosSortino:1,oosMaxDrawdown:0.1,crossWindowStability:0.8,survivorshipQuality:'CURRENT_SNAPSHOT',averageLeverage:1,executionCoverage:1,executionFit:90,concentration:0.1,liquidationDistance:0.5,btcBeta:0.4,pnlConsistency:0.8,isSharpe:1,isSortino:1,isCalmar:1,lookbackDays:90,scoreFlags:[],cloneCount:0}})),pairs:evidence.pairs.map(p=>({...p,currentExposureOverlap:0.1}))};
  frame.snapshotHash=snapshotCommitment(frame,addresses);return {evidence,frame,policy,addresses};}
 test('committee bridge binds full anonymous evidence without inventing specialist scores',()=>{

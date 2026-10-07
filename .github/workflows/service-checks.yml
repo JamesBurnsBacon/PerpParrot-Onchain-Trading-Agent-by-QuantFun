@@ -1,25 +1,18 @@
-# Tests, typechecks and WASM builds for the CRE mirror path (README §4.7–4.14),
-# plus the dashboard build.
-# The review core and review-spike are checked by agent-review-checks.yaml.
-# No secrets: simulation needs a CRE login and is run locally with scripts/e2e-mirror.sh.
-name: CRE checks
+# Tests and typechecks for the backend and executor (both against Postgres), plus the dashboard
+# build. The review core (packages/backend/review, packages/shared/src, tests/) is checked by
+# agent-review-checks.yaml. No secrets; scripts/e2e-mirror.sh runs a live end-to-end check locally.
+name: Service checks
 
 on:
   push:
-    branches: [main, cre-scaffold, ai-agent-workflow, ai-agent-mainnet-hardening]
+    branches: [main]
     paths:
-      - "packages/backend/**"
-      - "packages/executor/**"
-      - "packages/shared/**"
-      - "packages/cre-workflows/review/**"
+      - "packages/**"
       - "tests/support/**"
       - "package.json"
       - "pnpm-lock.yaml"
-      - "packages/cre-workflows/mirror/**"
-      - "packages/cre-workflows/project.yaml"
-      - "packages/dashboard/**"
       - "supabase/migrations/**"
-      - ".github/workflows/cre-checks.yml"
+      - ".github/workflows/service-checks.yml"
   pull_request:
 
 permissions:
@@ -31,7 +24,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: [backend, executor, cre-workflows/mirror]
+        package: [backend, executor]
     defaults:
       run:
         working-directory: packages/${{ matrix.package }}
@@ -64,30 +57,9 @@ jobs:
       - run: bun install --frozen-lockfile
       - name: Install integration dependency packages
         if: matrix.package == 'executor'
-        run: |
-          bun install --frozen-lockfile --cwd ../backend
-          bun install --frozen-lockfile --cwd ../cre-workflows/mirror
+        run: bun install --frozen-lockfile --cwd ../backend
       - run: bun test
       - run: bunx tsc --noEmit
-
-  wasm:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: packages/cre-workflows
-    steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.4.2
-      - name: Install CRE CLI
-        run: |
-          curl -sSL https://app.chain.link/cre/install.sh | bash
-          echo "$HOME/.cre/bin" >> "$GITHUB_PATH"
-      - run: bun install --frozen-lockfile --cwd ./mirror
-      - name: Build WASM
-        run: |
-          cre workflow build mirror -o "$RUNNER_TEMP/mirror.wasm" --non-interactive
 
   dashboard:
     runs-on: ubuntu-latest

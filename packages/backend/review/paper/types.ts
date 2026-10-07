@@ -1,4 +1,4 @@
-import type {CommitteeReceipt} from '../../../cre-workflows/review/committee/types.ts';
+import type {CommitteeReceipt} from '../committee/types.ts';
 import type {FrozenConfiguration} from '../../../shared/src/frozen-runtime.ts';
 export interface PaperSession {id:string;review:CommitteeReceipt|null;configuration:FrozenConfiguration|null;paused:boolean}
 export interface PaperEvent {mode:'PAPER';economicAuthority:false;[key:string]:unknown}

@@ -15,7 +15,7 @@ export class FileConfigurationSource implements ConfigurationSource {
 
   async load(nowMs: number): Promise<FrozenConfiguration> {
     const configuration = (await Bun.file(this.path).json()) as FrozenConfiguration;
-    // Fail here rather than serve a snapshot every DON node would reject.
+    // Fail here rather than build a snapshot the executor would reject (wrong configuration hash).
     checkFrozenConfiguration(keccakUtf8, configuration, this.pinnedHash, nowMs);
     return configuration;
   }
