@@ -2,6 +2,8 @@
 // IP; most info calls cost 20, plus 1 per 20 items returned for fills. The pipeline keeps to
 // `perMinute` so the mirror loop's own reads (a few dozen weight per run) always fit.
 
+import { routedFetch } from "./info-router";
+
 const INFO_URL = "https://api.hyperliquid.xyz/info";
 
 export class PacedInfo {
@@ -10,7 +12,7 @@ export class PacedInfo {
 
   constructor(
     private readonly perMinute = 600,
-    private readonly fetchImpl: typeof fetch = fetch,
+    private readonly fetchImpl: typeof fetch = routedFetch as unknown as typeof fetch,
     private readonly sleep = (ms: number) => Bun.sleep(ms),
   ) {}
 

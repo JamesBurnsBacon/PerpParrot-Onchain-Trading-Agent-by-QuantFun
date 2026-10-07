@@ -9,6 +9,7 @@
 import type { SQL } from "bun";
 import { fillStats, isHighFrequency, pickLeaderboard, sameAddresses, scoringWindows, type Fill, type LeaderboardRow, type Tracked } from "./derive";
 import { PacedInfo, getJson } from "./hl";
+import { routingStats } from "./info-router";
 import { pickVaults } from "./vaults";
 import { parsePortfolio, scoreCandidates, toFrameCandidates, type ScoreInput, type ScoreResult } from "../score";
 import { buildReviewInput, positionsFromStates, type LivePosition } from "../../review/input.ts";
@@ -171,7 +172,7 @@ export class Pipeline {
     const [active] = await sql`select hash, activated_at, configuration -> 'sources' as sources from configurations where status = 'active'`;
     // The latest run's finalists, funnel and per-candidate AI verdicts (dashboard).
     const [latest] = await sql`select id, finalists, review -> 'summary' as summary from selection_runs order by started_at desc limit 1`;
-    return { accounts: counts, selections: runs, active: active ?? null, latest: latest ?? null };
+    return { accounts: counts, selections: runs, active: active ?? null, latest: latest ?? null, routing: routingStats() };
   }
 
   // Every 10 minutes: qualify when due, then pick 25 and review them if they changed. `force`
