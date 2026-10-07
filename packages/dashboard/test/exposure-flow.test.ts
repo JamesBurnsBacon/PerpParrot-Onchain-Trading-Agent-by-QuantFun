@@ -127,6 +127,9 @@ describe("exposure flow", () => {
 
   test("many assets fold behind a +N more button; a single leftover is just shown", () => {
     const assets = (n: number) => Array.from({ length: n }, (_, i) => `A${i}`);
+    assert.deepEqual(visibleAssets(assets(0), false), { shown: [], hidden: 0, foldable: false });
+    assert.deepEqual(visibleAssets(assets(1), false), { shown: assets(1), hidden: 0, foldable: false });
+    assert.deepEqual(visibleAssets(assets(TOP_ASSETS + 2), false), { shown: assets(TOP_ASSETS), hidden: 2, foldable: true });
     assert.deepEqual(visibleAssets(assets(5), false), { shown: assets(5), hidden: 0, foldable: false });
     assert.deepEqual(visibleAssets(assets(TOP_ASSETS + 1), false), { shown: assets(TOP_ASSETS + 1), hidden: 0, foldable: false });
     const folded = visibleAssets(assets(15), false);
@@ -142,5 +145,16 @@ describe("exposure flow", () => {
     assert.equal(shown[0].asset, "X11");
     assert.ok(shown.every((row, i) => i === 0 || Math.abs(shown[i - 1].net) >= Math.abs(row.net)));
     assert.deepEqual(targetsWithMutes(model, new Set(["any"])).map((row) => row.asset), model.assets.map((row) => row.asset));
+  });
+
+  test("muting a wallet changes a hidden asset's net without touching the shown order", () => {
+    const wallet = "0xaaaa00000000000000000000000000000000aaaa";
+    const exposures = Array.from({ length: 12 }, (_, i) => ({ asset: `X${i}`, fraction: 0.2 - i * 0.01 }));
+    const model = buildExposureFlow({ runAt: 1, exposures, sources: [{ address: wallet, weight: 1, contributions: exposures.map(({ asset, fraction }) => ({ asset, fraction })) }] });
+    const before = visibleAssets(model.assets, false).shown.map((row) => row.asset);
+    const muted = targetsWithMutes(model, new Set([wallet]));
+    assert.deepEqual(muted.map((row) => row.asset), model.assets.map((row) => row.asset));
+    assert.ok(muted.every((row) => row.net === 0));
+    assert.deepEqual(visibleAssets(model.assets, false).shown.map((row) => row.asset), before);
   });
 });
