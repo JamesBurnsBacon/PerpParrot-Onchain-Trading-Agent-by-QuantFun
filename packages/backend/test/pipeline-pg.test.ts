@@ -140,9 +140,12 @@ describe.skipIf(!url)("Pipeline on Postgres", async () => {
     expect(picked.length).toBeGreaterThan(0);
     expect(picked).not.toContain([...highFrequency][0]);
     expect(run.finalists.highFrequency).toBe(1);
-    // A failed run is retried; a rejected one with the same 25 isn't reviewed again.
+    // A failed run is retried; a rejected one with the same 25 isn't reviewed again within 12 h...
     await sql`update selection_runs set status = 'rejected' where id = ${first.id!}`;
     expect(await pipeline.select()).toEqual({ status: "unchanged" });
+    // ...but is after, so the roster's bench of approvals stays fresh.
+    expect((await pipelineAt(NOW + 12 * 3_600_000).select()).status).toBe("failed"); // reviewed again (no OpenAI key here)
+    await sql`delete from selection_runs where id > ${first.id!}`;
     // A different pick waits while a review runs.
     await sql`update selection_runs set finalists = '{"finalists": []}'::jsonb, status = 'running', started_at = now() where id = ${first.id!}`;
     expect(await pipeline.select()).toEqual({ status: "waiting", reason: "a review is running" });

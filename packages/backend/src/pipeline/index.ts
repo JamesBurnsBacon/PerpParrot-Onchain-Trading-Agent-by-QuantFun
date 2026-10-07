@@ -221,11 +221,13 @@ export class Pipeline {
     const guard = await this.guarded(inputs, result);
     if (guard) result = guard.result;
 
-    // The AI review runs only when the 25 change (a rejected set isn't reviewed again).
-    const [last] = await sql`select finalists -> 'finalists' as finalists from selection_runs
+    // The AI review runs when the 25 change, and at least every 12 h so the roster's bench of approvals
+    // stays fresh (ROSTER.md §4.1). A rejected set isn't reviewed again within that time.
+    const [last] = await sql`select finalists -> 'finalists' as finalists, started_at from selection_runs
       where status <> 'failed' and finalists is not null and (finalists ->> 'scope') is distinct from 'seats' order by started_at desc limit 1`;
     const lastPicks = ((last?.finalists ?? []) as { address: string }[]).map((f) => f.address);
-    if (!force && sameAddresses(lastPicks, result.finalists)) return { status: "unchanged" };
+    const fresh = last && this.now() - new Date(last.started_at as string | Date).getTime() < ROSTER.approvalFreshHours * HOUR;
+    if (!force && fresh && sameAddresses(lastPicks, result.finalists)) return { status: "unchanged" };
     // One review at a time, and a failed one is retried after 30 minutes.
     // (A failed seat review doesn't hold the picks up.)
     const [busy] = await sql`select status from selection_runs
@@ -630,7 +632,12 @@ export class Pipeline {
       const result = scoreCandidates(inputs, { finalists: inputs.length, allowUnknown: ["minTrades"] });
       if (result.finalists.length === 0) throw new Error("no seat passed Score's filters");
       await this.review(id as number, inputs, result, 0, undefined, "seats");
-      const [run] = await sql`select review -> 'verdicts' as verdicts from selection_runs where id = ${id}`;
+      const [run] = await sql`select review -> 'verdicts' as verdicts, finalists -> 'holds' as holds from selection_runs where id = ${id}`;
+      // Fresh hold measures for each seat (the monitored turnover; seeded seats start without them).
+      for (const [address, h] of Object.entries((run?.holds ?? {}) as Record<string, HoldMeasures>)) {
+        await sql`update roster_seats set turnover_per_day = ${h.turnoverPerDay}, traded_per_day_over_equity = ${h.tradedPerDayOverEquity}
+          where address = ${address} and state in ${sql([...ACTIVE])}`;
+      }
       return (run?.verdicts ?? []) as Verdict[];
     } catch (e) {
       log("seat review failed", { id, error: (e as Error).message });
