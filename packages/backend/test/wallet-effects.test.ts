@@ -32,7 +32,7 @@ test("sfx requires gesture and sound, skips during speech, debounces and caps re
   const state = { enabled: true, unlocked: true, now: 5000, lastInput: 0, lastEffect: 0, calm: false };
   expect(scheduleSfx("strategy", 25, state).length).toBeLessThanOrEqual(26);
   for (const patch of [{ enabled: false }, { unlocked: false }, { lastInput: 4500 }, { lastEffect: 4900 }]) expect(scheduleSfx("strategy", 10, { ...state, ...patch })).toEqual([]);
-  expect(scheduleSfx("lock", 1, { ...state, calm: true }).some(s => s.kind === "fever")).toBe(true);
+  expect(scheduleSfx("lock", 1, { ...state, calm: true }).some(s => s.kind === "tada")).toBe(true);
   expect(scheduleSfx("strategy", 25, { ...state, calm: true }).filter(s => s.kind === "tick")).toHaveLength(0);
 });
 test("flash timeline caps every sliding second even across rapid retriggers", () => {
