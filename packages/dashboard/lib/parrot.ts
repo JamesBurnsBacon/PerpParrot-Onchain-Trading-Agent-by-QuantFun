@@ -107,6 +107,14 @@ export function isApiError(v: unknown): v is ApiError {
 
 export const shortenAddress = (value: string): string => address(value) ? `${value.slice(0, 6)}...${value.slice(-4)}` : value;
 
+// A rate-limited or out-of-allowance visitor sees how long to wait in the short status pill, not just "Try again".
+export function waitPillLabel(status: string): string | null {
+  const m = /try again in (\d+) seconds/i.exec(status);
+  if (!m) return null;
+  const sec = Number(m[1]);
+  return sec >= 90 ? `Wait ${Math.ceil(sec / 60)} min` : `Wait ${sec}s`;
+}
+
 export function describeError(code: string, retryAfterSec?: number): string {
   const retry = retryAfterSec !== undefined && Number.isFinite(retryAfterSec) && retryAfterSec >= 0
     ? `Try again in ${Math.ceil(retryAfterSec)} seconds.` : "Try again shortly.";

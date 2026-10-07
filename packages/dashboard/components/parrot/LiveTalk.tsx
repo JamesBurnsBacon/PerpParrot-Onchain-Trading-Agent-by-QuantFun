@@ -1,6 +1,7 @@
 // Voice call controls rendered by the Parrot page from useLiveTalk state.
 // Controls manage the conversation only and cannot authorize trades.
 import { Icon } from "./StageBits";
+import { waitPillLabel } from "../../lib/parrot";
 import type { useLiveTalk } from "./useLiveTalk";
 
 export function LiveTalk({ live, disabled }: { live: ReturnType<typeof useLiveTalk>; disabled: boolean }) {
@@ -8,7 +9,7 @@ export function LiveTalk({ live, disabled }: { live: ReturnType<typeof useLiveTa
   const waiting = view.phase === "closing";
   const label = view.phase === "connecting" ? "Cancel" : live.active ? "End" : "Talk live";
   const idleStatus = !view.status ? "Your mic" : view.status === "Conversation canceled." ? "Canceled"
-    : view.status.startsWith("Conversation ended") ? "Ended" : view.status.startsWith("Allow microphone") ? "Allow mic" : "Try again";
+    : view.status.startsWith("Conversation ended") ? "Ended" : view.status.startsWith("Allow microphone") ? "Allow mic" : waitPillLabel(view.status) ?? "Try again";
   const status = view.phase === "connecting" ? "Connecting…" : view.phase === "closing" ? "Ending…"
     : live.active ? (view.muted && view.avatar === "listening" ? "Muted" : { listening: "Listening", thinking: "Thinking", speaking: "Speaking" }[view.avatar]) : idleStatus;
   // The state drives the pill color: listening, thinking, speaking, muted, connecting/closing, or idle.
