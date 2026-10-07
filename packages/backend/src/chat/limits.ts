@@ -3,7 +3,7 @@
 import type { SQL } from "bun";
 
 export type LimitConfig = { ipHourly: number; previewIpHourly: number; previewGlobalDaily: number; globalDaily: number; dailyBudgetMicroUsd: number };
-export type Kind = "chat" | "preview" | "live";
+export type Kind = "chat" | "preview" | "live" | "decide";
 export type Reservation = { ok: true; id: string } | { ok: false; reason: "ip_hourly" | "global_daily" | "daily_budget"; retryAfterSec: number };
 export interface ChatLimiter {
   reserve(args: { ipHash: string; kind: Kind; nowMs: number; reserveMicroUsd: number; cfg: LimitConfig }): Promise<Reservation>;

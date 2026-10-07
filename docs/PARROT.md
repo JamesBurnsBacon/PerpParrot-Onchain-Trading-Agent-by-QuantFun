@@ -92,6 +92,7 @@ Local backend paths below are served under `/api/backend` on Vercel. Browser req
 
 | Endpoint | Input → result | Switch |
 | --- | --- | --- |
+| `POST /decide/receipt` | `{claim}` only → receipt grounding, relation probabilities and exact JSON call | `DECISIONS_ENABLED=true` plus API key |
 | `POST /live/session` | `{sdp}` only → server-created session id, answer SDP, browser countdown; no client config forwarding | `LIVE_ENABLED=true` plus API key |
 | `POST /live/strategy` | `{intent, previous?}` → checked shortlist, evidence, changes, facts and optional context; no model call | `LIVE_ENABLED=true` |
 | `POST /chat` | `{message, history?}` → strict model intent and selection, or clarification without selection | `CHAT_ENABLED=true` plus API key |
@@ -101,11 +102,15 @@ Local backend paths below are served under `/api/backend` on Vercel. Browser req
 
 | Environment variable | Default / purpose |
 | --- | --- |
-| `OPENAI_API_KEY` | Server-only key for text intent extraction and voice sessions |
+| `OPENAI_API_KEY` | Server-only key for text intent extraction, voice sessions and receipt Decisions |
 | `CHAT_ENABLED` / `LIVE_ENABLED` | Off; only literal `true` enables each |
+| `DECISIONS_ENABLED` | Off; only literal `true` enables receipt calls |
+| `DECISIONS_MODEL` | `gpt-6-luna`; server-owned model |
+| `DECISIONS_PRICE_PER_M_USD` | 0.10; estimate per million input tokens, no output charge |
+| `DECISIONS_IP_HOURLY_LIMIT` / `DECISIONS_GLOBAL_DAILY_LIMIT` | 30 / 500; independent call counts, shared daily budget |
 | `CHAT_MODEL` | `gpt-5.4-mini` |
 | `CHAT_IP_SALT` | `perpparrot-chat-v1`; hashes client IP for limiter storage |
-| `CHAT_DAILY_BUDGET_USD` | 5; shared chat/Live reservation budget |
+| `CHAT_DAILY_BUDGET_USD` | 5; shared chat/Live/Decisions reservation budget |
 | `CHAT_IP_HOURLY_LIMIT` / `CHAT_GLOBAL_DAILY_LIMIT` | 10 / 100 |
 | `CHAT_PREVIEW_IP_HOURLY_LIMIT` / `CHAT_PREVIEW_GLOBAL_DAILY_LIMIT` | 30 / 500 |
 | `CHAT_PRICE_IN_PER_M_USD` / `CHAT_PRICE_OUT_PER_M_USD` | 1 / 4; reservation estimates |
@@ -115,7 +120,23 @@ Local backend paths below are served under `/api/backend` on Vercel. Browser req
 | `LIVE_IP_HOURLY_LIMIT` / `LIVE_GLOBAL_DAILY_LIMIT` | 3 / 30 sessions |
 | `LIVE_VOICE_PRICE_PER_MIN_USD` / `LIVE_BACKEND_ALLOWANCE_USD` | 0.05 / 0.15; per-minute estimate plus per-session allowance |
 
-Invalid optional numeric settings fall back to defaults. Session reservations use at least 15 seconds plus the backend allowance. Database configuration and frozen-configuration loading follow the runbook. Apply migrations `20261006140000_chat.sql`, then `20261007000000_live_usage.sql`; without a database, request/limiter stores are in-memory and do not provide durable or cross-instance state.
+Invalid optional numeric settings fall back to defaults. Session reservations use at least 15 seconds plus the backend allowance. Database configuration and frozen-configuration loading follow the runbook. Apply migrations `20261006140000_chat.sql`, then `20261007000000_live_usage.sql` and `20261008000000_decisions_usage.sql`; without a database, request/limiter stores are in-memory and do not provide durable or cross-instance state.
+
+### Receipt Guillotine
+
+`/parrot/receipts` lets the Parrot face the paperwork: choose one of six sentences or type 3–200 characters. The **OpenAI Decisions API** judges whether that sentence agrees with a code-owned **SAMPLE DATA** receipt, with a `supported_by_facts` probability and a `relation` choice: faithful, contradicted, unestablished or ambiguous. This is grounding against supplied facts, not market truth, future performance or advice. Nothing enters the selection, policy or execution pipeline.
+
+The receipt contains two invented wallets: A has -8% drawdown and Sharpe 1.1; B has -20% and 1.4 over 30 days. Fees and coins are explicitly absent. Only the visitor's typed claim and this fixed sample receipt are sent as data to OpenAI, with fixed server-owned questions. Nicknames are presentation only. Claims and receipts are labelled data, never instructions. Input validation rejects extra body keys and control/bidi characters. The UI renders all text through React and stores nothing. The server keeps the provider key; the Lens reveals only exact JSON request/response bodies after strict validation, never headers.
+
+The always-visible **Decisions Lens** shows both questions, all five probabilities, measured browser round trip and server latency, input tokens and estimated input-only cost. Its call toggle exposes the real request and response. The visit counter counts validated successful results and their estimated costs; failed attempts can still incur cost. Raw provider field names are preserved in the JSON inspector. No synthetic telemetry is presented as an API result.
+
+Enable `DECISIONS_ENABLED=true` and the server key for real calls; the switch defaults off independently of Chat and Live. The route shares their CORS pattern and the browser's same-origin `backendFetch` guard. It uses the existing atomic limiter with kind `decide`, a reservation based on twice the serialized request byte size (including framing allowance), and an eight-second AbortController deadline. Successful usage settles to reported input-token cost; definite upstream 4xx releases cost, while 5xx, timeout and unusable responses retain the reservation. Limits use the existing shared daily budget and IP hashing. Apply the Decisions migration before enabling the route. Memory-only limits remain process-local.
+
+On disabled, rate-limited or failed requests, **CACHED DEMO** offers six hand-authored preset results. The Lens says **cached, no API call**, describing the displayed illustration; the preceding failed attempt may have reached the provider. Free text is disabled with a reason. Cached examples have no request/response, token count, latency or charged cost. Reload after the operator restores service to try live calls again.
+
+Residual risks: the API is beta (GA expected within weeks); the parser reads `answers`, `model` and `usage.input_tokens` and ignores other usage detail fields, which the real API returns (recorded fixture `packages/backend/test/fixtures/decisions.recorded.json`). The two questions can disagree (a real run called "Wallet A had the higher Sharpe." faithful with 0% support), so the page stamps UNCLEAR when the relation and `supported_by_facts` contradict each other (`settle` in `lib/parrot-receipts.ts`) and shows that disagreement. Accuracy beyond the 18-sentence check below, sarcasm and languages other than English and Japanese are unverified; output is a model's opinion about the sentence, never about the market. Prompt-injection resistance is an instruction boundary, not a guarantee. Pricing is a configurable estimate, provider rate limits are undocumented, and byte-based reservations are conservative estimates rather than provider billing caps. Provider spend controls remain an operational backstop.
+
+Offline checks: `bun packages/backend/scripts/receipt-mutations.ts` exercises claim-only validation, the relation enum, 4xx budget release and the browser's unknown-key guard in a disposable tree. It requires assertion RED, restored GREEN and matching workspace/disposable SHA-256. The real-Postgres migration test skips without `TEST_DATABASE_URL`. Offline tests cannot establish provider compatibility, real billable cost, deployment, visual layout, animation, sound or browser interaction acceptance.
 
 ### Run locally
 
@@ -160,6 +181,12 @@ Paths below are relative to the repository root; wildcard entries group files wi
 | Finalists | `packages/backend/src/chat/finalists.ts` | Score stored pipeline accounts; cache or fall back to sample |
 | Selection / preview | `packages/backend/src/chat/{strategy,preview}.ts` | Shared shortlist projection, evidence/reasons, simulation allocations and hash |
 | Live | `packages/backend/src/live/{config,handler}.ts` | Server-owned WebRTC session and code-built strategy response |
+| Receipt backend | `packages/backend/src/live/decisions.ts` | Fixed Decisions request, bounded provider call, kill switch and shared-budget handler |
+| Receipt contract | `packages/shared/receipt.ts` | Code-owned sample receipt, questions and strict server/client response guards |
+| Receipt page | `packages/dashboard/app/parrot/receipts/{page,ReceiptClient}.tsx`, `packages/dashboard/app/parrot/receipts/receipts.css` | Claims, preset fallback, playful verdict and reduced-motion snip |
+| Decisions Lens | `packages/dashboard/components/parrot/DecisionsLens.tsx`, `packages/dashboard/lib/parrot-receipts.ts` | Real telemetry/call inspector and explicitly hand-authored demo fixtures |
+| Receipt verification | `packages/backend/test/decisions*.test.ts`, `packages/dashboard/test/receipts.test.tsx`, `packages/backend/scripts/receipt-mutations.ts` | Parser, handler, migration, guard/render and disposable RED/GREEN checks |
+| Receipt migration | `supabase/migrations/20261008000000_decisions_usage.sql` | Add `decide` to the usage-kind constraint |
 | Context | `packages/backend/src/live/context.ts` | Independent comparison, paper and exposure summaries |
 | Shared presentation | `packages/shared/wallet-persona.ts` | Stable nicknames and cosmetic vibe thresholds |
 | Shared evidence | `packages/shared/wallet-evidence.ts` | Display evidence and closed reason vocabulary |
@@ -192,6 +219,8 @@ Production sound mapping stays whistle (start), bubble (arrival), pop (removal),
 
 | Date | Verified and how | Not established |
 | --- | --- | --- |
+| 2026-10-07 | Receipt Guillotine offline: backend 703 pass / 23 skip; dashboard 93 pass; both package type checks; webpack build includes `/parrot/receipts`; no production lab markers. Four disposable assertion RED/restored GREEN checks with matching SHA-256. 320 added product lines including shared contract/CSS/route wiring, plus one limiter type edit and four migration lines. | Actual Decisions API response compatibility, provider cost/latency, real Postgres, deployment and browser/audio/visual acceptance |
+| 2026-10-07 | Receipt Guillotine against the real Decisions API through the local backend and page (18 sentences incl. paraphrases, Japanese, sarcasm, two instruction-injection attempts): relation correct 16/18, latency 330-712 ms (mean 453 ms), injection attempts not obeyed. The first real run exposed a parser mismatch (extra `usage` fields), fixed with a recorded-response test; one preset was ambiguous without a comparator and was reworded. Backend 722 pass with real Postgres; dashboard 94 pass. | Sustained accuracy, beta stability under load, sarcasm/other languages, deployment, sound and visual acceptance on a phone |
 | 2026-10-06 | Prior real-provider text-driven WebRTC recording: session creation, delegated tool, blocked reconfiguration, limiter and close events | Current exploration behavior, real browser microphone/voice or deployment |
 | 2026-10-07 | Offline refactor: backend 659 pass / 20 skip, dashboard 65 pass; both TypeScript checks, webpack build, production marker scan and disposable scheduler/context RED/GREEN with SHA-256 restoration | Database tests, provider rerun, live Hyperliquid distribution, deployment, audio or visual acceptance |
 
