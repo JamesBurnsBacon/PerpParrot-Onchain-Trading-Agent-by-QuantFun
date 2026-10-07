@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { FILLS_PAGE, fillStats, isHighFrequency, keepsActive, pickLeaderboard, sameAddresses, scoringWindows, type Fill, type LeaderboardRow } from "../src/pipeline/derive";
 import { decodeSeroval } from "../src/pipeline/vaults";
-import { basicSources } from "../src/pipeline";
+import { basicSources, reviewGate } from "../src/pipeline";
 import { PacedInfo } from "../src/pipeline/hl";
 import { loadScreenedCohort, validateScreenedCohort } from "../src/pipeline/screened-cohort";
 import type { Policy, Row } from "../../shared/src/contracts.ts";
@@ -96,6 +96,15 @@ test("decodeSeroval: the site's object/array/number/string/constant nodes", () =
     p: { k: ["result", "error"], v: [{ t: 9, i: 1, a: [{ t: 10, i: 2, p: { k: ["vault_address", "current_tvl", "ok"], v: [{ t: 1, s: "0xAb" }, { t: 0, s: 12.5 }, { t: 2, s: 2 }] } }] }, { t: 2, s: 0 }] },
   };
   expect(decodeSeroval(wire)).toEqual({ result: [{ vault_address: "0xAb", current_tvl: 12.5, ok: true }], error: null });
+});
+
+test("reviewGate falls back only for insufficient evidence under the basic setting", () => {
+  expect(reviewGate({ status: "VALID", reason: "OK" })).toBe("strict");
+  expect(reviewGate({ status: "INVALID_BUCKET", reason: "INSUFFICIENT_EVIDENCE" })).toBe("basic");
+  expect(reviewGate({ status: "INVALID_BUCKET", reason: "INSUFFICIENT_EVIDENCE" }, "strict")).toBe("none");
+  for (const reason of ["POLICY_VIOLATION", "AGENT_FAILURE", "STALE_INPUT", "CAPACITY"] as const) {
+    expect(reviewGate({ status: "INVALID_BUCKET", reason })).toBe("none");
+  }
 });
 
 describe("basicSources", () => {

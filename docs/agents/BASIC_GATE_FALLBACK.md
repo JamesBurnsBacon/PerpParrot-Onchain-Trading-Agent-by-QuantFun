@@ -1,6 +1,6 @@
 # Fix: a failed strict review falls back to approving almost everyone
 
-**For:** Bradley. **Status:** open. **Found:** 2026-10-07, before go-live.
+**For:** Bradley. **Status:** fix implemented on this PR branch; not deployed. **Found:** 2026-10-07, before go-live.
 
 ## What happened
 
@@ -49,8 +49,8 @@ const approved =
 1. **Fall back only on missing evidence.** Use `approvedCandidates` only when
    `manifest.reason === "INSUFFICIENT_EVIDENCE"`, with `REVIEW_GATE=basic`. Any other non-`VALID`
    result (`POLICY_VIOLATION`, `INVALID_BUCKET`, a model error) approves no one. Record it as
-   reviewed-and-not-approved, so the bench's later-review rule (ROSTER.md §4.1) takes those
-   wallets off.
+   reviewed-and-not-approved. The bench query must include `rejected` runs as well as `benched`
+   runs; otherwise a zero-approval review cannot take earlier approvals off (ROSTER.md §4.1).
 2. **Record the path.** Store which path produced the bench (`review.gate`: `strict` / `basic` /
    `none`) and the manifest reason on the run, and show it on the dashboard's pipeline panel, so a
    lenient bench is visible.
@@ -63,6 +63,7 @@ const approved =
   verdicts take earlier approvals of those wallets off the bench.
 - `INSUFFICIENT_EVIDENCE` with `REVIEW_GATE=basic` still uses `approvedCandidates`.
 - `VALID` is unchanged: the manifest's sources only.
+- The dashboard labels the actual `strict`, `basic`, or `none` path and the manifest reason.
 
 ## Interim (owner's call)
 
