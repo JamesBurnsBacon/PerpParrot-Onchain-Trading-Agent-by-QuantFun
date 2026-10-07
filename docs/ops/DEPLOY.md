@@ -35,9 +35,12 @@ vault standing in for ours; the services only *read* it.
    # session pooler (DATABASE_URL) allows 15 clients in all, and the executor's run lock needs it
    ```
    Don't set `BACKEND_URL` (the binding injects it), `DRY_RUN`, `HL_API_WALLET_KEY` or the
-   `NEXT_PUBLIC_*` URLs (the executor runs production rules on Vercel and refuses `DRY_RUN=false`
+   `NEXT_PUBLIC_BACKEND_URL` / `NEXT_PUBLIC_EXECUTOR_URL` (the executor runs production rules on Vercel and refuses `DRY_RUN=false`
    there). Optional: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`. Deploy to **production**: crons only
    run there.
+   Optional dashboard demo: `NEXT_PUBLIC_DEMO_VIDEO_URL` accepts an HTTPS YouTube, Vimeo, or
+   direct `.mp4`/`.webm` URL. Unset or invalid hides the Demo button. It is baked in at build
+   time; rebuild/redeploy after changing it. The video loads only when the modal opens.
 3. **Check** (exit 0 expected):
    ```sh
    DATABASE_URL=<…> bun scripts/predeploy-check.ts \

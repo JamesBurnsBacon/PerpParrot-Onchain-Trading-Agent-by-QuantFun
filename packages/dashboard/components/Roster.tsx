@@ -8,7 +8,7 @@ const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 const hours = (ms: number) => (ms < HOUR ? `${Math.max(1, Math.round(ms / 60_000))}m` : ms < 48 * HOUR ? `${Math.round(ms / HOUR)}h` : `${Math.round(ms / (24 * HOUR))}d`);
 
 const STATE: Record<SeatState, { color: string; label: string }> = {
-  probation: { color: "var(--series-1)", label: "Probation" },
+  probation: { color: "var(--series-1)", label: "New" }, // admitted, still in its minimum tenure
   seated: { color: "var(--good)", label: "Seated" },
   winding_down: { color: "var(--warning)", label: "Winding down" },
   released: { color: "var(--muted)", label: "Released" },

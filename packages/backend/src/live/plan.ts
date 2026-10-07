@@ -60,6 +60,8 @@ export const sketchOrders = (targetsUsd: Map<string, number>, markets: Map<strin
     const lot = 10 ** market.szDecimals;
     const coins = Math.floor((Math.abs(targetUsd) / market.markPx) * lot) / lot;
     if (!(coins > 0)) { skipped.push({ asset, reason: "SIZE_ROUNDS_TO_ZERO", targetUsd }); continue; }
+    // Rounding down to the lot can leave an order under the minimum even though the target was above it.
+    if (coins * market.markPx < BANDS.minOrderUsd) { skipped.push({ asset, reason: "BELOW_MIN_ORDER", targetUsd }); continue; }
     orders.push({ asset, isBuy: targetUsd > 0, size: coins.toFixed(market.szDecimals), notionalUsd: Math.round(coins * market.markPx * targetUsd / Math.abs(targetUsd) * 100) / 100, markPx: market.markPx });
   }
   return { asOfMs: nowMs, equityUsd, marginScale, grossUsd: Math.round(orders.reduce((s, o) => s + Math.abs(o.notionalUsd), 0) * 100) / 100, orders, skipped };

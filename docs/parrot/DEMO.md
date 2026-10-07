@@ -32,6 +32,12 @@ Use `/parrot/receipts/live` for a longer sentence-feed walkthrough. Keep the loc
 
 The bird has three read-only tools besides `set_strategy`: `get_run_status`, `explain_wallet` (by list position, bird name or address prefix) and `get_backtest`. The browser fetches the same public Dashboard endpoints (`/api/executor/runs`, `/status`, `/api/backend/exposures`, `/artifacts/funnel`, `/artifacts/backtest`, `/pipeline`) with GET only; code builds the facts (capped at 1200 characters) that the bird reads aloud and that the receipt judge checks. They cannot pause, resume, flatten, trade or freeze anything. Rehearse them on the presentation device: a card appears only when its endpoint returns data. In development, `/parrot?fx=1` has buttons that show each card from synthetic inputs.
 
+### Confirm by voice (dry run, no orders)
+
+Say "lock this in": the bird calls `request_confirmation`, and the page shows a **dry-run order sketch** (the shortlist copied at equal weights onto a flat $470 account at current prices; hypothetical, nothing is sent) while the bird reads a short summary and asks for a yes. Say "yes": the bird calls `confirm_request` and a **PENDING simulation request** is saved (status PENDING, hash on screen, an operator must review and freeze it). The on-screen **Confirm** button does the same thing as the spoken yes.
+
+The model cannot confirm by itself: the browser saves only if the visitor's own transcript after the summary contains a clear yes (no "but", "wait", "not yet" or similar), the one-time nonce matches, it is within 90 seconds, and the strategy has not changed. Otherwise the bird says it did not hear a yes. If the selection moved between summary and yes, nothing is saved and the bird summarizes again. Real orders are not part of this page: the dry-run sketch is not the executor's plan (production weights, leverage normalization, current positions and the close-confirmation delay are not in it).
+
 ## If a service is unavailable
 
 | Symptom / page | What appears | Presenter action |
