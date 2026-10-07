@@ -22,6 +22,7 @@ import { keccakUtf8 } from "../snapshot";
 
 const HOUR = 3_600_000;
 const LEADERBOARD = "https://stats-data.hyperliquid.xyz/Mainnet/leaderboard";
+const REVIEW_FINALISTS = 15;
 
 export type PipelineOptions = {
   sql: SQL;
@@ -170,7 +171,9 @@ export class Pipeline {
       tradeCount: r.trade_count,
       makerShare: r.maker_share,
     }));
-    const result = scoreCandidates(inputs);
+    // 15, not Score's default 25: the committee's request must stay under its 105 KB budget
+    // (shared/src/committee-evidence.ts), at up to ~4 KB per finalist plus the pairs.
+    const result = scoreCandidates(inputs, { finalists: REVIEW_FINALISTS });
     const score = toFrameCandidates(result);
     const byAddress = new Map(result.candidates.map((c) => [c.address, c]));
     const finalists = result.finalists.map((address) => ({ address, kind: byAddress.get(address)?.kind, score: byAddress.get(address)?.score, rank: byAddress.get(address)?.rank }));
@@ -260,7 +263,9 @@ export class Pipeline {
         reviewHash: receipt.receiptHash,
         policy: structuredClone(policy) as unknown as FrozenConfiguration["policy"],
         policyHash: manifest.policyHash,
-        sources: basic.map((b) => ({ candidate: b.candidate, sourceAddress: b.sourceAddress, weightUnits: Math.floor(b.weight * 1e6), ceilingUnits: Math.floor(policy.maxSourceWeight * 1e6) })),
+        sources: basic
+          .map((b) => ({ candidate: b.candidate, sourceAddress: b.sourceAddress.toLowerCase(), weightUnits: Math.floor(b.weight * 1e6), ceilingUnits: Math.floor(policy.maxSourceWeight * 1e6) }))
+          .sort((a, b) => a.candidate - b.candidate), // the freeze checks candidate order
         cashUnits: 0,
       };
       payload.cashUnits = 1e6 - payload.sources.reduce((sum, s) => sum + s.weightUnits, 0);
