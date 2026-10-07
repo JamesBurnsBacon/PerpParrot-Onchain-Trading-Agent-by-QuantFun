@@ -39,7 +39,7 @@ All are backend routes protected by `CRON_SECRET`. Operators can call them with 
 |---|---|---|---|
 | `/cron/pipeline/scan` | 00:15, 12:15 UTC | Leaderboard file (~40 MB): ≥ $10k, positive month and all-time PnL. hyperliquidvaults.com's vault list (its TanStack server function), plus Hyperliquid's own vault list (open, not a child, ≥ $10k TVL, ≥ 39 days old). File reads only, no per-account calls. | `pipeline_accounts` (upsert, `listed_at`) |
 | `/cron/pipeline/refresh` | every 5 min, ≤ 240 s, 3 reads at a time | First, qualified accounts whose data is over 1 h old: `portfolio` + `userFillsByTime` (30 days, newest 2,000) → trade count, maker share, orders per day. Then the scan's accounts not refreshed for 11 h, primary sources first: `portfolio` only. Keeps only the `month` and `allTime` windows. Unfinished claims are released. | `pipeline_accounts` |
-| `/cron/pipeline/select` | every 10 min (`:x4`) | 1. **Qualify** when the qualified list is older than the scan, every primary source is fresh, and ≥ 95% of the scan is (or the scan is 3.5 h old): Score the population (trade count may be unknown here) and keep its top 250. 2. **Pick**: Score the qualified accounts with fresh fills, high-frequency traders left out, keep 25. 3. **Review** the 25 if they changed, freeze, and **activate** if the sources changed. | `pipeline_accounts.qualified_at`, `selection_runs`, `configurations` |
+| `/cron/pipeline/select` | every 10 min (`:x4`) | 1. **Qualify** when the qualified list is older than the scan, every primary source is fresh, and ≥ 95% of the scan is (or the scan is 3.5 h old): Score the population (trade count may be unknown here) and keep its top 250. 2. **Pick**: Score the qualified accounts with fresh fills, high-frequency traders left out, keep 25 (with the optional overlap guard, see below). 3. **Review** the 25 if they changed, freeze, and **activate** if the sources changed. | `pipeline_accounts.qualified_at`, `selection_runs`, `configurations` |
 
 **Hyperliquid budget**: the limit is 1,200 weight per minute per IP. Most info calls cost 20;
 fills cost 20 plus 1 per 20 fills; `clearinghouseState` costs 2. The refresh paces itself to 900
@@ -54,16 +54,27 @@ exists, nothing is picked and the active configuration (or the fixture) stays.
 ## Review gate
 
 The review core can't pass any candidate yet. `score/frame.ts` and `review/input.ts` leave the
-out-of-sample metrics, execution fit and exposure overlap null, and `compile` requires them.
+out-of-sample metrics, execution fit and the frame's exposure overlap null, and `compile` requires them.
 Until measured evidence lands, the **basic gate** (`REVIEW_GATE`, default `basic`) applies: keep
 finalists the Role model doesn't reject and with no Risk score above the reject threshold
 (evidence risk aside), weight them by Aggressive fit within the per-source cap, cash buffer and
 gross leverage, and require ≥ 5 sources. `REVIEW_GATE=strict` turns it off.
 
+## Exposure overlap
+
+The overlap of two accounts is the same-direction share of their current books, in [0, 1] (`review/overlap.ts`): each book is the net signed notional per market, summed over dexes and divided by its gross, and the overlap is the sum of the smaller shares over the markets both hold in the same direction. An empty book, or one that nets to zero, overlaps with nothing (0). It compares composition only, so two accounts that each hold a single market in the same direction overlap at 1.0 whatever their size or leverage.
+
+- **Measured, always on.** Each review already reads the 25 picks' positions, so it records every pick's largest overlap with another pick under `selection_runs.finalists.overlap` (no extra Hyperliquid reads), and the dashboard shows it as an Overlap column. It does not change the pick, and the frame's `currentExposureOverlap` stays null.
+- **Optional guard, off by default.** With `PICK_OVERLAP_GUARD=on` and `NOWNODES_API_KEY`, the pick reads the top 60 candidates' positions NOWNodes first (the official API only as a fallback), leaves out a candidate that overlaps one already chosen by more than the policy's `maxExposureOverlap`, and scores again without it (`pipeline/overlap-pick.ts`). The pick never shrinks (if fewer than 25 remain after leaving some out, the left-out ones come back in rank order), and a failed read or a paused NOWNodes leaves Score's own pick. What it did is recorded under `finalists.overlapGuard`. Env vars and the warning about pick churn: `docs/ops/DEPLOY.md`.
+
 ## Next
 
-- **Measured evidence** (out-of-sample windows, execution fit, exposure overlap) so the strict
-  review can pass candidates. Source: #33's `review/measured-evidence.ts`.
+- **Measured evidence** (out-of-sample windows, execution fit, and the frame's exposure overlap,
+  which the picks' overlap above could now fill) so the strict review can pass candidates.
+  Source: #33's `review/measured-evidence.ts`.
+- **Evidence for the overlap guard**: whether leaving out overlapping candidates helps returns is
+  not measured, and it can make the 25 (and so the AI reviews) change more often; a hysteresis
+  (keep a current pick unless it overlaps above a looser threshold) is the next step if it does.
 - **Gradual exit** for sources that leave the set (README §4.5: reduce-only legs, then DCA out).
   The first version switches targets directly.
 - **Stored month history** per account (denser than `allTime` beyond 30 days; README §4.1).
