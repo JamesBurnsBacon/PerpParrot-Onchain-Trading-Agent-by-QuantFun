@@ -238,7 +238,11 @@ export class Pipeline {
     // Only a review that produced a bench (or rejected the 25) counts: one from before the roster has none.
     const fresh = last && (last.status === "benched" || last.status === "rejected") &&
       this.now() - new Date(last.started_at as string | Date).getTime() < ROSTER.approvalFreshHours * HOUR;
-    if (!force && fresh && sameAddresses(lastPicks, result.finalists)) return { status: "unchanged" };
+    // A requested fresh start (ROSTER.md §4.6) reviews the current picks once more, so the bench
+    // gains approvals even when the 25 haven't changed.
+    const control = await this.freshStartControl();
+    const freshStartReview = control?.pending === true && (control.reviewedAt === null || control.reviewedAt < control.requestedAt);
+    if (!force && !freshStartReview && fresh && sameAddresses(lastPicks, result.finalists)) return { status: "unchanged" };
     // One review at a time, and a failed one is retried after 30 minutes.
     // (A failed seat review doesn't hold the picks up.)
     const [busy] = await sql`select status from selection_runs
@@ -246,6 +250,7 @@ export class Pipeline {
     if (busy && (busy.status === "running" || !force)) return { status: "waiting", reason: busy.status === "running" ? "a review is running" : "a review failed in the last 30 minutes" };
 
     const [{ id }] = await sql`insert into selection_runs (started_at, status, accounts) values (${new Date(this.now()).toISOString()}, 'running', ${inputs.length}) returning id`;
+    if (freshStartReview) await sql`update pipeline_controls set fresh_start_review_at = ${new Date(this.now()).toISOString()} where id = 1`;
     try {
       const outcome = await this.review(id as number, inputs, result, highFrequency, guard?.summary);
       return { id, ...outcome };
@@ -474,6 +479,35 @@ export class Pipeline {
       }
     }
 
+    // The fresh bench (every approval of the last 12 h) and the wallets cooling down. Wallets released
+    // by a fresh start don't cool down: an approved one can be seated again at once.
+    const bench = await this.freshBench(now);
+    const cooling = new Set<string>(
+      (await sql`select address from roster_seats where released_at > ${new Date(now - ROSTER.cooldownHours * HOUR).toISOString()}
+        and release_reason is distinct from 'fresh start'`).map((r: { address: string }) => r.address),
+    );
+
+    // A requested fresh start (ROSTER.md §4.6): once at least 5 approved wallets are on the bench,
+    // release every seat admitted before the request; step 4 then fills from the bench (5 at once,
+    // the rest at the usual pace) and step 5 activates the new roster.
+    const control = await this.freshStartControl();
+    let freshStartWaiting = false;
+    if (control?.pending) {
+      const ready = bench.filter((b) => b.passesHold && now - b.approvedAt <= ROSTER.approvalFreshHours * HOUR && !cooling.has(b.address));
+      if (ready.length >= ROSTER.minSeats) {
+        const old = (await this.activeSeats()).filter((s) => s.admittedAt < control.requestedAt);
+        for (const seat of old) {
+          await sql`update roster_seats set state = 'released', released_at = ${at}, release_reason = 'fresh start'
+            where address = ${seat.address} and state in ${sql([...ACTIVE])}`;
+          await event(seat.address, "released", { reason: "fresh start" });
+        }
+      } else {
+        // Until then the old seats stay and nobody is admitted, so the new roster forms at once.
+        freshStartWaiting = true;
+        log("roster fresh start waiting for approvals", { approved: ready.length, needed: ROSTER.minSeats });
+      }
+    }
+
     // A seat without its 30-day average leverage (seeded, or admitted before it was kept) takes it
     // from the latest review that measured the wallet, so the snapshot's normalization covers it.
     await sql`update roster_seats s set average_leverage = (
@@ -573,15 +607,9 @@ export class Pipeline {
 
     // 4. Fill open seats from the fresh bench, within the pace limits.
     const active = seats.filter((s) => ACTIVE.includes(s.state));
-    const [latest] = await sql`select id, review -> 'bench' as bench from selection_runs
-      where status = 'benched' and (review ->> 'scope') is distinct from 'seats' order by started_at desc limit 1`;
-    const bench = ((latest?.bench ?? []) as (BenchEntry & { approvedAt: number })[]).map((b) => ({ ...b, approvedAt: Number(b.approvedAt) }));
-    const cooling = new Set<string>(
-      (await sql`select address from roster_seats where released_at > ${new Date(now - ROSTER.cooldownHours * HOUR).toISOString()}`).map((r: { address: string }) => r.address),
-    );
     const [counts] = await sql`select count(*) filter (where at > ${new Date(now - HOUR).toISOString()})::int as hour, count(*)::int as day
       from roster_events where kind = 'admitted' and at > ${new Date(now - 24 * HOUR).toISOString()}`;
-    const admissions = planAdmissions({
+    const admissions = freshStartWaiting ? [] : planAdmissions({
       active, bench, cooling, admittedLastHour: counts.hour, admittedLastDay: counts.day, nowMs: now,
       cashBuffer: policy.cashBuffer, maxSourceWeight: policy.maxSourceWeight,
     });
@@ -595,7 +623,7 @@ export class Pipeline {
       await sql`insert into roster_seats (address, state, weight_units, fit, turnover_per_day, traded_per_day_over_equity, admitted_at,
           min_tenure_until, admitted_by, equity_at_admission, pnl_at_admission, average_leverage, reviewed_at)
         values (${a.entry.address}, 'probation', ${a.weightUnits}, ${a.entry.fit}, ${a.entry.turnoverPerDay}, ${a.entry.tradedPerDayOverEquity}, ${at},
-          ${new Date(a.minTenureUntil).toISOString()}, ${latest.id}, ${reading?.equity ?? null}, ${reading?.pnl ?? null}, ${a.entry.averageLeverage ?? null},
+          ${new Date(a.minTenureUntil).toISOString()}, ${bench.find((b) => b.address === a.entry.address)?.runId ?? null}, ${reading?.equity ?? null}, ${reading?.pnl ?? null}, ${a.entry.averageLeverage ?? null},
           ${new Date(a.entry.approvedAt).toISOString()})`; // its bench approval is its review: the next seat review is 12 h after it
       await event(a.entry.address, "admitted", { reason: "open seat", weightUnits: a.weightUnits, fit: a.entry.fit, copyableShare: a.entry.copyableShare,
         turnoverPerDay: a.entry.turnoverPerDay, tenureUntil: new Date(a.minTenureUntil).toISOString() });
@@ -619,6 +647,7 @@ export class Pipeline {
       sources.every((s) => configurationNow.sources.some((c) => c.sourceAddress.toLowerCase() === s.sourceAddress && c.weightUnits === s.weightUnits));
     if (unchanged) {
       if (changes.length) log("roster changed, configuration kept", { changes });
+      await this.finishFreshStart(control, seated);
       return { status: "kept", seats: seated.length, changes };
     }
     const [review] = await sql`select review ->> 'receiptHash' as receipt from selection_runs where status = 'benched' order by started_at desc limit 1`;
@@ -638,11 +667,65 @@ export class Pipeline {
     await sql.begin(async (tx) => {
       await tx`update configurations set status = 'retired' where status = 'active'`;
       await tx`insert into configurations (hash, configuration, status, selection_id, activated_at)
-        values (${configuration.configurationHash}, ${JSON.stringify(configuration)}::text::jsonb, 'active', ${latest?.id ?? null}, now())
+        values (${configuration.configurationHash}, ${JSON.stringify(configuration)}::text::jsonb, 'active', ${bench[0]?.runId ?? null}, now())
         on conflict (hash) do update set status = 'active', activated_at = now()`;
     });
     log("roster activated", { hash: configuration.configurationHash, seats: seated.length, changes });
+    await this.finishFreshStart(control, seated);
     return { status: "activated", seats: seated.length, changes, reason: configuration.configurationHash };
+  }
+
+  // The operator's fresh-start request (pipeline_controls; ROSTER.md §4.6). Undefined before its
+  // migration has run.
+  private async freshStartControl(): Promise<{ pending: boolean; requestedAt: number; reviewedAt: number | null } | undefined> {
+    try {
+      const [row] = await this.o.sql`select fresh_start_requested_at as requested, fresh_start_review_at as reviewed, fresh_start_done_at as done
+        from pipeline_controls where id = 1`;
+      if (!row?.requested) return undefined;
+      const requestedAt = new Date(row.requested as Date).getTime();
+      const pending = !row.done || new Date(row.done as Date).getTime() < requestedAt;
+      return { pending, requestedAt, reviewedAt: row.reviewed ? new Date(row.reviewed as Date).getTime() : null };
+    } catch (e) {
+      if ((e as { errno?: string }).errno === "42P01") return undefined; // undefined_table
+      throw e;
+    }
+  }
+
+  // A fresh start is done once every seat was admitted after the request and a configuration of at
+  // least 5 stands: the paper books then restart from their starting capital, their history moved to
+  // the archive tables.
+  private async finishFreshStart(control: Awaited<ReturnType<Pipeline["freshStartControl"]>>, seated: Seat[]): Promise<void> {
+    if (!control?.pending || seated.some((s) => s.admittedAt < control.requestedAt)) return;
+    await this.o.sql.begin(async (tx) => {
+      await tx`insert into paper_state_archive select now(), * from paper_state`;
+      await tx`insert into paper_points_archive select now(), * from paper_points`;
+      await tx`delete from paper_points`;
+      await tx`delete from paper_state`;
+      await tx`update pipeline_controls set fresh_start_done_at = ${new Date(this.now()).toISOString()} where id = 1`;
+    });
+    this.o.log("roster fresh start done; paper books restart", { seats: seated.length });
+  }
+
+  // The bench (ROSTER.md §4.1): every wallet a review of the picks approved in the last 12 h, as of
+  // its latest review. A later review that didn't approve it takes it off.
+  private async freshBench(nowMs: number): Promise<(BenchEntry & { runId: number })[]> {
+    const runs = await this.o.sql`select id, review -> 'bench' as bench, review -> 'verdicts' as verdicts from selection_runs
+      where status = 'benched' and (review ->> 'scope') is distinct from 'seats'
+        and started_at > ${new Date(nowMs - ROSTER.approvalFreshHours * HOUR).toISOString()}
+      order by started_at desc`;
+    const decided = new Set<string>();
+    const bench: (BenchEntry & { runId: number })[] = [];
+    for (const run of runs as { id: string | number; bench: BenchEntry[] | null; verdicts: { address: string }[] | null }[]) {
+      const approved = new Map((run.bench ?? []).map((b) => [b.address, b]));
+      const reviewed = run.verdicts?.length ? run.verdicts.map((v) => v.address) : [...approved.keys()];
+      for (const address of reviewed) {
+        if (decided.has(address)) continue;
+        decided.add(address);
+        const entry = approved.get(address);
+        if (entry) bench.push({ ...entry, approvedAt: Number(entry.approvedAt), runId: Number(run.id) });
+      }
+    }
+    return bench;
   }
 
   // The 12-hourly seat review: the committee over the wallets holding seats, as a 'seats' selection
