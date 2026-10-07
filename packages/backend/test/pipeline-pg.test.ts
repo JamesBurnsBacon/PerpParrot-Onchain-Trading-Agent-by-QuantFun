@@ -153,6 +153,11 @@ describe.skipIf(!url)("Pipeline on Postgres", async () => {
     await sql`update selection_runs set finalists = finalists || ${{ overlap }}::jsonb where id = ${id}`;
     const [run] = await sql`select finalists from selection_runs where id = ${id}`;
     expect(run.finalists).toEqual({ ...saved, overlap });
-    await sql`delete from selection_runs where id = ${id}`;
+    // A run whose pick was never saved still records (coalesce) instead of silently staying null.
+    const [{ id: bare }] = await sql`insert into selection_runs (started_at, status) values (now(), 'rejected') returning id`;
+    await sql`update selection_runs set finalists = coalesce(finalists, '{}'::jsonb) || ${{ overlap }}::jsonb where id = ${bare}`;
+    const [fresh] = await sql`select finalists from selection_runs where id = ${bare}`;
+    expect(fresh.finalists).toEqual({ overlap });
+    await sql`delete from selection_runs where id in ${sql([id, bare])}`;
   });
 });

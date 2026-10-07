@@ -11,7 +11,10 @@ type Book = ReadonlyMap<string, number>;
 
 const shares = (positions: readonly LivePosition[]): Book => {
   const net = new Map<string, number>();
-  for (const p of positions) net.set(p.market, (net.get(p.market) ?? 0) + p.signedNotionalUsd);
+  for (const p of positions) {
+    if (!Number.isFinite(p.signedNotionalUsd)) throw new Error(`overlap: non-finite notional for ${p.market}`);
+    net.set(p.market, (net.get(p.market) ?? 0) + p.signedNotionalUsd);
+  }
   const gross = [...net.values()].reduce((sum, v) => sum + Math.abs(v), 0);
   return new Map(gross > 0 ? [...net].map(([market, v]) => [market, v / gross] as const) : []);
 };
@@ -36,22 +39,30 @@ export type OverlapSummary = {
   byAddress: Record<string, number>; // each account's largest overlap with any other
 };
 
-const round = (v: number) => Math.round(v * 1e4) / 1e4;
+const round = (v: number) => Math.round(v * 1e6) / 1e6; // stored values only; comparisons use the raw overlap
 
 // Every pair among `addresses` (positions keyed by lower-case address; a missing book counts as empty).
 export const summarizeOverlap = (addresses: readonly string[], positions: ReadonlyMap<string, readonly LivePosition[]>, threshold: number, topN = 5): OverlapSummary => {
   const keys = addresses.map((a) => a.toLowerCase());
   const books = keys.map((a) => shares(positions.get(a) ?? []));
-  const all: { a: string; b: string; overlap: number }[] = [];
-  const byAddress: Record<string, number> = Object.fromEntries(keys.map((a) => [a, 0]));
+  const all: { a: string; b: string; overlap: number; raw: number }[] = [];
+  const worst: Record<string, number> = Object.fromEntries(keys.map((a) => [a, 0]));
   for (let i = 0; i < keys.length; i++) {
     for (let j = i + 1; j < keys.length; j++) {
-      const overlap = round(overlapOf(books[i]!, books[j]!));
-      all.push({ a: keys[i]!, b: keys[j]!, overlap });
-      byAddress[keys[i]!] = Math.max(byAddress[keys[i]!]!, overlap);
-      byAddress[keys[j]!] = Math.max(byAddress[keys[j]!]!, overlap);
+      const raw = overlapOf(books[i]!, books[j]!);
+      all.push({ a: keys[i]!, b: keys[j]!, overlap: round(raw), raw });
+      worst[keys[i]!] = Math.max(worst[keys[i]!]!, raw);
+      worst[keys[j]!] = Math.max(worst[keys[j]!]!, raw);
     }
   }
-  all.sort((x, y) => y.overlap - x.overlap || (x.a < y.a ? -1 : x.a > y.a ? 1 : x.b < y.b ? -1 : 1));
-  return { threshold, pairs: all.length, above: all.filter((p) => p.overlap > threshold).length, max: all[0]?.overlap ?? 0, top: all.slice(0, topN), byAddress };
+  all.sort((x, y) => y.raw - x.raw || (x.a < y.a ? -1 : x.a > y.a ? 1 : x.b < y.b ? -1 : 1));
+  const byAddress = Object.fromEntries(Object.entries(worst).map(([a, v]) => [a, round(v)]));
+  return {
+    threshold,
+    pairs: all.length,
+    above: all.filter((p) => p.raw > threshold).length,
+    max: round(all[0]?.raw ?? 0),
+    top: all.slice(0, topN).map(({ a, b, overlap }) => ({ a, b, overlap })),
+    byAddress,
+  };
 };

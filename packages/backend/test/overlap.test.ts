@@ -70,6 +70,19 @@ describe("summarizeOverlap", () => {
     expect(one).toEqual({ threshold: 0.5, pairs: 0, above: 0, max: 0, top: [], byAddress: { "0xa": 0 } });
   });
 
+  test("a pair just over the threshold counts even when its stored value rounds onto it", () => {
+    // a: BTC .5000004, ETH .4999996. b: BTC .6, SOL .4. Raw overlap .5000004; stored (6 digits) .5.
+    const m = new Map<string, LivePosition[]>([["0xa", [pos("BTC", 500_000.4), pos("ETH", 499_999.6)]], ["0xb", [pos("BTC", 600_000), pos("SOL", 400_000)]]]);
+    const s = summarizeOverlap(["0xa", "0xb"], m, 0.5);
+    expect(s.top[0]!.overlap).toBe(0.5);
+    expect(s.above).toBe(1);
+  });
+
+  test("a non-finite notional is an error, not a silent empty book", () => {
+    expect(() => exposureOverlap([pos("BTC", Number.NaN)], [pos("BTC", 1)])).toThrow("non-finite");
+    expect(() => summarizeOverlap(["0xa", "0xb"], new Map([["0xa", [pos("BTC", Number.POSITIVE_INFINITY)]], ["0xb", [pos("BTC", 1)]]]), 0.5)).toThrow("non-finite");
+  });
+
   test("keeps only the largest pairs, in a stable order", () => {
     const addrs = Array.from({ length: 6 }, (_, i) => `0x${i}`);
     const m = new Map(addrs.map((a) => [a, [pos("BTC", 100)]] as const));
