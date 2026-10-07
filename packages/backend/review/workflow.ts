@@ -57,17 +57,10 @@ export function riskDecision(row: Row, policy: Policy) {
   return {status, bindingConstraint, ceiling: status === 'REJECT' ? 0 : policy.maxSourceWeight * (1-severity/100)};
 }
 function compile(frame: Frame, policy: Policy, role: Row[], risk: Row[], addresses: ReadonlyMap<number,string>): Source[] {
-  const fitKey = `${policy.bucket.toLowerCase()}Fit`;
   const ranked = frame.candidates.flatMap(c => {
     const r = role.find(r=>r.candidate===c.candidate)!, k = risk.find(r=>r.candidate===c.candidate)!;
-    const m = c.metrics, decision = riskDecision(k, policy);
-    if (m.historyDays < policy.minHistoryDays || m.oosWindows < 1 || m.oosSharpe === null || m.oosSortino === null || m.oosMaxDrawdown === null || m.crossWindowStability === null || m.averageLeverage === null || m.medianHoldMinutes === null || m.medianHoldMinutes < 60 || m.executionFit === null || m.executionFit < policy.minExecutionFit || m.executionCoverage === null || m.executionCoverage <= 0 || r.confidence < policy.minConfidence || k.confidence < policy.minConfidence || r.reject >= policy.riskRejectThreshold || decision.status === 'REJECT') return [];
-    // Stronger latency penalty for 1–3h and softer for 3–6h; replay-calibrate.
-    const latency = m.medianHoldMinutes < 180 ? 0.5 : m.medianHoldMinutes < 360 ? 0.75 : 1;
-    const confidence = Math.min(r.confidence, k.confidence);
-    const score = r[fitKey] * latency * confidence / 100;
-    if (score <= 0) return [];
-    return [{candidate:c.candidate, score, ceiling:decision.ceiling}];
+    const gate=candidateGate(c.metrics,r,k,policy);
+    return gate.reasons.length ? [] : [{candidate:c.candidate,score:gate.score,ceiling:gate.ceiling}];
   }).sort((a,b)=>b.score-a.score || a.candidate-b.candidate);
   const selected: typeof ranked = [];
   for (const c of ranked) {
@@ -81,6 +74,26 @@ function compile(frame: Frame, policy: Policy, role: Row[], risk: Row[], address
   }
   const total = selected.reduce((sum,c)=>sum+c.score,0);
   return selected.map(c=>({candidate:c.candidate,sourceAddress:addresses.get(c.candidate)!,weight:Math.min((1-policy.cashBuffer)*c.score/total,c.ceiling),maxAllocation:c.ceiling}));
+}
+/** The compiler and diagnostic script share exactly the same candidate checks. Pair checks,
+ * capacity, Red-Team and the five-source freeze remain separate portfolio constraints. */
+export function candidateGate(m:Frame['candidates'][number]['metrics'],r:Row,k:Row,policy:Policy) {
+  const reasons:string[]=[];
+  if(m.historyDays<policy.minHistoryDays)reasons.push('history');
+  if(m.oosWindows<1||[m.oosSharpe,m.oosSortino,m.oosMaxDrawdown,m.crossWindowStability].some(v=>v===null))reasons.push('recent-window-evidence');
+  if(m.averageLeverage===null)reasons.push('missing-leverage');
+  if(m.medianHoldMinutes===null||m.medianHoldMinutes<60)reasons.push('holding-period');
+  if(m.executionFit===null||m.executionFit<policy.minExecutionFit)reasons.push('execution-fit');
+  if(m.executionCoverage===null||m.executionCoverage<=0)reasons.push('execution-coverage');
+  const confidence=Math.min(r.confidence,k.confidence);
+  if(confidence<policy.minConfidence)reasons.push('confidence');
+  if(r.reject>=policy.riskRejectThreshold)reasons.push('role-reject');
+  const decision=riskDecision(k,policy);
+  if(decision.status==='REJECT')reasons.push(`risk:${decision.bindingConstraint}`);
+  const hold=m.medianHoldMinutes??0,latency=hold<180?0.5:hold<360?0.75:1;
+  const score=r[`${policy.bucket.toLowerCase()}Fit`]*latency*confidence/100;
+  if(!(score>0))reasons.push('zero-score');
+  return {...decision,confidence,score,reasons};
 }
 /** Offline review orchestration. No signing, exchange calls, freeze mutation or mirror inference. */
 export async function runReview(inputFrame: Frame, inputPolicy: Policy, inputAddresses: ReadonlyMap<number,string>, nowMs: number, dependencies: Dependencies): Promise<Manifest> {

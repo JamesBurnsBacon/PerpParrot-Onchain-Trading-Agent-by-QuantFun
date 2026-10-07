@@ -34,11 +34,12 @@ export function positionsFromStates(states:{assetPositions:{position:{coin:strin
 }
 /** Measured frame fields per finalist (lower-case address), from the selection pipeline
  * (src/pipeline/evidence.ts). Absent fields keep Score's value or stay unknown (null). */
-export type MeasuredMetrics=Partial<Pick<Frame['candidates'][number]['metrics'],'averageLeverage'|'timeInMarket'|'medianHoldMinutes'|'oosWindows'|'oosSharpe'|'oosSortino'|'oosMaxDrawdown'|'crossWindowStability'|'executionCoverage'|'executionFit'|'concentration'|'liquidationDistance'>>;
+export type MeasuredMetrics=Partial<Pick<Frame['candidates'][number]['metrics'],'averageLeverage'|'timeInMarket'|'medianHoldMinutes'|'oosWindows'|'oosSharpe'|'oosSortino'|'oosMaxDrawdown'|'crossWindowStability'|'executionCoverage'|'executionFit'|'concentration'|'liquidationDistance'|'btcBeta'>>;
+export type AdditionalEvidence=Pick<Evidence['finalists'][number],'patterns'|'exposureByClass'|'measurement'>;
 /** Score finalists -> validated frame + evidence. Positions must be read for every kept finalist (by
  * lower-case address); a missing read is an error, never an empty book. `measured` and `overlap`
  * (today's shared exposure of two finalists) fill fields Score doesn't produce. */
-export function buildReviewInput(args:{score:ScoreFrame;inputs:ScoreInput[];positions:ReadonlyMap<string,LivePosition[]>;policy:Policy;asOfMs:number;ttlMs:number;measured?:ReadonlyMap<string,MeasuredMetrics>;overlap?:(a:string,b:string)=>number|null}):ReviewInput {
+export function buildReviewInput(args:{score:ScoreFrame;inputs:ScoreInput[];positions:ReadonlyMap<string,LivePosition[]>;policy:Policy;asOfMs:number;ttlMs:number;measured?:ReadonlyMap<string,MeasuredMetrics>;overlap?:(a:string,b:string)=>number|null;additional?:ReadonlyMap<string,AdditionalEvidence>}):ReviewInput {
   const {score,policy,asOfMs}=args;
   if(!Number.isSafeInteger(asOfMs)||!Number.isSafeInteger(args.ttlMs)||args.ttlMs<=0)throw new Error('invalid review clock');
   const inputs=new Map(args.inputs.map(input=>[input.address.toLowerCase(),input]));
@@ -58,18 +59,18 @@ export function buildReviewInput(args:{score:ScoreFrame;inputs:ScoreInput[];posi
   const candidates:Frame['candidates']=kept.map(({from,address},to)=>{
     const {kind,clones,metrics}=score.candidates[from]!;
     const measured=Object.fromEntries(Object.entries(args.measured?.get(address)??{}).filter(([,value])=>value!==undefined));
-    return {candidate:to,kind,clones:clones.map(address=>address.toLowerCase()),metrics:{...metrics,survivorshipQuality:'UNKNOWN',executionCoverage:null,executionFit:null,concentration:null,liquidationDistance:null,btcBeta:null,...measured}};
+    return {candidate:to,kind,clones:clones.map(address=>address.toLowerCase()),metrics:{...metrics,survivorshipQuality:'CURRENT_SNAPSHOT',executionCoverage:null,executionFit:null,concentration:null,liquidationDistance:null,btcBeta:null,...measured}};
   });
   const pairs:Frame['pairs']=score.pairs.filter(p=>index.has(p.a)&&index.has(p.b)).map(p=>{
     const [a,b]=[index.get(p.a)!,index.get(p.b)!].sort((x,y)=>x-y);
     return {a:a!,b:b!,correlation:p.correlation,currentExposureOverlap:args.overlap?.(kept[a!]!.address,kept[b!]!.address)??null,linkedSource:p.linkedSource};
   }).sort((x,y)=>x.a-y.a||x.b-y.b);
-  const finalists:Evidence['finalists']=kept.map(({curve,positions},to)=>{
+  const finalists:Evidence['finalists']=kept.map(({curve,positions,address},to)=>{
     const {kind,metrics}=candidates[to]!;
-    const row={candidate:to,kind,historyDays:metrics.historyDays,timeInMarket:metrics.timeInMarket,medianHoldMinutes:metrics.medianHoldMinutes,makerShare:metrics.makerShare,maxDrawdown:metrics.maxDrawdown,equityCurve:curve,positions,patterns:{increasesAfterLoss:null,repeatedRoundTrips:null,observedFills:null}};
+    const row={candidate:to,kind,historyDays:metrics.historyDays,timeInMarket:metrics.timeInMarket,medianHoldMinutes:metrics.medianHoldMinutes,makerShare:metrics.makerShare,maxDrawdown:metrics.maxDrawdown,equityCurve:curve,positions,patterns:{increasesAfterLoss:null,repeatedRoundTrips:null,observedFills:null},...args.additional?.get(address)};
     // Committee evidence caps a finalist (metrics + curve + positions + patterns) at 4 KB: thin the
     // curve to its minimum first, then drop the smallest positions.
-    const size=()=>byteLength({candidate:to,kind,metrics,equityCurve:row.equityCurve,positions:row.positions,patterns:row.patterns});
+    const size=()=>byteLength({candidate:to,kind,metrics,equityCurve:row.equityCurve,positions:row.positions,patterns:row.patterns,...(row.exposureByClass?{exposureByClass:row.exposureByClass}:{}),...(row.measurement?{measurement:row.measurement}:{})});
     for(let points=curve.length;size()>FINALIST_BYTES&&points>MIN_CURVE;)row.equityCurve=thin(curve,--points);
     while(size()>FINALIST_BYTES&&row.positions.length>0)row.positions=row.positions.slice(0,-1);
     return row;

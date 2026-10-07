@@ -15,6 +15,7 @@ import {
   ACTIVE, capsFrom, impliedTurnover, lossBreached, observe, passesHoldGate, planAdmissions, pnlAndEquity, reviewSeat, ROSTER, SEAT_REVIEW_HOURS,
   targetSeats, transition, type BenchEntry, type Seat, type SnapshotEntry, type Transition, type Verdict,
 } from "./roster";
+import {bitcoinBeta,exposureByClass,tradePatterns,type BtcCandle} from "./path-evidence";
 import { ENTER_OI_USD, fetchOpenInterest } from "../eligibility";
 import { PacedInfo, getJson } from "./hl";
 import { routingStats } from "./info-router";
@@ -23,11 +24,11 @@ import { checkContracts, nownodesCode, type CodeReader } from "./contract-check"
 import { overlapGuard, readPositionsBulk, type GuardSummary, type PositionReader } from "./overlap-pick";
 import { pickVaults } from "./vaults";
 import { parsePortfolio, scoreCandidates, toFrameCandidates, type ScoreInput, type ScoreResult } from "../score";
-import { buildReviewInput, positionsFromStates, type LivePosition } from "../../review/input.ts";
+import { buildReviewInput, positionsFromStates, type LivePosition, type AdditionalEvidence } from "../../review/input.ts";
 import { exposureOverlap, summarizeOverlap } from "../../review/overlap.ts";
 import { openAIPaperCommittee } from "../../review/models/openai-paper.ts";
 import { runCommitteeReview } from "../../review/committee/workflow.ts";
-import { MAX_SOURCES, type Assessment } from "../../review/workflow.ts";
+import { MAX_SOURCES, candidateGate, type Assessment } from "../../review/workflow.ts";
 import { commitment, policyCommitment } from "../../../shared/src/commitments.ts";
 import { validate } from "../../../shared/src/validate.ts";
 import type { Policy, Row } from "../../../shared/src/contracts.ts";
@@ -349,27 +350,37 @@ export class Pipeline {
     // and which markets the copy loop can trade.
     const eligible = new Set([...(await fetchOpenInterest())].filter(([, usd]) => usd >= ENTER_OI_USD).map(([asset]) => asset));
     const byInput = new Map(inputs.map((input) => [input.address.toLowerCase(), input]));
-    const measured = new Map<string, Measured>();
+    const measured = new Map<string, Measured & {btcBeta:number|null}>();
     const holds = new Map<string, HoldMeasures>();
     const liquidatedAt = new Map<string, number>();
+    const additional = new Map<string, AdditionalEvidence>();
+    const evidenceAt = this.now(), windowStart = evidenceAt - EVIDENCE_DAYS * 24 * HOUR;
+    // One benchmark read for the whole review. A missing benchmark is unknown, never beta zero.
+    const btc = await hl.post<BtcCandle[]>({type:"candleSnapshot",req:{coin:"BTC",interval:"1h",startTime:windowStart,endTime:evidenceAt}},20,f=>f.length)
+      .catch(()=>{log("BTC benchmark unavailable");return [] as BtcCandle[];});
     for (const address of score.addresses.map((a) => a.toLowerCase())) {
       const fills: HlFill[] = [];
-      let startTime = this.now() - EVIDENCE_DAYS * 24 * HOUR;
+      let startTime = windowStart, truncated = true;
       for (let page = 0; page < 5; page++) {
-        const rows = await hl.post<HlFill[]>({ type: "userFillsByTime", user: address, startTime, aggregateByTime: true }, 20, (f) => f.length);
+        const rows = await hl.post<HlFill[]>({ type: "userFillsByTime", user: address, startTime, endTime:evidenceAt, aggregateByTime: true }, 20, (f) => f.length);
         fills.push(...rows);
-        if (rows.length < FILLS_PAGE) break;
+        if (rows.length < FILLS_PAGE) {truncated=false;break;}
         startTime = rows[rows.length - 1]!.time + 1;
       }
-      const m = measure({ input: byInput.get(address)!, fills, positions: positions.get(address) ?? [], eligible, nowMs: this.now() });
-      measured.set(address, m);
-      holds.set(address, holdMeasures(fills, byInput.get(address)!.accountValue, m.averageLeverage, this.now()));
+      const input = byInput.get(address)!, book = positions.get(address)!;
+      const beta = bitcoinBeta(input, btc, evidenceAt);
+      const m = measure({ input, fills, positions: book, eligible, nowMs: evidenceAt });
+      measured.set(address, { ...m, btcBeta: beta.value });
+      holds.set(address, holdMeasures(fills, input.accountValue, m.averageLeverage, evidenceAt));
       const liquidations = fills.filter((f) => f.liquidation?.liquidatedUser?.toLowerCase() === address).map((f) => f.time);
       if (liquidations.length) liquidatedAt.set(address, Math.max(...liquidations));
+      additional.set(address,{patterns:tradePatterns(fills,windowStart,evidenceAt),exposureByClass:exposureByClass(book),
+        measurement:{version:"path-beta-v1",fromMs:windowStart,toMs:evidenceAt,fillHistory:truncated?"TRUNCATED":"API_BOUNDED",btcDailyPairs:beta.pairs,
+          exposureScope:"core+xyz current positions; all before detail cap"}});
     }
     const pairOverlap = (a: string, b: string) => exposureOverlap(positions.get(a) ?? [], positions.get(b) ?? []);
-    await sql`update selection_runs set finalists = coalesce(finalists, '{}'::jsonb) || ${JSON.stringify({ measured: Object.fromEntries(measured), holds: Object.fromEntries(holds) })}::text::jsonb where id = ${id}`;
-    const built = buildReviewInput({ score, inputs, positions, policy, asOfMs: this.now(), ttlMs: policy.maxFrameAgeMs, measured, overlap: pairOverlap });
+    await sql`update selection_runs set finalists = coalesce(finalists, '{}'::jsonb) || ${JSON.stringify({ measured: Object.fromEntries(measured), holds: Object.fromEntries(holds), additional: Object.fromEntries(additional) })}::text::jsonb where id = ${id}`;
+    const built = buildReviewInput({ score, inputs, positions, policy, asOfMs: this.now(), ttlMs: policy.maxFrameAgeMs, measured, overlap: pairOverlap, additional });
 
     // Gross leverage if every chosen source keeps today's book (README §4.6 policy check).
     const assess = (sources: readonly { sourceAddress: string; weight: number }[]): Assessment => {
@@ -404,9 +415,12 @@ export class Pipeline {
     const receipt = await runCommitteeReview(built.frame, policy, built.addresses, built.evidence, this.now(), deps);
     const { manifest } = receipt;
     const field = (stage: string, candidate: number, name: string) => stageRows[stage]?.[0]?.find((r) => r.candidate === candidate)?.[name] ?? null;
-    const summary = built.frame.candidates.map(({ candidate }) => ({
+    const summary = built.frame.candidates.map(({ candidate, metrics }) => ({
       candidate,
       address: built.addresses.get(candidate),
+      kind: built.frame.candidates[candidate]!.kind,
+      metrics,
+      gate: stageRows.role?.[0]&&stageRows.risk?.[0] ? candidateGate(metrics,stageRows.role[0].find(r=>r.candidate===candidate)!,stageRows.risk[0].find(r=>r.candidate===candidate)!,policy):null,
       aggressiveFit: field("role", candidate, "aggressiveFit"),
       reject: field("role", candidate, "reject"),
       leverageRisk: field("risk", candidate, "leverageRisk"),
