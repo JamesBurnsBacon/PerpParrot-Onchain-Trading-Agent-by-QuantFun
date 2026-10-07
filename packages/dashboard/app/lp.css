@@ -334,7 +334,7 @@
 .lp .exposure-flow-weight { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; }
 .lp .exposure-flow-target { position: absolute; transform: translateY(-50%); display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; font-size: 12px; line-height: 1.4; }
 .lp .exposure-flow-asset { min-width: 0; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.lp .exposure-flow-target strong { flex: none; font-size: 13px; white-space: nowrap; }
+.lp .exposure-flow-target strong { min-width: 0; font-size: 13px; overflow-wrap: anywhere; }
 .lp .exposure-flow-delta { flex-basis: 100%; color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
 .lp .exposure-flow-key { display: flex; flex-wrap: wrap; gap: 6px 16px; color: var(--ink-2); font-size: 11px; }
 .lp .exposure-flow-key span { display: inline-flex; align-items: center; gap: 6px; }

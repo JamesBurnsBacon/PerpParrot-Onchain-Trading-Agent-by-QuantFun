@@ -54,14 +54,20 @@ export function bandWidth(fraction: number, maxContribution: number, maxWidth = 
   return Math.max(1.4, Math.min(1, Math.abs(fraction) / maxContribution) * maxWidth);
 }
 
-// Targets read as a side and a size ("Short 42.7%"), not as a signed number. A size that rounds to 0.0 is "Flat".
+// Fractions closer to zero than this are float noise from subtracting contributions, not a position.
+const NOISE = 1e-9;
+
+// Targets read as a side and a size ("Short 42.7%"), not as a signed number. Only an exact zero is "Flat";
+// a real position too small for one decimal reads "<0.1%".
 export function sideLabel(fraction: number): string {
+  if (Math.abs(fraction) < NOISE) return "Flat";
   const size = (Math.abs(fraction) * 100).toFixed(1);
-  return size === "0.0" ? "Flat" : `${fraction > 0 ? "Long" : "Short"} ${size}%`;
+  return `${fraction > 0 ? "Long" : "Short"} ${size === "0.0" ? "<0.1" : size}%`;
 }
 
 // What muting changed, as a move toward long or short.
 export function shiftLabel(delta: number): string {
+  if (Math.abs(delta) < NOISE) return "no change";
   const size = (Math.abs(delta) * 100).toFixed(1);
-  return size === "0.0" ? "no change" : `${size} pp more ${delta > 0 ? "long" : "short"}`;
+  return `${size === "0.0" ? "<0.1" : size} pp more ${delta > 0 ? "long" : "short"}`;
 }

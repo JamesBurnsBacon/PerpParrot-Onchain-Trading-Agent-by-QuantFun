@@ -112,14 +112,16 @@ describe("exposure flow", () => {
     assert.equal(sideLabel(-0.251), "Short 25.1%");
     assert.equal(sideLabel(0), "Flat");
     assert.equal(sideLabel(-0), "Flat");
-    assert.equal(sideLabel(-0.00001), "Flat");
-    assert.equal(sideLabel(0.00049), "Flat");
+    assert.equal(sideLabel(1e-12), "Flat"); // float noise
+    assert.equal(sideLabel(-0.00001), "Short <0.1%"); // a real, tiny position is not hidden
+    assert.equal(sideLabel(0.00049), "Long <0.1%");
   });
 
   test("a mute reads as a move toward long or short", () => {
     assert.equal(shiftLabel(0.141), "14.1 pp more long");
     assert.equal(shiftLabel(-0.141), "14.1 pp more short");
     assert.equal(shiftLabel(0), "no change");
-    assert.equal(shiftLabel(-0.00001), "no change");
+    assert.equal(shiftLabel(1e-12), "no change");
+    assert.equal(shiftLabel(-0.00001), "<0.1 pp more short");
   });
 });
