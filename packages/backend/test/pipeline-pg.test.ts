@@ -151,10 +151,10 @@ describe.skipIf(!url)("Pipeline on Postgres", async () => {
     expect(picked.length).toBeGreaterThan(0);
     expect(picked).not.toContain([...highFrequency][0]);
     expect(run.finalists.highFrequency).toBe(1);
-    // A failed run is retried; a rejected one with the same 25 isn't reviewed again within 12 h...
+    // A failed run is retried; a rejected one with the same 40 isn't reviewed again within 12 h...
     await sql`update selection_runs set status = 'rejected' where id = ${first.id!}`;
     expect(await pipeline.select()).toEqual({ status: "unchanged" });
-    // A fresh start's request reviews the unchanged 25 once more (ROSTER.md §4.6), then not again.
+    // A fresh start's request reviews the unchanged 40 once more (ROSTER.md §4.6), then not again.
     await sql`update pipeline_controls set fresh_start_requested_at = ${new Date(NOW - 60_000).toISOString()} where id = 1`;
     expect((await pipeline.select()).status).toBe("failed"); // reviewed (no OpenAI key here)
     const [control] = await sql`select fresh_start_review_at from pipeline_controls where id = 1`;

@@ -263,7 +263,7 @@ export class Pipeline {
     const fresh = last && (last.status === "benched" || last.status === "rejected") &&
       this.now() - new Date(last.started_at as string | Date).getTime() < ROSTER.approvalFreshHours * HOUR;
     // A requested fresh start (ROSTER.md §4.6) reviews the current picks once more, so the bench
-    // gains approvals even when the 25 haven't changed.
+    // gains approvals even when the 40 haven't changed.
     const control = await this.freshStartControl();
     const freshStartReview = control?.pending === true && (control.reviewedAt === null || control.reviewedAt < control.requestedAt);
     if (!force && !freshStartReview && fresh && sameAddresses(lastPicks, result.finalists)) return { status: "unchanged" };
