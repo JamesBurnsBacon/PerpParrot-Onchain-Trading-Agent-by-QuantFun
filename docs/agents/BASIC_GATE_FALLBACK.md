@@ -54,6 +54,8 @@ const approved =
 2. **Record the path.** Store which path produced the bench (`review.gate`: `strict` / `basic` /
    `none`) and the manifest reason on the run, and show it on the dashboard's pipeline panel, so a
    lenient bench is visible.
+   A seat re-review with `gate: none` is an incomplete review, not a lost-approval
+   verdict: preserve the seats and retry after the failed-review cooldown.
 3. **Optional:** a policy violation is often a single seat or weight over a limit. Consider asking
    the committee to repair the portfolio once (the reason is in the receipt) before giving up.
 
