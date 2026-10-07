@@ -4,11 +4,14 @@
 //            (every 5 min, within a weight budget)
 //   select:  every 10 min: Score qualifies ~250 once the scan is refreshed, picks 25 from them
 //            (high-frequency traders left out) → AI review (Role, Risk, Red-Team) when the 25
-//            change → freeze → activate when the sources change
+//            change → the bench: the wallets the AI approves, with their hold measures
+//   roster:  every 10 min (docs/ingest/ROSTER.md): seats with a minimum tenure, released at exits,
+//            filled from the bench → freeze → activate when the seats change
 // The active configuration is what the 10-minute mirror loop copies from its next run on.
 import type { SQL } from "bun";
-import { FILLS_PAGE, fillStats, isHighFrequency, keepsActive, pickLeaderboard, sameAddresses, scoringWindows, type Fill, type LeaderboardRow, type Tracked } from "./derive";
-import { EVIDENCE_DAYS, measure, type HlFill, type Measured } from "./evidence";
+import { FILLS_PAGE, fillStats, isHighFrequency, pickLeaderboard, sameAddresses, scoringWindows, type Fill, type LeaderboardRow, type Tracked } from "./derive";
+import { EVIDENCE_DAYS, holdMeasures, measure, type HlFill, type HoldMeasures, type Measured } from "./evidence";
+import { ACTIVE, impliedTurnover, lossBreached, observe, passesHoldGate, planAdmissions, pnlAndEquity, ROSTER, transition, type BenchEntry, type Seat, type SnapshotEntry, type Transition } from "./roster";
 import { ENTER_OI_USD, fetchOpenInterest } from "../eligibility";
 import { PacedInfo, getJson } from "./hl";
 import { routingStats } from "./info-router";
@@ -20,12 +23,11 @@ import { exposureOverlap, summarizeOverlap } from "../../review/overlap.ts";
 import { openAIPaperCommittee } from "../../review/models/openai-paper.ts";
 import { runCommitteeReview } from "../../review/committee/workflow.ts";
 import { MAX_SOURCES, type Assessment } from "../../review/workflow.ts";
-import { commitment } from "../../../shared/src/commitments.ts";
-import { proposeFreeze } from "../../../shared/src/frozen.ts";
+import { commitment, policyCommitment } from "../../../shared/src/commitments.ts";
 import { validate } from "../../../shared/src/validate.ts";
 import type { Policy, Row } from "../../../shared/src/contracts.ts";
 import { checkFrozenConfiguration, type FrozenConfiguration } from "../../../shared/frozen";
-import { ELIGIBLE_DEXES } from "../../../shared/snapshot";
+import { ELIGIBLE_DEXES, type PositionsSnapshot } from "../../../shared/snapshot";
 import { keccakUtf8 } from "../snapshot";
 
 const HOUR = 3_600_000;
@@ -191,7 +193,7 @@ export class Pipeline {
     const [active] = await sql`select hash, activated_at, configuration -> 'sources' as sources from configurations where status = 'active'`;
     // The latest run's finalists, funnel and per-candidate AI verdicts (dashboard).
     const [latest] = await sql`select id, finalists, review -> 'summary' as summary from selection_runs order by started_at desc limit 1`;
-    return { accounts: counts, selections: runs, active: active ?? null, latest: latest ?? null, routing: routingStats() };
+    return { accounts: counts, selections: runs, active: active ?? null, latest: latest ?? null, roster: await this.rosterStatus(), routing: routingStats() };
   }
 
   // Every 10 minutes: qualify when due, then pick 25 and review them if they changed. `force`
@@ -317,6 +319,7 @@ export class Pipeline {
     const eligible = new Set([...(await fetchOpenInterest())].filter(([, usd]) => usd >= ENTER_OI_USD).map(([asset]) => asset));
     const byInput = new Map(inputs.map((input) => [input.address.toLowerCase(), input]));
     const measured = new Map<string, Measured>();
+    const holds = new Map<string, HoldMeasures>();
     for (const address of score.addresses.map((a) => a.toLowerCase())) {
       const fills: HlFill[] = [];
       let startTime = this.now() - EVIDENCE_DAYS * 24 * HOUR;
@@ -326,10 +329,12 @@ export class Pipeline {
         if (rows.length < FILLS_PAGE) break;
         startTime = rows[rows.length - 1]!.time + 1;
       }
-      measured.set(address, measure({ input: byInput.get(address)!, fills, positions: positions.get(address) ?? [], eligible, nowMs: this.now() }));
+      const m = measure({ input: byInput.get(address)!, fills, positions: positions.get(address) ?? [], eligible, nowMs: this.now() });
+      measured.set(address, m);
+      holds.set(address, holdMeasures(fills, byInput.get(address)!.accountValue, m.averageLeverage, this.now()));
     }
     const pairOverlap = (a: string, b: string) => exposureOverlap(positions.get(a) ?? [], positions.get(b) ?? []);
-    await sql`update selection_runs set finalists = coalesce(finalists, '{}'::jsonb) || ${JSON.stringify({ measured: Object.fromEntries(measured) })}::text::jsonb where id = ${id}`;
+    await sql`update selection_runs set finalists = coalesce(finalists, '{}'::jsonb) || ${JSON.stringify({ measured: Object.fromEntries(measured), holds: Object.fromEntries(holds) })}::text::jsonb where id = ${id}`;
     const built = buildReviewInput({ score, inputs, positions, policy, asOfMs: this.now(), ttlMs: policy.maxFrameAgeMs, measured, overlap: pairOverlap });
 
     // Gross leverage if every chosen source keeps today's book (README §4.6 policy check).
@@ -381,56 +386,213 @@ export class Pipeline {
       audit,
     };
     await sql`update selection_runs set review = ${JSON.stringify(review)}::text::jsonb where id = ${id}`;
-    let payload: Omit<FrozenConfiguration, "configurationHash">;
-    if (manifest.status === "VALID") {
-      // Freeze for our account (as freezePaperSession: bound to the review receipt).
-      const { configurationHash: _, ...proposed } = proposeFreeze(manifest, this.o.account.toLowerCase(), 999, this.now());
-      payload = { ...proposed, reviewHash: receipt.receiptHash } as unknown as typeof payload;
-    } else {
-      const basic = this.o.gate === "strict" ? [] : basicSources(built.frame.candidates.map((c) => c.candidate), stageRows.role?.[0] ?? [], stageRows.risk?.[0] ?? [], policy, built.addresses, assess);
-      if (basic.length < Math.max(5, policy.minExecutableTargets)) { // a freeze needs 5–25 sources
-        await sql`update selection_runs set status = 'rejected', finished_at = now() where id = ${id}`;
-        log("selection rejected", { id, reason: manifest.reason, basicSources: basic.length });
-        return { status: "rejected", reason: `${manifest.reason}; basic gate kept ${basic.length}` };
+    // The bench (ROSTER.md §4.1): the wallets the AI approves, with their fit and hold measures. The
+    // roster step seats them into open seats; nothing is activated here.
+    const fitKey = `${policy.bucket.toLowerCase()}Fit`;
+    const approved =
+      manifest.status === "VALID"
+        ? manifest.sources.map((s) => ({ sourceAddress: s.sourceAddress, fit: Number(field("role", s.candidate, fitKey) ?? 0) }))
+        : this.o.gate === "strict"
+          ? []
+          : approvedCandidates(built.frame.candidates.map((c) => c.candidate), stageRows.role?.[0] ?? [], stageRows.risk?.[0] ?? [], policy, built.addresses);
+    const bench: BenchEntry[] = approved.map((a) => {
+      const address = a.sourceAddress.toLowerCase();
+      const h = holds.get(address) ?? { copyableShare: null, closedPositions: 0, turnoverPerDay: null, tradedPerDayOverEquity: null };
+      return { address, fit: a.fit, approvedAt: this.now(), ...h, passesHold: passesHoldGate(h) };
+    });
+    const status = bench.length ? "benched" : "rejected";
+    await sql`update selection_runs set review = review || ${JSON.stringify({ gate: manifest.status === "VALID" ? "strict" : this.o.gate ?? "basic", bench })}::text::jsonb,
+      status = ${status}, finished_at = now() where id = ${id}`;
+    const copyable = bench.filter((b) => b.passesHold).length;
+    log("selection benched", { id, approved: bench.length, copyable });
+    return { status, reason: `${copyable} of ${bench.length} approved wallets pass the hold gate` };
+  }
+
+  // Every 10 minutes (ROSTER.md §7): observe the latest snapshot, apply the 50% loss rule and the
+  // seat lifecycle, fill open seats from the bench, then freeze the seats and activate them if
+  // they changed. Seeds the roster from the active configuration the first time.
+  async roster(): Promise<{ status: string; seats: number; changes: string[]; reason?: string }> {
+    const { sql, log, policy } = this.o;
+    const now = this.now();
+    const at = new Date(now).toISOString();
+    const changes: string[] = [];
+    const event = async (address: string, kind: string, detail: Record<string, unknown> = {}) => {
+      await sql`insert into roster_events (at, address, kind, detail) values (${at}, ${address}, ${kind}, ${JSON.stringify(detail)}::text::jsonb)`;
+      changes.push(`${kind} ${address}${typeof detail.reason === "string" ? ` (${detail.reason})` : ""}`);
+    };
+
+    // Seed: the active configuration's wallets, seated (they were admitted by earlier selections).
+    const [{ ever }] = await sql`select count(*)::int as ever from roster_seats`;
+    if (ever === 0) {
+      const configuration = await activeConfiguration(sql);
+      for (const source of configuration?.sources ?? []) {
+        await sql`insert into roster_seats (address, state, weight_units, admitted_at, min_tenure_until)
+          values (${source.sourceAddress.toLowerCase()}, 'seated', ${source.weightUnits}, ${at}, ${at})`;
+        await event(source.sourceAddress.toLowerCase(), "seeded", { weightUnits: source.weightUnits, configuration: configuration!.configurationHash });
       }
-      await sql`update selection_runs set review = review || ${JSON.stringify({ gate: "basic", basicSources: basic })}::text::jsonb where id = ${id}`;
-      payload = {
-        schemaVersion: "1.0.0",
-        account: this.o.account.toLowerCase(),
-        chainId: 999,
-        frozenAtMs: this.now(),
-        reviewHash: receipt.receiptHash,
-        policy: structuredClone(policy) as unknown as FrozenConfiguration["policy"],
-        policyHash: manifest.policyHash,
-        sources: basic
-          .map((b) => ({ candidate: b.candidate, sourceAddress: b.sourceAddress.toLowerCase(), weightUnits: Math.floor(b.weight * 1e6), ceilingUnits: Math.floor(policy.maxSourceWeight * 1e6) }))
-          .sort((a, b) => a.candidate - b.candidate), // the freeze checks candidate order
-        cashUnits: 0,
-      };
-      payload.cashUnits = 1e6 - payload.sources.reduce((sum, s) => sum + s.weightUnits, 0);
     }
+
+    // 1. Observe the latest stored snapshot (flat tracking; winding-down caps).
+    let seats = await this.activeSeats();
+    const [snap] = await sql`select run_at, body from run_snapshots order by run_at desc limit 1`;
+    if (snap) {
+      const entries = snapshotEntries(JSON.parse(snap.body as string) as PositionsSnapshot);
+      seats = seats.map((seat) => observe(seat, Number(snap.run_at), entries.get(seat.address)));
+    }
+
+    // 2. The one immediate removal: a 50% trading loss since admission (PnL, so withdrawals don't
+    // count). A seat without a baseline gets one now. A failed read skips the check this time.
+    const hl = this.info(900);
+    const decided = new Map<string, Transition & { detail?: Record<string, unknown> }>();
+    for (const seat of seats) {
+      let reading: ReturnType<typeof pnlAndEquity> = null;
+      try {
+        reading = pnlAndEquity(await hl.post<unknown>({ type: "portfolio", user: seat.address }));
+      } catch (e) {
+        log("roster: portfolio read failed", { address: seat.address, error: (e as Error).message });
+      }
+      if (!reading) continue;
+      if (seat.pnlAtAdmission === null || seat.equityAtAdmission === null) {
+        seat.pnlAtAdmission = reading.pnl;
+        seat.equityAtAdmission = reading.equity;
+      } else if (lossBreached(seat, reading.pnl)) {
+        decided.set(seat.address, { to: "removed", reason: "trading loss", detail: { pnlAtAdmission: seat.pnlAtAdmission, pnlNow: reading.pnl, equityAtAdmission: seat.equityAtAdmission } });
+      }
+    }
+
+    // 3. Lifecycle: tenure ends, idle and exit releases, wind-down ends.
+    for (const seat of seats) {
+      const next = decided.get(seat.address) ?? transition(seat, now);
+      if (next) {
+        seat.state = next.to;
+        await event(seat.address, next.to, { reason: next.reason, ...((next as { detail?: Record<string, unknown> }).detail ?? {}) });
+      }
+      const ended = seat.state === "released" || seat.state === "removed";
+      await sql`update roster_seats set state = ${seat.state}, flat_since = ${seat.flatSince === null ? null : new Date(seat.flatSince).toISOString()},
+          flat_runs = ${seat.flatRuns}, last_run_at = ${seat.lastRunAt}, equity_at_admission = ${seat.equityAtAdmission},
+          pnl_at_admission = ${seat.pnlAtAdmission}, caps = ${seat.caps === null ? null : JSON.stringify(seat.caps)}::text::jsonb,
+          released_at = ${ended ? at : null}, release_reason = ${ended ? (next?.reason ?? null) : null}
+        where address = ${seat.address} and state in ${sql([...ACTIVE])}`;
+    }
+
+    // 4. Fill open seats from the fresh bench, within the pace limits.
+    const active = seats.filter((s) => ACTIVE.includes(s.state));
+    const [latest] = await sql`select id, review -> 'bench' as bench from selection_runs where status = 'benched' order by started_at desc limit 1`;
+    const bench = ((latest?.bench ?? []) as (BenchEntry & { approvedAt: number })[]).map((b) => ({ ...b, approvedAt: Number(b.approvedAt) }));
+    const cooling = new Set<string>(
+      (await sql`select address from roster_seats where released_at > ${new Date(now - ROSTER.cooldownHours * HOUR).toISOString()}`).map((r: { address: string }) => r.address),
+    );
+    const [counts] = await sql`select count(*) filter (where at > ${new Date(now - HOUR).toISOString()})::int as hour, count(*)::int as day
+      from roster_events where kind = 'admitted' and at > ${new Date(now - 24 * HOUR).toISOString()}`;
+    const admissions = planAdmissions({
+      active, bench, cooling, admittedLastHour: counts.hour, admittedLastDay: counts.day, nowMs: now,
+      cashBuffer: policy.cashBuffer, maxSourceWeight: policy.maxSourceWeight,
+    });
+    for (const a of admissions) {
+      let reading: ReturnType<typeof pnlAndEquity> = null;
+      try {
+        reading = pnlAndEquity(await hl.post<unknown>({ type: "portfolio", user: a.entry.address }));
+      } catch {
+        // The baseline is taken on the next roster step.
+      }
+      await sql`insert into roster_seats (address, state, weight_units, fit, turnover_per_day, traded_per_day_over_equity, admitted_at,
+          min_tenure_until, admitted_by, equity_at_admission, pnl_at_admission)
+        values (${a.entry.address}, 'probation', ${a.weightUnits}, ${a.entry.fit}, ${a.entry.turnoverPerDay}, ${a.entry.tradedPerDayOverEquity}, ${at},
+          ${new Date(a.minTenureUntil).toISOString()}, ${latest.id}, ${reading?.equity ?? null}, ${reading?.pnl ?? null})`;
+      await event(a.entry.address, "admitted", { reason: "open seat", weightUnits: a.weightUnits, fit: a.entry.fit, copyableShare: a.entry.copyableShare,
+        turnoverPerDay: a.entry.turnoverPerDay, tenureUntil: new Date(a.minTenureUntil).toISOString() });
+    }
+
+    // 5. Freeze the seats; activate when they differ from the active configuration.
+    const seated = await this.activeSeats();
+    if (seated.length < ROSTER.minSeats) {
+      log("roster below the freeze's minimum", { seats: seated.length, changes });
+      return { status: "below minimum", seats: seated.length, changes, reason: `${seated.length} seats; a configuration needs ${ROSTER.minSeats}` };
+    }
+    const ceilingUnits = Math.floor(policy.maxSourceWeight * 1e6);
+    const sources = seated
+      .map((s) => ({ sourceAddress: s.address, weightUnits: Math.min(s.weightUnits, ceilingUnits) }))
+      .sort((a, b) => (a.sourceAddress < b.sourceAddress ? -1 : 1))
+      .map((s, candidate) => ({ candidate, ...s, ceilingUnits }));
+    const configurationNow = await activeConfiguration(sql);
+    const unchanged =
+      configurationNow?.sources.length === sources.length &&
+      sources.every((s) => configurationNow.sources.some((c) => c.sourceAddress.toLowerCase() === s.sourceAddress && c.weightUnits === s.weightUnits));
+    if (unchanged) {
+      if (changes.length) log("roster changed, configuration kept", { changes });
+      return { status: "kept", seats: seated.length, changes };
+    }
+    const [review] = await sql`select review ->> 'receiptHash' as receipt from selection_runs where status = 'benched' order by started_at desc limit 1`;
+    const payload: Omit<FrozenConfiguration, "configurationHash"> = {
+      schemaVersion: "1.0.0",
+      account: this.o.account.toLowerCase(),
+      chainId: 999,
+      frozenAtMs: now,
+      reviewHash: (review?.receipt as string | undefined) ?? commitment("perpparrot:roster:v1", sources),
+      policy: structuredClone(policy) as unknown as FrozenConfiguration["policy"],
+      policyHash: policyCommitment(policy),
+      sources,
+      cashUnits: 1e6 - sources.reduce((sum, s) => sum + s.weightUnits, 0),
+    } as Omit<FrozenConfiguration, "configurationHash">;
     const configuration = { ...payload, configurationHash: commitment("perpparrot:frozen:v1", payload) } as FrozenConfiguration;
-    checkFrozenConfiguration(keccakUtf8, configuration, configuration.configurationHash, this.now());
-    // Same wallets as the active configuration and no weight moved by more than 5 points: keep it,
-    // so the executor and paper books don't see a new configuration for every small re-weighting.
-    const [active] = await sql`select configuration -> 'sources' as sources from configurations where status = 'active'`;
-    const activeSources = (active?.sources ?? []) as { sourceAddress: string; weightUnits: number }[];
-    if (active && keepsActive(activeSources, configuration.sources)) {
-      await sql`update selection_runs set status = 'kept', finished_at = now() where id = ${id}`;
-      log("configuration kept", { id, sources: activeSources.length });
-      return { status: "kept" };
-    }
+    checkFrozenConfiguration(keccakUtf8, configuration, configuration.configurationHash, now);
     await sql.begin(async (tx) => {
       await tx`update configurations set status = 'retired' where status = 'active'`;
       await tx`insert into configurations (hash, configuration, status, selection_id, activated_at)
-        values (${configuration.configurationHash}, ${JSON.stringify(configuration)}::text::jsonb, 'active', ${id}, now())
+        values (${configuration.configurationHash}, ${JSON.stringify(configuration)}::text::jsonb, 'active', ${latest?.id ?? null}, now())
         on conflict (hash) do update set status = 'active', activated_at = now()`;
-      await tx`update selection_runs set status = 'activated', configuration_hash = ${configuration.configurationHash}, finished_at = now() where id = ${id}`;
     });
-    log("configuration activated", { id, hash: configuration.configurationHash, sources: configuration.sources.length });
-    return { status: "activated", reason: configuration.configurationHash };
+    log("roster activated", { hash: configuration.configurationHash, seats: seated.length, changes });
+    return { status: "activated", seats: seated.length, changes, reason: configuration.configurationHash };
+  }
+
+  private async activeSeats(): Promise<Seat[]> {
+    const rows = await this.o.sql`select * from roster_seats where state in ${this.o.sql([...ACTIVE])} order by admitted_at, address`;
+    return rows.map(seatFromRow);
+  }
+
+  // For /pipeline: the seats, recent roster events and the roster's implied turnover (monitored only).
+  private async rosterStatus() {
+    const { sql } = this.o;
+    try {
+      const seats = await this.activeSeats();
+      const events = await sql`select at, address, kind, detail from roster_events order by at desc, id desc limit 30`;
+      return { seats, events, impliedTurnover: impliedTurnover(seats) };
+    } catch {
+      return null; // the roster migration hasn't run
+    }
   }
 }
+
+const iso = (value: unknown): number | null => (value === null || value === undefined ? null : new Date(value as string | Date).getTime());
+const num = (value: unknown): number | null => (value === null || value === undefined ? null : Number(value));
+
+const seatFromRow = (r: Record<string, unknown>): Seat => ({
+  address: r.address as string,
+  state: r.state as Seat["state"],
+  weightUnits: Number(r.weight_units),
+  fit: num(r.fit),
+  turnoverPerDay: num(r.turnover_per_day),
+  tradedPerDayOverEquity: num(r.traded_per_day_over_equity),
+  admittedAt: iso(r.admitted_at)!,
+  minTenureUntil: iso(r.min_tenure_until)!,
+  flatSince: iso(r.flat_since),
+  flatRuns: Number(r.flat_runs),
+  lastRunAt: num(r.last_run_at),
+  equityAtAdmission: num(r.equity_at_admission),
+  pnlAtAdmission: num(r.pnl_at_admission),
+  windDownUntil: iso(r.wind_down_until),
+  caps: (r.caps as Record<string, number> | null) ?? null,
+});
+
+// A snapshot's sources as the roster reads them: equity and signed notional per perp, in USD.
+export const snapshotEntries = (snapshot: PositionsSnapshot): Map<string, SnapshotEntry> =>
+  new Map(
+    snapshot.sources.map((s) => [
+      s.address.toLowerCase(),
+      { equity: Number(s.equityE6) / 1e6, positions: s.positions.map((p) => ({ asset: p.asset, notional: Number(p.notionalE6) / 1e6 })) },
+    ]),
+  );
 
 // The active configuration, if the pipeline has activated one.
 export const activeConfiguration = async (sql: SQL): Promise<FrozenConfiguration | undefined> => {
@@ -453,16 +615,17 @@ const RISKS = ["drawdownRisk", "leverageRisk", "concentrationRisk", "pathRisk", 
 // Risk score above the policy's reject threshold, weight them by the Role model's fit
 // for the bucket, cap each at maxSourceWeight, keep the cash buffer, and scale down to the
 // policy's gross leverage. At most MAX_SOURCES (15) sources.
-export const basicSources = (
+// The finalists the AI approves (the basic gate's filter, and the roster's bench): not rejected by the
+// Role model, no Risk score above the reject threshold, positive fit for the bucket. Best fit first.
+export const approvedCandidates = (
   candidates: number[],
   role: Row[],
   risk: Row[],
   policy: Policy,
   addresses: ReadonlyMap<number, string>,
-  assess: (sources: { sourceAddress: string; weight: number }[]) => Assessment,
-): { candidate: number; sourceAddress: string; weight: number; fit: number }[] => {
+): { candidate: number; sourceAddress: string; fit: number }[] => {
   const fitKey = `${policy.bucket.toLowerCase()}Fit`;
-  const kept = candidates
+  return candidates
     .flatMap((candidate) => {
       const r = role.find((row) => row.candidate === candidate);
       const k = risk.find((row) => row.candidate === candidate);
@@ -471,8 +634,18 @@ export const basicSources = (
       const fit = Number(r[fitKey]);
       return fit > 0 && addresses.has(candidate) ? [{ candidate, sourceAddress: addresses.get(candidate)!, fit }] : [];
     })
-    .sort((a, b) => b.fit - a.fit || a.candidate - b.candidate)
-    .slice(0, MAX_SOURCES);
+    .sort((a, b) => b.fit - a.fit || a.candidate - b.candidate);
+};
+
+export const basicSources = (
+  candidates: number[],
+  role: Row[],
+  risk: Row[],
+  policy: Policy,
+  addresses: ReadonlyMap<number, string>,
+  assess: (sources: { sourceAddress: string; weight: number }[]) => Assessment,
+): { candidate: number; sourceAddress: string; weight: number; fit: number }[] => {
+  const kept = approvedCandidates(candidates, role, risk, policy, addresses).slice(0, MAX_SOURCES);
   const total = kept.reduce((sum, c) => sum + c.fit, 0);
   let sources = kept.map((c) => ({ ...c, weight: Math.min(((1 - policy.cashBuffer) * c.fit) / total, policy.maxSourceWeight) }));
   const { grossLeverage } = assess(sources);

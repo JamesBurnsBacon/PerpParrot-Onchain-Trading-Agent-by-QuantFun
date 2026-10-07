@@ -152,9 +152,9 @@ const server = Bun.serve({
       }
     }
     // The selection pipeline: Vercel Cron (vercel.json), or an operator with ADMIN_TOKEN
-    // (POST /admin/pipeline/scan|refresh|select; an operator's select qualifies on partial data and
-    // reviews an unchanged pick).
-    const step = /^\/(?:cron|admin)\/pipeline\/(scan|refresh|select)$/.exec(pathname);
+    // (POST /admin/pipeline/scan|refresh|select|roster; an operator's select qualifies on partial data
+    // and reviews an unchanged pick).
+    const step = /^\/(?:cron|admin)\/pipeline\/(scan|refresh|select|roster)$/.exec(pathname);
     if (step && pipeline) {
       const admin = req.method === "POST" && pathname.startsWith("/admin/");
       if (admin ? !env.ADMIN_TOKEN || req.headers.get("authorization") !== `Bearer ${env.ADMIN_TOKEN}` : req.method !== "GET" || !cronAuthorized(req))
@@ -164,6 +164,7 @@ const server = Bun.serve({
         const result =
           step[1] === "scan" ? await pipeline.scan()
           : step[1] === "refresh" ? await pipeline.refresh(started + 240_000)
+          : step[1] === "roster" ? await pipeline.roster()
           : await pipeline.select(admin);
         return Response.json(result);
       } catch (e) {

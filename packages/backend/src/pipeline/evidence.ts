@@ -206,6 +206,54 @@ export const executionCoverage = (fills: HlFill[], positions: LivePosition[], el
   return rows.reduce((s, [coin, n]) => s + (eligible.has(coin) && Number.isFinite(n) ? n : 0), 0) / total;
 };
 
+// Hold time as the roster uses it (docs/ingest/ROSTER.md §5). Kept apart from `Measured`, which
+// feeds the review frame field by field.
+export const COPYABLE_HORIZON_MINUTES = 90; // owner: a hold at least this long is copyable
+
+export type HoldMeasures = {
+  // Share of peak notional in fully closed positions held ≥ COPYABLE_HORIZON_MINUTES (null: none closed).
+  copyableShare: number | null;
+  closedPositions: number;
+  // Traded notional per day ÷ average gross notional: how often the book turns over (null: unknown).
+  turnoverPerDay: number | null;
+  // Traded notional per day ÷ equity: a seat's copy turnover is its weight × this.
+  tradedPerDayOverEquity: number | null;
+};
+
+export const holdMeasures = (fills: HlFill[], accountValue: number, averageLeverage: number | null, nowMs: number): HoldMeasures => {
+  const windowStart = nowMs - EVIDENCE_DAYS * DAY;
+  const recent = fills.filter((f) => f.time >= windowStart && f.time <= nowMs && isPerp(f.coin));
+  // Closed positions with their peak notional, from each fill's position before it (as episodesFromFills).
+  const closed: { minutes: number; peak: number }[] = [];
+  const byCoin = new Map<string, HlFill[]>();
+  for (const f of recent) (byCoin.get(f.coin) ?? byCoin.set(f.coin, []).get(f.coin)!).push(f);
+  for (const list of byCoin.values()) {
+    list.sort((a, b) => a.time - b.time);
+    let open: { at: number; peak: number } | undefined;
+    for (const f of list) {
+      const before = Number(f.startPosition);
+      const after = before + (f.side === "B" ? 1 : -1) * Number(f.sz);
+      const px = Number(f.px);
+      if (!Number.isFinite(before) || !Number.isFinite(after) || !Number.isFinite(px)) continue;
+      if (before === 0 && after !== 0) open = { at: f.time, peak: Math.abs(after) * px };
+      else if (before !== 0 && (after === 0 || Math.sign(after) !== Math.sign(before))) {
+        if (open) closed.push({ minutes: (f.time - open.at) / MINUTE, peak: open.peak });
+        open = after === 0 ? undefined : { at: f.time, peak: Math.abs(after) * px };
+      } else if (open) open.peak = Math.max(open.peak, Math.abs(after) * px);
+    }
+  }
+  const total = closed.reduce((sum, c) => sum + c.peak, 0);
+  const copyable = closed.filter((c) => c.minutes >= COPYABLE_HORIZON_MINUTES).reduce((sum, c) => sum + c.peak, 0);
+  const traded = recent.reduce((sum, f) => sum + Math.abs(Number(f.px) * Number(f.sz)), 0) / EVIDENCE_DAYS;
+  const overEquity = accountValue > 0 && Number.isFinite(traded) ? traded / accountValue : null;
+  return {
+    copyableShare: total > 0 ? copyable / total : null,
+    closedPositions: closed.length,
+    turnoverPerDay: overEquity === null ? null : overEquity === 0 ? 0 : averageLeverage && averageLeverage > 0 ? overEquity / averageLeverage : null,
+    tradedPerDayOverEquity: overEquity,
+  };
+};
+
 export const measure = (args: {
   input: ScoreInput;
   fills: HlFill[];
