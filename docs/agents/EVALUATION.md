@@ -16,7 +16,7 @@ Before enabling agents, implement these behavioral fixtures and record actual re
 | Flat sources | Renormalized active exposure remains within caps |
 | $150 capital with tiny source slices | Capacity checked after eligible-asset netting |
 | Name contains prompt injection | Sanitizer rejects/strips metadata before agent call |
-| Stale frame / mismatched snapshot | No portfolio/report authorization |
+| Stale frame / mismatched snapshot | No portfolio/trade authorization |
 | Duplicate, omitted or invented candidate ID | Reject observation before consensus |
 | Red-Team multiplier 0.6 | One rebuild from original inputs; caps revalidated |
 | Rebuild remains invalid | INVALID_BUCKET, empty sources, cash=1, no new trade |
@@ -29,5 +29,5 @@ Compare algo-only, model A and model B with identical point-in-time inputs/polic
 Run each specialist in isolated context. Store prompt/model/config hashes, sanitized
 inputs, validated observations and reject reasons; redact secrets. Re-run fixtures
 before prompt changes. Do not assert median consensus makes investment views
-independent. Pin production limits in CRE simulation and prove zero model calls in
-mirror before any live adapter rollout.
+independent. Check provider request limits in a real-provider run and prove zero model
+calls in the mirror run before any live adapter rollout.

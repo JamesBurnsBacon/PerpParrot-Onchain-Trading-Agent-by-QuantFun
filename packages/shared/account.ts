@@ -9,7 +9,7 @@
 // every mode (equal to accountValue for standard accounts), and it's the series
 // the backtest's returns come from.
 //
-// Pure and dependency-free so the CRE workflow can use it.
+// Pure and dependency-free: the backend, the executor and tests share it.
 import { decToE6, type AccountState } from "./copy";
 
 export type PerpState = {

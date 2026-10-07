@@ -13,23 +13,23 @@ const url = process.env.TEST_DATABASE_URL;
 describe.skipIf(!url)("PostgresStore", async () => {
   if (!url) return;
   const sql = new SQL(url);
-  await sql.unsafe(await Bun.file(new URL("../../../supabase/migrations/20261006120000_cre_mirror.sql", import.meta.url)).text());
+  await sql.unsafe(await Bun.file(new URL("../../../supabase/migrations/20261006120000_mirror.sql", import.meta.url)).text());
   await sql.unsafe(await Bun.file(new URL("../../../supabase/migrations/20261006180000_executor_order_journal.sql", import.meta.url)).text());
   const store = new PostgresStore(sql);
   const unique = `${Date.now()}-${Math.random()}`;
 
-  test("claims a report ID exactly once, even concurrently", async () => {
-    const id = `report-${unique}`;
-    const claims = await Promise.all([store.claimReport(id), store.claimReport(id), store.claimReport(id)]);
+  test("claims a run exactly once, even concurrently", async () => {
+    const id = `mirror-${unique}`;
+    const claims = await Promise.all([store.claimRun(id), store.claimRun(id), store.claimRun(id)]);
     expect(claims.filter(Boolean)).toHaveLength(1);
-    expect(await store.claimReport(id)).toBe(false);
+    expect(await store.claimRun(id)).toBe(false);
   });
 
   test("saves and reads back runs, newest first", async () => {
     const run = (id: string, startedAt: number): RunRecord => ({
       id,
       runId: `mirror-${startedAt}`,
-      kind: "report",
+      kind: "mirror",
       status: "executed",
       dryRun: true,
       startedAt,
@@ -37,7 +37,7 @@ describe.skipIf(!url)("PostgresStore", async () => {
       equityUsd: 470.12,
       plan: { orders: [], skipped: [], marginScale: 1, initialMarginUsd: 0 },
       results: [],
-      envelope: { report: "ab", context: "cd", signatures: ["ef"] },
+      evidence: { snapshotHash: `0x${"cd".repeat(32)}`, configurationHash: `0x${"ab".repeat(32)}`, exposures: [] },
     });
     const base = Date.now() + 1e9;
     await store.saveRun(run(`a-${unique}`, base));
@@ -57,7 +57,7 @@ describe.skipIf(!url)("PostgresStore", async () => {
   test("journals each batch before dispatch and recovers unresolved state", async () => {
     const id = `batch-${unique}`;
     await store.beginOrderBatch({
-      id, reportId: `report-${unique}`, createdAt: Date.now(),
+      id, runId: `report-${unique}`, createdAt: Date.now(),
       orders: [{ asset: "BTC", assetId: 0, isBuy: true, price: "100", size: "1", reduceOnly: false, notionalUsd: 100, targetUsd: 100, currentUsd: 0 }],
       cloids: [`0x${"01".repeat(16)}` as `0x${string}`], kind: "orders",
     });
@@ -79,7 +79,7 @@ describe.skipIf(!url)("PostgresStore", async () => {
     const leverageId = `leverage-${unique}`;
     const details = { asset: "BTC", assetId: 0, leverage: 3 };
     await store.beginOrderBatch({
-      id: leverageId, reportId: `report-${unique}`, createdAt: Date.now(),
+      id: leverageId, runId: `report-${unique}`, createdAt: Date.now(),
       orders: [], cloids: [], kind: "leverage", details,
     });
     expect(await mine()).toMatchObject([{ id: leverageId, kind: "leverage", details, orders: [], cloids: [] }]);
@@ -108,6 +108,21 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("postgresRunLock", () => {
     await releaseA();
     const releaseB = await waiting;
     await releaseB();
+    await sqlA.close();
+    await sqlB.close();
+  });
+
+  // Production pools close idle connections (server.ts: idleTimeout 5 on Vercel); Bun closes a
+  // reserved one too, which would drop the lock mid-run.
+  test("stays held past the pool's idle timeout", async () => {
+    const sqlA = new SQL(process.env.TEST_DATABASE_URL!, { max: 3, idleTimeout: 1 });
+    const sqlB = new SQL(process.env.TEST_DATABASE_URL!);
+    const key = 901_000 + Math.floor(Math.random() * 1000);
+    const releaseA = await postgresRunLock(sqlA, key, 300).acquire(1000);
+    await Bun.sleep(2500);
+    await expect(postgresRunLock(sqlB, key).acquire(300)).rejects.toThrow("held the run lock");
+    await releaseA();
+    await (await postgresRunLock(sqlB, key).acquire(1000))();
     await sqlA.close();
     await sqlB.close();
   });

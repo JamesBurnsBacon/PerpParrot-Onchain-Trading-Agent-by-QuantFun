@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {runReview, riskDecision} from '../packages/cre-workflows/review/workflow.ts';
-import type {Dependencies} from '../packages/cre-workflows/review/workflow.ts';
+import {runReview, riskDecision} from '../packages/backend/review/workflow.ts';
+import type {Dependencies} from '../packages/backend/review/workflow.ts';
 import type {Frame, Policy, Row, Observation} from '../packages/shared/src/contracts.ts';
 import {validate} from '../packages/shared/src/validate.ts';
 import {commitment,policyCommitment,snapshotCommitment} from '../packages/shared/src/commitments.ts';

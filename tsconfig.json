@@ -14,7 +14,6 @@
   "include": [
     "packages/shared/src/**/*.ts",
     "packages/backend/review/**/*.ts",
-    "packages/cre-workflows/review/**/*.ts",
     "tests/**/*.ts"
   ]
 }

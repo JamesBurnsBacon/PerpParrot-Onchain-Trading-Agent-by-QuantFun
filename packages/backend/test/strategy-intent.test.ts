@@ -194,7 +194,7 @@ describe("integration with the actual Score output", () => {
     eligible: true,
     metrics: { sharpe: 1, sortino: 1, calmar: 0.5, maxDrawdown: index / 100, consistency: 0.6, periodReturn: 0.2, annualisedReturn: 0.2, annualisedVol: index / 10, realizedVol: index / 10, allTimeMaxDrawdown: index / 100, lookbackDays: 90, coveredDays: 90, skippedTimeShare: 0, fineTimeShare: 1, flags: [] },
     percentiles: { sharpe: 0.8, sortino: 0.8, calmar: 0.7, negMaxDrawdown: 0.6, consistency: 0.5 },
-    scoreNumerator: index, cloneOf: null, clones: [], score: index / 100, rank: index, finalist: true,
+    scoreNumerator: index, makerPenalty: 0, cloneOf: null, clones: [], score: index / 100, rank: index, finalist: true,
     passthrough: { avgLeverage: 1, timeInMarket: 0.5, medianHoldHours: 2, makerShare: 0.2 },
     makerPenalty: null, ...overrides,
   });

@@ -6,9 +6,9 @@ import { createExchange } from "../src/exchange";
 import type { InfoFn } from "../src/hyperliquid";
 import { cloidFor, Runner } from "../src/runner";
 import { MemoryStore, type RunRecord } from "../src/store";
-import { verifyEnvelope } from "../src/verify";
 import { cronWatchdog } from "../src/watchdog";
-import { ACCOUNT, AS_OF, body, envelope, keys, CONFIGURATION, registry } from "./helpers";
+import { ACCOUNT, AS_OF, CONFIGURATION, targets } from "./helpers";
+import type { Targets } from "../src/targets";
 
 // Fake HL info: BTC/ETH on core, MSFT on xyz (dex index 1), and our account.
 const fakeInfo = (account: { equity: string; core?: [string, string][]; xyz?: [string, string][] }): InfoFn =>
@@ -41,6 +41,8 @@ const fakeInfo = (account: { equity: string; core?: [string, string][]; xyz?: [s
 
 const setup = (info: InfoFn) => {
   const store = new MemoryStore();
+  // The backend's answer per run; tests override a run's targets here.
+  const overrides = new Map<number, Partial<Targets>>();
   const exchange = createExchange({ dryRun: true });
   const alerts: string[] = [];
   const runnerDeps = {
@@ -49,23 +51,25 @@ const setup = (info: InfoFn) => {
     info,
     alert: async (m: string) => void alerts.push(m),
     now: () => AS_OF * 1000,
+    targets: async (runAt: number) => targets({ runAt, ...overrides.get(runAt) }),
     config: {
       account: ACCOUNT,
+      frozenConfigurationHash: CONFIGURATION,
       maxGrossLeverage: 50,
+      runTtlSeconds: 300,
       runTimeoutMs: 1_000,
       plan: { minOrderUsd: 10, driftFraction: 0.1, marginCap: 0.95, slippageBps: 50 },
     },
   };
-  return { store, exchange, runner: new Runner(runnerDeps), runnerDeps, alerts };
+  return { store, exchange, runner: new Runner(runnerDeps), runnerDeps, alerts, overrides };
 };
 
-const verified = async (b = body()) => verifyEnvelope(await envelope(keys.slice(0, 2), { body: b }), registry);
 
 describe("Runner: cross-process run lock", () => {
   test("a run that can't get the lock is recorded as failed and alerted", async () => {
     const { runnerDeps, store, alerts } = setup(fakeInfo({ equity: "400", core: [] }));
     const lock = { acquire: async () => Promise.reject(new Error("another executor process held the run lock for 1s")) };
-    const record = await new Runner({ ...runnerDeps, lock }).executeReport(await verified(), {});
+    const record = await new Runner({ ...runnerDeps, lock }).executeRun(AS_OF);
     expect(record).toMatchObject({ status: "failed", error: "another executor process held the run lock for 1s" });
     expect((await store.recentRuns(1))[0].status).toBe("failed");
     expect(alerts.join()).toContain("held the run lock");
@@ -84,17 +88,16 @@ describe("Runner: cross-process run lock", () => {
         return async () => void events.push("release");
       },
     };
-    const record = await new Runner({ ...runnerDeps, store: tracked, lock }).executeReport(await verified(), {});
+    const record = await new Runner({ ...runnerDeps, store: tracked, lock }).executeRun(AS_OF);
     expect(record.status).toBe("executed");
     expect(events).toEqual(["acquire 1000", "save", "release"]);
   });
 });
 
-describe("Runner.executeReport (dry run)", () => {
+describe("Runner.executeRun (dry run)", () => {
   test("plans against the live account and signs one IOC batch", async () => {
     const { runner, exchange, store } = setup(fakeInfo({ equity: "400", core: [["ETH", "-0.05"]] }));
-    const report = await verified();
-    const run = await runner.executeReport(report, {});
+    const run = await runner.executeRun(AS_OF);
 
     expect(run).toMatchObject({ status: "executed", dryRun: true, equityUsd: 400 });
     // BTC +$1200 from flat; ETH target −$350 vs −$200 held → sell $150 more.
@@ -124,7 +127,7 @@ describe("Runner.executeReport (dry run)", () => {
       s: "0.012",
       r: false,
       t: { limit: { tif: "Ioc" } },
-      c: cloidFor(report.id, "BTC"),
+      c: cloidFor(`mirror-${AS_OF}`, "BTC"),
     });
     expect(orderReq.signature.r).toMatch(/^0x[0-9a-f]{64}$/);
     expect(orderReq.nonce).toBeGreaterThan(0);
@@ -142,7 +145,7 @@ describe("Runner.executeReport (dry run)", () => {
       clock = (AS_OF + 301) * 1000;
       return outcome;
     };
-    const run = await new Runner(runnerDeps).executeReport(await verified(), {});
+    const run = await new Runner(runnerDeps).executeRun(AS_OF);
     expect(run.status).toBe("failed");
     expect(run.error).toContain("expired before exchange action");
     expect(exchange.recorded()).toHaveLength(1);
@@ -156,19 +159,18 @@ describe("Runner.executeReport (dry run)", () => {
       await store.setControls({ paused: true, updatedAt: AS_OF, updatedBy: "test" });
       return outcome;
     };
-    const run = await new Runner(runnerDeps).executeReport(await verified(), {});
+    const run = await new Runner(runnerDeps).executeRun(AS_OF);
     expect(run.status).toBe("failed");
     expect(run.error).toBe("execution paused");
     expect(exchange.recorded()).toHaveLength(1);
   });
 
-  test("binds signed leverage and order actions to report expiry", async () => {
+  test("binds signed leverage and order actions to the run's expiry (runAt + runTtlSeconds)", async () => {
     const { runner, exchange } = setup(fakeInfo({ equity: "400" }));
-    const report = await verified();
-    await runner.executeReport(report, {});
+    await runner.executeRun(AS_OF);
     expect(exchange.recorded()).toHaveLength(3);
     for (const request of exchange.recorded()) {
-      expect((request.payload as { expiresAfter: number }).expiresAfter).toBe(Number(report.body.expiresAt) * 1000);
+      expect((request.payload as { expiresAfter: number }).expiresAfter).toBe((AS_OF + 300) * 1000);
     }
   });
 
@@ -178,7 +180,7 @@ describe("Runner.executeReport (dry run)", () => {
       { asset: "BTC", status: "filled", filledSize: "0.012", avgPx: "100000" },
       { asset: "ETH", status: "error", error: "insufficient margin" },
     ];
-    const run = await new Runner(runnerDeps).executeReport(await verified(), {});
+    const run = await new Runner(runnerDeps).executeRun(AS_OF);
     expect(run.status).toBe("failed");
     expect(run.error).toContain("insufficient margin");
     expect(run.results?.map((r) => r.status)).toEqual(["filled", "error"]);
@@ -195,14 +197,14 @@ describe("Runner.executeReport (dry run)", () => {
         { asset: "ETH", status: "not_sent" },
       ];
     };
-    const run = await new Runner(runnerDeps).executeReport(await verified(), {});
+    const run = await new Runner(runnerDeps).executeRun(AS_OF);
     expect(run.status).toBe("failed");
     expect(run.error).toBe("execution guard failed: database offline");
     expect(run.results?.map((r) => r.status)).toEqual(["filled", "not_sent"]);
     expect((await store.recentRuns(1))[0]).toEqual(run);
   });
 
-  test("unknown exchange outcome pauses subsequent reports for reconciliation", async () => {
+  test("unknown exchange outcome pauses subsequent runs for reconciliation", async () => {
     const { runnerDeps, exchange, store } = setup(fakeInfo({ equity: "400" }));
     let submissions = 0;
     exchange.submit = async (orders, cloids, _stop, _expiry, journal) => {
@@ -213,23 +215,23 @@ describe("Runner.executeReport (dry run)", () => {
       return results;
     };
     const runner = new Runner(runnerDeps);
-    const run = await runner.executeReport(await verified(), {});
+    const run = await runner.executeRun(AS_OF);
     expect(run.status).toBe("failed");
     expect(run.error).toContain("reconcile order IDs");
     expect((await store.getControls()).paused).toBe(true);
-    const next = await runner.executeReport(await verified(body({ runId: "next" })), {});
+    const next = await runner.executeRun(AS_OF + 600);
     expect(next.status).toBe("skipped_paused");
     expect(submissions).toBe(1);
     const [batch] = await store.unresolvedOrderBatches();
-    expect(batch).toMatchObject({ state: "uncertain", reportId: run.id });
+    expect(batch).toMatchObject({ state: "uncertain", runId: run.id });
     await store.reconcileOrderBatch(batch.id, "operator", "Verified all client order IDs and current positions against the exchange", AS_OF * 1000);
     expect(await store.unresolvedOrderBatches()).toEqual([]);
   });
 
-  test("a batch left dispatching after a crash blocks the next report", async () => {
+  test("a batch left dispatching after a crash blocks the next run", async () => {
     const { runner, store, exchange } = setup(fakeInfo({ equity: "400" }));
-    await store.beginOrderBatch({ id: "orphaned:0", reportId: "orphaned", createdAt: AS_OF * 1000, orders: [], cloids: [], kind: "orders" });
-    const next = await runner.executeReport(await verified(body({ runId: "after-crash" })), {});
+    await store.beginOrderBatch({ id: "orphaned:0", runId: "orphaned", createdAt: AS_OF * 1000, orders: [], cloids: [], kind: "orders" });
+    const next = await runner.executeRun(AS_OF + 600);
     expect(next.status).toBe("skipped_paused");
     expect(next.error).toContain("need reconciliation");
     expect((await store.getControls()).paused).toBe(true);
@@ -237,9 +239,10 @@ describe("Runner.executeReport (dry run)", () => {
   });
 
   test("sets leverage once per asset across runs", async () => {
-    const { runner, exchange } = setup(fakeInfo({ equity: "400" }));
-    await runner.executeReport(await verified(), {});
-    await runner.executeReport(await verified(body({ runId: "mirror-2", exposures: [{ asset: "BTC", exposureE9: 6_000_000_000n }] })), {});
+    const { runner, exchange, overrides } = setup(fakeInfo({ equity: "400" }));
+    overrides.set(AS_OF + 600, { exposures: [{ asset: "BTC", exposureE9: 6_000_000_000n }] });
+    await runner.executeRun(AS_OF);
+    await runner.executeRun(AS_OF + 600);
     const types = exchange.recorded().map((r) => (r.payload as { action: { type: string } }).action.type);
     expect(types.filter((t) => t === "updateLeverage")).toHaveLength(2);
   });
@@ -247,21 +250,22 @@ describe("Runner.executeReport (dry run)", () => {
   test("skips while paused", async () => {
     const { runner, store, exchange } = setup(fakeInfo({ equity: "400" }));
     await store.setControls({ paused: true, updatedAt: 1, updatedBy: "test" });
-    const run = await runner.executeReport(await verified(), {});
+    const run = await runner.executeRun(AS_OF);
     expect(run.status).toBe("skipped_paused");
     expect(exchange.recorded()).toEqual([]);
   });
 
   test("sizes targets with our live equity at execution time", async () => {
-    // Same report, account doubled to $800: BTC target $2,400.
+    // Same targets, account doubled to $800: BTC target $2,400.
     const { runner } = setup(fakeInfo({ equity: "800" }));
-    const run = await runner.executeReport(await verified(), {});
+    const run = await runner.executeRun(AS_OF);
     expect(run.plan?.orders.find((o) => o.asset === "BTC")?.size).toBe("0.024");
   });
 
   test("rejects exposures beyond the gross leverage bound and alerts", async () => {
-    const { runner, alerts } = setup(fakeInfo({ equity: "400" }));
-    const run = await runner.executeReport(await verified(body({ exposures: [{ asset: "BTC", exposureE9: 60_000_000_000n }] })), {});
+    const { runner, alerts, overrides } = setup(fakeInfo({ equity: "400" }));
+    overrides.set(AS_OF, { exposures: [{ asset: "BTC", exposureE9: 60_000_000_000n }] });
+    const run = await runner.executeRun(AS_OF);
     expect(run.status).toBe("failed");
     expect(run.error).toBe("gross exposure 60.00× exceeds 50×");
     expect(alerts).toHaveLength(1);
@@ -276,7 +280,7 @@ describe("Runner.executeReport (dry run)", () => {
     };
     // BTC (asset 0) opens: its leverage fails. ETH reduces from $400 to −$350: a flip, not reduce-only,
     // so its leverage is set and it trades.
-    const run = await s.runner.executeReport(await verified(), {});
+    const run = await s.runner.executeRun(AS_OF);
     expect(run.status).toBe("failed");
     expect(run.error).toBe("Invalid leverage value");
     expect(s.exchange.recorded().filter((r) => (r.payload as { action: { type: string } }).action.type === "order")).toEqual([]);
@@ -287,7 +291,7 @@ describe("Runner.executeReport (dry run)", () => {
     const s = setup(fakeInfo({ equity: "400", core: [["ETH", "0.1"]] }));
     const original = s.exchange.setLeverage;
     s.exchange.setLeverage = async (assetId, lev, expires) => assetId === 0 ? { rejected: "Invalid leverage value" } : original(assetId, lev, expires);
-    const run = await s.runner.executeReport(await verified(), {});
+    const run = await s.runner.executeRun(AS_OF);
     expect(run.plan?.skipped).toContainEqual(expect.objectContaining({ asset: "BTC", reason: "LEVERAGE_FAILED" }));
     expect(run.plan?.orders.map((o) => o.asset)).not.toContain("BTC");
     expect(run.status).toBe("executed");
@@ -295,11 +299,11 @@ describe("Runner.executeReport (dry run)", () => {
     expect((await s.store.getControls()).paused).toBe(false);
   });
 
-  test("doesn't execute a report that expired while queued", async () => {
+  test("doesn't execute a run that expired while queued", async () => {
     const s = setup(fakeInfo({ equity: "400" }));
     const late = new Runner({ ...s.runnerDeps, now: () => (AS_OF + 301) * 1000 });
-    const run = await late.executeReport(await verified(), {});
-    expect(run).toMatchObject({ status: "failed", error: "report expired before execution" });
+    const run = await late.executeRun(AS_OF);
+    expect(run).toMatchObject({ status: "failed", error: "run expired before execution" });
   });
 
   test("cancels a slow run before it submits, and never overlaps the next run", async () => {
@@ -314,8 +318,8 @@ describe("Runner.executeReport (dry run)", () => {
       }
       return base(req);
     }) as InfoFn);
-    const slow = s.runner.executeReport(await verified(), {});
-    const next = s.runner.executeReport(await verified(body({ runId: "mirror-2" })), {});
+    const slow = s.runner.executeRun(AS_OF);
+    const next = s.runner.executeRun(AS_OF + 600);
     await Bun.sleep(1_100); // past the 1 s timeout
     expect(s.alerts[0]).toContain("still running after 1s");
     // The queue waits for the slow run: the next one hasn't started.
@@ -333,7 +337,7 @@ describe("Runner.executeReport (dry run)", () => {
     const { runner } = setup((async () => {
       throw new Error("HL down");
     }) as InfoFn);
-    const run = await runner.executeReport(await verified(), {});
+    const run = await runner.executeRun(AS_OF);
     expect(run).toMatchObject({ status: "failed", error: "HL down" });
   });
 
@@ -349,9 +353,7 @@ describe("Runner.executeReport (dry run)", () => {
       return base(req);
     }) as InfoFn;
     const { runner } = setup(slow);
-    const a = await verified();
-    const b = await verified(body({ runId: "mirror-2" }));
-    await Promise.all([runner.executeReport(a, {}), runner.executeReport(b, {})]);
+    await Promise.all([runner.executeRun(AS_OF), runner.executeRun(AS_OF + 600)]);
     // loadMarkets + loadAccount run in parallel within a run (≤ 4 concurrent reads),
     // but two runs never overlap.
     expect(maxActive).toBeLessThanOrEqual(4);
@@ -375,14 +377,8 @@ describe("app routes", () => {
     const s = setup(fakeInfo({ equity: "400", core: [["BTC", "0.002"]] }));
     const logs: string[] = [];
     const app = createApp({
-      handler: {
-        mode: registry,
-        frozenConfigurationHash: CONFIGURATION,
-        account: ACCOUNT,
-        now: () => AS_OF + 10,
-        maxLeadSeconds: 60,
-        maxTtlSeconds: 300,
-      },
+      // 10 s after the :x0 run AS_OF.
+      now: () => AS_OF * 1000 + 10_000,
       runner: s.runner,
       store: s.store,
       adminToken,
@@ -394,16 +390,31 @@ describe("app routes", () => {
   };
   const post = (path: string, init: RequestInit = {}) => new Request(`http://x${path}`, { method: "POST", ...init });
 
-  test("POST /reports accepts, then answers duplicates", async () => {
-    const { app, store } = make();
-    const env = await envelope(keys.slice(0, 2));
-    const first = await app(post("/reports", { body: JSON.stringify(env) }));
-    expect(first.status).toBe(200);
-    expect(await first.json()).toMatchObject({ status: "accepted" });
-    const dup = await app(post("/reports", { body: JSON.stringify(await envelope(keys.slice(2, 4))) }));
-    expect(await dup.json()).toMatchObject({ status: "duplicate" });
-    await Bun.sleep(20);
+  const cron = (path = "/api/executor/cron/run", secret = "c") => new Request(`http://x${path}`, { headers: { authorization: `Bearer ${secret}` } });
+
+  test("GET /cron/run runs the due slot once; a second trigger is a duplicate", async () => {
+    const { app, store } = make(undefined, { cronSecret: "c" });
+    const first = await app(cron());
+    expect(await first.json()).toMatchObject({ runId: `mirror-${AS_OF}`, kind: "mirror", status: "executed" });
+    expect(await (await app(cron())).json()).toEqual({ status: "duplicate", runId: `mirror-${AS_OF}` });
     expect((await store.recentRuns(5)).map((r) => r.status)).toEqual(["executed"]);
+  });
+
+  test("GET /cron/run needs the cron secret and does nothing outside the grace window", async () => {
+    expect((await make(undefined, { cronSecret: "c" }).app(cron(undefined, "wrong"))).status).toBe(401);
+    expect((await make().app(cron())).status).toBe(401);
+    const late = make(undefined, { cronSecret: "c", now: () => (AS_OF + 300) * 1000 });
+    expect(await (await late.app(cron())).json()).toEqual({ status: "no run due" });
+    expect(await late.store.recentRuns(5)).toEqual([]);
+  });
+
+  test("POST /admin/run runs a given :x0 slot and refuses others", async () => {
+    const { app, store } = make("s3cret");
+    const run = (runAt: unknown) => app(post("/admin/run", { headers: { authorization: "Bearer s3cret" }, body: JSON.stringify({ runAt }) }));
+    expect((await run(AS_OF + 1)).status).toBe(400);
+    expect((await run(AS_OF + 6000)).status).toBe(400);
+    expect(await (await run(AS_OF + 600)).json()).toMatchObject({ runId: `mirror-${AS_OF + 600}`, status: "executed" });
+    expect((await store.recentRuns(1))[0].evidence).toMatchObject({ snapshotHash: `0x${"cd".repeat(32)}`, configurationHash: CONFIGURATION });
   });
 
   test("serves the same routes under /api/executor (vercel.json)", async () => {
@@ -413,15 +424,6 @@ describe("app routes", () => {
     expect((await app(new Request("http://x/api/executorx/health"))).status).toBe(404);
   });
 
-  test("POST /reports hands the run to background (Vercel's waitUntil)", async () => {
-    const kept: Promise<unknown>[] = [];
-    const { app, store } = make(undefined, { background: (p) => void kept.push(p) });
-    await app(post("/api/executor/reports", { body: JSON.stringify(await envelope(keys.slice(0, 2))) }));
-    expect(kept).toHaveLength(1);
-    await kept[0];
-    expect((await store.recentRuns(5)).map((r) => r.status)).toEqual(["executed"]);
-  });
-
   test("GET /cron/watchdog needs the cron secret", async () => {
     const watchdog = async () => ({ alerted: false });
     const get = (headers: Record<string, string> = {}) => new Request("http://x/api/executor/cron/watchdog", { headers });
@@ -429,10 +431,6 @@ describe("app routes", () => {
     expect((await make(undefined, { watchdog }).app(get({ authorization: "Bearer " }))).status).toBe(401);
     const ok = await make(undefined, { watchdog, cronSecret: "c" }).app(get({ authorization: "Bearer c" }));
     expect(await ok.json()).toEqual({ alerted: false });
-  });
-
-  test("POST /reports rejects invalid JSON", async () => {
-    expect((await make().app(post("/reports", { body: "{" }))).status).toBe(400);
   });
 
   test("admin routes need the bearer token", async () => {
@@ -447,26 +445,26 @@ describe("app routes", () => {
   test("uncertain order batches can only be reconciled with authenticated evidence", async () => {
     const { app, store } = make("s3cret");
     await store.beginOrderBatch({
-      id: "report:0", reportId: "report", createdAt: AS_OF * 1000,
+      id: "run:0", runId: "run", createdAt: AS_OF * 1000,
       orders: [], cloids: [`0x${"12".repeat(16)}` as `0x${string}`], kind: "orders",
     });
     const get = (headers: Record<string, string> = {}) => new Request("http://x/admin/order-batches", { headers });
     expect((await app(get())).status).toBe(401);
     const listing = await app(get({ authorization: "Bearer s3cret" }));
-    expect(await listing.json()).toMatchObject([{ id: "report:0", state: "dispatching" }]);
+    expect(await listing.json()).toMatchObject([{ id: "run:0", state: "dispatching" }]);
     const resume = await app(post("/admin/resume", { headers: { authorization: "Bearer s3cret" } }));
     expect(resume.status).toBe(409);
     expect(await resume.json()).toMatchObject({ unresolved: 1, paused: true });
     const invalid = await app(post("/admin/reconcile-batch", {
       headers: { authorization: "Bearer s3cret", "content-type": "application/json" },
-      body: JSON.stringify({ id: "report:0", evidence: "looked" }),
+      body: JSON.stringify({ id: "run:0", evidence: "looked" }),
     }));
     expect(invalid.status).toBe(400);
     const resolved = await app(post("/admin/reconcile-batch", {
       headers: { authorization: "Bearer s3cret", "x-operator": "james", "content-type": "application/json" },
-      body: JSON.stringify({ id: "report:0", evidence: "Verified client order ID, fills and positions against Hyperliquid" }),
+      body: JSON.stringify({ id: "run:0", evidence: "Verified client order ID, fills and positions against Hyperliquid" }),
     }));
-    expect(await resolved.json()).toMatchObject({ reconciled: "report:0", unresolved: 0, paused: true });
+    expect(await resolved.json()).toMatchObject({ reconciled: "run:0", unresolved: 0, paused: true });
     expect(await store.unresolvedOrderBatches()).toEqual([]);
     expect((await store.getControls()).paused).toBe(true);
   });
@@ -474,7 +472,7 @@ describe("app routes", () => {
   test("reconciliation waits for an active run (the run lock)", async () => {
     const { app, store, runner } = make("s3cret");
     await store.beginOrderBatch({
-      id: "in-flight:0", reportId: "in-flight", createdAt: AS_OF * 1000,
+      id: "in-flight:0", runId: "in-flight", createdAt: AS_OF * 1000,
       orders: [], cloids: [], kind: "orders",
     });
     let entered!: () => void;
@@ -531,8 +529,7 @@ describe("app routes", () => {
     const busy = { acquire: async () => { throw new Error("another executor process held the run lock for 1s"); } };
     const s = setup(fakeInfo({ equity: "400" }));
     const runner = new Runner({ ...s.runnerDeps, lock: busy });
-    const app = createApp({ handler: { mode: registry, frozenConfigurationHash: CONFIGURATION, account: ACCOUNT, now: () => AS_OF + 10, maxLeadSeconds: 60, maxTtlSeconds: 300 },
-      runner, store: s.store, adminToken: "s3cret", status: () => ({}), log: () => undefined });
+    const app = createApp({ runner, store: s.store, adminToken: "s3cret", status: () => ({}), log: () => undefined });
     const response = await app(post("/admin/resume", { headers: { authorization: "Bearer s3cret" } }));
     expect(response.status).toBe(409);
   });
@@ -548,32 +545,29 @@ describe("app routes", () => {
     expect((await store.getControls()).paused).toBe(true);
   });
 
-  test("GET /runs serializes bigint report fields and allows browser reads", async () => {
-    const { app } = make();
-    await app(post("/reports", { body: JSON.stringify(await envelope(keys.slice(0, 2))) }));
-    await Bun.sleep(20);
+  test("GET /runs serializes bigint target fields and allows browser reads", async () => {
+    const { app, runner } = make();
+    await runner.executeRun(AS_OF);
     const res = await app(new Request("http://x/runs?limit=5"));
     expect(res.headers.get("access-control-allow-origin")).toBe("*");
     const runs = (await res.json()) as { runId: string }[];
     expect(runs[0].runId).toBe(`mirror-${AS_OF}`);
   });
 
-  test("GET /runs?summary=1 leaves out plans and reports", async () => {
-    const { app } = make();
-    await app(post("/reports", { body: JSON.stringify(await envelope(keys.slice(0, 2))) }));
-    await Bun.sleep(20);
+  test("GET /runs?summary=1 leaves out plans and evidence", async () => {
+    const { app, runner } = make();
+    await runner.executeRun(AS_OF);
     const [run] = (await (await app(new Request("http://x/runs?summary=1&limit=1000"))).json()) as Record<string, unknown>[];
     expect(run).toMatchObject({ runId: `mirror-${AS_OF}`, status: "executed", orders: expect.any(Number) });
-    expect(run).not.toHaveProperty("envelope");
+    expect(run).not.toHaveProperty("evidence");
     expect(run).not.toHaveProperty("plan");
   });
 
   test("GET /equity: live runs only, on the run clock; every executed run counted", async () => {
-    const { app, store } = make();
-    await app(post("/reports", { body: JSON.stringify(await envelope(keys.slice(0, 2))) })); // a dry run
-    await Bun.sleep(20);
+    const { app, store, runner } = make();
+    await runner.executeRun(AS_OF); // a dry run
     const live = AS_OF + 600;
-    await store.saveRun({ id: "live", runId: `mirror-${live}`, kind: "report", status: "executed", dryRun: false, startedAt: live * 1000 + 3000, finishedAt: live * 1000 + 4000, equityUsd: 470 });
+    await store.saveRun({ id: "live", runId: `mirror-${live}`, kind: "mirror", status: "executed", dryRun: false, startedAt: live * 1000 + 3000, finishedAt: live * 1000 + 4000, equityUsd: 470 });
     const res = await app(new Request("http://x/equity"));
     expect(res.headers.get("access-control-allow-origin")).toBe("*");
     expect(await res.json()).toEqual({ runs: 2, points: [[live * 1000, 470]] });
@@ -586,7 +580,7 @@ describe("cronWatchdog", () => {
     const alerts: string[] = [];
     const store = new MemoryStore();
     for (const [i, t] of finishedAt.entries()) {
-      await store.saveRun({ id: `r${i}`, runId: `mirror-${i}`, kind: "report", status: "executed", dryRun: true, startedAt: t - 1000, finishedAt: t });
+      await store.saveRun({ id: `r${i}`, runId: `mirror-${i}`, kind: "mirror", status: "executed", dryRun: true, startedAt: t - 1000, finishedAt: t });
     }
     const result = await cronWatchdog({ store, alert: async (m) => void alerts.push(m), now: () => now, afterMs: 25 * MIN, everyMs: 5 * MIN })();
     return { result, alerts };
@@ -607,42 +601,20 @@ describe("cronWatchdog", () => {
 
 describe("loadConfig", () => {
   const base = {
-    WORKFLOW_OWNER: "0xc5feb3cf878c9ba42a776e9edf62a4558ab08b85",
     FROZEN_CONFIGURATION_HASH: CONFIGURATION,
     HL_ACCOUNT: ACCOUNT,
   };
+  const production = { ...base, NODE_ENV: "production", ADMIN_TOKEN: "x", DATABASE_URL: "postgres://db", BACKEND_URL: "https://perpparrot.vercel.app/api/backend" };
 
-  test("defaults to dry run with report verification", () => {
-    expect(loadConfig(base)).toMatchObject({ dryRun: true, verifyReports: true, slippageBps: 50, marginCap: 0.95 });
+  test("defaults to dry run against the local backend", () => {
+    expect(loadConfig(base)).toMatchObject({ dryRun: true, backendUrl: "http://localhost:8788", runTtlSeconds: 300, slippageBps: 50, marginCap: 0.95 });
   });
 
-  test("refuses unverified reports in production", () => {
-    expect(() => loadConfig({ ...base, NODE_ENV: "production", VERIFY_REPORTS: "false", ADMIN_TOKEN: "x" })).toThrow(
-      "not allowed in production",
-    );
-  });
-
-  test("requires an admin token in production", () => {
-    expect(() => loadConfig({ ...base, NODE_ENV: "production" })).toThrow("ADMIN_TOKEN is required");
-  });
-
-  test("requires durable storage in production, including dry run", () => {
-    expect(() => loadConfig({ ...base, NODE_ENV: "production", ADMIN_TOKEN: "x" })).toThrow("DATABASE_URL is required");
-  });
-
-  test("live trading in production needs the workflow and DON pins", () => {
-    const live = { ...base, NODE_ENV: "production", ADMIN_TOKEN: "x", DATABASE_URL: "postgres://db", DRY_RUN: "false", HL_API_WALLET_KEY: `0x${"22".repeat(32)}` };
-    expect(() => loadConfig(live)).toThrow("WORKFLOW_NAME and DON_ID are required");
-    expect(loadConfig({ ...live, WORKFLOW_NAME: `0x${"ab".repeat(10)}`, DON_ID: "1" })).toMatchObject({ dryRun: false, donId: 1 });
-    // Dry run in production is fine without them (that's how you learn their values).
-    expect(loadConfig({ ...base, NODE_ENV: "production", ADMIN_TOKEN: "x", DATABASE_URL: "postgres://db" }).dryRun).toBe(true);
-  });
-
-  test("refuses to trade live on unverified reports", () => {
-    const key = `0x${"22".repeat(32)}` as Hex;
-    expect(() => loadConfig({ ...base, DRY_RUN: "false", HL_API_WALLET_KEY: key, VERIFY_REPORTS: "false" })).toThrow(
-      "only allowed with DRY_RUN",
-    );
+  test("production needs an admin token, durable storage and the backend URL", () => {
+    expect(() => loadConfig({ ...production, ADMIN_TOKEN: undefined })).toThrow("ADMIN_TOKEN is required");
+    expect(() => loadConfig({ ...production, DATABASE_URL: undefined })).toThrow("DATABASE_URL is required");
+    expect(() => loadConfig({ ...production, BACKEND_URL: undefined })).toThrow("BACKEND_URL is required");
+    expect(loadConfig(production)).toMatchObject({ production: true, dryRun: true });
   });
 
   test("requires the API wallet key to trade live", () => {
@@ -652,17 +624,17 @@ describe("loadConfig", () => {
   });
 
   test("on Vercel: production rules, dry run only, Postgres and a cron secret", () => {
-    const vercel = { ...base, VERCEL: "1", ADMIN_TOKEN: "x", DATABASE_URL: "postgres://x", CRON_SECRET: "c" };
+    const vercel = { ...production, NODE_ENV: undefined, VERCEL: "1", CRON_SECRET: "c" };
     expect(loadConfig(vercel)).toMatchObject({ vercel: true, production: true, dryRun: true, cronSecret: "c" });
     expect(() => loadConfig({ ...vercel, ADMIN_TOKEN: undefined })).toThrow("ADMIN_TOKEN is required");
     expect(() => loadConfig({ ...vercel, DATABASE_URL: undefined })).toThrow("DATABASE_URL is required on Vercel");
     expect(() => loadConfig({ ...vercel, CRON_SECRET: undefined })).toThrow("CRON_SECRET is required on Vercel");
-    const live = { ...vercel, DRY_RUN: "false", HL_API_WALLET_KEY: `0x${"22".repeat(32)}`, WORKFLOW_NAME: `0x${"ab".repeat(10)}`, DON_ID: "1" };
-    expect(() => loadConfig(live)).toThrow("DRY_RUN=false is not allowed on Vercel");
+    expect(() => loadConfig({ ...vercel, DRY_RUN: "false", HL_API_WALLET_KEY: `0x${"22".repeat(32)}` })).toThrow("DRY_RUN=false is not allowed on Vercel");
   });
 
-  test("validates hex settings and numbers", () => {
+  test("validates hex settings, numbers and the backend URL", () => {
     expect(() => loadConfig({ ...base, HL_ACCOUNT: "0x12" })).toThrow("HL_ACCOUNT must be");
     expect(() => loadConfig({ ...base, SLIPPAGE_BPS: "abc" })).toThrow("SLIPPAGE_BPS must be a number");
+    expect(() => loadConfig({ ...base, BACKEND_URL: "ftp://x" })).toThrow("BACKEND_URL must be");
   });
 });

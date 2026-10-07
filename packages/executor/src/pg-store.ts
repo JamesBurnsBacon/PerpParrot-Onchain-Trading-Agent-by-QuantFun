@@ -19,15 +19,15 @@ const deadline = <T>(query: Promise<T>): Promise<T> =>
 const jsonValue = (value: unknown): unknown =>
   value === undefined ? null : JSON.parse(JSON.stringify(value, (_, item) => (typeof item === "bigint" ? item.toString() : item)));
 
-// executor_reports / executor_runs / executor_controls / executor_order_batches
-// (supabase/migrations/20261006120000_cre_mirror.sql and 20261006180000_executor_order_journal.sql).
+// executor_run_claims / executor_runs / executor_controls / executor_order_batches
+// (supabase/migrations/20261006120000_mirror.sql and 20261006180000_executor_order_journal.sql).
 export class PostgresStore implements ExecutorStore {
   constructor(private readonly sql: SQL) {}
 
   async beginOrderBatch(batch: Omit<OrderBatch, "state" | "results" | "resolution">): Promise<void> {
     await deadline(this.sql`
-      insert into executor_order_batches (id, report_id, created_at, kind, details, orders, cloids, state)
-      values (${batch.id}, ${batch.reportId}, ${new Date(batch.createdAt)}, ${batch.kind}, ${jsonValue(batch.details)}::jsonb, ${jsonValue(batch.orders)}::jsonb, ${jsonValue(batch.cloids)}::jsonb, 'dispatching')`);
+      insert into executor_order_batches (id, run_id, created_at, kind, details, orders, cloids, state)
+      values (${batch.id}, ${batch.runId}, ${new Date(batch.createdAt)}, ${batch.kind}, ${jsonValue(batch.details)}::jsonb, ${jsonValue(batch.orders)}::jsonb, ${jsonValue(batch.cloids)}::jsonb, 'dispatching')`);
   }
 
   async finishOrderBatch(id: string, results: OrderResult[]): Promise<void> {
@@ -40,11 +40,11 @@ export class PostgresStore implements ExecutorStore {
 
   async unresolvedOrderBatches(): Promise<OrderBatch[]> {
     const rows = await deadline(this.sql`
-      select id, report_id, created_at, kind, details, orders, cloids, state, results
+      select id, run_id, created_at, kind, details, orders, cloids, state, results
       from executor_order_batches where state in ('dispatching', 'uncertain') order by created_at`);
     return rows.map((r: Record<string, unknown>) => ({
       id: r.id as string,
-      reportId: r.report_id as string,
+      runId: r.run_id as string,
       createdAt: (r.created_at as Date).getTime(),
       orders: r.orders as PlannedOrder[],
       kind: r.kind as OrderBatch["kind"],
@@ -62,11 +62,11 @@ export class PostgresStore implements ExecutorStore {
     if (rows.length !== 1) throw new Error("order batch is not unresolved");
   }
 
-  async claimReport(id: string): Promise<boolean> {
+  async claimRun(runId: string): Promise<boolean> {
     const rows = await deadline(this.sql`
-      insert into executor_reports (report_id) values (${id})
-      on conflict (report_id) do nothing
-      returning report_id`);
+      insert into executor_run_claims (run_id) values (${runId})
+      on conflict (run_id) do nothing
+      returning run_id`);
     return rows.length === 1;
   }
 
@@ -75,11 +75,11 @@ export class PostgresStore implements ExecutorStore {
     // Passing a JSON string instead would store a jsonb string scalar.
     await deadline(this.sql`
       insert into executor_runs
-        (id, run_id, kind, status, dry_run, started_at, finished_at, equity_usd, plan, results, error, envelope)
+        (id, run_id, kind, status, dry_run, started_at, finished_at, equity_usd, plan, results, error, evidence)
       values (
         ${run.id}, ${run.runId}, ${run.kind}, ${run.status}, ${run.dryRun},
         ${new Date(run.startedAt)}, ${new Date(run.finishedAt)}, ${run.equityUsd ?? null},
-        ${jsonValue(run.plan)}::jsonb, ${jsonValue(run.results)}::jsonb, ${run.error ?? null}, ${jsonValue(run.envelope)}::jsonb
+        ${jsonValue(run.plan)}::jsonb, ${jsonValue(run.results)}::jsonb, ${run.error ?? null}, ${jsonValue(run.evidence)}::jsonb
       )
       on conflict (id) do update set
         status = excluded.status, finished_at = excluded.finished_at, equity_usd = excluded.equity_usd,
@@ -102,13 +102,13 @@ export class PostgresStore implements ExecutorStore {
         plan: (r.plan as RunRecord["plan"]) ?? undefined,
         results: (r.results as RunRecord["results"]) ?? undefined,
         error: (r.error as string | null) ?? undefined,
-        envelope: r.envelope ?? undefined,
+        evidence: r.evidence ?? undefined,
       }),
     );
   }
 
   // Scalar columns and the order count only: the public run strip must not pull every run's plan,
-  // results and signed report (jsonb) through the small Vercel pool.
+  // results and evidence (jsonb) through the small Vercel pool.
   async recentRunSummaries(limit: number): Promise<RunSummary[]> {
     const rows = await deadline(this.sql`
       select id, run_id, kind, status, dry_run, started_at, finished_at, equity_usd, error,
@@ -131,7 +131,7 @@ export class PostgresStore implements ExecutorStore {
   }
 
   async equityCurve(): Promise<EquityPoint[]> {
-    const rows = await deadline(this.sql`select run_id, started_at, equity_usd, dry_run from executor_runs where kind = 'report' and status = 'executed' and equity_usd is not null order by started_at`);
+    const rows = await deadline(this.sql`select run_id, started_at, equity_usd, dry_run from executor_runs where kind = 'mirror' and status = 'executed' and equity_usd is not null order by started_at`);
     return rows
       .map((r: Record<string, unknown>): EquityPoint => ({ t: runAtMs({ runId: r.run_id as string, startedAt: (r.started_at as Date).getTime() }), equityUsd: Number(r.equity_usd), dryRun: r.dry_run as boolean }))
       // On the run clock (runAt), not started_at: a delayed run still lands in its slot.

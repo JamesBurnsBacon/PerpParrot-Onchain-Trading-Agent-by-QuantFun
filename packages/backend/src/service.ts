@@ -15,8 +15,7 @@ export type SnapshotServiceDeps = {
   nowMs: () => number;
   hl?: HlReader;
   // Build only this close to the run (default 120 s): a snapshot built earlier would be
-  // stale at run time, and every node would reject it. 600 for `cre workflow simulate`,
-  // which stamps the next :x0.
+  // stale at run time. 600 for local end-to-end runs, which ask for the next :x0 early.
   maxLeadSeconds?: number;
   // Refuse to build snapshots for runs that are this far in the past.
   maxLagSeconds?: number;
@@ -30,7 +29,7 @@ export class SnapshotService {
   constructor(private readonly deps: SnapshotServiceDeps) {}
 
   // Returns the stored snapshot for runAt, building it once if needed. Concurrent
-  // requests (one per DON node) share the same build. Only real run times (:x0
+  // requests (the :x9 cron, the executor, the dashboard) share one build. Only real run times (:x0
   // boundaries) close to now can be built, so the public endpoint can't be used to
   // pre-build a stale snapshot for a future run or to burn our HL rate limit.
   async get(runAt: number): Promise<string> {
@@ -58,7 +57,7 @@ export class SnapshotService {
     const eligible = await this.deps.eligibility.current(nowMs);
     const snapshot = await buildSnapshot(configuration, eligible, runAt, this.deps.nowMs, this.deps.hl);
     const json = await this.deps.store.putIfAbsent(runAt, JSON.stringify(snapshot));
-    // After serving starts, so a slow hook never delays a DON node.
+    // After serving starts, so a slow hook never delays the executor's run.
     if (this.deps.onBuilt) queueMicrotask(() => void this.deps.onBuilt!(runAt, json).catch(() => undefined));
     return json;
   }

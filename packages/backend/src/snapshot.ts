@@ -39,9 +39,9 @@ export const buildSnapshot = async (
   return { snapshotId: `snap-${runAt}`, runAt, startedAt, takenAt, configuration, eligibleAssets, sources };
 };
 
-// Snapshots are written once per runAt and never changed, so every DON node
-// fetching the same run gets identical bytes. In memory for now; Supabase once
-// the project is connected.
+// Snapshots are written once per runAt and never changed: the targets the executor traded and
+// the paper books' step come from the same bytes, and the run log records their hash.
+// Postgres in production (pg-store.ts), memory locally.
 export interface SnapshotStore {
   get(runAt: number): Promise<string | undefined>;
   // Returns the stored JSON: the existing one if another writer got there first.

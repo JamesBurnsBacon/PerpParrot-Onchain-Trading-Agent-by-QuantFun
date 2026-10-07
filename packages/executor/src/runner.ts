@@ -4,14 +4,18 @@ import type { Exchange } from "./exchange";
 import { loadAccount, loadMarkets, type InfoFn } from "./hyperliquid";
 import { planFlatten, planOrders, type Market, type Plan, type PlanConfig } from "./planner";
 import type { ExecutorStore, RunRecord } from "./store";
-import type { VerifiedReport } from "./verify";
+import type { TargetSource } from "./targets";
 import { noLock, type RunLock } from "./lock";
 
 export type RunnerConfig = {
   account: Hex;
+  // The frozen configuration the backend's targets must come from (README §4.7).
+  frozenConfigurationHash: string;
   plan: PlanConfig;
-  // Sanity bound (README §4.8): reject reports whose gross exposure exceeds this.
+  // Sanity bound (README §4.8): reject targets whose gross exposure exceeds this.
   maxGrossLeverage: number;
+  // Orders for a run may go out until runAt + this; later, the run is skipped.
+  runTtlSeconds: number;
   // A run still going after this is cancelled before its next order batch and alerted on.
   runTimeoutMs: number;
 };
@@ -23,20 +27,23 @@ export type RunnerDeps = {
   alert: Alert;
   now: () => number;
   config: RunnerConfig;
+  // Where a run's targets come from: the backend (targets.ts).
+  targets: TargetSource;
   lock?: RunLock;
 };
 
-// Stable per-report order identifiers for reconciliation. Do not assume that
+// Stable per-run order identifiers for reconciliation. Do not assume that
 // repeating an exchange submission with the same cloid guarantees idempotency.
-export const cloidFor = (reportId: string, asset: string): Hex => keccak256(toHex(`${reportId}:${asset}`)).slice(0, 34) as Hex;
+export const cloidFor = (runId: string, asset: string): Hex => keccak256(toHex(`${runId}:${asset}`)).slice(0, 34) as Hex;
 
 type CancelToken = { cancelled: boolean };
 
 export class Runner {
-  // One run at a time: reports are 10 minutes apart, so queueing is enough (README §4.8).
+  // One run at a time: runs are 10 minutes apart, so queueing is enough (README §4.8).
   private queue: Promise<unknown> = Promise.resolve();
   private readonly leverageSet = new Set<number>();
-  lastReportAt = 0;
+  // When the last scheduled run started (status page).
+  lastRunAt = 0;
   // When the last run finished, whatever its outcome (the watchdog uses it).
   lastFinishedAt = 0;
 
@@ -89,24 +96,31 @@ export class Runner {
     return next;
   }
 
-  executeReport(report: VerifiedReport, envelope: unknown): Promise<RunRecord> {
-    this.lastReportAt = this.deps.now();
-    const { id, body } = report;
-    return this.serial(body.runId, (token) => this.run(id, body.runId, "report", envelope, token, async (markets, account) => {
-      // Re-checked here: the report may have waited in the queue.
-      if (this.deps.now() > Number(body.expiresAt) * 1000) throw new Error("report expired before execution");
-      const exposures = report.body.exposures.map((e) => ({ asset: e.asset, fraction: Number(e.exposureE9) / 1e9 }));
+  // One scheduled run (README §4.7): the backend's targets for runAt, checked against our pinned
+  // configuration and account, sized with our live equity, then traded. Any failure, the backend
+  // included, is a recorded failed run; the next run tries again.
+  executeRun(runAt: number): Promise<RunRecord> {
+    this.lastRunAt = this.deps.now();
+    const runId = `mirror-${runAt}`;
+    const expiresAt = (runAt + this.deps.config.runTtlSeconds) * 1000;
+    return this.serial(runId, (token) => this.run(runId, runId, "mirror", undefined, token, async (markets, account, record) => {
+      // Re-checked here: the run may have waited in the queue.
+      if (this.deps.now() > expiresAt) throw new Error("run expired before execution");
+      const targets = await this.deps.targets(runAt);
+      record.evidence = { snapshotHash: targets.snapshotHash, configurationHash: targets.configurationHash, exposures: targets.exposures };
+      const { config } = this.deps;
+      if (targets.configurationHash !== config.frozenConfigurationHash.toLowerCase()) throw new Error(`configuration mismatch: targets from ${targets.configurationHash}`);
+      if (targets.account !== config.account.toLowerCase()) throw new Error(`account mismatch: targets for ${targets.account}`);
+      const exposures = targets.exposures.map((e) => ({ asset: e.asset, fraction: Number(e.exposureE9) / 1e9 }));
       const gross = exposures.reduce((sum, e) => sum + Math.abs(e.fraction), 0);
-      const { maxGrossLeverage } = this.deps.config;
-      if (gross > maxGrossLeverage) throw new Error(`gross exposure ${gross.toFixed(2)}× exceeds ${maxGrossLeverage}×`);
-      // Targets = DON-attested exposure × our equity now (account = truth).
+      if (gross > config.maxGrossLeverage) throw new Error(`gross exposure ${gross.toFixed(2)}× exceeds ${config.maxGrossLeverage}×`);
+      // Targets = exposure × our equity now (account = truth).
       const equity = Math.max(account.equityUsd, 0);
-      const targets = new Map(exposures.map((e) => [e.asset, e.fraction * equity]));
-      return planOrders(targets, account, markets, this.deps.config.plan);
-    }, Number(body.expiresAt) * 1000));
+      return planOrders(new Map(exposures.map((e) => [e.asset, e.fraction * equity])), account, markets, config.plan);
+    }, expiresAt));
   }
 
-  // Kill switch: close everything, bypassing CRE (README §4.8).
+  // Kill switch: close everything, whatever the targets say (README §4.8).
   flatten(by: string): Promise<RunRecord> {
     const id = `flatten-${this.deps.now()}`;
     return this.serial(id, (token) =>
@@ -118,18 +132,18 @@ export class Runner {
     id: string,
     runId: string,
     kind: RunRecord["kind"],
-    envelope: unknown,
+    evidence: unknown,
     token: CancelToken,
-    makePlan: (markets: Map<string, Market>, account: Awaited<ReturnType<typeof loadAccount>>) => Promise<Plan>,
+    makePlan: (markets: Map<string, Market>, account: Awaited<ReturnType<typeof loadAccount>>, record: RunRecord) => Promise<Plan>,
     expiresAt?: number,
   ): Promise<RunRecord> {
     const { store, exchange, info, alert, now, config } = this.deps;
-    const record: RunRecord = { id, runId, kind, status: "executed", dryRun: exchange.dryRun, startedAt: now(), finishedAt: 0, envelope };
+    const record: RunRecord = { id, runId, kind, status: "executed", dryRun: exchange.dryRun, startedAt: now(), finishedAt: 0, evidence };
     let release: (() => Promise<void>) | undefined;
     try {
       release = await (this.deps.lock ?? noLock).acquire(config.runTimeoutMs);
       const unresolved = await store.unresolvedOrderBatches();
-      if (kind === "report" && unresolved.length > 0) {
+      if (kind === "mirror" && unresolved.length > 0) {
         await store.setControls({ paused: true, updatedAt: now(), updatedBy: `unresolved-order-batch:${unresolved[0].id}` });
         record.status = "skipped_paused";
         record.error = `${unresolved.length} order batch(es) need reconciliation`;
@@ -137,13 +151,13 @@ export class Runner {
         return record;
       }
       const controls = await store.getControls();
-      if (kind === "report" && controls.paused) {
+      if (kind === "mirror" && controls.paused) {
         record.status = "skipped_paused";
         return record;
       }
       const [markets, account] = await Promise.all([loadMarkets(info), loadAccount(info, config.account)]);
       record.equityUsd = account.equityUsd;
-      const plan = await makePlan(markets, account);
+      const plan = await makePlan(markets, account, record);
       record.plan = plan;
 
       // Re-read durable controls after asynchronous work and before each exchange
@@ -151,10 +165,10 @@ export class Runner {
       // prevent subsequent orders, including later batches.
       const stopReason = async (): Promise<string | undefined> => {
         if (token.cancelled) return `run timed out after ${config.runTimeoutMs / 1000}s`;
-        if (kind === "report" && (await store.getControls()).paused) return "execution paused";
+        if (kind === "mirror" && (await store.getControls()).paused) return "execution paused";
         // Check time after the database read as it can itself be slow.
         if (token.cancelled) return `run timed out after ${config.runTimeoutMs / 1000}s`;
-        if (expiresAt !== undefined && now() > expiresAt) return "report expired before exchange action";
+        if (expiresAt !== undefined && now() > expiresAt) return "run expired before exchange action";
         return undefined;
       };
       const assertActive = async (): Promise<void> => {
@@ -172,7 +186,7 @@ export class Runner {
         const leverage = markets.get(o.asset)!.maxLeverage;
         const journalId = `${id}:leverage:${o.assetId}`;
         await store.beginOrderBatch({
-          id: journalId, reportId: id, createdAt: now(), orders: [], cloids: [], kind: "leverage",
+          id: journalId, runId: id, createdAt: now(), orders: [], cloids: [], kind: "leverage",
           details: { asset: o.asset, assetId: o.assetId, leverage },
         });
         // Persist intent before dispatch. If the request or process fails before a
@@ -214,7 +228,7 @@ export class Runner {
         {
           beforeDispatch: (batchIndex, orders, cloids) => store.beginOrderBatch({
             id: `${id}:${batchIndex}`,
-            reportId: id,
+            runId: id,
             createdAt: now(),
             orders: structuredClone(orders),
             cloids: [...cloids],

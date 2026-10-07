@@ -6,7 +6,7 @@ import {tmpdir} from 'node:os';
 import {PGlite} from '@electric-sql/pglite';
 import {reviewPaperSession,freezePaperSession} from '../packages/backend/review/paper/lifecycle.ts';
 import {SupabasePaperStore} from '../packages/backend/review/paper/store.ts';
-import {runCommitteeReview} from '../packages/cre-workflows/review/committee/workflow.ts';
+import {runCommitteeReview} from '../packages/backend/review/committee/workflow.ts';
 import {paperFixture,NOW} from './support/paper-lifecycle-fixture.ts';
 import type {Rpc} from '../packages/backend/review/supabase.ts';
 async function database(path?:string):Promise<PGlite>{const db=new PGlite(path);await db.exec('create role anon; create role authenticated; create role service_role bypassrls;');for(const name of ['20261006130000_review_audit.sql','20261006140000_paper_review.sql'])await db.exec(readFileSync(new URL('../supabase/migrations/'+name,import.meta.url),'utf8'));return db;}

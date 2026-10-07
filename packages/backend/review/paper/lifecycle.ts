@@ -1,7 +1,7 @@
 // @env node
 import {z} from '../../../shared/src/zod.ts';
-import {runCommitteeReview,validateCommitteeReceipt} from '../../../cre-workflows/review/committee/workflow.ts';
-import type {CommitteeDependencies,CommitteeReceipt} from '../../../cre-workflows/review/committee/types.ts';
+import {runCommitteeReview,validateCommitteeReceipt} from '../committee/workflow.ts';
+import type {CommitteeDependencies,CommitteeReceipt} from '../committee/types.ts';
 import {bindCommitteeEvidence} from '../../../shared/src/committee-evidence.ts';
 import type {CommitteeEvidence} from '../../../shared/src/committee-evidence.ts';
 import {proposeFreeze} from '../../../shared/src/frozen.ts';

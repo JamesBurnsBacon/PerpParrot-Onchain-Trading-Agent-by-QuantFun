@@ -1,4 +1,4 @@
-import { capGrossExposure, checkActiveCeilings, computeExposures, EXPOSURE_SCALE } from "../../../shared/copy";
+import { EXPOSURE_SCALE, targetsFromSnapshot } from "../../../shared/copy";
 import type { PositionsSnapshot } from "../../../shared/snapshot";
 import { metaAndAssetCtxs } from "../hyperliquid";
 import { accrueFunding, equityOf, newBook, recordMarks, stepBtcBook, stepCopyBook, type Market, type PaperBook, type PaperConfig } from "./book";
@@ -67,28 +67,10 @@ export const loadPaperMarkets = async (): Promise<Map<string, Market>> => {
   return markets;
 };
 
-// The same exposures the mirror's DON computes from this snapshot (weights and ceilings
-// from the frozen configuration, gross capped at the policy's maxGrossLeverage), with the
-// mirror's deterministic checks: where it would send no report, this throws and the books
-// hold, as the executor does. (A spot-check failure can't be seen from here.)
-export const exposuresFromSnapshot = (snapshot: PositionsSnapshot): Map<string, number> => {
-  const frozen = new Map(snapshot.configuration.sources.map((s) => [s.sourceAddress.toLowerCase(), s]));
-  const eligible = new Set(snapshot.eligibleAssets);
-  for (const s of snapshot.sources) {
-    if (!frozen.has(s.address)) throw new Error(`source ${s.address} is not in the frozen configuration`);
-    for (const p of s.positions) if (!eligible.has(p.asset)) throw new Error(`ineligible asset in snapshot: ${p.asset}`);
-  }
-  const sources = snapshot.sources.map((s) => ({
-    ...s,
-    weightE6: frozen.get(s.address)!.weightUnits,
-    ceilingE6: frozen.get(s.address)!.ceilingUnits,
-  }));
-  checkActiveCeilings(sources);
-  const maxGrossE9 = BigInt(Math.round(snapshot.configuration.policy.maxGrossLeverage * Number(EXPOSURE_SCALE)));
-  return new Map(
-    capGrossExposure(computeExposures(sources), maxGrossE9).map((e) => [e.asset, Number(e.exposureE9) / Number(EXPOSURE_SCALE)]),
-  );
-};
+// The run's target exposures as fractions of equity (shared/copy.ts targetsFromSnapshot): where the
+// executor would get no targets, this throws and the books hold, as the executor does.
+export const exposuresFromSnapshot = (snapshot: PositionsSnapshot): Map<string, number> =>
+  new Map(targetsFromSnapshot(snapshot).map((e) => [e.asset, Number(e.exposureE9) / Number(EXPOSURE_SCALE)]));
 
 // At most `max` points: every point if it fits, else evenly spaced ones plus the last.
 const thin = <T,>(points: T[], max: number): T[] => {

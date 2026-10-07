@@ -40,10 +40,8 @@ metrics and deterministic rank ordering as the scorer, with a shared cutoff and 
 gap-safe held-out return calculation. It fails on malformed histories, stale data,
 duplicate addresses, insufficient observations, or undersized cohorts.
 
-The YouTube context was useful for the CRE simulation/workflow boundary, not for
-claiming trading edge: the [Chainlink CRE Bootcamp walkthrough](https://www.youtube.com/watch?v=pLAttM7-UTA)
-focuses on building and simulating workflows. For the statistical design, I followed
-the more precise [QuantConnect research guidance](https://www.quantconnect.com/docs/v2/writing-algorithms/key-concepts/research-guide):
+For the statistical design, I followed the
+[QuantConnect research guidance](https://www.quantconnect.com/docs/v2/writing-algorithms/key-concepts/research-guide):
 freeze the rule, keep later data unseen during ranking, and require repeated forward
 windows before trusting a result. This first run only implements one cutoff; the report
 does not claim to satisfy the multi-window gate.

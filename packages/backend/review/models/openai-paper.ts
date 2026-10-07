@@ -8,12 +8,12 @@ import {validate} from '../../../shared/src/validate.ts';
 import {commitment} from '../../../shared/src/commitments.ts';
 import {ROLE_PROMPT,RISK_PROMPT,RED_TEAM_PROMPT} from '../../../shared/src/prompts.ts';
 import type {CommitteeEvidence} from '../../../shared/src/committee-evidence.ts';
-import type {CommitteeDependencies,EvidenceObservation,EvidenceCritique,CritiqueInput} from '../../../cre-workflows/review/committee/types.ts';
+import type {CommitteeDependencies,EvidenceObservation,EvidenceCritique,CritiqueInput} from '../committee/types.ts';
 import type {PaperModelOptions,PaperModelCore,CommitteeStage} from './types.ts';
 const modelPattern=/^gpt-[A-Za-z0-9.-]+-\d{4}-\d{2}-\d{2}$/;
 const nodeId='paper-provider';
-/** Real server-side provider adapter, one local observation. It never impersonates
- * DON nodes; deployed CRE must perform independent capability consensus. */
+/** Real server-side provider adapter: one honest observation per stage (quorum 1). Several
+ * independent observations (other models or providers) would each be their own node. */
 export function openAIPaperCommittee(options:PaperModelOptions,core:PaperModelCore):CommitteeDependencies{
   // Default: the versioned prompts, byte-identical to docs/agents/SYSTEM_PROMPTS.md.
   const {apiKey,model}=options,prompts={...(options.prompts??{role:ROLE_PROMPT,risk:RISK_PROMPT,redteam:RED_TEAM_PROMPT})},fetcher=options.fetcher??fetch;

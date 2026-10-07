@@ -1,13 +1,13 @@
-# Agent / CRE architecture v1
+# Agent architecture v1
 
-Status: design contract for the offline/CRE review core; this is not deployed trading
+Status: design contract for the server-side review core; this is not deployed trading
 code. See [integration guide](INTEGRATION.md) and
 [production integration status](PRODUCTION_INTEGRATION.md) for implemented behavior
 and outstanding gates. The initial design was drafted against baseline
 `0f07e229028c84d62caecf00d1e842adc774a9e8`; the current branch also contains the
-backend score/snapshot service, shared contracts, CRE mirror workflow, and executor.
-Their presence and local tests do not establish successful CRE simulation, production
-deployment, or funded execution.
+backend score/snapshot service, shared contracts, the mirror run (backend targets plus
+executor) and the dashboard. Their presence and local tests do not establish a
+real-provider review run, production deployment, or funded execution.
 
 ## Decisions and precedence
 
@@ -25,15 +25,15 @@ memory, dynamic delegation, execution agent or inference in the 10-minute loop.
 flowchart TD
   I[Backend ingest / label / score] --> P[Preflight numeric evidence]
   B[Point-in-time backtest evidence] --> P
-  P --> R[CRE Role scores]
-  P --> K[CRE Risk scores]
-  R --> C[Validated field-level consensus]
+  P --> R[Role scores]
+  P --> K[Risk scores]
+  R --> C[Validated field-level aggregation]
   K --> C
   C --> D[Deterministic diversification / compiler]
-  D --> T[CRE Red Team]
+  D --> T[Red Team]
   T --> V[At most one bounded rebuild / validator]
-  V --> M[BucketManifest / signed report / freeze receipt]
-  M --> L[Deterministic mirror / signed RebalanceReport]
+  V --> M[BucketManifest / frozen configuration / configurationHash]
+  M --> L[Deterministic mirror run / target exposures]
   L --> E[Existing API-wallet executor / reconciliation]
   M --> N[Narrative / dashboard only]
 ```
@@ -124,15 +124,16 @@ change.
 | backtest | Past-cut evidence and provenance feed preflight; evaluate selections separately | backtests per OOS window |
 | review | Frame → Role/Risk → diversification → compiler → Red Team → validator | reviews / buckets / freeze hash |
 | positions | Uses resolved manifest source addresses and frozen weights | snapshot API |
-| mirror | Reads only VALID frozen manifest + fresh state; zero inference | signed report + receipt hash |
-| execute | Existing DON verification, nonce, signing, IOC, reconciliation | orders / fills / ledger |
+| mirror | Reads only VALID frozen configuration + fresh state; zero inference | run snapshot + target exposures |
+| execute | Existing configurationHash/account check, run claim, nonce, signing, IOC, reconciliation | orders / fills / ledger |
 | paper / dashboard | Render modes and Narrative separately | paper_books / read-only UI |
 
 Adapters must preserve existing table/API shapes once implementations exist. Do not
 rename `review` to `curate` externally. `CandidateCurationFrame` and consensus are
-internal review inputs. `BucketManifest` is the resolved downstream handoff;
-`RebalanceReport` describes the unsigned payload wrapped by a CRE report. It is not
-itself a DON signature or a Hyperliquid exchange request.
+internal review inputs. `BucketManifest` is the resolved downstream handoff.
+`RebalanceReport` is the original contract's order-intent shape; the running mirror
+instead serves target exposures (`GET /targets/:runAt`) that the executor sizes and
+plans itself. Neither is a Hyperliquid exchange request.
 
 ## Consensus and failure state machine
 
@@ -142,8 +143,9 @@ hashes, nonfinite values and incomplete vectors. Do not median candidate IDs or
 hashes. Agree identity exactly, sort by candidate, aggregate numeric fields using
 median, then revalidate. For even observation counts use the mean of the middle
 values and round risk/rejection scores upward and suitability/confidence scores downward; multipliers stay numeric. Quorum must be
-configured for the actual DON, never inferred from an LLM-provided count. The
-orchestrator attaches consensus provenance; models return only result rows.
+configured for the actual set of model observations (today one provider node,
+quorum 1), never inferred from an LLM-provided count. The orchestrator attaches
+aggregation provenance; models return only result rows.
 
 Risk scores become CAP / WATCHLIST / REJECT, a binding constraint and allocation
 ceiling through policy code. Choose the largest dimension as binding, with stable
@@ -166,53 +168,53 @@ manifest. Failure does not automatically flatten existing positions: Pause/Flatt
 remain explicit executor controls. Mirror stale/mismatched state → NO_TRADE.
 Uncertain execution → reconcile by cloid; never blind resend or switch transports.
 
-## CRE and signing boundaries
+## Aggregation, hashing and signing boundaries
 
-Same-model DON aggregation provides tamper-resistant structured judgments and
-sampling robustness, not independent investment opinions or removal of shared bias.
-Role/Risk separation provides independent context. Two-model backtest comparison
-remains an offline experiment: pin prompt, model configuration, policy and data cut,
-then shadow-track the loser. Do not mix model outputs in one consensus vector.
+Several observations of the same model provide sampling robustness, not independent
+investment opinions or removal of shared bias. Role/Risk separation provides
+independent context. Two-model backtest comparison remains an offline experiment:
+pin prompt, model configuration, policy and data cut, then shadow-track the loser.
+Do not mix model outputs in one aggregated vector.
 
-Before wiring the SDK, pin its version, prove strict structured responses and
-aggregation in simulation, measure serialized bytes and run production-limit checks.
-Current [CRE quotas](https://docs.chain.link/cre/service-quotas) are deployment
-constraints, not constants in prompts. Budget one compact backend request, one Role
-call, one Risk call, one Red-Team call per run; multiple bucket critiques must be
-batched or split into workflows within actual quotas. Rebuild is deterministic and
-adds no model call. Mirror spot-check count must fit remaining HTTP quota after
-account and report delivery calls; README's ~10-source sampling is not guaranteed.
-Use a deterministic snapshot-derived sample, not per-node unseeded randomness.
+The review runs server-side (`packages/backend/scripts/review-run.ts`), not in the
+10-minute loop. Budget one compact evidence build, one Role call, one Risk call and
+one Red-Team call per run; multiple bucket critiques must be batched. Rebuild is
+deterministic and adds no model call. Measure serialized request and response sizes
+against the provider's limits rather than encoding them in prompts.
 
-Report verification must bind manifest, snapshot, account, policy, intent hash,
-expiry and approved workflow/environment. Hash JSON with RFC 8785 canonicalization and Keccak-256 over UTF-8 canonical
+Hash JSON with RFC 8785 canonicalization and Keccak-256 over UTF-8 canonical
 `{domain,payload}`, excluding its own hash field. Shared commitment helpers implement
 this exact format.
 Do not claim JSON.stringify is canonical. Bind snapshotHash to sanitized frame
 content (excluding snapshotHash) **and** trusted index/address mapping; use the
-same domain convention for policy/manifest/report and log prompt/model hashes.
+same domain convention for policy/manifest/configuration and log prompt/model hashes.
 Self-reported hashes must be independently recomputed. Reject semantic mismatches,
 expiry before creation, stale input, wrong mode/account, duplicate sources/assets,
 weights outside caps or weights+cash !=1 (explicit numeric tolerance), nonpositive
-order sizes/prices, and NO_TRADE reports containing orders. Require VALID to have
+order sizes/prices, and NO_TRADE results containing orders. Require VALID to have
 reason OK, matching nested bucket/mode, and only Aggressive eligible for LIVE in v1.
 These are adapter semantic checks; JSON Schema alone cannot enforce them.
 
-Signer holds only an approved HL API wallet, never the master key. Keep DON
-verification, report dedupe, atomic nonce ownership, kill switch, allowed assets and
-exposure checks in execute. [HL nonce/API-wallet guidance](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/nonces-and-api-wallets)
+Each mirror run binds its evidence to the frozen configuration: the executor rejects
+targets whose configurationHash or account differs from its pinned
+FROZEN_CONFIGURATION_HASH and HL_ACCOUNT, and records `{snapshotHash,
+configurationHash, exposures}` with the run so anyone can fetch the snapshot and
+recompute its keccak256.
+
+Signer holds only an approved HL API wallet, never the master key. Keep the
+configuration check, per-run claim, atomic nonce ownership, kill switch, allowed
+assets and exposure checks in execute. [HL nonce/API-wallet guidance](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/nonces-and-api-wallets)
 is the integration reference. Deterministic cloid, expiry and reconciliation remain
-required. A proposed `ExchangeTransport` may later carry an already-signed envelope
-through Confidential HTTP; no signing rewrite, automatic transport failover after
-uncertainty, key migration or executor refactor is part of this contribution.
+required. No signing rewrite, automatic transport failover after uncertainty, key
+migration or executor refactor is part of this contribution.
 
 ## Implementation gates
 
 1. Adopt schemas with strict runtime validation and semantic checks in shared.
 2. Build deterministic compiler/validator against replay fixtures before model calls.
-3. Run prompt evals and CRE production-limit simulation; then connect review adapter.
-4. Prove frozen-manifest mirror behavior and existing executor reports unchanged.
-5. Only then integrate receipts and optional Confidential HTTP against installed SDK.
+3. Run prompt evals and a real-provider review run; then connect the review adapter.
+4. Prove frozen-configuration mirror behavior and existing executor runs unchanged.
+5. Only then integrate receipts and decide how reviews are scheduled (Vercel Cron or AWS).
 
 No live capital, leverage settings, source reselection, orders or deployment changes
 are made by this documentation/contracts contribution.
