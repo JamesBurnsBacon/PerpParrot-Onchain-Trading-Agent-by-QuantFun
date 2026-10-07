@@ -8,7 +8,7 @@ import type {Evidence} from './review-evidence.ts';
 export const COMMITTEE_PAYLOAD_BYTES=1_000_000;
 export interface CommitteeEvidence {
   schemaVersion:Binding['schemaVersion'];snapshotHash:string;policyHash:string;asOfMs:number;
-  finalists:({candidate:number;kind:Frame['candidates'][number]['kind'];metrics:Frame['candidates'][number]['metrics']} & Pick<Evidence['finalists'][number],'equityCurve'|'positions'|'patterns'>)[];
+  finalists:({candidate:number;kind:Frame['candidates'][number]['kind'];metrics:Frame['candidates'][number]['metrics']} & Pick<Evidence['finalists'][number],'equityCurve'|'positions'|'patterns'|'exposureByClass'|'measurement'>)[];
   pairs:Frame['pairs'];evidenceHash:string;
 }
 /** Server/offline bridge. Models receive anonymous evidence; addresses remain in
@@ -24,7 +24,8 @@ export function bindCommitteeEvidence(frame:Frame,policy:Policy,addresses:Readon
     if(!candidate||candidate.kind!==finalist.kind)throw new Error('committee identity mismatch');
     const metricPairs=[['historyDays','historyDays'],['timeInMarket','timeInMarket'],['medianHoldMinutes','medianHoldMinutes'],['makerShare','makerShare'],['maxDrawdown','maxDrawdown']] as const;
     for(const [field,metric] of metricPairs)if(finalist[field]!==candidate.metrics[metric])throw new Error('contradictory finalist metrics');
-    const result={candidate:finalist.candidate,kind:finalist.kind,metrics:structuredClone(candidate.metrics),equityCurve:finalist.equityCurve,positions:finalist.positions,patterns:finalist.patterns};
+    const result={candidate:finalist.candidate,kind:finalist.kind,metrics:structuredClone(candidate.metrics),equityCurve:finalist.equityCurve,positions:finalist.positions,patterns:finalist.patterns,
+      ...(finalist.exposureByClass?{exposureByClass:finalist.exposureByClass}:{}),...(finalist.measurement?{measurement:finalist.measurement}:{})};
     if(byteLength(result)>4096)throw new Error('combined finalist exceeds 4 KB');
     return result;
   });
