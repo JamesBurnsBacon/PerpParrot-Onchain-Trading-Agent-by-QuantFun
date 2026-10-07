@@ -58,16 +58,16 @@ test("a saved request card shows PENDING with the request id, no order wording a
   expect(out).not.toMatch(/<button[^>]*>[^<]*(place|submit|execute) order/i); // no control that acts on an account
 });
 
-// Four rows fit the phone stage; later orders remain reachable via the pager.
-test("large order sketches are paginated without dropping the total", () => {
+// Nothing is paged: every order is on screen at once, in columns, and the total is still shown.
+test("large order sketches show every order at once, in columns, with no pager", () => {
   const out = html({ kind: "request", stage: "awaiting", plan: { ...PLAN, orders: Array.from({ length: 25 }, (_, i) => ({ ...PLAN.orders[0], asset: `ASSET${i}` })) }, previewHash: "0xabc", requestId: null, sources: 25 });
-  expect(out.match(/<li>/g)).toHaveLength(4);
+  expect(out.match(/<li>/g)).toHaveLength(25);
   expect(out).toContain("25 orders");
-  expect(out).toContain('aria-label="Next orders"');
-  expect(out).toContain("1 / 7");
+  expect(out).toContain('data-cols="3"');
+  expect(out).not.toMatch(/Next orders|Previous orders|stage-pager/);
 });
 
-test("stage pagination reaches every order and fact, resets on a new card, and only awaiting can confirm", () => {
+test("every order and fact is on screen at once, and only the awaiting card can confirm", () => {
   const result = Bun.spawnSync([process.execPath, "run", "test/fixtures/parrot-stage-interactions.fixture.tsx"], { cwd: new URL("..", import.meta.url).pathname, stdout: "pipe", stderr: "pipe" });
   expect(result.stdout.toString() + result.stderr.toString()).toContain("stage interactions GREEN");
   expect(result.exitCode).toBe(0);

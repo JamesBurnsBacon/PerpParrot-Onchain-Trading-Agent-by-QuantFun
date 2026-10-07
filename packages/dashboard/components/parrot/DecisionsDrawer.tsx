@@ -3,15 +3,12 @@ import { useEffect, useRef, useState } from "react";
 import type { ReceiptRow } from "../../lib/parrot-judge-queue";
 import { settle, STAMPS } from "../../lib/parrot-receipts";
 import { OpenAIMark } from "./OpenAIMark";
-import { Icon, Pager } from "./StageBits";
+import { Icon } from "./StageBits";
 
-// Bounded pages keep the exact sentence and turn facts reachable without a JSON viewer or scrolling.
+// The exact sentence and turn facts are shown in full (small type), without paging, a JSON viewer or scrolling.
 export function ReceiptText({ text, label }: { text: string; label: string }) {
-  const [page, setPage] = useState(0);
   const display = text.replace(/\s+/g, " ").trim();
-  const count = Math.max(1, Math.ceil(display.length / 180));
-  const current = Math.min(page, count - 1);
-  return <section className="receipt-text"><h3>{label}</h3><p>{display.slice(current * 180, (current + 1) * 180)}</p><Pager page={current} count={count} onPage={setPage} label={label.toLowerCase()} /></section>;
+  return <section className="receipt-text"><h3>{label}</h3><p>{display}</p></section>;
 }
 
 export function DecisionsDrawer({ rows, initial, calls, cost, opener, onClose }: {

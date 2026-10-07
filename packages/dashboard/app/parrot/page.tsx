@@ -100,10 +100,7 @@ function ParrotContent() {
       <header className="parrot-top">
         <a href="/" className="parrot-back" aria-label="Back to Dashboard"><Icon kind="back" /></a>
         <h1 className="parrot-brand"><Parrot />PerpParrot</h1>
-        <div className="show-controls">
-          <button type="button" aria-label={`Sound effects ${fx.sound ? "on" : "off"}`} aria-pressed={fx.sound} onClick={fx.toggleSound}><Icon kind="sound" /></button>
-          <button type="button" aria-label="Calm mode" aria-pressed={fx.calm} onClick={fx.toggleCalm}><Icon kind="moon" /></button>
-        </div>
+        <span className="top-spacer" aria-hidden="true" />
       </header>
       <div className="show-floor">
         <section className="parrot-stage" aria-label="Talk with PerpParrot">

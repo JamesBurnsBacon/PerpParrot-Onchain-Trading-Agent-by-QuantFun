@@ -30,15 +30,6 @@ export function CountUp({ value, prefix = "", suffix = "", digits = 0 }: { value
   return <span className="count-up" role="img" aria-label={format(value)}><span aria-hidden="true">{format(shown)}</span></span>;
 }
 
-export function Pager({ page, count, onPage, label }: { page: number; count: number; onPage: (page: number) => void; label: string }) {
-  if (count <= 1) return null;
-  return <nav className="stage-pager" aria-label={label}>
-    <button type="button" aria-label={`Previous ${label}`} disabled={page === 0} onClick={() => onPage(page - 1)}><Icon kind="back" /></button>
-    <span role="status">{page + 1} / {count}</span>
-    <button type="button" aria-label={`Next ${label}`} disabled={page >= count - 1} onClick={() => onPage(page + 1)}><Icon kind="arrow" /></button>
-  </nav>;
-}
-
 // Region changes never steal microphone focus. Keyboard users can tab to this bounded stage.
 export function StageCard({ label, children, onClose }: { label: string; children: ReactNode; onClose: () => void }) {
   return <section className="parrot-live-card" aria-label={`Live card: ${label}`}>

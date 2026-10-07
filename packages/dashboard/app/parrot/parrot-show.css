@@ -1,6 +1,7 @@
 /* One stage, never a document-length dashboard. All large collections use explicit pagination. */
-html:has(.parrot-show), body:has(.parrot-show) { height: 100%; overflow: hidden; overscroll-behavior: none; }
-.parrot-show { --ink: #26312b; --ink-2: #46523b; --muted: #526046; --surface: #fffcf5; --parrot-green: #6cc04a; --parrot-deep: #27722f; --parrot-navy: #26312b; position: fixed; inset: 0; height: 100dvh; overflow: hidden; isolation: isolate; color: var(--ink); }
+html:has(.parrot-show), body:has(.parrot-show) { height: 100%; overflow: hidden; overflow: clip; overscroll-behavior: none; }
+.parrot-show { --ink: #26312b; --ink-2: #46523b; --muted: #526046; --surface: #fffcf5; --parrot-green: #6cc04a; --parrot-deep: #27722f; --parrot-navy: #26312b; position: fixed; inset: 0; height: 100dvh; overflow: hidden; overflow: clip; contain: layout paint; isolation: isolate; color: var(--ink); }
+/* clip, not just hidden: a hidden box can still be scrolled by focus or scrollIntoView, which pushed the header off the screen */
 .parrot-show *, .parrot-show .decisions-drawer * { box-sizing: border-box; }
 .parrot-show .parrot-shell { height: 100%; display: grid; grid-template-rows: 66px minmax(0, 1fr) 26px; gap: 12px; padding: 28px 36px 4px; max-width: 1600px; margin: auto; }
 .parrot-show .parrot-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
@@ -260,3 +261,63 @@ html:has(.parrot-show), body:has(.parrot-show) { height: 100%; overflow: hidden;
 .parrot-show button:hover, .parrot-show button:active, .parrot-show a:hover { transform: none; } }
 
 .parrot-show [hidden] { display: none !important; }
+
+/* One screen, nothing to page: every bird, order and lane is on screen at once; the art shrinks to fit. */
+.parrot-show .top-spacer { width: 44px; height: 44px; }
+.parrot-show .stage-flock { position: relative; flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; gap: 4px; }
+.parrot-show .flock-heading { flex-direction: row; justify-content: center; align-items: center; gap: 12px; }
+.parrot-show .flock-heading h2 { font-size: 26px; }
+.parrot-show .flock-changes { margin: 0; }
+.parrot-show .bird-wire { flex: 1 1 0; min-height: 0; grid-template-columns: repeat(var(--cols, 4), minmax(0, 1fr)); grid-template-rows: repeat(var(--rows, 1), minmax(0, 1fr)); align-items: stretch; gap: 2px 8px; }
+.parrot-show .bird-wire::before { display: none; }
+.parrot-show .wire-bird { min-height: 0; justify-content: flex-end; }
+.parrot-show .wire-bird svg { flex: 1 1 0; min-height: 0; width: 100%; max-width: 120px; height: auto; }
+.parrot-show .bird-wire[data-rows="1"] .wire-bird b { font-size: 13px; }
+.parrot-show .bird-wire[data-rows="2"] .wire-bird b { font-size: 11px; }
+.parrot-show .bird-wire:is([data-rows="3"], [data-rows="4"]) .wire-bird b { font-size: 9.5px; }
+.parrot-show .bird-wire:is([data-rows="3"], [data-rows="4"]) .bird-meter i { width: 8px; height: 4px; }
+.parrot-show .bird-ghosts { position: absolute; inset: 0; pointer-events: none; }
+.parrot-show .stage-pager { display: none; }
+.parrot-show .order-sketch { width: 100%; max-width: 580px; grid-template-columns: repeat(var(--ocols, 1), minmax(0, 1fr)); gap: 4px 20px; }
+.parrot-show .order-sketch li { font-size: 15px; }
+.parrot-show .bird-race { gap: 8px; }
+.parrot-show .receipt-text p { font-size: 12px; overflow-wrap: anywhere; }
+
+/* The audited sentence is shown (small, two lines at most) so it is clear which line of the talk the verdict is about. */
+.parrot-show .compact-receipt-row { flex-direction: column; align-items: stretch; gap: 3px; text-align: left; }
+.parrot-show .compact-receipt-sentence { font-size: 10px; line-height: 1.2; font-style: italic; color: #46523b; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.parrot-show .compact-receipt-verdict { display: flex; align-items: center; justify-content: flex-start; gap: 8px; }
+
+/* The flock stage fills the whole screen under the label: heading, every bird, then the button. */
+.parrot-show .flock-stage { align-self: stretch; flex: 1 1 auto; width: 100%; justify-content: flex-start; padding: 8px 24px 22px; gap: 8px; } /* the label bar is already above: equal, small margins top and bottom; the birds take the rest */
+.parrot-show .flock-stage .stage-flock { width: 100%; }
+.parrot-show .flock-stage .parrot-button { flex: 0 0 auto; }
+
+/* What kind of wallet at a glance: fall (red/yellow/green) and gain, symbols and numbers only. */
+.parrot-show .bird-stats { display: flex; justify-content: center; gap: 6px; font-size: 10px; line-height: 1; }
+.parrot-show .bird-stats b, .parrot-show .flock-legend b { display: inline-flex; align-items: center; gap: 1px; font-weight: 950; font-variant-numeric: tabular-nums; }
+.parrot-show .bird-stats i { font-style: normal; font-size: 8px; }
+.parrot-show .stat-dd[data-level="low"], .parrot-show .stat-ret[data-level="up"] { color: #1f7a2e; }
+.parrot-show .stat-dd[data-level="mid"] { color: #a37b00; }
+.parrot-show .stat-dd[data-level="high"], .parrot-show .stat-ret[data-level="down"] { color: #b3401a; }
+.parrot-show .stat-dd[data-level="none"], .parrot-show .stat-ret[data-level="none"] { color: #7a8268; }
+.parrot-show .flock-legend { margin-left: 4px; font-size: 10px; font-weight: 800; color: #526046; }
+.parrot-show .bird-wire[data-rows="1"] .bird-stats { font-size: 12px; }
+.parrot-show .bird-wire:is([data-rows="3"], [data-rows="4"]) .bird-stats { font-size: 9px; gap: 4px; }
+
+/* Balance: the parrot scales with the screen height, and the right side gets the hill the left side has. */
+.parrot-show .parrot-scene { width: min(70%, 42dvh); }
+.parrot-show::after { content: ""; position: absolute; z-index: -1; pointer-events: none; width: 60%; height: 26%; right: -22%; bottom: -17%; border-radius: 50%; background: #6cc04a; box-shadow: 0 -15px 0 #b7d895; transform: rotate(-9deg); }
+.parrot-show .bird-stats b { white-space: nowrap; }
+/* A stage, not a document: no accidental text selection highlights (the receipt drawer stays selectable). */
+.parrot-show { user-select: none; -webkit-user-select: none; }
+.parrot-show .decisions-drawer, .parrot-show .decisions-drawer * { user-select: text; -webkit-user-select: text; }
+
+/* Left column: room to breathe, and the stickers sit just outside the ring instead of on the photo. */
+.parrot-show .parrot-stage { gap: 28px; padding-top: 22px; }
+.parrot-show .parrot-scene { width: min(60%, 36dvh); }
+.parrot-show .show-shout { top: -33%; left: -12%; font-size: clamp(28px, 3.4vw, 50px); transform: rotate(-5deg); }
+.parrot-show .show-rosette { right: -26%; bottom: -4%; width: 66px; height: 66px; font-size: 14px; transform: rotate(10deg); }
+.parrot-show .voice-dock { gap: 14px; }
+.parrot-show .parrot-live { gap: 6px 14px; }
+.parrot-show .compact-receipt { margin-top: 0; max-width: 300px; }

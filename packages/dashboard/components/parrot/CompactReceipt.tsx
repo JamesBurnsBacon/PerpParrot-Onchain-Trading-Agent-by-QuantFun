@@ -30,13 +30,15 @@ export function CompactReceipt({ active, status, rows, latest, calls, cost }: Co
     <div className="compact-receipt">
       <button type="button" className="compact-receipt-header" aria-label="Audited by OpenAI Decisions" aria-haspopup="dialog" aria-controls="parrot-decisions-drawer" onClick={e => open(e.currentTarget)}><span>Audited by</span><OpenAIMark /><b>Decisions</b></button>
       <button type="button" className="compact-receipt-row" aria-haspopup="dialog" aria-controls="parrot-decisions-drawer" onClick={e => open(e.currentTarget)}>
-        <span className="compact-receipt-sentence sr-only">{latest.claim}</span>
+        <span className="compact-receipt-sentence" title={latest.claim}>“{latest.claim}”</span>
+        <span className="compact-receipt-verdict">
         {status === "paused" || !decision ? <span className="compact-receipt-state">{state}</span> : banter ? <span className="compact-receipt-state">banter</span> : <>
           <strong className="compact-receipt-stamp" data-relation={settle(decision)} aria-label={stamp}>{stamp === "NOT ON THE RECEIPT" ? "NO EVIDENCE" : stamp}</strong>
           <span className="compact-receipt-grounding"><span className="sr-only">Grounding </span>{Math.round(decision.supported * 100)}%
             <span className="compact-receipt-meter" aria-hidden="true"><i style={{ width: `${decision.supported * 100}%` }} /></span>
           </span>
         </>}
+        </span>
       </button>
     </div>
     <span className="sr-only" aria-live="polite" aria-atomic="true">{announcement}</span>
