@@ -28,6 +28,11 @@ export function ParrotAvatar({ state, stream, live }: { state: AvatarState; stre
   }, [stream, live, quiet, sfx]);
   return <div ref={node} className={`parrot-avatar parrot-avatar--${state}`}>
     <div className="parrot-halo" aria-hidden="true"><i /><i /><i /></div>
+    <div className="parrot-ring" aria-hidden="true" />
+    <i className="parrot-twinkle" aria-hidden="true" style={{ left: "-12%", top: "6%" }} />
+    <i className="parrot-twinkle b" aria-hidden="true" style={{ right: "-10%", top: "30%" }} />
+    <i className="parrot-twinkle c" aria-hidden="true" style={{ left: "-4%", bottom: "6%" }} />
+    <i className="parrot-twinkle d" aria-hidden="true" style={{ right: "-2%", bottom: "2%" }} />
     <div className="parrot-portrait">
       <img src="/parrot.jpg" width={524} height={528} alt="PerpParrot, a friendly green clay parrot with googly eyes, an orange beak, rainbow propeller cap and navy Team RT3 hoodie" />
     </div>

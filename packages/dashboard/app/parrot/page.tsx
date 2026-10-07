@@ -7,7 +7,8 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Badge } from "../../components/parrot/Badge";
 import { ParrotAvatar, type AvatarState } from "../../components/parrot/ParrotAvatar";
 import { StepRail, type Step } from "../../components/parrot/StepRail";
-import { ThemeToggle } from "../../components/parrot/ThemeToggle";
+import { Parrot, ParrotSymbols } from "../../components/lp/ParrotSymbols";
+import { ScrollBuddy } from "../../components/lp/ScrollBuddy";
 import { LiveTalk } from "../../components/parrot/LiveTalk";
 import { CompactReceipt } from "../../components/parrot/CompactReceipt";
 import { useSentenceReceipts } from "../../components/parrot/useSentenceReceipts";
@@ -18,7 +19,12 @@ import { PARROT_PRESETS, type ParrotPreset } from "../../lib/parrot-presets";
 import { ParrotEffectsProvider, useParrotEffects, FunControls, Fever } from "../../components/parrot/ParrotEffects";
 import { diffWallets } from "../../lib/wallet-board";
 import { WaitingFlock } from "../../components/parrot/WalletBoard";
+import "../lp.css"; // the landing theme's shared bits: progress bar, click feathers, peeking parrot
 import "./parrot.css";
+import "./parrot-lp.css"; // the landing page's soft theme on this page (light only)
+
+// Drifting leaves behind the stage (decorative; positions and timings are fixed so server and client agree).
+const LEAVES = Array.from({ length: 12 }, (_, i) => ({ left: (i * 37) % 92, delay: -((i * 1.3) % 9), duration: 8 + (i % 4) }));
 
 // Development-only: the whole module is behind a constant condition, so production builds contain neither the import nor its chunk.
 const EffectsLab = process.env.NODE_ENV !== "production"
@@ -86,14 +92,21 @@ function ParrotContent() {
   const state: AvatarState = live.view.phase === "connecting" ? "thinking" : live.active ? live.view.avatar : busy ? "thinking" : "idle";
 
   return <main data-calm={fx.quiet} className="parrot-page px-4 py-5 sm:px-7 sm:py-7">
+    <ParrotSymbols />
+    <ScrollBuddy />
+    <div className="parrot-awning" aria-hidden="true" />
     <div className="parrot-shell mx-auto max-w-[1240px]">
-      <header className="flex items-center justify-between gap-3">
+      <header className="parrot-top">
         <a href="/" className="parrot-back">← Dashboard</a>
-        <h1 className="sr-only">Talk with PerpParrot</h1>
-        <ThemeToggle />
+        <h1 className="parrot-brand"><Parrot />PerpParrot<span className="sr-only"> · Talk with PerpParrot</span></h1>
+        <span className="parrot-top-spacer" aria-hidden="true" />
       </header>
       <div className="parrot-layout parrot-layout--result">
         <section className="parrot-stage min-w-0" aria-label="Talk with PerpParrot">
+          <div className="parrot-scenery" aria-hidden="true">
+            {LEAVES.map((l, i) => <i key={i} className="parrot-leaf" style={{ left: `${l.left}%`, animationDelay: `${l.delay}s`, animationDuration: `${l.duration}s` }} />)}
+            <div className="parrot-hill back" /><div className="parrot-hill" />
+          </div>
           <div className="parrot-scene"><ParrotAvatar state={state} stream={live.remoteStream} live={live.view.phase === "live" && !live.view.playbackBlocked} /></div>
           <LiveTalk live={live} disabled={busy} />
           <CompactReceipt active={live.view.phase === "live"} {...receipts} />

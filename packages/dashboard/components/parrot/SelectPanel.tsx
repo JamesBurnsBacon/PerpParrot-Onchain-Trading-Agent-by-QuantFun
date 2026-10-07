@@ -15,7 +15,7 @@ export function SelectPanel({ chat, onVerify }: { chat: ChatResponse; demo: bool
   return (
     <div className="space-y-4">
       <WalletBoard chat={chat} />
-      <Panel title="Your wallet preferences" meta={<span className="parrot-eyebrow">01 / SELECT</span>}>
+      <Panel title="Your wallet preferences" tone={3} peek="right" meta={<span className="parrot-eyebrow">01 / SELECT</span>}>
         <div className="flex flex-wrap gap-2">{intentChips(chat.intent).map(chip => <span className={`parrot-chip ${flash.chips.includes(chip) ? "parrot-policy-flash" : ""}`} key={chip}>{chip}</span>)}</div>
         <p className="mt-3 text-sm">Simulation preview. An operator must review and freeze.</p>
         <details className="parrot-details mt-3"><summary>Show what the model returned</summary><pre>{JSON.stringify(chat.intent, null, 2)}</pre></details>
