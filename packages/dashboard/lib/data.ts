@@ -80,6 +80,15 @@ export type RosterEvent = { at: string; address: string; kind: "seeded" | "admit
 export type RosterView = { seats: RosterSeat[]; events: RosterEvent[]; impliedTurnover: number | null };
 export type BenchRow = { address: string; fit: number; approvedAt: number; copyableShare: number | null; closedPositions: number; turnoverPerDay: number | null; passesHold: boolean };
 export type PipelineView = {
+  // NOWNodes cross-check of each mirror snapshot (SNAPSHOT_VERIFY; absent on older backends, mode "off" when unset).
+  verification?: {
+    mode: "off" | "on" | "strict";
+    checks: number;
+    verified: number;
+    mismatches: number;
+    unverified: number;
+    last: { verdict: "verified" | "mismatch" | "unverified"; sources: number; retried: number; ms: number; at: number; diffs: { address: string; asset: string }[]; unverified: string[] } | null;
+  };
   // Hyperliquid read routing of the serving backend instance (absent on older backends).
   routing?: {
     mode: string;
@@ -88,6 +97,13 @@ export type PipelineView = {
     fallbacks: number;
     shadow: { compared: number; mismatches: number };
     breakerOpen: boolean;
+    // The last NOWNodes capability probe (absent or null when the probe is off).
+    capabilities?: {
+      probedAt: number;
+      rows: { method: string; status: number | null; verdict: "supported" | "unsupported" | "inconclusive"; allowlisted: boolean; drift: boolean; ms: number }[];
+      narrowed: string[];
+      newlySupported: string[];
+    } | null;
   };
   accounts: { listed: number; fresh: number; errors: number; listed_at: string | null; qualified?: number; high_frequency?: number; qualified_at?: string | null };
   selections: {

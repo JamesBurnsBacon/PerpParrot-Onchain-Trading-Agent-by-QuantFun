@@ -13,6 +13,8 @@ import { exposuresFromSnapshot, MemoryPaperStore, PaperService, defaultBooks } f
 import { targetsFromSnapshot } from "../../shared/copy";
 import type { PositionsSnapshot } from "../../shared/snapshot";
 import { keccakUtf8 } from "./snapshot";
+import { hlReader } from "./hyperliquid";
+import { nownodesPerp, verifyMode } from "./snapshot-verify";
 import { PostgresEligibilityStore, PostgresPaperStore, PostgresSnapshotStore, readPostgresArtifact } from "./pg-store";
 import { MemorySnapshotStore } from "./snapshot";
 
@@ -99,6 +101,18 @@ const service = new SnapshotService({
   ),
   store,
   nowMs: Date.now,
+  // SNAPSHOT_VERIFY=on|strict (needs NOWNODES_API_KEY; off by default): cross-check every snapshot against NOWNodes.
+  ...(verifyMode(env.SNAPSHOT_VERIFY, env.NOWNODES_API_KEY) !== "off"
+    ? {
+        verify: {
+          mode: verifyMode(env.SNAPSHOT_VERIFY, env.NOWNODES_API_KEY) as "on" | "strict",
+          second: nownodesPerp(env.NOWNODES_API_KEY!),
+          official: hlReader.perp,
+          ...(env.SNAPSHOT_VERIFY_TOLERANCE_PCT ? { tolerancePct: Number(env.SNAPSHOT_VERIFY_TOLERANCE_PCT) } : {}),
+          log,
+        },
+      }
+    : {}),
   // Local end-to-end runs ask for the next :x0 ahead of time (scripts/e2e-mirror.sh): set 600 there.
   maxLeadSeconds: leadSeconds(env.SNAPSHOT_MAX_LEAD_SECONDS),
   onBuilt: (runAt, json) => {

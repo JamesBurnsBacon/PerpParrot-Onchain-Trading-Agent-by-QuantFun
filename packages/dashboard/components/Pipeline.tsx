@@ -71,7 +71,7 @@ function Tile({ label, children, note }: { label: string; children: React.ReactN
 // scan ~14k accounts every 12 h → refresh every 5 min → Score qualifies ~250 → every 10 min pick 25
 // (no high-frequency traders) → AI review when they change → freeze → activate when the sources change.
 export function Pipeline({ view }: { view: PipelineView }) {
-  const { accounts, selections, active, latest, routing } = view;
+  const { accounts, selections, active, latest, routing, verification } = view;
   const run = selections[0];
   const freshShare = accounts.listed ? accounts.fresh / accounts.listed : 0;
   const sources = [...(active?.sources ?? [])].sort((a, b) => b.weightUnits - a.weightUnits);
@@ -139,6 +139,36 @@ export function Pipeline({ view }: { view: PipelineView }) {
             ))}
             <span style={{ color: "var(--ink-2)" }}>{routing.fallbacks} failovers</span>
           </div>
+          {routing.capabilities && (
+            <div className="mt-2 text-xs" style={{ color: "var(--ink-2)" }}>
+              Probed {routing.capabilities.rows.length} info methods on NOWNodes {ago(new Date(routing.capabilities.probedAt).toISOString())}:{" "}
+              {routing.capabilities.rows.filter((r) => r.verdict === "supported").length} served, {routing.capabilities.rows.filter((r) => r.verdict === "unsupported").length} refused (422)
+              {routing.capabilities.rows.some((r) => r.verdict === "inconclusive") ? `, ${routing.capabilities.rows.filter((r) => r.verdict === "inconclusive").length} inconclusive` : ""}.
+              {routing.capabilities.narrowed.length ? ` Not used any more: ${routing.capabilities.narrowed.join(", ")}.` : " The allowlist matches."}
+              {routing.capabilities.newlySupported.length ? ` Served but unused: ${routing.capabilities.newlySupported.join(", ")}.` : ""}
+            </div>
+          )}
+        </Tile>
+      )}
+
+      {verification && verification.mode !== "off" && (
+        <Tile
+          label="Snapshot cross-check (NOWNodes)"
+          note={`mode ${verification.mode} · each mirror snapshot's positions are read again from NOWNodes before the executor sees them`}
+        >
+          <div className="tabular flex flex-wrap items-baseline gap-x-6 gap-y-1 text-sm">
+            <span><span className="font-semibold">{verification.verified}</span> verified</span>
+            <span style={{ color: verification.mismatches ? "var(--critical)" : "var(--ink-2)" }}>{verification.mismatches} blocked on a mismatch</span>
+            <span style={{ color: "var(--ink-2)" }}>{verification.unverified} unverified</span>
+            <span style={{ color: "var(--ink-2)" }}>{verification.checks} checks since this instance started</span>
+          </div>
+          {verification.last && (
+            <div className="mt-2 text-xs" style={{ color: "var(--ink-2)" }}>
+              Last: {verification.last.verdict} across {verification.last.sources} sources in {verification.last.ms} ms
+              {verification.last.retried ? `, ${verification.last.retried} re-read` : ""}
+              {verification.last.diffs.length ? `, differing: ${verification.last.diffs.map((d) => `${short(d.address)} ${d.asset}`).join(", ")}` : ""}.
+            </div>
+          )}
         </Tile>
       )}
 
