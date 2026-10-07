@@ -14,6 +14,7 @@ function fixture(): Decision {
       { value: "faithful", probability: .97 }, { value: "contradicted", probability: .01 },
       { value: "unestablished", probability: .01 }, { value: "ambiguous", probability: .01 },
     ] },
+    { type: "predicate", name: "states_a_fact", probability: .99 },
   ] };
   return { ...parseDecisionsResponse(response), response, request: buildDecisionsRequest(PRESETS[0]), latencyMs: 651, costUsd: .000043 };
 }

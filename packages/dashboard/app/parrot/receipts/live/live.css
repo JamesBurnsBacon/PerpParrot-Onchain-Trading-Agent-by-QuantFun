@@ -1,0 +1,11 @@
+.receipt-live-stage { display: grid; justify-items: center; gap: 16px; margin: 24px 0; }
+.receipt-live-stage .parrot-avatar { width: 180px; height: 180px; }
+.receipt-feed h2 { margin-bottom: 16px; }
+.receipt-card { display: block; width: 100%; text-align: left; border: 2px solid #819564; border-radius: 16px; padding: 18px; margin: 12px 0; background: #90b45312; color: inherit; cursor: pointer; }
+.receipt-card[aria-pressed=true] { outline: 2px solid #719442; outline-offset: 2px; }
+.receipt-card.is-banter { opacity: .6; }
+.receipt-card .receipt-cut { min-height: 0; font-size: 1rem; }
+.receipt-card .receipt-stamp { font-size: 1rem; padding: 5px; }
+.receipt-card .receipt-blade { font-size: 1rem; border-bottom: 1px solid #b6453a; width: 100%; }
+.receipt-bound-facts { white-space: pre-wrap; overflow-wrap: anywhere; }
+.receipt-page > .wallet-board { margin: 24px 0; }

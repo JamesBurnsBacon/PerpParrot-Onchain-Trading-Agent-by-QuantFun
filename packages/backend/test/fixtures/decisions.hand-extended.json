@@ -29,6 +29,11 @@
         }
       ],
       "confidence": 0.96
+    },
+    {
+      "type": "predicate",
+      "name": "states_a_fact",
+      "probability": 0.99
     }
   ],
   "usage": {

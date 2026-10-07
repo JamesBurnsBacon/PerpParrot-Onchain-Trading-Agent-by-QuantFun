@@ -41,7 +41,7 @@ export function ReceiptContent({ initialCached = false }: { initialCached?: bool
         body: JSON.stringify({ claim: text }), signal: AbortSignal.any([controller.signal, AbortSignal.timeout(10_000)]) });
       if (!response.ok) { unavailable = response.status === 503 ? "Jury is resting." : response.status === 429 ? "Jury's call allowance is used up." : unavailable; throw new Error(); }
       const value: unknown = await response.json();
-      if (!isDecision(value) || JSON.parse(value.request.input).claim !== text) throw new Error("Jury returned an unfamiliar result.");
+      if (!isDecision(value, { claim: text }) || JSON.parse(value.request.input).claim !== text) throw new Error("Jury returned an unfamiliar result.");
       if (controller.signal.aborted) return;
       setRoundTrip(performance.now() - start); setLive(value);
       setVisit(v => ({ calls: v.calls + 1, cost: v.cost + value.costUsd })); finish(text, value);
@@ -53,7 +53,7 @@ export function ReceiptContent({ initialCached = false }: { initialCached?: bool
   }
   let valid = false; try { claimText(claim); valid = true; } catch {}
   return <main className={`parrot-page receipt-page ${fx.quiet ? "receipt-quiet" : ""}`}>
-    <header className="receipt-header"><a href="/parrot">← Back to the nest</a>
+    <header className="receipt-header"><a href="/parrot">← Back to the nest</a><a href="/parrot/receipts/live">Judge the Parrot live →</a>
       <small title="Validated API results only. Failed attempts may still be billed.">Decisions calls this visit: {visit.calls} · ${visit.cost.toFixed(8)}<br />Confirmed results · estimated cost; failed calls may cost extra</small></header>
     <h1>Receipt Guillotine <span aria-hidden="true">✂</span></h1><p className="receipt-subtitle">Big beak. Small print. Bring the receipt.</p>
     <section className="receipt-paper" aria-label="Sample receipt"><Badge kind="SAMPLE DATA" /><h2>RECEIPT № 001</h2><pre>{RECEIPT}</pre></section>

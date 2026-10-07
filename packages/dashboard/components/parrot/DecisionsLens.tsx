@@ -9,6 +9,7 @@ export function DecisionsLens({ verdict, live, cached, roundTrip }: { verdict?: 
   return <aside className="decisions-lens" aria-label="Decisions Lens">
     <h2>Decisions Lens</h2><p className="receipt-api">OpenAI Decisions API · {live?.model ?? "gpt-6-luna"} · beta</p>
     <p>{cached ? "cached, no API call · hand-authored numbers" : live ? "API result · grounding against this receipt" : "Awaiting a call · no result yet"}</p>
+    <Bar name="states_a_fact" value={live?.statesAFact} />
     <Bar name="supported_by_facts" value={verdict?.supported} />
     <h3>relation</h3>{RELATIONS.map(r => <Bar key={r} name={r} value={verdict?.relationProbabilities[r]} />)}
     <p>Round trip: {live ? `${roundTrip?.toFixed(0)} ms` : "—"} · Server: {live ? `${live.latencyMs} ms` : "—"}</p>
