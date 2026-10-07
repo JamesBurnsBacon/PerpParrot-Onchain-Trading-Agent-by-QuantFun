@@ -25,6 +25,9 @@ export default function Page() {
   const btc = lastReturn(series, "btc");
   const live = liveIsReal(data?.status ?? null, data?.equity ?? null);
   const executed = data?.equity?.runs ?? 0;
+  // The heartbeat starts one run window (10 min) before the paper books' current start.
+  const booksStart = Math.min(...(data?.paper?.books ?? []).map((b) => b.startedAt ?? Infinity));
+  const heartbeatSince = Number.isFinite(booksStart) ? booksStart * 1000 - 600_000 : undefined;
   const bookNote = (id: string) => {
     const b = data?.paper?.books.find((x) => x.id === id);
     return b ? `${b.openPositions} positions · ${usd(b.equityUsd)}` : undefined;
@@ -95,7 +98,7 @@ export default function Page() {
 
           <div className="grid gap-4 md:grid-cols-2">
             <Panel tone={3} title="Heartbeat" meta="10 min">
-              {data?.runs?.length ? <RunStrip runs={data.runs} /> : <Waiting what="No runs yet" source="executor /runs" />}
+              {data?.runs?.length ? <RunStrip runs={data.runs} since={heartbeatSince} /> : <Waiting what="No runs yet" source="executor /runs" />}
             </Panel>
             <Panel tone={2} title="Run log">
               {data?.recent?.some((r) => r.kind === "mirror") ? <RunLog runs={data.recent} /> : <Waiting what="No runs yet" source="executor /runs" />}
