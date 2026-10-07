@@ -60,9 +60,9 @@ export function HoldButton({ disabled, onConfirm, chat }: { disabled: boolean; o
         <circle cx="15" cy="15" r="12" fill="none" stroke="currentColor" strokeWidth="3" pathLength="1" strokeDasharray="1" strokeDashoffset={1 - progress} transform="rotate(-90 15 15)" />
         <path d="M11 14v-3a4 4 0 018 0v3m-9 0h10v8H10z" fill="none" stroke="currentColor" strokeWidth="1.4" />
       </svg>
-      Lock this strategy
+      Hold to lock
     </button>
-    <p id="parrot-hold-help" className="mt-2 text-center text-xs" style={{ color: "var(--ink-2)" }}>Hold for 1.2 seconds · mouse, touch, Space or Enter. Release to cancel.</p>
+    <p id="parrot-hold-help" className="mt-2 text-center text-xs" style={{ color: "var(--ink-2)" }}><span aria-hidden="true">1.2 seconds</span><span className="sr-only">Hold for 1.2 seconds · mouse, touch, Space or Enter. Release to cancel.</span></p>
     <p className="sr-only" role="status">{progress > 0 && progress < 1 ? "Keep holding to save a pending request." : ""}</p>
   </div>;
 }

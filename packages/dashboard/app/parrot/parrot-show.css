@@ -1,0 +1,327 @@
+/* One stage, never a document-length dashboard. All large collections use explicit pagination. */
+html:has(.parrot-show), body:has(.parrot-show) { height: 100%; overflow: hidden; overflow: clip; overscroll-behavior: none; }
+.parrot-show { --ink: #26312b; --ink-2: #46523b; --muted: #526046; --surface: #fffcf5; --parrot-green: #6cc04a; --parrot-deep: #27722f; --parrot-navy: #26312b; position: fixed; inset: 0; height: 100dvh; overflow: hidden; overflow: clip; contain: layout paint; isolation: isolate; color: var(--ink); }
+/* clip, not just hidden: a hidden box can still be scrolled by focus or scrollIntoView, which pushed the header off the screen */
+.parrot-show *, .parrot-show .decisions-drawer * { box-sizing: border-box; }
+.parrot-show .parrot-shell { height: 100%; display: grid; grid-template-rows: 66px minmax(0, 1fr) 26px; gap: 12px; padding: 28px 36px 4px; max-width: 1600px; margin: auto; }
+.parrot-show .parrot-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.parrot-show .parrot-brand { display: flex; align-items: center; gap: 7px; font-size: 25px; font-weight: 950; letter-spacing: -1.2px; }
+.parrot-show .parrot-brand svg { width: 29px; height: 32px; }
+.parrot-show .show-controls { display: flex; gap: 7px; }
+.parrot-show button, .parrot-show .parrot-back, .parrot-show .decisions-drawer button { cursor: pointer; touch-action: manipulation; transition: transform 150ms ease; }
+.parrot-show button:not(:disabled):hover, .parrot-show .parrot-back:hover, .parrot-show .decisions-drawer button:not(:disabled):hover { transform: translateY(-3px) rotate(-3deg); }
+.parrot-show button:not(:disabled):active, .parrot-show .parrot-back:active, .parrot-show .decisions-drawer button:not(:disabled):active { transform: translateY(3px) rotate(3deg) scale(.97); }
+.parrot-show :is(button,a,select):focus-visible, .parrot-show .decisions-drawer :is(button,select):focus-visible { outline: 3px solid #26312b; outline-offset: 4px; }
+.parrot-show button:disabled, .parrot-show .decisions-drawer button:disabled { cursor: default; opacity: .45; }
+.parrot-show .show-controls button, .parrot-show .parrot-back, .parrot-show .stage-close, .parrot-show .stage-pager button, .parrot-show .decisions-drawer header button { display: inline-grid; place-items: center; width: 44px; height: 44px; flex: 0 0 auto; border: 2px solid #26312b; border-radius: 50%; background: #fffcf5; color: #26312b; box-shadow: 0 3px 0 #26312b18; }
+.parrot-show .show-controls button[aria-pressed="true"] { background: #cfe5b2; }
+.parrot-show .show-floor { min-height: 0; display: grid; grid-template-columns: minmax(0, .92fr) minmax(0, 1fr); gap: 34px; }
+.parrot-show .parrot-stage { min-width: 0; min-height: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 18px; }
+.parrot-show .parrot-scene { position: relative; width: min(66%, 320px); aspect-ratio: 1; flex-shrink: 1; min-height: 0; }
+.parrot-show .show-shout { position: absolute; z-index: 2; top: -20%; left: -16%; font-size: clamp(30px, 5vw, 70px); font-weight: 1000; letter-spacing: -.07em; transform: rotate(-11deg); text-shadow: 3px 4px 0 #fffcf5; }
+.parrot-show .show-rosette { position: absolute; right: -22%; bottom: 3%; z-index: 3; width: 90px; height: 90px; display: grid; place-content: center; line-height: .95; text-align: center; font-size: 23px; font-weight: 950; background: #eac744; border: 3px solid #26312b; border-radius: 35% 48% 30% 48%; transform: rotate(14deg); box-shadow: 4px 6px 0 #26312b20; }
+.parrot-show .parrot-avatar { width: 100%; height: 100%; position: relative; isolation: isolate; animation: bird-bob 2.6s ease-in-out infinite; }
+.parrot-show .parrot-portrait { width: 100%; height: 100%; overflow: hidden; border-radius: 46% 46% 40% 45%; border: 5px solid #fffcf5; box-shadow: 0 12px 0 #34773630, 0 22px 40px #56432925; }
+.parrot-show .parrot-portrait img { width: 100%; height: 100%; object-fit: cover; }
+.parrot-show .parrot-avatar::before { content: ""; position: absolute; inset: -7%; z-index: -1; border: 13px solid #eac744; border-right-color: #9683bf; border-bottom-color: #f29a2e; border-left-color: #639ec4; border-radius: 50%; animation: bird-spin 22s linear infinite; }
+.parrot-show .parrot-avatar--listening .parrot-halo i { animation: bird-listen 2s ease-out infinite; }
+.parrot-show .parrot-halo i { position: absolute; inset: -10%; border: 3px solid #3f9a3a; border-radius: 50%; z-index: -2; opacity: 0; }
+.parrot-show .parrot-halo i:nth-child(2) { animation-delay: .65s; }
+.parrot-show .parrot-halo i:nth-child(3) { animation-delay: 1.3s; }
+.parrot-show .parrot-avatar--speaking { animation: bird-speak .45s ease-in-out infinite alternate; }
+.parrot-show .parrot-avatar--speaking[data-reactive="true"] .parrot-portrait { transform: scale(calc(1 + var(--level, 0) * .1)) rotate(calc(var(--bass, 0) * 5deg)); }
+.parrot-show .parrot-avatar--thinking { animation: bird-think .9s ease-in-out infinite alternate; }
+.parrot-show .voice-dock { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.parrot-show .parrot-live { display: grid; grid-template-columns: auto auto; align-items: center; justify-content: center; gap: 4px 12px; }
+.parrot-show .parrot-talk-row { grid-row: 1 / 4; display: flex; gap: 10px; align-items: center; }
+.parrot-show .parrot-talk { display: grid; place-items: center; width: 80px; height: 80px; border-radius: 45%; background: #6cc04a; border: 3px solid #26312b; color: #26312b; box-shadow: 0 7px 0 #27722f; }
+.parrot-show .parrot-talk--active { background: #f29a2e; box-shadow: 0 7px 0 #975110; }
+.parrot-show .parrot-mute { display: grid; place-items: center; width: 44px; height: 44px; border: 2px solid #26312b; border-radius: 50%; background: #fffcf5; }
+.parrot-show .parrot-mute.is-muted { background: #f8d0ae; }
+.parrot-show .parrot-talk-label { font-size: 23px; font-weight: 950; }
+.parrot-show .parrot-live-status { display: flex; align-items: center; gap: 4px; font-size: 12px; max-width: 180px; }
+.parrot-show .parrot-live-status svg { width: 14px; height: 14px; }
+.parrot-show .parrot-countdown { font-size: 12px; font-variant-numeric: tabular-nums; }
+.parrot-show .parrot-live > .parrot-button { grid-column: 1 / -1; }
+.parrot-show .parrot-spinner { width: 25px; height: 25px; border: 3px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: bird-spin 1s linear infinite; }
+.parrot-show .show-screen { position: relative; min-width: 0; min-height: 0; border: 3px solid #26312b; border-radius: 40px 40px 55px 40px; background: #fffcf5; box-shadow: 9px 12px 0 #26312b, 14px 18px 0 #b7ce9e; padding: 56px 24px 20px; display: flex; flex-direction: column; justify-content: center; overflow: hidden; }
+.parrot-show .screen-label { position: absolute; top: 0; left: 0; right: 0; min-height: 42px; padding: 10px 18px; background: #cfe5b2; border-bottom: 2px solid #26312b; display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 11px; font-weight: 900; letter-spacing: .1em; }
+.parrot-show .screen-label .parrot-badge { font-size: 9px; letter-spacing: 0; }
+.parrot-show .show-idle, .parrot-show .flock-stage, .parrot-show .execute-stage, .parrot-show .parrot-live-card { min-height: 0; min-width: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; text-align: center; gap: 14px; }
+.parrot-show .show-idle h2 { font-size: clamp(64px, 7.8vw, 106px); line-height: .86; letter-spacing: -.075em; font-weight: 1000; transform: rotate(-4deg); text-shadow: 3px 5px 0 #eac744; }
+.parrot-show .show-idle h2 em { font-style: normal; color: #27722f; }
+.parrot-show .show-idle > p { font-size: 21px; font-weight: 850; transform: rotate(-3deg); }
+.parrot-show .leaf-chip, .parrot-show .strategy-style, .parrot-show .strategy-chips > span { display: inline-flex; align-items: center; gap: 5px; background: #eac744; border: 2px solid #26312b; padding: 6px 16px; border-radius: 75% 12% 70% 15% / 35% 60% 35% 60%; font-size: 13px; font-weight: 850; }
+.parrot-show .waiting-wire { display: flex; width: min(90%, 310px); border-bottom: 3px solid #26312b; }
+.parrot-show .waiting-wire svg { width: 33%; margin-bottom: -9px; animation: bird-bob 2s infinite; }
+.parrot-show .waiting-wire svg:nth-child(2) { animation-delay: -.7s; }
+.parrot-show .parrot-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 9px 20px; background: #fffcf5; border: 2px solid #26312b; border-radius: 20px; color: #26312b; font-size: 14px; font-weight: 900; box-shadow: 0 4px 0 #26312b24; }
+.parrot-show .parrot-button--primary { background: #6cc04a; font-size: 20px; min-height: 54px; box-shadow: 0 5px 0 #27722f; }
+.parrot-show .demo-button { min-height: 44px; padding: 5px 18px; font-size: 12px; }
+.parrot-show .dry-bird { display: inline-flex; align-items: center; font-size: 12px; transform: rotate(-6deg); animation: seed-hop 1.4s ease-in-out infinite alternate; }
+.parrot-show .dry-bird svg { max-height: 32px; }
+.parrot-show .dry-bird b { margin-left: -6px; }
+.parrot-show .stage-close { position: absolute; right: 12px; top: 48px; z-index: 4; width: 44px; height: 44px; }
+.parrot-show .parrot-live-card h2, .parrot-show .execute-stage h2 { max-width: 100%; font-size: clamp(26px, 3vw, 44px); font-weight: 1000; letter-spacing: -.06em; line-height: 1; overflow-wrap: anywhere; }
+.parrot-show .parrot-live-card { width: 100%; }
+.parrot-show .stage-stats { display: flex; justify-content: center; gap: 25px; width: 100%; }
+.parrot-show .stage-stats > div { min-width: 0; flex: 1; }
+.parrot-show .stage-stats dt { font-size: 12px; }
+.parrot-show .stage-stats dd { font-size: clamp(22px, 3vw, 38px); font-weight: 950; letter-spacing: -.05em; overflow-wrap: anywhere; }
+.parrot-show .count-up { font-variant-numeric: tabular-nums; }
+.parrot-show .run-state, .parrot-show .strategy-chips { display: flex; justify-content: center; align-items: center; gap: 8px; flex-wrap: wrap; }
+.parrot-show .wallet-solo { width: 110px; }
+.parrot-show .wallet-stats { gap: 8px; }
+.parrot-show .wallet-stats dd { font-size: 26px; }
+.parrot-show .parrot-live-card h2.wallet-title { font-size: 30px; }
+.parrot-show .bird-race { width: 100%; display: grid; gap: 18px; }
+.parrot-show .race-lane { display: grid; grid-template-columns: 1fr 85px; align-items: center; text-align: left; }
+.parrot-show .race-track { position: relative; height: 65px; border-bottom: 3px dashed #b7bda6; margin-right: 10px; background: repeating-linear-gradient(90deg,transparent 0 21px,#26312b08 21px 23px); }
+.parrot-show .race-track::after { content: ""; position: absolute; right: 2px; bottom: 0; width: 8px; height: 55px; background: repeating-conic-gradient(#26312b 0% 25%, #fff 0% 50%) 0 / 8px 8px; }
+.parrot-show .race-runner { position: absolute; width: 55px; left: var(--finish); bottom: -3px; animation: race-enter 1.3s cubic-bezier(.2,.8,.2,1) both; }
+.parrot-show .race-runner svg { width: 55px; height: 55px; animation: seed-hop .6s infinite alternate; }
+.parrot-show .race-lane strong { font-size: 26px; }
+.parrot-show .race-name { font-size: 11px; max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.parrot-show .race-window { font-size: 12px; }
+.parrot-show .sketch-heading { display: flex; align-items: center; gap: 7px; padding-right: 24px; }
+.parrot-show .sketch-heading h2 { font-size: 30px; }
+.parrot-show .order-sketch { width: min(100%, 350px); display: grid; gap: 7px; list-style: none; padding: 0; margin: 0; }
+.parrot-show .order-sketch li { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-weight: 900; font-size: 18px; min-width: 0; }
+.parrot-show .order-sketch li > .count-up { overflow-wrap: anywhere; }
+.parrot-show .order-side { display: flex; align-items: center; gap: 5px; max-width: 58%; overflow-wrap: anywhere; padding: 5px 13px 5px 9px; border-radius: 80% 15% 70% 20% / 25% 60% 30% 70%; border: 2px solid currentColor; font-size: 15px; }
+.parrot-show .order-side svg { flex-shrink: 0; }
+.parrot-show .is-buy { color: #245e2c; background: #d6ebba; }
+.parrot-show .is-sell { color: #783d0a; background: #ffdaad; }
+.parrot-show .sketch-meta { display: flex; gap: 10px; font-size: 11px; flex-wrap: wrap; justify-content: center; }
+.parrot-show .honesty-line { font-size: 11px; color: #46523b; }
+.parrot-show .stage-error { font-size: 12px; font-weight: 800; color: #813511; }
+.parrot-show .saved-ticket { display: flex; flex-direction: column; align-items: center; gap: 18px; max-width: 100%; padding: 10px 0; }
+.parrot-show .ticket-punch { display: grid; place-items: center; background: #cfe5b2; width: 60px; height: 60px; border-radius: 50%; border: 2px solid #26312b; }
+.parrot-show .ticket-punch svg { width: 38px; height: 38px; }
+.parrot-show .pending-stamp { display: block; font-size: clamp(26px, 4vw, 54px); letter-spacing: -.06em; font-weight: 1000; color: #783d0a; border: 5px double currentColor; padding: 5px 12px; transform: rotate(-10deg); animation: stamp-slam .6s cubic-bezier(.2,.9,.2,1) both; }
+.parrot-show .ticket-id { max-width: 100%; overflow-wrap: anywhere; font-size: 12px; }
+.parrot-show .saved-ticket code { font-size: 13px; }
+.parrot-show .unavailable-icon svg { width: 85px; height: 85px; color: #975110; }
+.parrot-show .parrot-badge { display: inline-flex; border: 1px solid #76501d; border-radius: 7px; padding: 3px 6px; background: #ffedb9; color: #59340c; font-size: 10px; font-weight: 900; white-space: nowrap; }
+.parrot-show .stage-flock { width: 100%; }
+.parrot-show .flock-heading { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.parrot-show .flock-heading h2 { font-size: 34px; font-weight: 1000; letter-spacing: -.05em; }
+.parrot-show .flock-count { display: inline-block; margin-left: 10px; color: #27722f; }
+.parrot-show .flock-changes { display: flex; justify-content: center; gap: 12px; font-size: 12px; font-weight: 850; margin: 6px 0; }
+.parrot-show .bird-wire { position: relative; display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); align-items: end; gap: 5px; min-height: 110px; }
+.parrot-show .bird-wire::before { content: ""; position: absolute; top: 68%; width: 100%; border-bottom: 3px solid #26312b; transform: rotate(-2deg); }
+.parrot-show .wire-bird { position: relative; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.parrot-show .wire-bird svg { width: 100%; max-width: 110px; }
+.parrot-show .wire-bird b { font-size: 11px; max-width: 100%; line-height: 1.1; overflow-wrap: anywhere; }
+.parrot-show .bird-joins { animation: bird-join .65s cubic-bezier(.2,.8,.3,1) both; }
+.parrot-show .bird-joins:nth-child(even) { animation-delay: .12s; }
+.parrot-show .bird-joins .wallet-wing, .parrot-show .bird-leaves .wallet-wing { transform-origin: 40px 65px; animation: wing-flap .18s 5 alternate; }
+.parrot-show .bird-leaves { position: absolute; top: 0; width: 80px; animation: bird-exit .8s ease-in both; pointer-events: none; }
+.parrot-show .bird-leaves:nth-child(even) { left: 50%; }
+.parrot-show .stage-pager { display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 6px; font-size: 12px; }
+.parrot-show .stage-pager button { box-shadow: none; }
+.parrot-show .stage-pager button svg { width: 19px; }
+.parrot-show .parrot-privacy { align-self: end; text-align: center; font-size: 10px; color: #46523b; }
+.parrot-show .parrot-fever-slot { position: absolute; inset: 0; pointer-events: none; z-index: 6; }
+.parrot-show .parrot-fever { position: absolute; inset: 0; display: grid; place-items: center; }
+.parrot-show .fever-banner { background: #eac744; border: 3px solid #26312b; padding: 8px 15px; border-radius: 70% 12% / 35% 60%; font-size: 25px; transform: rotate(-8deg); box-shadow: 0 5px 0 #26312b20; }
+.parrot-show .is-animated .fever-banner { animation: celebration-pop 1.8s both; }
+.parrot-show .is-static .fever-banner { font-size: 14px; align-self: end; margin-bottom: 15px; }
+.parrot-show .parrot-feathers { position: absolute; inset: 0; width: 100%; height: 100%; }
+@keyframes bird-bob { 50% { transform: translateY(-7px) rotate(2deg); } }
+@keyframes bird-spin { to { transform: rotate(360deg); } }
+@keyframes bird-listen { 0% { opacity: .5; transform: scale(.95); } 100% { opacity: 0; transform: scale(1.25); } }
+@keyframes bird-speak { to { transform: translateY(-4px) rotate(-3deg) scale(1.035); } }
+@keyframes bird-think { to { transform: rotate(-7deg); } }
+@keyframes seed-hop { to { transform: translateY(-5px) rotate(7deg); } }
+@keyframes bird-join { from { transform: translateY(-65px) rotate(-16deg); opacity: 0; } 70% { transform: translateY(5px) rotate(3deg); } to { transform: none; opacity: 1; } }
+@keyframes bird-exit { to { transform: translate(100px,-130px) rotate(20deg); opacity: 0; } }
+@keyframes wing-flap { to { transform: rotate(35deg); } }
+@keyframes race-enter { from { transform: translateX(-60%); } to { transform: translateX(0); } }
+@keyframes stamp-slam { from { transform: scale(2.5) rotate(15deg); opacity: 0; } 65% { transform: scale(.92) rotate(-12deg); opacity: 1; } to { transform: scale(1) rotate(-10deg); opacity: 1; } }
+@keyframes celebration-pop { 0% { opacity: 0; transform: scale(.5) rotate(-15deg); } 20%,65% { opacity: 1; transform: scale(1) rotate(-8deg); } 100% { opacity: 0; transform: translateY(-50px) rotate(5deg); } }
+@media (max-width: 700px) {
+.parrot-show .parrot-shell { grid-template-rows: 48px minmax(0,1fr) 20px; padding: max(24px, env(safe-area-inset-top)) 16px max(4px,env(safe-area-inset-bottom)); gap: 9px; }
+.parrot-show .parrot-brand { font-size: 20px; }
+.parrot-show .parrot-brand svg { width: 23px; }
+.parrot-show .show-controls { gap: 4px; }
+.parrot-show .show-controls button, .parrot-show .parrot-back { width: 44px; height: 44px; }
+.parrot-show .show-floor { grid-template-columns: minmax(0,1fr); grid-template-rows: minmax(195px,.78fr) minmax(330px,1fr); gap: 12px; }
+.parrot-show .parrot-stage { flex-direction: row; gap: 12px; padding-top: 18px; }
+.parrot-show .parrot-scene { width: 42%; flex-shrink: 0; }
+.parrot-show .show-shout { font-size: 32px; top: -23%; left: -2%; }
+.parrot-show .show-rosette { width: 54px; height: 54px; font-size: 16px; right: -9%; bottom: -5%; border-width: 2px; }
+.parrot-show .parrot-avatar::before { border-width: 8px; }
+.parrot-show .parrot-portrait { border-width: 3px; }
+.parrot-show .voice-dock { width: 53%; gap: 8px; }
+.parrot-show .parrot-live { display: flex; flex-direction: column; gap: 4px; }
+.parrot-show .parrot-talk { width: 64px; height: 64px; }
+.parrot-show .parrot-talk-label { font-size: 20px; }
+.parrot-show .parrot-talk-row { gap: 7px; }
+.parrot-show .parrot-live-status { font-size: 11px; }
+.parrot-show .parrot-countdown { font-size: 11px; }
+.parrot-show .show-screen { border-radius: 26px 26px 36px 26px; padding: 50px 15px 14px; box-shadow: 5px 7px 0 #26312b, 9px 11px 0 #b7ce9e; }
+.parrot-show .screen-label { font-size: 9px; padding: 10px 12px; min-height: 38px; letter-spacing: .04em; }
+.parrot-show .show-idle, .parrot-show .flock-stage, .parrot-show .execute-stage, .parrot-show .parrot-live-card { gap: 8px; }
+.parrot-show .show-idle h2 { font-size: 67px; }
+.parrot-show .waiting-wire { width: 210px; }
+.parrot-show .show-idle > p { font-size: 16px; }
+.parrot-show .stage-close { top: 43px; right: 7px; }
+.parrot-show .leaf-chip { font-size: 11px; padding: 4px 13px; }
+.parrot-show .parrot-button--primary { min-height: 48px; font-size: 18px; }
+.parrot-show .bird-wire { min-height: 95px; }
+.parrot-show .flock-heading h2 { font-size: 27px; }
+.parrot-show .wire-bird b { font-size: 10px; }
+.parrot-show .flock-heading { gap: 3px; }
+.parrot-show .flock-changes { margin: 3px 0; }
+.parrot-show .strategy-style { font-size: 11px; }
+.parrot-show .stage-pager { margin: 0; }
+.parrot-show .stage-pager button { width: 44px; height: 44px; }
+.parrot-show .order-sketch { gap: 4px; }
+.parrot-show .order-side { padding: 3px 9px; font-size: 13px; }
+.parrot-show .order-sketch li { font-size: 17px; }
+.parrot-show .sketch-heading h2 { font-size: 24px; }
+.parrot-show .sketch-meta { gap: 8px; font-size: 10px; }
+.parrot-show .sketch-heading { align-self: flex-start; }
+.parrot-show .wallet-solo { width: 82px; }
+.parrot-show .wallet-stats dd { font-size: 23px; }
+.parrot-show .stage-stats { gap: 9px; }
+.parrot-show .stage-stats dd { font-size: 27px; }
+.parrot-show .pending-stamp { font-size: 35px; }
+.parrot-show .saved-ticket { gap: 17px; }
+.parrot-show .ticket-id { font-size: 11px; }
+.parrot-show .bird-race { gap: 10px; }
+.parrot-show .race-track { height: 55px; }
+.parrot-show .race-lane strong { font-size: 23px; }
+}
+@media (max-height: 740px) and (min-width: 701px) {
+.parrot-show .parrot-scene { width: min(53%, 260px); }
+.parrot-show .parrot-stage { gap: 20px; }
+.parrot-show .parrot-shell { gap: 7px; }
+.parrot-show .show-screen { padding-top: 52px; }
+.parrot-show .parrot-live-card { gap: 10px; } }
+@media (max-height: 760px) and (max-width: 700px) {
+.parrot-show .show-floor { grid-template-rows: minmax(148px,.55fr) minmax(310px,1fr); gap: 8px; }
+.parrot-show .parrot-scene { width: 34%; }
+.parrot-show .voice-dock { width: 61%; }
+.parrot-show .parrot-stage { padding-top: 5px; }
+.parrot-show .show-shout { font-size: 26px; }
+.parrot-show .parrot-talk { width: 50px; height: 50px; }
+.parrot-show .parrot-live { display: grid; gap: 3px 7px; }
+.parrot-show .parrot-talk-row { grid-row: 1 / 4; }
+.parrot-show .parrot-talk-label { font-size: 16px; }
+.parrot-show .parrot-mute { width: 44px; }
+.parrot-show .show-rosette { display: none; } }
+/* A2: compact audited receipt. The two real buttons retain the native modal drawer contract. */
+.parrot-show .compact-receipt { width: 100%; max-width: 320px; border: 1px dashed #526046; border-radius: 14px; background: #fffcf5; overflow: hidden; }
+.parrot-show .compact-receipt button { width: 100%; min-height: 44px; padding: 4px 10px; background: transparent; border: 0; color: #26312b; font-size: 12px; display: flex; align-items: center; justify-content: center; gap: 6px; }
+.parrot-show .compact-receipt-row { border-top: 1px dashed #b7bda6 !important; }
+.parrot-show .compact-receipt-stamp { font-size: 10px; }
+.parrot-show .compact-receipt-stamp[data-relation="contradicted"] { color: #813511; }
+.parrot-show .compact-receipt-grounding { display: flex; gap: 5px; align-items: center; }
+.parrot-show .compact-receipt-meter { width: 26px; height: 5px; border-radius: 3px; background: #dbe1d0; overflow: hidden; }
+.parrot-show .compact-receipt-meter i { display: block; height: 100%; background: #27722f; }
+.parrot-show .openai-mark { flex: 0 0 auto; }
+.parrot-show .decisions-drawer { color: #26312b; background: #fffcf5; border: 3px solid #26312b; border-radius: 28px; width: min(480px,calc(100vw - 24px)); max-width: calc(100vw - 24px); height: min(650px,calc(100dvh - 36px)); max-height: calc(100dvh - 36px); margin: auto; padding: 18px; overflow: hidden; font-family: ui-rounded,"SF Pro Rounded",system-ui,sans-serif; box-shadow: 7px 9px 0 #26312b; }
+.parrot-show .decisions-drawer[open] { display: flex; flex-direction: column; gap: 10px; }
+.parrot-show .decisions-drawer::backdrop { background: #26312bb8; }
+.parrot-show .decisions-drawer header { display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+.parrot-show .decisions-drawer h2 { display: flex; align-items: center; gap: 8px; font-size: 23px; font-weight: 950; }
+.parrot-show .receipt-select { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+.parrot-show .receipt-select select { min-width: 0; width: 100%; height: 44px; border: 2px solid #526046; border-radius: 12px; padding: 4px; text-overflow: ellipsis; }
+.parrot-show .receipt-text { display: flex; flex-direction: column; min-height: 0; flex: 1; gap: 3px; }
+.parrot-show .receipt-text h3 { font-size: 12px; font-weight: 850; }
+.parrot-show .receipt-text p { font-size: 13px; line-height: 1.4; overflow-wrap: anywhere; white-space: pre-wrap; }
+.parrot-show .receipt-text .stage-pager { margin-top: auto; }
+.parrot-show .drawer-verdict { font-size: 17px; color: #783d0a; }
+.parrot-show .receipt-numbers { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
+.parrot-show .receipt-numbers dd { font-weight: 900; }
+.parrot-show .decisions-drawer small { font-size: 11px; }
+@media (max-width: 700px) {
+.parrot-show .compact-receipt button { padding: 3px 5px; gap: 3px; font-size: 10px; }
+.parrot-show .compact-receipt .openai-mark { width: 19px; height: 19px; }
+.parrot-show .compact-receipt-stamp { font-size: 9px; }
+.parrot-show .compact-receipt-meter { display: none; } }
+/* Applies to pseudo-elements and modal top-layer descendants too. Audio reactivity already uses quiet. */
+.parrot-show[data-calm="true"] *, .parrot-show[data-calm="true"] *::before, .parrot-show[data-calm="true"] *::after { animation: none !important; transition: none !important; }
+.parrot-show[data-calm="true"] .bird-leaves { display: none; }
+.parrot-show[data-calm="true"] .parrot-avatar { transform: none; }
+.parrot-show[data-calm="true"] button:hover, .parrot-show[data-calm="true"] button:active, .parrot-show[data-calm="true"] a:hover { transform: none; }
+@media (prefers-reduced-motion: reduce) {
+.parrot-show *, .parrot-show *::before, .parrot-show *::after, .parrot-show .decisions-drawer * { animation: none !important; transition: none !important; }
+.parrot-show .bird-leaves { display: none; }
+.parrot-show button:hover, .parrot-show button:active, .parrot-show a:hover { transform: none; } }
+
+.parrot-show [hidden] { display: none !important; }
+
+/* One screen, nothing to page: every bird, order and lane is on screen at once; the art shrinks to fit. */
+.parrot-show .top-spacer { width: 44px; height: 44px; }
+.parrot-show .stage-flock { position: relative; flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; gap: 4px; }
+.parrot-show .flock-heading { flex-direction: row; justify-content: center; align-items: center; gap: 12px; }
+.parrot-show .flock-heading h2 { font-size: 26px; }
+.parrot-show .flock-changes { margin: 0; }
+.parrot-show .bird-wire { flex: 1 1 0; min-height: 0; grid-template-columns: repeat(var(--cols, 4), minmax(0, 1fr)); grid-template-rows: repeat(var(--rows, 1), minmax(0, 1fr)); align-items: stretch; gap: 2px 8px; }
+.parrot-show .bird-wire::before { display: none; }
+.parrot-show .wire-bird { min-height: 0; justify-content: flex-end; }
+.parrot-show .wire-bird svg { flex: 1 1 0; min-height: 0; width: 100%; max-width: 120px; height: auto; }
+.parrot-show .bird-wire[data-rows="1"] .wire-bird b { font-size: 13px; }
+.parrot-show .bird-wire[data-rows="2"] .wire-bird b { font-size: 11px; }
+.parrot-show .bird-wire:is([data-rows="3"], [data-rows="4"]) .wire-bird b { font-size: 9.5px; }
+.parrot-show .bird-ghosts { position: absolute; inset: 0; pointer-events: none; }
+.parrot-show .stage-pager { display: none; }
+.parrot-show .order-sketch { width: 100%; max-width: 580px; grid-template-columns: repeat(var(--ocols, 1), minmax(0, 1fr)); gap: 4px 20px; }
+.parrot-show .order-sketch li { font-size: 15px; }
+.parrot-show .bird-race { gap: 8px; }
+.parrot-show .receipt-text p { font-size: 12px; overflow-wrap: anywhere; }
+
+/* The audited sentence is shown (small, two lines at most) so it is clear which line of the talk the verdict is about. */
+.parrot-show .compact-receipt-row { flex-direction: column; align-items: stretch; gap: 3px; text-align: left; }
+.parrot-show .compact-receipt-sentence { font-size: 10px; line-height: 1.2; font-style: italic; color: #46523b; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.parrot-show .compact-receipt-verdict { display: flex; align-items: center; justify-content: flex-start; gap: 8px; }
+
+/* The flock stage fills the whole screen under the label: heading, every bird, then the button. */
+.parrot-show .flock-stage { align-self: stretch; flex: 1 1 auto; width: 100%; justify-content: flex-start; padding: 8px 24px 22px; gap: 8px; } /* the label bar is already above: equal, small margins top and bottom; the birds take the rest */
+.parrot-show .flock-stage .stage-flock { width: 100%; }
+.parrot-show .flock-stage .parrot-button { flex: 0 0 auto; }
+
+/* What kind of wallet at a glance: fall (red/yellow/green) and gain, symbols and numbers only. */
+.parrot-show .bird-stats { display: flex; justify-content: center; gap: 6px; font-size: 10px; line-height: 1; }
+.parrot-show .bird-stats b, .parrot-show .flock-legend b { display: inline-flex; align-items: center; gap: 1px; font-weight: 950; font-variant-numeric: tabular-nums; }
+.parrot-show .bird-stats i { font-style: normal; font-size: 8px; }
+.parrot-show .stat-dd[data-level="low"], .parrot-show .stat-ret[data-level="up"] { color: #1f7a2e; }
+.parrot-show .stat-dd[data-level="mid"] { color: #a37b00; }
+.parrot-show .stat-dd[data-level="high"], .parrot-show .stat-ret[data-level="down"] { color: #b3401a; }
+.parrot-show .stat-dd[data-level="none"], .parrot-show .stat-ret[data-level="none"] { color: #7a8268; }
+.parrot-show .flock-legend { margin-left: 4px; font-size: 10px; font-weight: 800; color: #526046; }
+.parrot-show .bird-wire[data-rows="1"] .bird-stats { font-size: 12px; }
+.parrot-show .bird-wire:is([data-rows="3"], [data-rows="4"]) .bird-stats { font-size: 9px; gap: 4px; }
+
+/* Balance: the parrot scales with the screen height, and the right side gets the hill the left side has. */
+.parrot-show .parrot-scene { width: min(70%, 42dvh); }
+.parrot-show::after { content: ""; position: absolute; z-index: -1; pointer-events: none; width: 60%; height: 26%; right: -22%; bottom: -17%; border-radius: 50%; background: #6cc04a; box-shadow: 0 -15px 0 #b7d895; transform: rotate(-9deg); }
+.parrot-show .bird-stats b { white-space: nowrap; }
+/* A stage, not a document: no accidental text selection highlights (the receipt drawer stays selectable). */
+.parrot-show { user-select: none; -webkit-user-select: none; }
+.parrot-show .decisions-drawer, .parrot-show .decisions-drawer * { user-select: text; -webkit-user-select: text; }
+
+/* Left column: room to breathe, and the stickers sit just outside the ring instead of on the photo. */
+.parrot-show .parrot-stage { gap: 28px; padding-top: 22px; }
+.parrot-show .parrot-scene { width: min(60%, 36dvh); }
+.parrot-show .show-shout { top: -33%; left: -12%; font-size: clamp(28px, 3.4vw, 50px); transform: rotate(-5deg); }
+.parrot-show .show-rosette { right: -26%; bottom: -4%; width: 66px; height: 66px; font-size: 14px; transform: rotate(10deg); }
+.parrot-show .voice-dock { gap: 14px; }
+.parrot-show .parrot-live { gap: 6px 14px; }
+.parrot-show .compact-receipt { margin-top: 0; max-width: 300px; }
+
+/* Listening rings stay inside the gap under the parrot and never paint over the controls. */
+@keyframes bird-listen { 0% { opacity: .45; transform: scale(.97); } 100% { opacity: 0; transform: scale(1.04); } }
+.parrot-show .parrot-halo i { inset: -8%; }
+.parrot-show .parrot-scene { z-index: 1; }
+.parrot-show .voice-dock { position: relative; z-index: 4; }
+.parrot-show .ticket-wait { font-size: 12px; font-weight: 850; color: #6f3d12; }
+
+/* Thinking: a classic speech bubble with three bouncing dots, instead of the little leaves under the parrot. */
+.parrot-show .thinking-bubble { position: absolute; z-index: 3; top: 2%; right: -12%; display: flex; gap: 5px; align-items: center; padding: 9px 13px; background: #fffcf5; border: 3px solid #26312b; border-radius: 20px 20px 20px 4px; box-shadow: 3px 4px 0 #26312b25; }
+.parrot-show .thinking-bubble i { width: 8px; height: 8px; border-radius: 50%; background: #26312b; animation: seed-hop .5s ease-in-out infinite alternate; }
+.parrot-show .thinking-bubble i:nth-child(2) { animation-delay: .17s; }
+.parrot-show .thinking-bubble i:nth-child(3) { animation-delay: .34s; }
