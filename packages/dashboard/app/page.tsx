@@ -6,7 +6,7 @@ import { LineChart } from "../components/LineChart";
 import { Pipeline } from "../components/Pipeline";
 import { Roster } from "../components/Roster";
 import { RunLog } from "../components/RunLog";
-import { performanceSeries, pct, runTime, stamp, time, useDashboard, usd, type Series } from "../lib/data";
+import { BUCKETS, liveIsReal, performanceSeries, pct, runTime, stamp, time, useDashboard, usd, type Series } from "../lib/data";
 
 function ThemeToggle() {
   const [theme, setTheme] = useState<"light" | "dark" | null>(null);
@@ -48,18 +48,18 @@ const lastReturn = (series: Series[], id: string) => series.find((s) => s.id ===
 
 export default function Page() {
   const data = useDashboard();
-  const series = performanceSeries(data?.paper ?? null, data?.equity ?? null);
+  const series = performanceSeries(data?.paper ?? null, data?.equity ?? null, data?.status ?? null);
   const lastRun = data?.runs?.filter((r) => r.kind === "mirror").sort((a, b) => b.startedAt - a.startedAt)[0];
   const finalists = data?.funnel?.finalists ?? [];
   // The newest executed run with a plan: targets vs held.
   const lastPlanned = data?.recent?.find((r) => r.kind === "mirror" && r.status === "executed" && r.plan);
-  const live = lastReturn(series, "live");
-  const paper470 = lastReturn(series, "aggressive-470");
-  const twin = lastReturn(series, "aggressive-10k");
-  const btc = lastReturn(series, "btc-hold");
-  const book470 = data?.paper?.books.find((b) => b.id === "aggressive-470");
-  const book10k = data?.paper?.books.find((b) => b.id === "aggressive-10k");
+  const btc = lastReturn(series, "btc");
+  const live = liveIsReal(data?.status ?? null, data?.equity ?? null);
   const executed = data?.equity?.runs ?? 0;
+  const bookNote = (id: string) => {
+    const b = data?.paper?.books.find((x) => x.id === id);
+    return b ? `${b.openPositions} positions · ${usd(b.equityUsd)}` : undefined;
+  };
   const tone = (v?: number) => (v === undefined || Math.abs(v) < 0.005 ? undefined : v > 0 ? "up" : "down");
 
   return (
@@ -79,10 +79,13 @@ export default function Page() {
       </header>
 
       <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatTile label="Live account" value={live === undefined ? "—" : pct(live)} tone={tone(live)} note={executed ? `${executed} run${executed === 1 ? "" : "s"} executed${live === undefined ? " · no live trades yet" : ""}` : undefined} />
-        <StatTile label="Paper · $470" value={paper470 === undefined ? "—" : pct(paper470)} tone={tone(paper470)} note={book470 ? `${book470.openPositions} positions · ${usd(book470.equityUsd)}` : undefined} />
-        <StatTile label="Paper · $10k twin" value={twin === undefined ? "—" : pct(twin)} tone={tone(twin)} note={book10k ? `${book10k.openPositions} positions · ${usd(book10k.equityUsd)}` : undefined} />
-        <StatTile label="BTC buy & hold" value={btc === undefined ? "—" : pct(btc)} tone={tone(btc)} note="benchmark" />
+        {BUCKETS.map((k) => {
+          const v = lastReturn(series, k.id);
+          const note =
+            k.id !== "aggressive" ? bookNote(k.book) : live ? `${executed} run${executed === 1 ? "" : "s"} executed` : `paper model${bookNote(k.book) ? ` · ${bookNote(k.book)}` : ""}`;
+          return <StatTile key={k.id} label={k.label} color={k.color} value={v === undefined ? "—" : pct(v)} tone={tone(v)} note={note} />;
+        })}
+        <StatTile label="BTC buy & hold" color="var(--muted)" reference value={btc === undefined ? "—" : pct(btc)} tone={tone(btc)} note="benchmark" />
       </div>
 
       <div className="mb-4">
@@ -92,7 +95,7 @@ export default function Page() {
           ) : (
             <Waiting what="No runs yet" source="Curves start with the first mirror run" />
           )}
-          {data?.paper?.books.length ? (
+          {series.some((s) => s.bookId) && data?.paper ? (
             <div className="mt-4">
               <PaperTable books={data.paper.books} series={series} />
             </div>

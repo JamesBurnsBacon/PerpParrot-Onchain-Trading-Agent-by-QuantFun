@@ -27,10 +27,18 @@ export function Waiting({ what, source }: { what: string; source: string }) {
 }
 
 // Hero number with an optional signed change (tone + arrow) and a neutral note.
-export function StatTile({ label, value, tone, note }: { label: string; value: string; tone?: "up" | "down"; note?: string }) {
+// color: the tile's line key in the performance chart (dashed for a reference line).
+export function StatTile({ label, value, tone, note, color, reference }: { label: string; value: string; tone?: "up" | "down"; note?: string; color?: string; reference?: boolean }) {
   return (
     <div className="min-w-0 rounded-xl p-4" style={{ background: "var(--surface)", border: "1px solid var(--ring)" }}>
-      <div className="truncate text-xs" style={{ color: "var(--ink-2)" }}>{label}</div>
+      <div className="flex items-center gap-1.5 truncate text-xs" style={{ color: "var(--ink-2)" }}>
+        {color && (
+          <svg width="14" height="8" aria-hidden className="shrink-0">
+            <line x1="0" x2="14" y1="4" y2="4" stroke={color} strokeWidth="3" strokeLinecap="round" strokeDasharray={reference ? "4 3" : undefined} />
+          </svg>
+        )}
+        {label}
+      </div>
       <div className="mt-1 flex items-baseline gap-1.5 text-2xl font-semibold">
         {tone && (
           <span className="text-sm" style={{ color: tone === "up" ? "var(--up)" : "var(--critical)" }} aria-label={tone === "up" ? "up" : "down"}>
@@ -246,8 +254,12 @@ export function TargetsVsHeld({ run }: { run: Run }) {
   );
 }
 
-// The books behind the performance chart: same line key, with costs and activity.
+// The paper books behind the performance chart's lines: same line key, with costs and activity.
 export function PaperTable({ books, series }: { books: PaperView["books"]; series: Series[] }) {
+  const rows = series.flatMap((s) => {
+    const b = books.find((x) => x.id === s.bookId);
+    return b ? [{ s, b }] : [];
+  });
   const cost = (v: number, start: number) => `${usd(v)} (${((v / start) * 100).toFixed(2)}%)`;
   return (
     <div className="overflow-x-auto">
@@ -264,16 +276,15 @@ export function PaperTable({ books, series }: { books: PaperView["books"]; serie
           </tr>
         </thead>
         <tbody>
-          {books.map((b) => {
-            const s = series.find((x) => x.id === b.id);
+          {rows.map(({ s, b }) => {
             return (
               <tr key={b.id} className="border-t" style={{ borderColor: "var(--grid)" }}>
                 <td className="py-1.5" style={{ color: "var(--ink)" }}>
                   <span className="inline-flex items-center gap-1.5">
                     <svg width="16" height="8" aria-hidden>
-                      <line x1="0" x2="16" y1="4" y2="4" stroke={s?.color ?? "var(--muted)"} strokeWidth="2" strokeDasharray={s?.reference ? "4 3" : undefined} />
+                      <line x1="0" x2="16" y1="4" y2="4" stroke={s.color} strokeWidth="2" strokeDasharray={s.reference ? "4 3" : undefined} />
                     </svg>
-                    {b.label.replace(" · ", " ")}
+                    {s.label}{s.id === "aggressive" ? " (paper model)" : ""}
                   </span>
                 </td>
                 <td className="py-1.5 pl-3 text-right" style={{ color: "var(--ink)" }}>{usd(b.equityUsd)}</td>

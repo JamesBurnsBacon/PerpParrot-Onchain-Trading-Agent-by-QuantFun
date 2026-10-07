@@ -174,6 +174,7 @@ export type Series = {
   label: string;
   short: string; // direct label at the line end
   color: string;
+  bookId?: string; // the paper book behind the line, if any
   reference?: boolean; // benchmark: dashed, muted
   points: [tMs: number, value: number][];
 };
@@ -188,24 +189,32 @@ export const runTime = (r: Run) => {
   return m ? Number(m[1]) * 1000 : r.startedAt;
 };
 
-// Live account (from its first executed run) and paper books (from their starting capital), as % return.
-export const performanceSeries = (paper: PaperView | null, equity: Equity | null): Series[] => {
-  const series: Series[] = [];
-  const live = equity?.points ?? [];
-  if (live.length) series.push({ id: "live", label: "Live account", short: "Live", color: "var(--series-1)", points: toReturns(live) });
+// The three buckets, shown at the live size only (the backend's $10k twins stay unshown).
+// Aggressive is the live bucket: the account's own curve once it trades for real (not dry run),
+// until then its $470 paper model. Balanced and Conservative are modeled: paper books.
+export const BUCKETS = [
+  { id: "aggressive", book: "aggressive-470", label: "Aggressive · live", short: "Aggressive", color: "var(--aggressive)" },
+  { id: "balanced", book: "balanced-470", label: "Balanced · modeled", short: "Balanced", color: "var(--balanced)" },
+  { id: "conservative", book: "conservative-470", label: "Conservative · modeled", short: "Conservative", color: "var(--conservative)" },
+] as const;
 
-  const slots: Record<string, [color: string, short: string]> = {
-    "aggressive-470": ["var(--series-2)", "$470"],
-    "aggressive-10k": ["var(--series-3)", "$10k"],
-    "balanced-470": ["var(--series-4)", "Balanced"],
-  };
-  for (const b of paper?.books ?? []) {
-    // Paper books start from their capital, so the first fills' fees show.
-    const points = toReturns(b.curve.map(([t, v]) => [t * 1000, v]), b.startingEquityUsd);
-    if (!points.length) continue;
-    if (b.kind === "btc") series.push({ id: b.id, label: "BTC buy & hold", short: "BTC", color: "var(--muted)", reference: true, points });
-    else if (slots[b.id]) series.push({ id: b.id, label: b.label.replace(" · ", " "), short: slots[b.id][1], color: slots[b.id][0], points });
+// Whether the Aggressive line is the live account itself (else its paper model).
+export const liveIsReal = (status: Status | null, equity: Equity | null) => status?.dryRun === false && (equity?.points.length ?? 0) > 0;
+
+// Each bucket and BTC as % return: the live account from its first executed run, paper books from their starting capital.
+export const performanceSeries = (paper: PaperView | null, equity: Equity | null, status: Status | null): Series[] => {
+  const series: Series[] = [];
+  const book = (id: string) => paper?.books.find((b) => b.id === id);
+  // Paper books start from their capital, so the first fills' fees show.
+  const bookReturns = (b: PaperView["books"][number]) => toReturns(b.curve.map(([t, v]) => [t * 1000, v]), b.startingEquityUsd);
+  for (const k of BUCKETS) {
+    const b = k.id === "aggressive" && liveIsReal(status, equity) ? undefined : book(k.book);
+    const points = b ? bookReturns(b) : k.id === "aggressive" ? toReturns(equity?.points ?? []) : [];
+    if (points.length) series.push({ id: k.id, bookId: b?.id, label: k.label, short: k.short, color: k.color, points });
   }
+  const btc = paper?.books.find((b) => b.kind === "btc");
+  const points = btc ? bookReturns(btc) : [];
+  if (btc && points.length) series.push({ id: "btc", bookId: btc.id, label: "BTC buy & hold", short: "BTC", color: "var(--muted)", reference: true, points });
   return series;
 };
 
