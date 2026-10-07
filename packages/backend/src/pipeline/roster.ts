@@ -46,6 +46,8 @@ export type Seat = {
   windDownUntil: number | null;
   // Winding down: the signed leverage (notional ÷ equity) per perp we still follow, ratcheted down.
   caps: Record<string, number> | null;
+  reviewedAt: number | null; // the last 12-hourly seat review
+  unqualifiedReviews: number; // consecutive seat reviews that found it off the qualified list
 };
 
 // An AI-approved candidate from the latest review (selection_runs.review.bench).
@@ -57,6 +59,32 @@ export type BenchEntry = HoldMeasures & {
 };
 
 export type Transition = { to: SeatState; reason: string };
+
+// A wallet's verdict from a review (selection_runs.review -> 'verdicts').
+export type Verdict = { address: string; approved: boolean; riskReject: boolean; fit: number; liquidatedAt: number | null };
+
+export const SEAT_REVIEW_HOURS = 12;
+export const WEIGHT_REFRESH_UNITS = 50_000; // a re-review moves a seat's weight only past 5 points
+
+// A seat review's outcome for one seat (ROSTER.md §4.4–4.5): wind down on a warning sign at any time
+// (Risk reject, liquidation since admission) or, past tenure, on losing approval (not approved, or
+// off the qualified list at 2 consecutive reviews); otherwise maybe a new weight. Never a sale.
+export const reviewSeat = (
+  seat: Seat,
+  verdict: Verdict | undefined,
+  qualified: boolean,
+  nowMs: number,
+  refreshedUnits: number | null,
+): { windDown?: string; unqualifiedReviews: number; weightUnits?: number } => {
+  const unqualifiedReviews = qualified ? 0 : seat.unqualifiedReviews + 1;
+  if (verdict?.riskReject) return { windDown: "risk reject", unqualifiedReviews };
+  if (verdict?.liquidatedAt != null && verdict.liquidatedAt >= seat.admittedAt) return { windDown: "liquidation", unqualifiedReviews };
+  const pastTenure = seat.state === "seated" || nowMs >= seat.minTenureUntil;
+  if (pastTenure && !verdict?.approved) return { windDown: "lost approval", unqualifiedReviews };
+  if (pastTenure && unqualifiedReviews >= 2) return { windDown: "off the qualified list", unqualifiedReviews };
+  if (verdict?.approved && refreshedUnits !== null && Math.abs(refreshedUnits - seat.weightUnits) > WEIGHT_REFRESH_UNITS) return { unqualifiedReviews, weightUnits: refreshedUnits };
+  return { unqualifiedReviews };
+};
 
 // Minimum tenure: 3 book lifetimes, within 12–72 h (owner D1).
 export const tenureMs = (turnoverPerDay: number | null): number => {

@@ -11,7 +11,10 @@
 import type { SQL } from "bun";
 import { FILLS_PAGE, fillStats, isHighFrequency, pickLeaderboard, sameAddresses, scoringWindows, type Fill, type LeaderboardRow, type Tracked } from "./derive";
 import { EVIDENCE_DAYS, holdMeasures, measure, type HlFill, type HoldMeasures, type Measured } from "./evidence";
-import { ACTIVE, impliedTurnover, lossBreached, observe, passesHoldGate, planAdmissions, pnlAndEquity, ROSTER, transition, type BenchEntry, type Seat, type SnapshotEntry, type Transition } from "./roster";
+import {
+  ACTIVE, capsFrom, impliedTurnover, lossBreached, observe, passesHoldGate, planAdmissions, pnlAndEquity, reviewSeat, ROSTER, SEAT_REVIEW_HOURS,
+  targetSeats, transition, type BenchEntry, type Seat, type SnapshotEntry, type Transition, type Verdict,
+} from "./roster";
 import { ENTER_OI_USD, fetchOpenInterest } from "../eligibility";
 import { PacedInfo, getJson } from "./hl";
 import { routingStats } from "./info-router";
@@ -27,7 +30,7 @@ import { commitment, policyCommitment } from "../../../shared/src/commitments.ts
 import { validate } from "../../../shared/src/validate.ts";
 import type { Policy, Row } from "../../../shared/src/contracts.ts";
 import { checkFrozenConfiguration, type FrozenConfiguration } from "../../../shared/frozen";
-import { ELIGIBLE_DEXES, type PositionsSnapshot } from "../../../shared/snapshot";
+import { ELIGIBLE_DEXES, type PositionsSnapshot, type WindDownSource } from "../../../shared/snapshot";
 import { keccakUtf8 } from "../snapshot";
 
 const HOUR = 3_600_000;
@@ -218,14 +221,19 @@ export class Pipeline {
     const guard = await this.guarded(inputs, result);
     if (guard) result = guard.result;
 
-    // The AI review runs only when the 25 change (a rejected set isn't reviewed again).
-    const [last] = await sql`select finalists -> 'finalists' as finalists from selection_runs
-      where status <> 'failed' and finalists is not null order by started_at desc limit 1`;
+    // The AI review runs when the 25 change, and at least every 12 h so the roster's bench of approvals
+    // stays fresh (ROSTER.md §4.1). A rejected set isn't reviewed again within that time.
+    const [last] = await sql`select finalists -> 'finalists' as finalists, started_at, status from selection_runs
+      where status <> 'failed' and finalists is not null and (finalists ->> 'scope') is distinct from 'seats' order by started_at desc limit 1`;
     const lastPicks = ((last?.finalists ?? []) as { address: string }[]).map((f) => f.address);
-    if (!force && sameAddresses(lastPicks, result.finalists)) return { status: "unchanged" };
+    // Only a review that produced a bench (or rejected the 25) counts: one from before the roster has none.
+    const fresh = last && (last.status === "benched" || last.status === "rejected") &&
+      this.now() - new Date(last.started_at as string | Date).getTime() < ROSTER.approvalFreshHours * HOUR;
+    if (!force && fresh && sameAddresses(lastPicks, result.finalists)) return { status: "unchanged" };
     // One review at a time, and a failed one is retried after 30 minutes.
+    // (A failed seat review doesn't hold the picks up.)
     const [busy] = await sql`select status from selection_runs
-      where status = 'running' or (status = 'failed' and started_at > now() - interval '30 minutes') limit 1`;
+      where status = 'running' or (status = 'failed' and started_at > now() - interval '30 minutes' and (finalists ->> 'scope') is distinct from 'seats') limit 1`;
     if (busy && (busy.status === "running" || !force)) return { status: "waiting", reason: busy.status === "running" ? "a review is running" : "a review failed in the last 30 minutes" };
 
     const [{ id }] = await sql`insert into selection_runs (started_at, status, accounts) values (${new Date(this.now()).toISOString()}, 'running', ${inputs.length}) returning id`;
@@ -288,13 +296,15 @@ export class Pipeline {
     return { accounts: fresh.length, qualified: result.finalists.length };
   }
 
-  private async review(id: number, inputs: ScoreInput[], result: ScoreResult, highFrequency: number, guard?: GuardSummary): Promise<{ status: string; reason?: string }> {
+  // `scope`: "picks" reviews Score's 25 and fills the bench; "seats" is the roster's 12-hourly
+  // review of the wallets holding seats (its verdicts; never the admission bench).
+  private async review(id: number, inputs: ScoreInput[], result: ScoreResult, highFrequency: number, guard?: GuardSummary, scope: "picks" | "seats" = "picks"): Promise<{ status: string; reason?: string }> {
     const { sql, log, policy } = this.o;
     const score = toFrameCandidates(result);
     const byAddress = new Map(result.candidates.map((c) => [c.address, c]));
     const finalists = result.finalists.map((address) => ({ address, kind: byAddress.get(address)?.kind, score: byAddress.get(address)?.score, rank: byAddress.get(address)?.rank }));
     const funnel = result.funnel;
-    await sql`update selection_runs set finalists = ${JSON.stringify({ finalists, funnel, highFrequency, ...(guard ? { overlapGuard: guard } : {}) })}::text::jsonb where id = ${id}`;
+    await sql`update selection_runs set finalists = ${JSON.stringify({ finalists, funnel, highFrequency, ...(guard ? { overlapGuard: guard } : {}), ...(scope === "seats" ? { scope } : {}) })}::text::jsonb where id = ${id}`;
     if (score.candidates.length === 0) throw new Error(`no frame candidates (${result.finalists.length} finalists)`);
 
     // Live positions and equity of each finalist (the review's evidence and the leverage check).
@@ -320,6 +330,7 @@ export class Pipeline {
     const byInput = new Map(inputs.map((input) => [input.address.toLowerCase(), input]));
     const measured = new Map<string, Measured>();
     const holds = new Map<string, HoldMeasures>();
+    const liquidatedAt = new Map<string, number>();
     for (const address of score.addresses.map((a) => a.toLowerCase())) {
       const fills: HlFill[] = [];
       let startTime = this.now() - EVIDENCE_DAYS * 24 * HOUR;
@@ -332,6 +343,8 @@ export class Pipeline {
       const m = measure({ input: byInput.get(address)!, fills, positions: positions.get(address) ?? [], eligible, nowMs: this.now() });
       measured.set(address, m);
       holds.set(address, holdMeasures(fills, byInput.get(address)!.accountValue, m.averageLeverage, this.now()));
+      const liquidations = fills.filter((f) => f.liquidation?.liquidatedUser?.toLowerCase() === address).map((f) => f.time);
+      if (liquidations.length) liquidatedAt.set(address, Math.max(...liquidations));
     }
     const pairOverlap = (a: string, b: string) => exposureOverlap(positions.get(a) ?? [], positions.get(b) ?? []);
     await sql`update selection_runs set finalists = coalesce(finalists, '{}'::jsonb) || ${JSON.stringify({ measured: Object.fromEntries(measured), holds: Object.fromEntries(holds) })}::text::jsonb where id = ${id}`;
@@ -400,8 +413,16 @@ export class Pipeline {
       const h = holds.get(address) ?? { copyableShare: null, closedPositions: 0, turnoverPerDay: null, tradedPerDayOverEquity: null };
       return { address, fit: a.fit, approvedAt: this.now(), ...h, passesHold: passesHoldGate(h) };
     });
-    const status = bench.length ? "benched" : "rejected";
-    await sql`update selection_runs set review = review || ${JSON.stringify({ gate: manifest.status === "VALID" ? "strict" : this.o.gate ?? "basic", bench })}::text::jsonb,
+    // Every reviewed wallet's verdict, for the roster's seat review (warning signs, approval, fit).
+    const approvedSet = new Set(bench.map((b) => b.address));
+    const verdicts: Verdict[] = built.frame.candidates.map(({ candidate }) => {
+      const address = built.addresses.get(candidate)!.toLowerCase();
+      const risk = stageRows.risk?.[0]?.find((r) => r.candidate === candidate);
+      const riskReject = Number(field("role", candidate, "reject") ?? 0) >= policy.riskRejectThreshold || RISKS.some((name) => Number(risk?.[name] ?? 0) > policy.riskRejectThreshold);
+      return { address, approved: approvedSet.has(address), riskReject, fit: Number(field("role", candidate, fitKey) ?? 0), liquidatedAt: liquidatedAt.get(address) ?? null };
+    });
+    const status = bench.length || scope === "seats" ? "benched" : "rejected";
+    await sql`update selection_runs set review = review || ${JSON.stringify({ gate: manifest.status === "VALID" ? "strict" : this.o.gate ?? "basic", bench, verdicts, ...(scope === "seats" ? { scope } : {}) })}::text::jsonb,
       status = ${status}, finished_at = now() where id = ${id}`;
     const copyable = bench.filter((b) => b.passesHold).length;
     log("selection benched", { id, approved: bench.length, copyable });
@@ -475,9 +496,57 @@ export class Pipeline {
         where address = ${seat.address} and state in ${sql([...ACTIVE])}`;
     }
 
+    // 3b. Warning signs (ROSTER.md §4.4–4.5): wind down, never sell. Turning high-frequency is checked
+    // every step; the rest at the 12-hourly seat review.
+    const entries = snap ? snapshotEntries(JSON.parse(snap.body as string) as PositionsSnapshot) : new Map<string, SnapshotEntry>();
+    const windDown = async (seat: Seat, reason: string) => {
+      seat.state = "winding_down";
+      seat.caps = capsFrom(entries.get(seat.address));
+      seat.windDownUntil = now + ROSTER.windDownHours * HOUR;
+      await sql`update roster_seats set state = 'winding_down', caps = ${JSON.stringify(seat.caps)}::text::jsonb,
+        wind_down_until = ${new Date(seat.windDownUntil).toISOString()} where address = ${seat.address} and state in ${sql([...ACTIVE])}`;
+      await event(seat.address, "winding_down", { reason, caps: seat.caps });
+    };
+    const trading = () => seats.filter((s) => s.state === "probation" || s.state === "seated");
+    if (trading().length) {
+      const fast = await sql`select address from pipeline_accounts where address in ${sql(trading().map((s) => s.address))} and orders_per_day > 100`;
+      for (const { address } of fast as { address: string }[]) await windDown(seats.find((s) => s.address === address)!, "high-frequency");
+    }
+    const due = trading().filter((s) => s.reviewedAt === null || now - s.reviewedAt >= SEAT_REVIEW_HOURS * HOUR);
+    if (due.length) {
+      const verdicts = await this.reviewSeats(trading().map((s) => s.address));
+      if (verdicts) {
+        const qualified = new Set<string>((await sql`select address from pipeline_accounts where qualified_at is not null`).map((r: { address: string }) => r.address));
+        const approved = verdicts.filter((v) => v.approved && v.fit > 0);
+        const meanFit = approved.length ? approved.reduce((sum, v) => sum + v.fit, 0) / approved.length : 0;
+        const seatUnits = ((1 - policy.cashBuffer) / targetSeats(seats.filter((s) => ACTIVE.includes(s.state)), [])) * 1e6;
+        for (const seat of trading()) {
+          const verdict = verdicts.find((v) => v.address === seat.address);
+          const refreshed = verdict?.approved && meanFit > 0
+            ? Math.min(Math.floor(seatUnits * Math.min(Math.max(verdict.fit / meanFit, ROSTER.fitModifier[0]), ROSTER.fitModifier[1])), Math.floor(policy.maxSourceWeight * 1e6))
+            : null;
+          const outcome = reviewSeat(seat, verdict, qualified.has(seat.address), now, refreshed);
+          seat.unqualifiedReviews = outcome.unqualifiedReviews;
+          await sql`update roster_seats set reviewed_at = ${at}, unqualified_reviews = ${outcome.unqualifiedReviews} where address = ${seat.address} and state in ${sql([...ACTIVE])}`;
+          if (outcome.windDown) await windDown(seat, outcome.windDown);
+          else if (outcome.weightUnits !== undefined) {
+            // A raise never takes the roster past 90%.
+            const room = Math.floor((1 - policy.cashBuffer) * 1e6) - seats.filter((s) => ACTIVE.includes(s.state)).reduce((sum, s) => sum + s.weightUnits, 0);
+            const units = Math.min(outcome.weightUnits, seat.weightUnits + Math.max(room, 0));
+            if (Math.abs(units - seat.weightUnits) > 50_000) {
+              await event(seat.address, "weight", { reason: "re-review", from: seat.weightUnits, to: units, fit: verdict!.fit });
+              seat.weightUnits = units;
+              await sql`update roster_seats set weight_units = ${units}, fit = ${verdict!.fit} where address = ${seat.address} and state in ${sql([...ACTIVE])}`;
+            }
+          }
+        }
+      }
+    }
+
     // 4. Fill open seats from the fresh bench, within the pace limits.
     const active = seats.filter((s) => ACTIVE.includes(s.state));
-    const [latest] = await sql`select id, review -> 'bench' as bench from selection_runs where status = 'benched' order by started_at desc limit 1`;
+    const [latest] = await sql`select id, review -> 'bench' as bench from selection_runs
+      where status = 'benched' and (review ->> 'scope') is distinct from 'seats' order by started_at desc limit 1`;
     const bench = ((latest?.bench ?? []) as (BenchEntry & { approvedAt: number })[]).map((b) => ({ ...b, approvedAt: Number(b.approvedAt) }));
     const cooling = new Set<string>(
       (await sql`select address from roster_seats where released_at > ${new Date(now - ROSTER.cooldownHours * HOUR).toISOString()}`).map((r: { address: string }) => r.address),
@@ -546,6 +615,39 @@ export class Pipeline {
     return { status: "activated", seats: seated.length, changes, reason: configuration.configurationHash };
   }
 
+  // The 12-hourly seat review: the committee over the wallets holding seats, as a 'seats' selection
+  // run. Their verdicts, or undefined when another review is running or this one fails.
+  private async reviewSeats(addresses: string[]): Promise<Verdict[] | undefined> {
+    const { sql, log } = this.o;
+    // One review at a time; a failed seat review is retried after 30 minutes.
+    const [busy] = await sql`select id from selection_runs where status = 'running'
+      or (status = 'failed' and (finalists ->> 'scope') = 'seats' and started_at > ${new Date(this.now() - 30 * 60_000).toISOString()}) limit 1`;
+    if (busy) return undefined;
+    const rows = (await sql`
+      select address, kind, account_value, closed, portfolio, trade_count, maker_share, orders_per_day
+      from pipeline_accounts where address in ${sql(addresses)} and portfolio is not null`) as AccountRow[];
+    const inputs = rows.map(toInput);
+    // Marked as a seat review from the start, so a failure is recognised as one.
+    const [{ id }] = await sql`insert into selection_runs (started_at, status, accounts, finalists)
+      values (${new Date(this.now()).toISOString()}, 'running', ${inputs.length}, ${JSON.stringify({ scope: "seats" })}::text::jsonb) returning id`;
+    try {
+      const result = scoreCandidates(inputs, { finalists: inputs.length, allowUnknown: ["minTrades"] });
+      if (result.finalists.length === 0) throw new Error("no seat passed Score's filters");
+      await this.review(id as number, inputs, result, 0, undefined, "seats");
+      const [run] = await sql`select review -> 'verdicts' as verdicts, finalists -> 'holds' as holds from selection_runs where id = ${id}`;
+      // Fresh hold measures for each seat (the monitored turnover; seeded seats start without them).
+      for (const [address, h] of Object.entries((run?.holds ?? {}) as Record<string, HoldMeasures>)) {
+        await sql`update roster_seats set turnover_per_day = ${h.turnoverPerDay}, traded_per_day_over_equity = ${h.tradedPerDayOverEquity}
+          where address = ${address} and state in ${sql([...ACTIVE])}`;
+      }
+      return (run?.verdicts ?? []) as Verdict[];
+    } catch (e) {
+      log("seat review failed", { id, error: (e as Error).message });
+      await sql`update selection_runs set status = 'failed', error = ${(e as Error).message}, finished_at = now() where id = ${id}`;
+      return undefined;
+    }
+  }
+
   private async activeSeats(): Promise<Seat[]> {
     const rows = await this.o.sql`select * from roster_seats where state in ${this.o.sql([...ACTIVE])} order by admitted_at, address`;
     return rows.map(seatFromRow);
@@ -583,6 +685,8 @@ const seatFromRow = (r: Record<string, unknown>): Seat => ({
   pnlAtAdmission: num(r.pnl_at_admission),
   windDownUntil: iso(r.wind_down_until),
   caps: (r.caps as Record<string, number> | null) ?? null,
+  reviewedAt: iso(r.reviewed_at),
+  unqualifiedReviews: Number(r.unqualified_reviews ?? 0),
 });
 
 // A snapshot's sources as the roster reads them: equity and signed notional per perp, in USD.
@@ -593,6 +697,20 @@ export const snapshotEntries = (snapshot: PositionsSnapshot): Map<string, Snapsh
       { equity: Number(s.equityE6) / 1e6, positions: s.positions.map((p) => ({ asset: p.asset, notional: Number(p.notionalE6) / 1e6 })) },
     ]),
   );
+
+// The caps of the seats winding down, for the snapshot (shared/snapshot.ts windDown). Before the roster
+// migration runs there are none.
+export const windDownCaps = async (sql: SQL): Promise<WindDownSource[]> => {
+  try {
+    const rows = await sql`select address, caps from roster_seats where state = 'winding_down' and caps is not null`;
+    return rows.map((r: { address: string; caps: Record<string, number> }) => ({
+      address: r.address,
+      caps: Object.entries(r.caps).map(([asset, leverage]) => ({ asset, leverageE9: BigInt(Math.round(leverage * 1e9)).toString() })),
+    }));
+  } catch {
+    return [];
+  }
+};
 
 // The active configuration, if the pipeline has activated one.
 export const activeConfiguration = async (sql: SQL): Promise<FrozenConfiguration | undefined> => {

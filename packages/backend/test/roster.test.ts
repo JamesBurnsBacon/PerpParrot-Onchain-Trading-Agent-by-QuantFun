@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { holdMeasures, type HlFill } from "../src/pipeline/evidence";
 import {
-  capsFrom, impliedTurnover, lossBreached, observe, passesHoldGate, planAdmissions, pnlAndEquity, ratchetCaps, ROSTER,
-  targetSeats, tenureMs, transition, type BenchEntry, type Seat,
+  capsFrom, impliedTurnover, lossBreached, observe, passesHoldGate, planAdmissions, pnlAndEquity, ratchetCaps, reviewSeat, ROSTER,
+  targetSeats, tenureMs, transition, type BenchEntry, type Seat, type Verdict,
 } from "../src/pipeline/roster";
 
 const HOUR = 3_600_000;
@@ -12,7 +12,7 @@ const addr = (i: number) => `0x${(i + 1).toString(16).padStart(40, "0")}`;
 const seat = (over: Partial<Seat> = {}): Seat => ({
   address: addr(0), state: "seated", weightUnits: 90_000, fit: 60, turnoverPerDay: 1, tradedPerDayOverEquity: 0.5,
   admittedAt: NOW - 48 * HOUR, minTenureUntil: NOW - 24 * HOUR, flatSince: null, flatRuns: 0, lastRunAt: null,
-  equityAtAdmission: 100_000, pnlAtAdmission: 10_000, windDownUntil: null, caps: null, ...over,
+  equityAtAdmission: 100_000, pnlAtAdmission: 10_000, windDownUntil: null, caps: null, reviewedAt: null, unqualifiedReviews: 0, ...over,
 });
 const bench = (i: number, fit: number, over: Partial<BenchEntry> = {}): BenchEntry => ({
   address: addr(i), fit, approvedAt: NOW - HOUR, copyableShare: 0.8, closedPositions: 10, turnoverPerDay: 0.5,
@@ -105,6 +105,37 @@ describe("observe and transition (ROSTER.md §4)", () => {
     const next = ratchetCaps(caps, { equity: 1_000, positions: [{ asset: "BTC", notional: 800 }, { asset: "ETH", notional: -100 }, { asset: "SOL", notional: -50 }] });
     expect(next).toEqual({ BTC: 0.5, ETH: -0.1 }); // BTC increased: still 0.5; SOL flipped: gone
     expect(observe(seat({ state: "winding_down", caps }), 600, { equity: 1_000, positions: [] }).caps).toEqual({});
+  });
+});
+
+describe("the 12-hourly seat review (owner: wind down, no panic selling)", () => {
+  const v = (over: Partial<Verdict> = {}): Verdict => ({ address: addr(0), approved: true, riskReject: false, fit: 60, liquidatedAt: null, ...over });
+  const probation = seat({ state: "probation", minTenureUntil: NOW + 10 * HOUR });
+
+  test("warning signs wind down at any time, even in probation", () => {
+    expect(reviewSeat(probation, v({ riskReject: true }), true, NOW, null).windDown).toBe("risk reject");
+    expect(reviewSeat(probation, v({ liquidatedAt: probation.admittedAt + 1 }), true, NOW, null).windDown).toBe("liquidation");
+    // A liquidation before admission isn't this seat's warning.
+    expect(reviewSeat(probation, v({ liquidatedAt: probation.admittedAt - 1 }), true, NOW, null).windDown).toBeUndefined();
+  });
+
+  test("losing approval winds down only past tenure", () => {
+    expect(reviewSeat(probation, v({ approved: false }), true, NOW, null).windDown).toBeUndefined();
+    expect(reviewSeat(probation, undefined, true, NOW, null).windDown).toBeUndefined();
+    expect(reviewSeat(seat(), v({ approved: false }), true, NOW, null).windDown).toBe("lost approval");
+    expect(reviewSeat(seat(), undefined, true, NOW, null).windDown).toBe("lost approval"); // Score dropped it
+  });
+
+  test("off the qualified list at 2 consecutive reviews winds down a seated wallet", () => {
+    const once = reviewSeat(seat(), v(), false, NOW, null);
+    expect(once).toEqual({ unqualifiedReviews: 1 });
+    expect(reviewSeat(seat({ unqualifiedReviews: 1 }), v(), false, NOW, null).windDown).toBe("off the qualified list");
+    expect(reviewSeat(seat({ unqualifiedReviews: 1 }), v(), true, NOW, null)).toEqual({ unqualifiedReviews: 0 });
+  });
+
+  test("an approved seat's weight moves only past 5 points", () => {
+    expect(reviewSeat(seat({ weightUnits: 90_000 }), v(), true, NOW, 140_000)).toEqual({ unqualifiedReviews: 0 });
+    expect(reviewSeat(seat({ weightUnits: 90_000 }), v(), true, NOW, 140_001)).toEqual({ unqualifiedReviews: 0, weightUnits: 140_001 });
   });
 });
 

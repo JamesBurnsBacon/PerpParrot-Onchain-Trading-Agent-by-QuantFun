@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  cappedNotional,
   capGrossExposure,
   computeExposures,
   decToE6,
@@ -64,6 +65,24 @@ describe("computeExposures", () => {
 
   test("is empty when every source is flat", () => {
     expect(computeExposures([src("0xa", 1_000_000, "1000000000", [])])).toEqual([]);
+  });
+});
+
+describe("winding-down caps (ROSTER.md §4.4)", () => {
+  test("a capped source is followed up to its cap, same sign only; perps without a cap aren't followed", () => {
+    const equity = 1_000_000_000n; // $1,000
+    expect(cappedNotional(800_000_000n, 500_000_000n, equity)).toBe(500_000_000n); // 0.8× held, 0.5× cap
+    expect(cappedNotional(300_000_000n, 500_000_000n, equity)).toBe(300_000_000n); // under the cap: as held
+    expect(cappedNotional(-900_000_000n, -400_000_000n, equity)).toBe(-400_000_000n);
+    expect(cappedNotional(300_000_000n, -400_000_000n, equity)).toBe(0n); // flipped
+    expect(cappedNotional(300_000_000n, undefined, equity)).toBe(0n); // a new perp
+  });
+
+  test("computeExposures applies the caps to that source only", () => {
+    const capped = { ...src("0xa", 500_000, "1000000000", [["BTC", "800000000"], ["ETH", "200000000"]]), caps: new Map([["BTC", 500_000_000n]]) };
+    const exp = computeExposures([capped, src("0xb", 500_000, "1000000000", [["ETH", "1000000000"]])]);
+    // A: BTC capped at 0.5 × weight 0.5; its new ETH isn't followed. B: ETH 1 × 0.5.
+    expect(exp).toEqual([{ asset: "BTC", exposureE9: 250_000_000n }, { asset: "ETH", exposureE9: 500_000_000n }]);
   });
 });
 

@@ -23,7 +23,8 @@ export type AccountState = {
   positions: Map<string, bigint>;
 };
 
-export type WeightedSource = SnapshotSource & { weightE6: number };
+// caps: a winding-down source's signed leverage cap per perp × 1e9 (snapshot.windDown).
+export type WeightedSource = SnapshotSource & { weightE6: number; caps?: Map<string, bigint> };
 
 // exposure_c = Σ_i w_i × n_i,c / E_i (README §4.4). Weights come from the frozen configuration and
 // sum to 1 − cash. A wallet's exit is a signal (owner, 2026-10-07): a flat wallet contributes
@@ -36,7 +37,9 @@ export const computeExposures = (sources: WeightedSource[]): { asset: string; ex
     const equity = BigInt(s.equityE6);
     if (equity <= 0n) continue;
     for (const p of s.positions) {
-      const term = (BigInt(s.weightE6) * BigInt(p.notionalE6) * EXPOSURE_SCALE) / (equity * E6);
+      const notional = s.caps ? cappedNotional(BigInt(p.notionalE6), s.caps.get(p.asset), equity) : BigInt(p.notionalE6);
+      if (notional === 0n) continue;
+      const term = (BigInt(s.weightE6) * notional * EXPOSURE_SCALE) / (equity * E6);
       totals.set(p.asset, (totals.get(p.asset) ?? 0n) + term);
     }
   }
@@ -44,6 +47,14 @@ export const computeExposures = (sources: WeightedSource[]): { asset: string; ex
     .filter(([, e]) => e !== 0n)
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
     .map(([asset, exposureE9]) => ({ asset, exposureE9 }));
+};
+
+// A winding-down source's position within its cap: same sign as the cap and no larger than
+// |cap| × equity; a perp with no cap, or held the other way, isn't followed.
+export const cappedNotional = (notionalE6: bigint, capE9: bigint | undefined, equityE6: bigint): bigint => {
+  if (capE9 === undefined || capE9 === 0n || notionalE6 === 0n || (notionalE6 < 0n) !== (capE9 < 0n)) return 0n;
+  const limit = (abs(capE9) * equityE6) / EXPOSURE_SCALE;
+  return abs(notionalE6) <= limit ? notionalE6 : notionalE6 < 0n ? -limit : limit;
 };
 
 // Scales all exposures down pro-rata so gross (Σ |exposure|) ≤ the policy's maxGrossLeverage.
@@ -66,7 +77,9 @@ export const targetsFromSnapshot = (snapshot: PositionsSnapshot): { asset: strin
     if (!frozen.has(s.address)) throw new Error(`source ${s.address} is not in the frozen configuration`);
     for (const p of s.positions) if (!eligible.has(p.asset)) throw new Error(`ineligible asset in snapshot: ${p.asset}`);
   }
-  const sources = snapshot.sources.map((s) => ({ ...s, weightE6: frozen.get(s.address)!.weightUnits }));
+  const caps = new Map((snapshot.windDown ?? []).map((w) => [w.address.toLowerCase(), new Map(w.caps.map((c) => [c.asset, BigInt(c.leverageE9)]))]));
+  for (const address of caps.keys()) if (!frozen.has(address)) throw new Error(`winding-down source ${address} is not in the frozen configuration`);
+  const sources = snapshot.sources.map((s) => ({ ...s, weightE6: frozen.get(s.address)!.weightUnits, caps: caps.get(s.address) }));
   const maxGrossE9 = BigInt(Math.round(snapshot.configuration.policy.maxGrossLeverage * Number(EXPOSURE_SCALE)));
   return capGrossExposure(computeExposures(sources), maxGrossE9);
 };
