@@ -11,16 +11,16 @@ test("every cue kind synthesizes without throwing, and the celebration sounds st
   sfx.context = context as unknown as AudioContext;
   await sfx.unlock();
   const counts: Record<string, number> = {};
-  for (const kind of ["fever", "ding", "tick", "swoosh", "pop", "stamp", "bonk", "squawk"]) {
+  for (const kind of ["tada", "sprinkle", "tick", "bubble", "pop", "nope", "whistle"]) {
     const before = made.sources.length;
     expect(() => (sfx as unknown as Synth).synth({ kind, at: 0, pitch: 440 })).not.toThrow();
     counts[kind] = made.sources.length - before;
     expect(counts[kind]).toBeGreaterThan(0);
   }
-  // Applause is many short claps: clearly more voices than a single bang, but bounded.
-  expect(counts.fever).toBeGreaterThan(counts.stamp * 5);
-  expect(counts.fever).toBeLessThan(300);
-  expect(counts.ding).toBeLessThan(200);
+  // The sprinkle is a short run of tones: clearly more voices than a single blip, but small and bounded.
+  expect(counts.sprinkle).toBeGreaterThan(counts.bubble * 5);
+  expect(counts.sprinkle).toBeLessThan(30);
+  expect(counts.tada).toBeLessThan(10);
   sfx.dispose();
   for (const v of made.sources) expect(v.stop).toHaveBeenCalled();
 });

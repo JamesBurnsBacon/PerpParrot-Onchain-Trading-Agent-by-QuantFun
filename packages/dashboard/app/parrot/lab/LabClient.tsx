@@ -94,7 +94,7 @@ export function MaterialsLab() {
     </section>
     <section aria-labelledby="scenario-title" className="materials-panel">
       <h2 id="scenario-title">Mock scenario</h2>
-      <p>Start → flock arrives / leaves → boundary → reels settle → Locked in. Reel clicks and the opening stamp keep their product timing. Picks last only until you leave this page.</p>
+      <p>Start → flock arrives / leaves → boundary → reels settle → Locked in. Reel clicks keep their product timing. Picks last only until you leave this page.</p>
       <div className="materials-grid">
         {MOMENTS.map(moment => <label key={moment} className="materials-pick" aria-current={active === moment ? "step" : undefined}>
           <span>{moment}{active === moment ? " ← playing" : ""}</span>

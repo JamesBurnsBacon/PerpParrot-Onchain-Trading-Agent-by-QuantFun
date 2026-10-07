@@ -107,14 +107,13 @@ export class ParrotSfx {
     if (!this.context) return;
     const t = this.context.currentTime;
     switch (cue.kind) {
-      case "fever": this.cymbal(t, 1, 1.3); this.applause(t + .05, 1.6, .5); this.cracker(t + .18, .8); break;   // LOCKED IN / big moment
-      case "ding": this.cracker(t); this.applause(t + .08, .9, .38); break;                                       // STRATEGY SET
+      case "tada": for (const [offset, f] of [[0, 330], [.2, 440]]) { this.tone(t + offset, .3, f, f, "sawtooth", .12); this.tone(t + offset, .3, f * 1.5, f * 1.5, "square", .05); } break;   // LOCKED IN
+      case "sprinkle": for (let i = 0; i < 10; i++) this.tone(t + i * .07, .18, 1700 + i * 137, 1650 + i * 137, "sine", .1); break;                                            // STRATEGY SET
       case "tick": this.noise(t, .03, "bandpass", 2600 + cue.pitch, 2000 + cue.pitch, .12); break;                // reel click
-      case "swoosh": this.noise(t, .22, "bandpass", 500, 2600, .16); break;
-      case "pop": this.tone(t, .12, 240, 55, "sine", .3); this.noise(t, .04, "lowpass", 1000, 300, .14); break;
-      case "stamp": this.cracker(t, 1); break;
-      case "bonk": this.tone(t, .22, 170, 55, "triangle", .34, true); break;
-      case "squawk": this.tone(t, .26, 780, 260, "sawtooth", .18, true); this.tone(t + .24, .16, 920, 380, "sawtooth", .14, true); break;
+      case "bubble": this.tone(t, .12, 420, 1200, "sine", .2); break;                                             // wallet in
+      case "pop": this.tone(t, .12, 240, 55, "sine", .3); this.noise(t, .04, "lowpass", 1000, 300, .14); break;  // wallet out
+      case "nope": this.tone(t, .18, 330, 330, "triangle", .13); this.tone(t + .2, .22, 262, 262, "triangle", .13); break;   // bounded by code
+      case "whistle": this.tone(t, .5, 650, 1400, "sine", .15); break;                                            // parrot greets
     }
   }
   cancel() { for (const timer of this.timers) clearTimeout(timer); this.timers.clear(); for (const voice of this.voices) { try { voice.stop(); } catch {} } this.voices.clear(); }

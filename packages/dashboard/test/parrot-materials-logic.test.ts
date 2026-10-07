@@ -20,9 +20,9 @@ test("catalog integrity and in-use badges agree with the real scheduler and synt
 
 test("scenario uses picks with product order/timing, bounded reels, and calm motion", () => {
   const steps = buildScenario(DEFAULT_PICKS);
-  expect(steps.filter(s => !["reel-click", "cracker"].includes(s.soundId)).map(s => [s.at, s.moment, s.soundId])).toEqual([
-    [0,"Start","double-squawk"], [1400,"Wallet swoosh-in","whoosh"], [1500,"Wallet out","pop"],
-    [1560,"Clamp","bonk"], [2075,"Strategy set","cracker-applause"], [4500,"Locked in","cymbal-applause-cracker"],
+  expect(steps.filter(s => s.soundId !== "reel-click").map(s => [s.at, s.moment, s.soundId])).toEqual([
+    [0,"Start","whistle"], [1400,"Wallet swoosh-in","bubble"], [1500,"Wallet out","pop"],
+    [1560,"Clamp","nope"], [2075,"Strategy set","metal-shower"], [4400,"Locked in","ta-da"],
   ]);
   const chosen = Object.fromEntries(MOMENTS.map(m => [m,"bell"])) as typeof DEFAULT_PICKS;
   expect(buildScenario(chosen).filter(s => s.soundId === "bell")).toHaveLength(6);
@@ -39,6 +39,6 @@ test("scenario uses picks with product order/timing, bounded reels, and calm mot
 });
 
 test("copy picks is a plain-text list of every selected label", () => {
-  expect(copyPicks({...DEFAULT_PICKS, "Locked in":"cymbal-applause"})).toBe("Start = Double squawk; Wallet swoosh-in = Whoosh; Wallet out = Pop; Strategy set = Cracker + applause (short); Clamp = Cartoon bonk; Locked in = Cymbal + applause");
-  expect(copyPicks({...DEFAULT_PICKS, Start:"missing"})).toContain("Start = Double squawk");
+  expect(copyPicks({...DEFAULT_PICKS, "Locked in":"cymbal-applause"})).toBe("Start = Parrot whistle; Wallet swoosh-in = Bubble pop; Wallet out = Pop; Strategy set = Metallic sprinkle; Clamp = Soft nope; Locked in = Cymbal + applause");
+  expect(copyPicks({...DEFAULT_PICKS, Start:"missing"})).toContain("Start = Parrot whistle");
 });

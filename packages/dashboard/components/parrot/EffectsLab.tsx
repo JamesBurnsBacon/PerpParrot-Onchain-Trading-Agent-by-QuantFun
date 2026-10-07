@@ -6,10 +6,10 @@ import { useParrotEffects } from "./ParrotEffects";
 // Development-only helper for looking at and listening to the effects without a live call.
 // It is rendered only when the page is opened with ?fx=1 outside production (see page.tsx).
 const SOUNDS: { label: string; event: EffectEvent; count?: number; removed?: number; clamped?: boolean }[] = [
-  { label: "Start squawk", event: "start" }, { label: "Swoosh in", event: "in" }, { label: "Pop out", event: "out" },
+  { label: "Start whistle", event: "start" }, { label: "Bubble in", event: "in" }, { label: "Pop out", event: "out" },
   { label: "Strategy set: clicks + cracker + applause (6)", event: "strategy", count: 6 },
   { label: "Strategy set (12 wallets, 4 out)", event: "strategy", count: 12, removed: 4 },
-  { label: "Clamp bonk", event: "clamp", clamped: true }, { label: "LOCKED IN: cracker + cymbal + applause", event: "lock" },
+  { label: "Clamp nope", event: "clamp", clamped: true }, { label: "LOCKED IN: ta-da brass", event: "lock" },
 ];
 
 export function EffectsLab({ onPreset, onLock, onReset }: { onPreset: (preset: ParrotPreset) => void; onLock: () => void; onReset: () => void }) {

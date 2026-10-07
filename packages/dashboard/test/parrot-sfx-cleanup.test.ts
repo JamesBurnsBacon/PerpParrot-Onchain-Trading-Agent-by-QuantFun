@@ -27,7 +27,7 @@ test("audio disposal cancels queued cues, stops active voices and releases its c
     await sfx.unlock();
     sfx.play("strategy", 5, 1, true);
     expect(pending.size).toBeGreaterThan(1);
-    // Play every queued cue except the last (swoosh, pop, ticks, bonk ...), so oscillators AND filtered-noise sources are live
+    // Play every queued cue except the last (bubble, pop, ticks, nope ...), so oscillators AND filtered-noise sources are live
     // before disposal while one cue is still queued.
     for (const [id, callback] of [...pending.entries()].slice(0, -1)) { pending.delete(id); callback(); }
     expect(voices.length).toBeGreaterThan(0);

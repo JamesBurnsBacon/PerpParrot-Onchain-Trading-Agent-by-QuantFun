@@ -38,7 +38,7 @@ export function flashTimeline(requested: number[]): number[] {
   return accepted;
 }
 export type EffectEvent = "strategy" | "lock" | "clamp" | "start" | "in" | "out";
-export type SfxCue = { kind: "tick" | "ding" | "fever" | "stamp" | "bonk" | "squawk" | "swoosh" | "pop"; at: number; pitch: number };
+export type SfxCue = { kind: "tick" | "pop" | "bubble" | "whistle" | "nope" | "sprinkle" | "tada"; at: number; pitch: number };
 export type SfxState = { enabled: boolean; unlocked: boolean; now: number; lastInput: number; lastEffect: number; calm: boolean };
 export const canSound = (s: SfxState) => s.enabled && s.unlocked && s.now - s.lastInput >= 1200 && s.now - s.lastEffect >= 180;
 export function scheduleSfx(event: EffectEvent, count: number, state: SfxState, removed = 0, clamped = false): SfxCue[] {
@@ -46,9 +46,9 @@ export function scheduleSfx(event: EffectEvent, count: number, state: SfxState, 
   if (event === "strategy") {
     const reels = reelSchedule(count, state.calm);
     const ticks = reels; // One short tick per card, bounded to the 25-card server limit.
-    return [...(clamped ? [{ kind: "bonk" as const, at: 160, pitch: 95 }] : []), { kind: "swoosh", at: 0, pitch: 250 }, ...(removed > 0 ? [{ kind: "pop" as const, at: 100, pitch: 140 }] : []), ...ticks.map(s => ({ kind: s.final ? "ding" as const : "tick" as const, at: s.at, pitch: s.pitch })),
-      ...(state.calm ? [{ kind: "ding" as const, at: 0, pitch: 660 }] : [])];
+    return [...(clamped ? [{ kind: "nope" as const, at: 160, pitch: 95 }] : []), { kind: "bubble", at: 0, pitch: 250 }, ...(removed > 0 ? [{ kind: "pop" as const, at: 100, pitch: 140 }] : []), ...ticks.map(s => ({ kind: s.final ? "sprinkle" as const : "tick" as const, at: s.at, pitch: s.pitch })),
+      ...(state.calm ? [{ kind: "sprinkle" as const, at: 0, pitch: 660 }] : [])];
   }
-  if (event === "lock") return [{ kind: "stamp", at: 0, pitch: 130 }, { kind: "fever", at: 100, pitch: 440 }];
-  return [{ kind: { clamp: "bonk", start: "squawk", in: "swoosh", out: "pop" }[event] as SfxCue["kind"], at: 0, pitch: event === "clamp" ? 95 : 220 }];
+  if (event === "lock") return [{ kind: "tada", at: 0, pitch: 440 }];
+  return [{ kind: { clamp: "nope", start: "whistle", in: "bubble", out: "pop" }[event] as SfxCue["kind"], at: 0, pitch: event === "clamp" ? 95 : 220 }];
 }

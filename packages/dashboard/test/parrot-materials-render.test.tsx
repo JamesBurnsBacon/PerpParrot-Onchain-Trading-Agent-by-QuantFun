@@ -11,7 +11,7 @@ test("materials page renders accessible catalog, scenario and real visual sample
   for (const mood of ["calm","steady","wild"]) expect(html).toContain(`data-vibe="${mood}"`);
   expect(html.match(/<select(?: |>)/g)).toHaveLength(MOMENTS.length);
   expect(html.match(/aria-label="Play /g)).toHaveLength(SOUND_CATALOG.length);
-  expect(html.match(/>in use</g)).toHaveLength(8);
+  expect(html.match(/>in use</g)).toHaveLength(7);
   expect(html).toContain('aria-label="My sound picks"');
   expect(html).toContain('class="wallet-nickname"');
   expect(html).not.toContain("<audio");
