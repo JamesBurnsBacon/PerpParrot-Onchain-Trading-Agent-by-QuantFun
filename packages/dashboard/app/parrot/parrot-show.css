@@ -354,3 +354,28 @@ html:has(.parrot-show), body:has(.parrot-show) { height: 100%; overflow: hidden;
 .parrot-show .parrot-countdown { grid-column: 1 / -1; grid-row: 3; }
 .parrot-show .parrot-live > .parrot-button { grid-column: 1 / -1; grid-row: 4; }
 .parrot-show .voice-dock { min-height: 244px; }
+
+
+/* Status and time: one centered row of two pills directly under the talk button. The pill color follows the state. */
+.parrot-show .parrot-meta { grid-column: 1 / -1; grid-row: 2; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.parrot-show .parrot-live-status, .parrot-show .parrot-countdown { grid-column: auto; grid-row: auto; display: inline-flex; align-items: center; gap: 5px; margin: 0; max-width: none; padding: 4px 12px; border: 2px solid #26312b; border-radius: 999px; font-size: 13px; font-weight: 900; line-height: 1.1; white-space: nowrap; background: #fffcf5; }
+.parrot-show .parrot-live-status svg { width: 14px; height: 14px; }
+.parrot-show .parrot-meta[data-state="listening"] .parrot-live-status { background: #cfe5b2; }
+.parrot-show .parrot-meta[data-state="thinking"] .parrot-live-status { background: #f6dd7a; }
+.parrot-show .parrot-meta[data-state="speaking"] .parrot-live-status { background: #f6b36a; }
+.parrot-show .parrot-meta[data-state="muted"] .parrot-live-status { background: #f8d0ae; }
+.parrot-show .parrot-meta:is([data-state="connecting"], [data-state="closing"]) .parrot-live-status { background: #e3dcc4; }
+.parrot-show .parrot-countdown { font-variant-numeric: tabular-nums; border-style: dashed; border-color: #526046; background: transparent; }
+.parrot-show .parrot-countdown[data-low="true"] { background: #f4b79a; border-style: solid; border-color: #7a2a0c; color: #7a2a0c; animation: time-low 1s ease-in-out infinite alternate; }
+@keyframes time-low { to { transform: scale(1.08); } }
+.parrot-show .parrot-live > .parrot-button { grid-row: 3; }
+.parrot-show .voice-dock { min-height: 232px; }
+
+/* Room to breathe: the talk button has a 7px shadow, so the status row sits clearly below it. */
+.parrot-show .parrot-live { row-gap: 16px; }
+.parrot-show .parrot-meta { margin-top: 6px; gap: 10px; }
+.parrot-show .parrot-live-status, .parrot-show .parrot-countdown { padding: 5px 14px; }
+.parrot-show .voice-dock { min-height: 250px; gap: 16px; }
+
+/* Top-aligned column: the parrot and the buttons keep their place whether or not the audited receipt has appeared below them. */
+.parrot-show .parrot-stage { justify-content: flex-start; padding-top: 10px; }
