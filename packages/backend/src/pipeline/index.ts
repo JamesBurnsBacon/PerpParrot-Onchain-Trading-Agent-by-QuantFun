@@ -31,6 +31,9 @@ export type PipelineOptions = {
   model?: string;
   log: (msg: string, data?: Record<string, unknown>) => void;
   now?: () => number;
+  // "strict": only the review core's VALID manifest activates. "basic" (default): when the core
+  // rejects for missing measured evidence, keep the finalists the AI rated acceptable (below).
+  gate?: "strict" | "basic";
 };
 
 type AccountRow = {
@@ -236,16 +239,33 @@ export class Pipeline {
       audit,
     };
     await sql`update selection_runs set review = ${review}::jsonb where id = ${id}`;
-    if (manifest.status !== "VALID") {
-      await sql`update selection_runs set status = 'rejected', finished_at = now() where id = ${id}`;
-      log("selection rejected", { id, reason: manifest.reason });
-      return { status: "rejected", reason: manifest.reason };
+    let payload: Omit<FrozenConfiguration, "configurationHash">;
+    if (manifest.status === "VALID") {
+      // Freeze for our account (as freezePaperSession: bound to the review receipt).
+      const { configurationHash: _, ...proposed } = proposeFreeze(manifest, this.o.account.toLowerCase(), 999, this.now());
+      payload = { ...proposed, reviewHash: receipt.receiptHash } as unknown as typeof payload;
+    } else {
+      const basic = this.o.gate === "strict" ? [] : basicSources(built.frame.candidates.map((c) => c.candidate), stageRows.role?.[0] ?? [], stageRows.risk?.[0] ?? [], policy, built.addresses, assess);
+      if (basic.length < Math.max(5, policy.minExecutableTargets)) { // a freeze needs 5–25 sources
+        await sql`update selection_runs set status = 'rejected', finished_at = now() where id = ${id}`;
+        log("selection rejected", { id, reason: manifest.reason, basicSources: basic.length });
+        return { status: "rejected", reason: `${manifest.reason}; basic gate kept ${basic.length}` };
+      }
+      await sql`update selection_runs set review = review || ${{ gate: "basic", basicSources: basic }}::jsonb where id = ${id}`;
+      payload = {
+        schemaVersion: "1.0.0",
+        account: this.o.account.toLowerCase(),
+        chainId: 999,
+        frozenAtMs: this.now(),
+        reviewHash: receipt.receiptHash,
+        policy: structuredClone(policy) as unknown as FrozenConfiguration["policy"],
+        policyHash: manifest.policyHash,
+        sources: basic.map((b) => ({ candidate: b.candidate, sourceAddress: b.sourceAddress, weightUnits: Math.floor(b.weight * 1e6), ceilingUnits: Math.floor(policy.maxSourceWeight * 1e6) })),
+        cashUnits: 0,
+      };
+      payload.cashUnits = 1e6 - payload.sources.reduce((sum, s) => sum + s.weightUnits, 0);
     }
-
-    // Freeze for our account (as freezePaperSession: bound to the review receipt) and activate.
-    const proposed = proposeFreeze(manifest, this.o.account.toLowerCase(), 999, this.now());
-    const { configurationHash: _, ...payload } = { ...proposed, reviewHash: receipt.receiptHash };
-    const configuration = { ...payload, configurationHash: commitment("perpparrot:frozen:v1", payload) } as unknown as FrozenConfiguration;
+    const configuration = { ...payload, configurationHash: commitment("perpparrot:frozen:v1", payload) } as FrozenConfiguration;
     checkFrozenConfiguration(keccakUtf8, configuration, configuration.configurationHash, this.now());
     await sql.begin(async (tx) => {
       await tx`update configurations set status = 'retired' where status = 'active'`;
@@ -269,4 +289,43 @@ export const reviewPolicy = (configuration: { policy: Record<string, unknown> })
   const policy = structuredClone(configuration.policy) as unknown as Policy;
   validate("bucket-policy", policy);
   return policy;
+};
+
+// evidenceRisk is left out: it rates the very gap this gate stands in for (every finalist scores ~80).
+const RISKS = ["drawdownRisk", "leverageRisk", "concentrationRisk", "pathRisk", "executionRisk"];
+
+// The basic gate. The review core requires measured evidence (out-of-sample windows, execution
+// fit, exposure overlap) that the frame doesn't carry yet (docs/ingest/PIPELINE.md PR D), so its
+// compile step keeps no one. Until then: keep finalists the Role model doesn't reject and with no
+// Risk score above the policy's reject threshold, weight them by the Role model's fit
+// for the bucket, cap each at maxSourceWeight, keep the cash buffer, and scale down to the
+// policy's gross leverage. At most 10 sources.
+export const basicSources = (
+  candidates: number[],
+  role: Row[],
+  risk: Row[],
+  policy: Policy,
+  addresses: ReadonlyMap<number, string>,
+  assess: (sources: { sourceAddress: string; weight: number }[]) => Assessment,
+): { candidate: number; sourceAddress: string; weight: number; fit: number }[] => {
+  const fitKey = `${policy.bucket.toLowerCase()}Fit`;
+  const kept = candidates
+    .flatMap((candidate) => {
+      const r = role.find((row) => row.candidate === candidate);
+      const k = risk.find((row) => row.candidate === candidate);
+      if (!r || !k || Number(r.reject) >= policy.riskRejectThreshold) return [];
+      if (RISKS.some((name) => Number(k[name]) > policy.riskRejectThreshold)) return [];
+      const fit = Number(r[fitKey]);
+      return fit > 0 && addresses.has(candidate) ? [{ candidate, sourceAddress: addresses.get(candidate)!, fit }] : [];
+    })
+    .sort((a, b) => b.fit - a.fit || a.candidate - b.candidate)
+    .slice(0, 10);
+  const total = kept.reduce((sum, c) => sum + c.fit, 0);
+  let sources = kept.map((c) => ({ ...c, weight: Math.min(((1 - policy.cashBuffer) * c.fit) / total, policy.maxSourceWeight) }));
+  const { grossLeverage } = assess(sources);
+  if (grossLeverage > policy.maxGrossLeverage) {
+    const scale = (0.95 * policy.maxGrossLeverage) / grossLeverage;
+    sources = sources.map((s) => ({ ...s, weight: s.weight * scale }));
+  }
+  return sources;
 };

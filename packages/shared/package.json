@@ -1,0 +1,12 @@
+{
+  "name": "@perpparrot/shared",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Runtime dependencies of shared/src (the AI review core) for the backend's Vercel bundle, which installs per package. Same versions as the root package.json.",
+  "dependencies": {
+    "@noble/hashes": "2.0.1",
+    "ajv": "8.20.0",
+    "zod": "3.25.76"
+  }
+}
