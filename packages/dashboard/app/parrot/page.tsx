@@ -9,6 +9,8 @@ import { ParrotAvatar, type AvatarState } from "../../components/parrot/ParrotAv
 import { StepRail, type Step } from "../../components/parrot/StepRail";
 import { ThemeToggle } from "../../components/parrot/ThemeToggle";
 import { LiveTalk } from "../../components/parrot/LiveTalk";
+import { CompactReceipt } from "../../components/parrot/CompactReceipt";
+import { useSentenceReceipts } from "../../components/parrot/useSentenceReceipts";
 import { useLiveTalk } from "../../components/parrot/useLiveTalk";
 import { canDemo, post, type Failure } from "../../components/parrot/api";
 import { isPreviewResponse, type ChatResponse, type PreviewResponse } from "../../lib/parrot";
@@ -39,15 +41,17 @@ function ParrotContent() {
   // Development-only effects lab: open /parrot?fx=1 (never rendered in production builds).
   useEffect(() => { if (process.env.NODE_ENV !== "production" && new URLSearchParams(location.search).get("fx") === "1") setLab(true); }, []);
   const request = useRef<AbortController | null>(null);
+  const receipts = useSentenceReceipts();
   const live = useLiveTalk(result => {
     setStale(false); setChat(result); setDemo(null); setPreview(null); setPreviewError(null); setStep(0);
   }, () => {
     setChat(null); setPreview(null); setDemo(null); setPreviewError(null); setStep(0); setStale(true);
   }, demo ? [] : chat?.shortlist.addresses ?? [], { gesture: () => {
+    receipts.begin();
     // Cached preset identities are illustrations, not server finalist identities.
     if (demo) { setChat(null); setDemo(null); setPreview(null); setStep(0); }
     void fx.sfx.unlock().then(() => fx.sfx.play("start"));
-  }, input: () => fx.sfx.input() });
+  }, input: () => fx.sfx.input() }, receipts.observers);
 
   useEffect(() => {
     if (chat && chat !== lastChat.current) {
@@ -92,6 +96,7 @@ function ParrotContent() {
         <section className="parrot-stage min-w-0" aria-label="Talk with PerpParrot">
           <div className="parrot-scene"><ParrotAvatar state={state} stream={live.remoteStream} live={live.view.phase === "live" && !live.view.playbackBlocked} /></div>
           <LiveTalk live={live} disabled={busy} />
+          <CompactReceipt active={live.view.phase === "live"} {...receipts} />
           <FunControls />
           {stale && <p className="parrot-live-status" role="status">Our last change did not finish, so I cleared the plan. Talk live again to redo it.</p>}
           {!live.active && !demo && canDemo(live.view.failure) && <button type="button" className="parrot-button mt-3" onClick={playDemo}>Play the cached demo</button>}
@@ -109,7 +114,7 @@ function ParrotContent() {
         onPreset={preset => { setStale(false); setDemo(preset); setChat(preset.chat); setPreview(null); setPreviewError(null); setStep(0); }}
         onLock={() => { const p = demo ?? PARROT_PRESETS[0]; if (!demo) { setDemo(p); setChat(p.chat); } setPreview(p.preview); }}
         onReset={() => { setChat(null); setDemo(null); setPreview(null); setStep(0); lastChat.current = null; }} /></Suspense>}
-      <footer className="parrot-privacy">Voice is processed by OpenAI. The parrot cannot trade.</footer>
+      <footer className="parrot-privacy">Parrot&apos;s opinion, not advice. Receipts check words, not markets. Voice is processed by OpenAI; when receipts are on, sentences and their turn facts are too. The parrot cannot trade.</footer>
     </div>
   </main>;
 }

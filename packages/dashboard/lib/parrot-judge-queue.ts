@@ -2,8 +2,8 @@ import { isDecision, type Decision } from "../../shared/receipt";
 export type ReceiptRow = { id: number; claim: string; facts: string; state: "checking" | "done" | "skipped" | "unavailable"; decision?: Decision; roundTrip?: number };
 export type ReceiptFeed = { rows: ReceiptRow[]; calls: number; cost: number; skipped: number; paused: boolean };
 export const emptyReceiptFeed = (): ReceiptFeed => ({ rows: [], calls: 0, cost: 0, skipped: 0, paused: false });
-type Judge = (claim: string, facts: string, signal: AbortSignal) => Promise<{ status: number; value?: unknown }>;
-export function createJudgeQueue(judge: Judge, changed: (feed: ReceiptFeed, verdict?: ReceiptRow) => void, now = () => performance.now()) {
+export type Judge = (claim: string, facts: string, signal: AbortSignal) => Promise<{ status: number; value?: unknown }>;
+export function createJudgeQueue(judge: Judge, changed: (feed: ReceiptFeed, verdict?: ReceiptRow) => void, now = () => performance.now(), pauseOnFailure = false) {
   let feed = emptyReceiptFeed(), serial = 0, stopped = false, last = "";
   let turn = { facts: "", calls: 0 };
   type Job = { row: ReceiptRow; turn: typeof turn };
@@ -27,7 +27,10 @@ export function createJudgeQueue(judge: Judge, changed: (feed: ReceiptFeed, verd
         if (result.status !== 200 || !isDecision(result.value, { claim: job.row.claim, facts: job.row.facts })) throw new Error("unavailable");
         job.row.decision = result.value; job.row.state = "done"; job.row.roundTrip = now() - start;
         feed.cost += result.value.costUsd; publish(job.row);
-      }).catch(() => { if (!controller.signal.aborted) { job.row.state = "unavailable"; publish(); } })
+      }).catch(() => { if (!controller.signal.aborted) {
+        if (pauseOnFailure) { feed.paused = true; cancel(); }
+        job.row.state = "unavailable"; publish();
+      } })
         .finally(() => { active.delete(job); pump(); });
     }
   }
