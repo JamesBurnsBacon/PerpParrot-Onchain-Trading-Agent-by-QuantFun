@@ -53,6 +53,7 @@ function ParrotContent() {
   const receipts = useSentenceReceipts();
   const live = useLiveTalk(result => {
     setStale(false); setChat(result); setDemo(null); setPreview(null); setPreviewError(null); setStep(0);
+    setCard(c => (c?.kind === "request" ? null : c)); // a new strategy voids a summary or sketch of the old one
   }, () => {
     setChat(null); setPreview(null); setDemo(null); setPreviewError(null); setStep(0); setStale(true);
   }, demo ? [] : chat?.shortlist.addresses ?? [], { gesture: () => {
@@ -60,7 +61,7 @@ function ParrotContent() {
     // Cached preset identities are illustrations, not server finalist identities.
     if (demo) { setChat(null); setDemo(null); setPreview(null); setStep(0); }
     void fx.sfx.unlock().then(() => fx.sfx.play("start"));
-  }, input: () => fx.sfx.input() }, { ...receipts.observers, onCard: setCard });
+  }, input: () => fx.sfx.input() }, { ...receipts.observers, onCard: setCard, onRequestSaved: saved => { setPreview(saved); setPreviewError(null); setStep(2); } });
 
   useEffect(() => {
     if (chat && chat !== lastChat.current) {
@@ -130,7 +131,7 @@ function ParrotContent() {
         </div>}
         {!chat && <WaitingFlock />}
       </div>
-      <LiveCards card={card} onClose={() => setCard(null)} />
+      <LiveCards card={card} onClose={() => setCard(null)} onConfirm={() => void live.confirmNow()} />
       {lab && EffectsLab && <Suspense fallback={null}><EffectsLab onCard={setCard}
         onPreset={preset => { setStale(false); setDemo(preset); setChat(preset.chat); setPreview(null); setPreviewError(null); setStep(0); }}
         onLock={() => { const p = demo ?? PARROT_PRESETS[0]; if (!demo) { setDemo(p); setChat(p.chat); } setPreview(p.preview); }}

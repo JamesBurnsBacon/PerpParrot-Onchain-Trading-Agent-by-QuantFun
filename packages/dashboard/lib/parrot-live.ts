@@ -1,7 +1,7 @@
 // Live protocol reducer and browser helpers used by useLiveTalk.
 // Accept only checked strategy results; protocol events never grant trading authority.
 import { isChatResponse, type ChatResponse } from "./parrot";
-import { isReadTool, type ReadToolName } from "./parrot-read-tools";
+import { isConfirmTool, isReadTool, type ConfirmToolName, type ReadToolName } from "./parrot-read-tools";
 
 type LiveStrategy = Pick<ChatResponse, "ok" | "intent" | "policy" | "shortlist" | "changes" | "context"> & { evidence: NonNullable<ChatResponse["evidence"]> } & { facts: string };
 type LiveSession = { ok: true; session: { id: string }; transport: { sdp: string }; maxSessionSeconds: number };
@@ -16,7 +16,7 @@ export const isLiveStrategy = (v: unknown): v is LiveStrategy => record(v) && re
   Array.isArray(v.evidence) && v.facts.length <= 1200 && isChatResponse({ ...v, reply: v.intent.reply, clarify: null, model: "Live voice", latencyMs: 0 });
 
 type Transcript = { delta: string; startMs: number; endMs: number; speaker: "user" | "parrot" };
-export type LiveToolName = "set_strategy" | ReadToolName;
+export type LiveToolName = "set_strategy" | ReadToolName | ConfirmToolName;
 type ToolCall = { callId: string; responseId: string; delegationId: string; name?: LiveToolName; args?: Record<string, unknown>; error?: string };
 type Delegation = { id: string; responseId?: string; running: boolean };
 export type LiveEvents = {
@@ -83,8 +83,8 @@ export function reduceLiveEvent(state: LiveEvents, raw: unknown): LiveEvents {
   if (state.seenCalls.length >= 128) return { ...state, error: true };
   const call: ToolCall = { callId: item.call_id, responseId: delegation.responseId, delegationId };
   try {
-    // Allowlist: the strategy checker plus the three read-only Dashboard tools; any other name is rejected.
-    if ((item.name !== "set_strategy" && !isReadTool(item.name)) || typeof item.arguments !== "string" || bytes(item.arguments) > 2048) throw new Error();
+    // Allowlist: the strategy checker, the three read-only Dashboard tools and the two confirmation tools; any other name is rejected.
+    if ((item.name !== "set_strategy" && !isReadTool(item.name) && !isConfirmTool(item.name)) || typeof item.arguments !== "string" || bytes(item.arguments) > 2048) throw new Error();
     call.name = item.name as LiveToolName;
     const args: unknown = JSON.parse(item.arguments);
     if (!record(args)) throw new Error();

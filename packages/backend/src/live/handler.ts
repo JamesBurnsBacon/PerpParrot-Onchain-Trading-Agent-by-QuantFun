@@ -13,12 +13,12 @@ export type LiveDeps = Pick<ChatDeps, "limiter" | "finalists" | "basePolicy" | "
   context?: LiveContextDeps;
   env: LiveEnv; chatEnv: Pick<ChatDeps["env"], "ipSalt" | "limits">; fetchImpl: typeof fetch; timeoutMs?: number;
 };
-const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { "Access-Control-Allow-Origin": "*" } });
-const object = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v);
-const ipHash = (req: Request, deps: LiveDeps) => hashIp(
+export const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { "Access-Control-Allow-Origin": "*" } });
+export const object = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v);
+export const ipHash = (req: Request, deps: LiveDeps) => hashIp(
   req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("x-real-ip")?.trim() || "unknown", deps.chatEnv.ipSalt);
 
-const readBody = async (req: Request, limit: number): Promise<unknown> => {
+export const readBody = async (req: Request, limit: number): Promise<unknown> => {
   if (req.headers.get("content-type")?.split(";")[0].trim().toLowerCase() !== "application/json") return failure(400, "bad_request");
   const reader = req.body?.getReader();
   if (!reader) return failure(400, "bad_request");

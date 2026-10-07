@@ -36,7 +36,7 @@ export type PreviewResponse = {
     previewHash: string;
   };
 };
-const errorCodes = ["disabled", "bad_request", "too_large", "rate_limited", "budget", "model_unavailable", "invalid_model_output", "infeasible", "too_few_sources"] as const;
+const errorCodes = ["disabled", "bad_request", "too_large", "rate_limited", "budget", "model_unavailable", "invalid_model_output", "infeasible", "too_few_sources", "changed"] as const;
 export type ApiError = { ok: false; code: typeof errorCodes[number]; reply: string; retryAfterSec?: number };
 
 const record = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -120,6 +120,7 @@ export function describeError(code: string, retryAfterSec?: number): string {
     case "invalid_model_output": return "My answer didn't pass the code checks; please try again.";
     case "infeasible": return "That preview cannot be saved with the base policy. An operator must review it.";
     case "too_few_sources": return "There aren't enough eligible wallets for that mix. Let's try a broader selection.";
+    case "changed": return "That selection changed while we talked; I will summarize it again before you confirm.";
     case "network": return "I can't reach the nest; check your connection or play the cached demo.";
     default: return "My answer couldn't be checked. Please try again.";
   }

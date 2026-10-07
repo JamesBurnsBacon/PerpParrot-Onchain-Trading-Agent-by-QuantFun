@@ -26,6 +26,7 @@ import { callIntentModel } from "./chat/openai";
 import { createFinalistsSource, localFinalistsRows, type TrackedAccountRow } from "./chat/finalists";
 import { readLiveEnv } from "./live/config";
 import { handleLiveSession, handleLiveStrategy } from "./live/handler";
+import { handleLivePlan, handleLiveRequest } from "./live/request";
 import { validateRuntimePolicy } from "../../shared/src/policy-runtime";
 
 const env = process.env;
@@ -260,7 +261,7 @@ const server = Bun.serve({
       response.headers.set("Cache-Control", "no-store");
       return response;
     }
-    if (pathname === "/live/session" || pathname === "/live/strategy") {
+    if (pathname === "/live/session" || pathname === "/live/strategy" || pathname === "/live/plan" || pathname === "/live/request") {
       if (!liveEnv.enabled || (pathname === "/live/session" && !liveEnv.apiKey)) return chatDisabled();
       if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: chatCors });
       let chat: ChatDeps;
@@ -268,7 +269,10 @@ const server = Bun.serve({
       catch { return chatDisabled(); }
       const deps = { ...chat, env: liveEnv, chatEnv, fetchImpl: fetch,
         context: { activeSources: readActiveSources, paperPoints: readPaperPoints, liveExposures: readLiveExposures } };
-      const response = await (pathname === "/live/session" ? handleLiveSession(req, deps) : handleLiveStrategy(req, deps));
+      const response = await (pathname === "/live/session" ? handleLiveSession(req, deps)
+        : pathname === "/live/plan" ? handleLivePlan(req, deps)
+        : pathname === "/live/request" ? handleLiveRequest(req, deps)
+        : handleLiveStrategy(req, deps));
       for (const [name, value] of Object.entries(chatCors)) response.headers.set(name, value);
       return response;
     }

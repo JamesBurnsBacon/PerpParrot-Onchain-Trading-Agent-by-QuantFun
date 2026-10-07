@@ -35,3 +35,21 @@ test("a backtest card draws the chart with the BTC reference and the caveat; una
   expect(none).toContain("Backtest not available");
   expect(none).not.toContain("<svg");
 });
+
+const PLAN = { asOfMs: 1790000000000, equityUsd: 470, marginScale: 0.8, grossUsd: 150, skipped: [{ asset: "DOGE", reason: "NOT_TRADABLE" as const, targetUsd: 20 }],
+  orders: [{ asset: "BTC", isBuy: true, size: "0.00100", notionalUsd: 100, markPx: 100000 }, { asset: "ETH", isBuy: false, size: "0.0125", notionalUsd: -50, markPx: 4000 }] };
+
+test("an awaiting request card shows the dry-run sketch, says nothing is sent, and offers the Confirm button only then", () => {
+  const out = renderToStaticMarkup(<LiveCards card={{ kind: "request", stage: "awaiting", plan: PLAN, previewHash: `0x${"ab".repeat(32)}`, requestId: null, sources: 5 }} onClose={() => {}} onConfirm={() => {}} />);
+  for (const part of ["Order preview", "Hypothetical", "Nothing is sent", "Buy BTC", "Sell ETH", "2 orders", "margin rule scaled to 80%", "1 legs skipped", "Confirm (save pending request)", "Say “yes”"]) expect(out).toContain(part);
+  expect(out).not.toContain("PENDING ·");
+});
+
+test("a saved request card shows PENDING with the request id, no order wording and no Confirm button", () => {
+  const out = renderToStaticMarkup(<LiveCards card={{ kind: "request", stage: "saved", plan: PLAN, previewHash: `0x${"ab".repeat(32)}`, requestId: "req-9", sources: 5 }} onClose={() => {}} onConfirm={() => {}} />);
+  expect(out).toContain("PENDING");
+  expect(out).toContain("req-9");
+  expect(out).toContain("No orders were placed");
+  expect(out).not.toContain("Confirm (save pending request)");
+  expect(out).not.toMatch(/<button[^>]*>[^<]*(place|submit|execute) order/i); // no control that acts on an account
+});
