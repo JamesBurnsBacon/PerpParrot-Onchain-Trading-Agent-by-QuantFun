@@ -100,7 +100,7 @@
   - **Daily snapshots:** save each tracked address's `month` points (in the `allTime` PnL baseline). `allTime` is coarse (7–14 days between points for older accounts), so this is the only way to get ~16-hour resolution beyond 30 days.
 - **Fills** (trade count, leverage, holding times, maker share): only for addresses that pass the cheap filters.
 - Cache the leaderboard every few hours and save every snapshot.
-- **Production schedule** (Vercel Cron, state in Supabase): daily discovery, a rate-limited refresh every 5 min, and selection at 06:00 and 18:00 UTC. See [docs/ingest/PIPELINE.md](docs/ingest/PIPELINE.md).
+- **Production schedule** (Vercel Cron, state in Supabase): a scan every 12 h (~14k accounts), a rate-limited refresh every 5 min, a qualified list of ~250, and 25 picked every 10 min (high-frequency traders left out). See [docs/ingest/PIPELINE.md](docs/ingest/PIPELINE.md).
 
 ### 4.2 Score (backend)
 - **Hard filters:**
@@ -158,7 +158,7 @@
 ### 4.5 Source-set changes
 **Hackathon: the set is fully frozen at go-live.** The agent only monitors.
 
-**Production** (reselection **twice a day**, 06:00 and 18:00 UTC; a set that passes the review goes live automatically at the next `:x0` run: [docs/ingest/PIPELINE.md](docs/ingest/PIPELINE.md)):
+**Production** (25 sources picked **every 10 minutes** from a qualified list rebuilt every 12 h; a reviewed set whose sources changed goes live automatically at the next `:x0` run: [docs/ingest/PIPELINE.md](docs/ingest/PIPELINE.md)):
 
 | Type | Trigger | Handling |
 |---|---|---|
@@ -291,7 +291,7 @@ Status: built (`packages/dashboard`): live account vs paper books vs BTC, target
 - **One Vercel project, three services** (root `vercel.json`): dashboard at `/`, backend at `/api/backend/*`, executor at `/api/executor/*`. The executor reaches the backend over a service binding (`BACKEND_URL`). Supabase Postgres holds all state. Deploy and operations: [docs/ops/DEPLOY.md](docs/ops/DEPLOY.md), [docs/ops/RUNBOOK.md](docs/ops/RUNBOOK.md).
 - **Vercel Cron** (production deployments only): `:x9` snapshot pre-build, `:x0` executor run, every 5 min the missed-run watchdog. Cron routes require `CRON_SECRET`.
 - **Live trading** needs one long-running executor process (one HL nonce sequence, no function timeout): the `Dockerfile` + `railway.json` build it; it triggers its own runs at `:x0`. The executor refuses `DRY_RUN=false` on Vercel.
-- **Ingest, scoring and scheduled AI reviews**: Vercel Cron as well (decided 2026-10-07; design in [docs/ingest/PIPELINE.md](docs/ingest/PIPELINE.md), not built yet). If Hyperliquid rate-limits Vercel's IPs, only the refresh job moves to one long-running process (Railway, same code).
+- **Ingest, scoring and scheduled AI reviews**: Vercel Cron as well (decided 2026-10-07; [docs/ingest/PIPELINE.md](docs/ingest/PIPELINE.md)). If Hyperliquid rate-limits Vercel's IPs, only the refresh job moves to one long-running process (Railway, same code).
 - **CI:** `.github/workflows/service-checks.yml` (backend and executor against Postgres, dashboard build) and `.github/workflows/agent-review-checks.yaml` (AI review core). No secrets in CI.
 
 ## 5. Stack
@@ -341,9 +341,9 @@ Budget ~1 h of testing per 2 h of features. Integrate only tested modules.
 - [ ] ❓ Per-tier type-B threshold N (production)
 - [x] Backend → executor: **exposures** (§4.13); `rebalance-report.schema.json` (orders) is kept as a contract document only
 - [x] Live bucket: **Aggressive** (team decision 2026-10-06); enforced in the review core and the frozen-configuration checks
-- [x] Freeze confirmation: `configurationHash` pinned in the backend and executor environment; no HyperEVM contract. With automatic go-live it moves to an `active` row in Supabase ([docs/ingest/PIPELINE.md](docs/ingest/PIPELINE.md) item 5)
+- [x] Freeze confirmation: `configurationHash` pinned in the backend and executor environment; no HyperEVM contract. With automatic go-live it moves to an `active` row in Supabase ([docs/ingest/PIPELINE.md](docs/ingest/PIPELINE.md))
 - [x] Orchestration: **no Chainlink CRE** (2026-10-07); Vercel Cron and our own services, AWS if a job outgrows a function
-- [x] Scheduled AI reviews and the ingest: **Vercel Cron**, re-selection twice a day, automatic go-live ([docs/ingest/PIPELINE.md](docs/ingest/PIPELINE.md))
+- [x] Scheduled AI reviews and the ingest: **Vercel Cron**, 12-hour scans, 25 picked every 10 minutes, automatic go-live ([docs/ingest/PIPELINE.md](docs/ingest/PIPELINE.md))
 - [ ] ❓ Our account mode: **unified** is simplest (one USDC balance margins core and `xyz`); standard mode needs USDC moved into each dex. Equity is read the same way either way
 
 ---

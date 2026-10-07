@@ -1,91 +1,72 @@
-# Ingest → score → review → go-live (target design)
+# Ingest → qualify → pick → review → go-live
 
-Decided by the owner on 2026-10-07; **not built yet**. Bradley is reworking #11, #31 and #33 to
-this design. Item 5 (go-live) is a separate PR. Nothing here changes the 10-minute mirror loop
-(README §4.7).
+Owner decisions of 2026-10-07. Code: `packages/backend/src/pipeline/`, cron routes in the root
+`vercel.json`, tables in `supabase/migrations/*pipeline*.sql`. Nothing here changes the 10-minute
+mirror loop (README §4.7).
 
 ## Decisions
 
-- **Re-select twice a day**: discover, score and AI review produce a new source set at
-  **06:00 and 18:00 UTC**.
-- **Automatic go-live**: a set that passes the review and the freeze checks becomes the active
-  configuration at the next `:x0` run, with no redeploy and no human step. Pause and revert stay
-  available to the operator.
-- **All on Vercel Cron**, state in Supabase through `DATABASE_URL` (Bun SQL, like the backend).
-  If Hyperliquid rate-limits Vercel's IPs, only the refresh job (2) moves to one long-running
-  process. That process uses the same code with a timer instead of a cron, on Railway with the
-  existing `packages/backend/Dockerfile`.
-- **Simple pipeline**: no SQLite, no local disk, no raw-response archives, no receipts, proofs,
-  leases or publication endpoints, and no CRE. A Postgres row claim or advisory lock is enough
-  to stop two invocations from doing the same work.
+- **Scan twice a day** (12-hour cron, 00:15 and 12:15 UTC). Sources, primarily
+  hyperliquidvaults.com (vaults) and the Hyperliquid leaderboard (traders), plus a broad scan of
+  every leaderboard account and HyperCore vault with ≥ $10k account value or TVL (~13–14k
+  accounts).
+- **Qualified list of ~250**: once the scan's accounts are refreshed, Score ranks the whole
+  population and keeps its top 250 distinct accounts (clones grouped, trader/vault pools
+  proportional).
+- **Pick 25 every 10 minutes** from the qualified list, with fresh portfolios and fills.
+  **High-frequency traders are left out**: more than 100 distinct orders a day in the fills read.
+  A 10-minute copy loop can't follow them.
+- **Review and automatic go-live**: the AI committee (Role, Risk, Red-Team) reviews the 25. It
+  runs only when the 25 changed since the last review.
+  A reviewed set that passes the freeze checks becomes the active configuration. It switches only
+  when its sources differ from the active set's, so the executor and paper books don't see a new
+  configuration hash every 10 minutes. Pause and revert stay with the operator.
+- **All on Vercel Cron**, state in Supabase through `DATABASE_URL`. No SQLite, local disk, raw
+  archives, receipts, proofs or CRE. Row claims (`for update skip locked`) stop two invocations
+  doing the same work. If Hyperliquid rate-limits Vercel's IPs, only the refresh job moves to one
+  long-running process (same code with a timer, on Railway).
 
 ## Jobs
 
-All jobs are backend cron routes protected by `CRON_SECRET`, like `/cron/snapshot`.
+All are backend routes protected by `CRON_SECRET`. Operators can call them with `ADMIN_TOKEN` as
+`POST /admin/pipeline/<step>`.
 
-| # | Route | Schedule | Work | Writes |
-|---|---|---|---|---|
-| 1 | `/cron/discover` | daily 00:15 UTC | Leaderboard (~40 MB, 35 s–2 min) and vault list (~14 MB). Keep accounts with ≥ $10k account value or TVL and positive month and all-time PnL; this uses only the files, with no per-account calls. Label HyperCore vaults from the vault list. For ERC-4626 detection (README §4.1), call HyperEVM `eth_getCode` only for addresses not seen before. | `ingest_accounts` (upsert; `last_seen` marks accounts that left) |
-| 2 | `/cron/refresh` | every 5 min, ≤ 240 s each | Claim the stalest accounts (`order by refreshed_at nulls first … for update skip locked`). Fetch `portfolio`. For accounts that pass Score's cheap gates, page `userFillsByTime` and keep derived metrics: distinct `(coin, oid)` order count, maker share, hold times. | `ingest_portfolios` (latest per account, overwritten), `ingest_fill_stats` |
-| 3 | `/cron/select` | 06:00 and 18:00 UTC | Load `ScoreInput[]` from Postgres (#11's loader), `scoreCandidates` (~8 s, ~0.9 GB for ~11k inputs), then publish the funnel and finalists to the dashboard. | `score_runs`, `dashboard_artifacts` |
-| 4 | same invocation as 3 | after 3 | For each finalist, collect measured evidence (`clearinghouseState` + recent fills) and build the review input. Then run the Role, Risk and Red-Team review, which is several minutes of model calls, so this route needs `maxDuration` up to 800 s (the Vercel Pro maximum). | `review_audit` |
-| 5 | same invocation as 4 | after 4 | **Go-live**, if the review approved and `freeze.ts`'s checks pass: write the configuration and mark it active. | `configurations` |
+| Route | Schedule | Work | Writes |
+|---|---|---|---|
+| `/cron/pipeline/scan` | 00:15, 12:15 UTC | Leaderboard file (~40 MB): ≥ $10k, positive month and all-time PnL. hyperliquidvaults.com's vault list (its TanStack server function), plus Hyperliquid's own vault list (open, not a child, ≥ $10k TVL, ≥ 39 days old). File reads only, no per-account calls. | `pipeline_accounts` (upsert, `listed_at`) |
+| `/cron/pipeline/refresh` | every 5 min, ≤ 240 s | First, qualified accounts whose data is over 1 h old: `portfolio` + `userFillsByTime` (30 days, newest 2,000) → trade count, maker share, orders per day. Then accounts not refreshed since the latest scan: `portfolio` only. Keeps only the `month` and `allTime` windows. Unfinished claims are released. | `pipeline_accounts` |
+| `/cron/pipeline/select` | every 10 min (`:x4`) | 1. **Qualify** when ≥ 95% of the scan is refreshed and the qualified list is older than the scan: Score the population (trade count may be unknown here) and keep its top 250. 2. **Pick**: Score the qualified accounts with fresh fills, high-frequency traders left out, keep 25. 3. **Review** the 25 if they changed, freeze, and **activate** if the sources changed. | `pipeline_accounts.qualified_at`, `selection_runs`, `configurations` |
 
-**Hyperliquid budget**:
-- The limit is 1200 weight/min per IP. Most info calls cost 20; `clearinghouseState` costs 2.
-- Ingest keeps itself to ≤ 600 weight/min, which leaves room for the snapshot cron. The budget
-  is held in one Postgres row that every invocation reserves from.
-- Honour `429` / `Retry-After`.
-- At that budget the refresh covers ~11k accounts in about 6 h, so every account is fresh for
-  each twice-daily selection.
-- On a cold start, `/cron/select` waits until at least 95% of accounts have been refreshed
-  within 12 h; it doesn't score on partial data.
+**Hyperliquid budget**: the limit is 1,200 weight per minute per IP. Most info calls cost 20;
+fills cost 20 plus 1 per 20 fills; `clearinghouseState` costs 2. The refresh paces itself to 900
+per minute, which leaves room for the snapshot cron. Rough load: the population is ~14k × 20
+every 12 h (~390/min), and the qualified list is ~250 × ~60 every hour (~250/min). `429` /
+`Retry-After` is honoured.
 
-**Tables**: the PR proposes the final schema as one migration. #11's migration
-(`ingest_runs`, `ingest_candidates`, `ingest_portfolios`, `ingest_sources`) may already have been
-applied to production by hand. Check before writing the migration, and alter or replace those
-tables rather than adding a parallel set. Store only the
-latest portfolio and derived fill metrics per account, not every raw response.
+**Cold start**: the first full refresh after a scan takes ~8 h. Until the first qualified list
+exists, nothing is picked and the active configuration (or the fixture) stays.
 
-## Go-live (item 5)
+## Review gate
 
-- `configurations(hash, configuration jsonb, status, review_id, activated_at)`. Exactly one row
-  is `active`.
-- The backend reads the active row instead of `CONFIGURATION_PATH`. The executor compares the
-  targets' `configurationHash` with the active row instead of `FROZEN_CONFIGURATION_HASH`.
-- `HL_ACCOUNT` stays pinned in the environment.
-- Guard rails:
-  - Aggressive bucket only, enforced already by the review core.
-  - The freeze checks run before activation.
-  - At most one switch per selection.
-  - A switch takes effect at a `:x0` run, never mid-run.
-  - `POST /admin/configuration/revert` restores the previous set.
-  - `POST /admin/pause` still stops trading.
-- The first version switches targets directly: the executor's diff closes what the new set
-  doesn't hold. README §4.5's gradual exit for edged-out sources (reduce-only legs, then DCA out)
-  is a follow-up.
+The review core can't pass any candidate yet. `score/frame.ts` and `review/input.ts` leave the
+out-of-sample metrics, execution fit and exposure overlap null, and `compile` requires them.
+Until measured evidence lands, the **basic gate** (`REVIEW_GATE`, default `basic`) applies: keep
+finalists the Role model doesn't reject and with no Risk score above the reject threshold
+(evidence risk aside), weight them by Aggressive fit within the per-source cap, cash buffer and
+gross leverage, and require ≥ 5 sources. `REVIEW_GATE=strict` turns it off.
 
-## PR plan
+## Next
 
-Keep each PR under about 1,500 changed lines excluding tests. Generated evidence and data files
-are never committed. No new CI workflow uses secrets or calls a paid API.
+- **Measured evidence** (out-of-sample windows, execution fit, exposure overlap) so the strict
+  review can pass candidates. Source: #33's `review/measured-evidence.ts`.
+- **Gradual exit** for sources that leave the set (README §4.5: reduce-only legs, then DCA out).
+  The first version switches targets directly.
+- **Stored month history** per account (denser than `allTime` beyond 30 days; README §4.1).
+- **Advisory strategy analysis** of the picks (#38's `strategy-agent.ts`): it has no authority
+  over configuration or orders.
 
-| PR | Contents | Source |
-|---|---|---|
-| A (first, small) | Model requests use the agent timeout instead of `bounded-http.ts`'s fixed 10 s cap. A journal failure on the executor's last order batch fails the run. Both with tests. | #33 |
-| B | Ingest tables, `/cron/discover`, `/cron/refresh`, the Postgres-held budget | #11 discovery, classification and order counting; #31 `BudgetClient` and fetch logic, ported from SQLite to Postgres |
-| C | `/cron/select` scoring from Postgres, `score_runs`, dashboard funnel | #11 Score loader |
-| D | Measured evidence and the scheduled review | #33 `review/measured-evidence.ts` |
-| E | Go-live (above) | new |
-
-**Not carried over**:
-- The SQLite worker and its HTTP server, receipts, lease and publication endpoints.
-- The CRE `ingest-cycle` workflow.
-- The 10-minute Top 100 loop: nothing consumes it while the active set changes twice a day.
-- `night-shift-integration/` and its evidence, verifiers and rule adapters.
-- `supabase-js`, `SUPABASE_SECRET_KEY` and Storage archives: use `DATABASE_URL`.
-- The QuickNode-only bootstrap.
-- Runtime dependencies on GitHub Release data.
-
-Research, replay and export tools can live under `scripts/research/` if still wanted, not in
-`packages/backend/src`.
+**Not carried over** from #11, #31, #33 and #38: the SQLite worker and its HTTP server,
+receipts, leases and publication endpoints, the CRE workflow, `night-shift-integration/` and its
+verifiers, `supabase-js`/Storage archives, the QuickNode bootstrap, the one-time research-cache
+import, and runtime dependencies on GitHub Release data. Research tools can live under
+`scripts/research/`.
