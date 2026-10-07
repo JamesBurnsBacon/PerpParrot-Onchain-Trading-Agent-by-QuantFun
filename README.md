@@ -308,7 +308,8 @@ Status: built (`packages/dashboard`): live account vs paper books vs BTC, target
 | Storage / hosting | Supabase. One Vercel project with three services (root `vercel.json`): dashboard at `/`, backend at `/api/backend`, executor at `/api/executor`, Vercel Cron for the snapshot pre-build, the run and the missed-run watchdog. Live trading moves the executor to one long-running process (nonces and run ordering; `Dockerfile` + `railway.json`); the leaderboard download, once built, may need one too (too slow for a function). |
 | Secrets | Vercel env vars. `.env.example` only in the repo. Runbook: `docs/ops/RUNBOOK.md`. |
 | Testing | Fixtures, then $10–20 mainnet runs before the freeze. No testnet. |
-| Optional / unused | NOWNodes (HyperEVM RPC + an Info API copy) if it helps with rate limits; not a track. No AgentKit. |
+| Under consideration | NOWNodes (HyperEVM RPC + an Info API copy): we'd like to enter its Multichain Infrastructure Challenge if it fits, and it can also help with rate limits. Not decided or built yet. |
+| Unused | No AgentKit. |
 
 ## 6. Timeline (SGT)
 Budget ~1 h of testing per 2 h of features. Integrate only tested modules.
@@ -394,11 +395,12 @@ Budget ~1 h of testing per 2 h of features. Integrate only tested modules.
 - DefiLlama yields API (chain "Hyperliquid L1"): 529 pools, 75 with ≥ $1M TVL.
 - When a vault trades on HyperCore via CoreWriter, its HyperCore account shares the contract's address, so on the leaderboard it **looks like a normal address**. Hence the `eth_getCode` check.
 
-### NOWNodes (optional infra)
-- `hype.nownodes.io` has two parts:
-  - **HyperEVM JSON-RPC:** `eth_getCode`, `eth_call`, `eth_getLogs`, `eth_sendRawTransaction`, …
-  - **A copy of HL's Info API:** `clearinghouseState`, spot state, vault summaries, user vault equities, `webData2`, …
-- Missing from the Info API copy: `portfolio`, fill history, `userFunding`. No `/exchange`, so orders go to HL directly.
+### NOWNodes (under consideration: infra, and possibly the Multichain Infrastructure Challenge)
+- `hype.nownodes.io` has two parts (key in the `api-key` header; measured 2026-10-07):
+  - **HyperEVM JSON-RPC** at `/evm` (`eth_blockNumber` answers; `/` is a 404).
+  - **A copy of HL's Info API** at `/info`. It serves `meta`, `perpDexs`, `clearinghouseState`, `spotClearinghouseState`, `webData2`, `userVaultEquities`, `spotMeta` and `vaultSummaries`.
+- It answers 422 for `portfolio`, `userFillsByTime`, `userFunding`, `metaAndAssetCtxs`, `vaultDetails`, `allMids`, `l2Book` and `candleSnapshot`, so the selection pipeline's heavy reads (`portfolio`, fills) stay on Hyperliquid. No `/exchange`, so orders go to HL directly.
+- About 1.7x slower than the official API per read (median 0.36 s vs 0.21 s). The backend therefore keeps Hyperliquid as the primary and uses NOWNodes only as a failover (`INFO_ROUTING=overflow`), see `docs/ops/DEPLOY.md`.
 - Paid plans advertise unlimited requests per second. It needs an API key. [Docs](https://docs.nownodes.io/hype)
 
 ### Coinbase AgentKit

@@ -31,6 +31,8 @@ vault standing in for ours; the services only *read* it.
    ADMIN_TOKEN=<openssl rand -hex 32; keep it in a password manager>
    CRON_SECRET=<openssl rand -hex 32>
    DATABASE_URL=<service-role connection string>
+   BACKEND_DATABASE_URL=<transaction pooler connection string, port 6543>  # backend only; the
+   # session pooler (DATABASE_URL) allows 15 clients in all, and the executor's run lock needs it
    ```
    Don't set `BACKEND_URL` (the binding injects it), `DRY_RUN`, `HL_API_WALLET_KEY` or the
    `NEXT_PUBLIC_*` URLs (the executor runs production rules on Vercel and refuses `DRY_RUN=false`
@@ -62,14 +64,29 @@ vault standing in for ours; the services only *read* it.
 Going live (`DRY_RUN=false`, API wallet, funding, a long-running executor) is RUNBOOK § Deploy
 step 5 and is not part of this rehearsal.
 
+## NOWNodes failover (optional)
+
+The backend can fail over its Hyperliquid info reads to NOWNodes' copy (`hype.nownodes.io/info`). It is off by default; with `INFO_ROUTING` unset or `official` the code path is a plain `fetch` to `api.hyperliquid.xyz`, as before.
+
+| Variable | Meaning |
+|---|---|
+| `NOWNODES_API_KEY` | Required for anything but `official`. Set it as a Vercel env var with `vercel env add` (never in the repo). |
+| `INFO_ROUTING` | `official` (default), `overflow` (a read the official API answers with 429, 5xx or a timeout is retried on NOWNodes), `split` (`INFO_SPLIT_PERCENT`, default 25, of capable reads go to NOWNodes first, failing over to official). |
+| `INFO_SHADOW_PERCENT` | Share of official `clearinghouseState` reads also sent to NOWNodes in the background and compared (account value, position count); nothing waits for it. |
+
+Only `meta`, `perpDexs`, `clearinghouseState`, `spotClearinghouseState`, `webData2`, `userVaultEquities`, `spotMeta` and `vaultSummaries` can go to NOWNodes; `portfolio`, fills and the rest always use the official API (NOWNodes answers 422). The executor is not routed. Three NOWNodes failures in a row pause it for 60 s. `GET /pipeline` returns `routing` (reads, average latency and errors per provider, failovers, shadow matches) and the dashboard's Pipeline panel shows it when NOWNodes is in use.
+
+`split` is slower (NOWNodes measured about 1.7x the official latency), so prefer `overflow` unless a benchmark says otherwise.
+
 ## Selection pipeline (2026-10-07; [docs/ingest/PIPELINE.md](../ingest/PIPELINE.md))
 
 Every 12 hours (00:15 and 12:15 UTC) the backend scans every leaderboard trader (≥ $10k, positive
 month and all-time PnL) and HyperCore vault (hyperliquidvaults.com's list first, then
 Hyperliquid's: open, not a child, ≥ $10k, ≥ 39 days old), about 14k accounts. The refresh
 (every 5 minutes, 900 weight/min) keeps their portfolios within 12 hours and reads the
-qualified accounts' portfolio and fills every hour. Once 95% of a scan is refreshed, Score
-qualifies its top 250. Every 10 minutes Score picks 25 from the qualified list, leaving out
+qualified accounts' portfolio and fills every hour, three reads at a time. Primary sources
+(hyperliquidvaults.com's vaults, the leaderboard's top 200) are read first. Once they are fresh
+and 95% of a scan is (or 3.5 hours after the scan), Score qualifies its top 250. Every 10 minutes Score picks 25 from the qualified list, leaving out
 high-frequency traders (> 100 orders a day). When the 25 change, the AI committee reviews them;
 the result is frozen for `HL_ACCOUNT` and activated if its sources differ from the active set's
 (otherwise the run is `kept`). The backend serves the active configuration and the executor
@@ -83,7 +100,8 @@ aside). It weights them by Aggressive fit, within the per-source cap, cash buffe
 leverage, and needs at least 5. `REVIEW_GATE=strict` turns this off.
 
 1. **Supabase**: run `supabase/migrations/20261007120000_pipeline.sql`, then
-   `20261007150000_pipeline_qualified.sql`, **before** the deploy. Both only add tables, columns
+   `20261007150000_pipeline_qualified.sql` and `20261007160000_pipeline_primary.sql`, **before**
+   the deploy. Both only add tables, columns
    and a wider status check, and are safe to run twice. The new code reads the new columns, so
    until they exist the pipeline routes fail.
 2. **Vercel variables**:

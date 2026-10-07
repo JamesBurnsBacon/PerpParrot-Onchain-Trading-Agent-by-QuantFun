@@ -26,12 +26,20 @@ const required = (name: string) => {
 // Supabase Postgres when DATABASE_URL is set (snapshots then survive restarts and
 // are shared between instances); in memory otherwise. On Vercel any request can land on
 // a fresh instance, so memory would lose snapshots and the paper books between requests.
-if (env.VERCEL && !env.DATABASE_URL) throw new Error("DATABASE_URL is required on Vercel");
+// BACKEND_DATABASE_URL, when set, is Supabase's transaction pooler (port 6543): it shares a few
+// server connections among many clients, so the backend's crons and dashboard reads don't use up
+// the session pooler's 15. It can't keep prepared statements. The backend holds no session state;
+// the executor's run lock does, so the executor stays on DATABASE_URL (the session pooler).
+const databaseUrl = env.BACKEND_DATABASE_URL || env.DATABASE_URL;
+const transactionPooler = databaseUrl ? new URL(databaseUrl).port === "6543" : false;
+if (env.VERCEL && !databaseUrl) throw new Error("DATABASE_URL is required on Vercel");
 if (env.VERCEL && !env.CRON_SECRET) throw new Error("CRON_SECRET is required on Vercel (Vercel Cron sends it to /cron/snapshot)");
 // Supabase's session pooler allows 15 connections across every instance of both services
 // (Bun's default pool is 10), and a stopped Vercel instance keeps its connections until
 // they idle out. On Vercel: small pools that let go quickly (the executor takes 3).
-const sql = env.DATABASE_URL ? new SQL(env.DATABASE_URL, env.VERCEL ? { max: 2, idleTimeout: 5 } : {}) : undefined;
+const sql = databaseUrl
+  ? new SQL(databaseUrl, { ...(env.VERCEL ? { max: 2, idleTimeout: 5 } : {}), ...(transactionPooler ? { prepare: false } : {}) })
+  : undefined;
 const store = sql ? new PostgresSnapshotStore(sql) : new MemorySnapshotStore();
 const log = (msg: string, extra: Record<string, unknown> = {}) =>
   console.log(JSON.stringify({ t: new Date().toISOString(), msg, ...extra }));
@@ -225,4 +233,4 @@ if (!env.VERCEL) {
   }, 15_000);
 }
 
-log("snapshot service listening", { port: server.port, store: env.DATABASE_URL ? "postgres" : "memory" });
+log("snapshot service listening", { port: server.port, store: databaseUrl ? (transactionPooler ? "postgres (transaction pooler)" : "postgres") : "memory" });
