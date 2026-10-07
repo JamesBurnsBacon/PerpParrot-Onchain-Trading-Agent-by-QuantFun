@@ -14,6 +14,7 @@ export const SELECTION_STATUS: Record<SelectionStatus, { color: string; icon: st
   running: { color: "var(--series-1)", icon: "◌", label: "Running" },
   activated: { color: "var(--good)", icon: "●", label: "Activated" },
   kept: { color: "var(--good)", icon: "○", label: "Kept" },
+  benched: { color: "var(--series-1)", icon: "◑", label: "Benched" },
   rejected: { color: "var(--warning)", icon: "◐", label: "Rejected" },
   failed: { color: "var(--critical)", icon: "✕", label: "Failed" },
 };
@@ -78,6 +79,8 @@ export function Pipeline({ view }: { view: PipelineView }) {
 
   // Latest run's finalists joined with the AI verdicts; picked = in that run's manifest.
   const picked = new Map((run?.manifest?.sources ?? []).map((s) => [s.address.toLowerCase(), s.weight]));
+  // The roster's bench: approved wallets and whether a 10-minute loop can follow them.
+  const bench = new Map((latest?.bench ?? []).map((b) => [b.address.toLowerCase(), b]));
   const verdicts = new Map((latest?.summary ?? []).filter((s) => s.address).map((s) => [s.address!.toLowerCase(), s]));
   const finalists = [...(latest?.finalists?.finalists ?? [])].sort((a, b) => (a.rank ?? 1e9) - (b.rank ?? 1e9));
   const funnel = latest?.finalists?.funnel ?? [];
@@ -218,6 +221,7 @@ export function Pipeline({ view }: { view: PipelineView }) {
                   <th className="py-1 pl-2 text-right font-normal" title="Risk: leverage">Lev</th>
                   <th className="py-1 pl-2 text-right font-normal" title="Risk: evidence">Evid</th>
                   {overlap && <th className="py-1 pl-2 text-right font-normal" title="Largest same-direction position overlap with another pick (0–1)">Overlap</th>}
+                  {bench.size > 0 && <th className="py-1 pl-2 text-right font-normal" title="Approved for the roster's bench · share of notional held ≥ 90 min (≥ 50% to be seated)">Bench · copyable</th>}
                   <th className="py-1 pl-2 text-right font-normal">Weight</th>
                 </tr>
               </thead>
@@ -240,6 +244,12 @@ export function Pipeline({ view }: { view: PipelineView }) {
                           {overlap.byAddress[f.address.toLowerCase()] === undefined ? "—" : overlap.byAddress[f.address.toLowerCase()]!.toFixed(2)}
                         </td>
                       )}
+                      {bench.size > 0 && (() => {
+                        const b = bench.get(f.address.toLowerCase());
+                        if (!b) return <td className="py-1 pl-2 text-right" style={{ color: "var(--muted)" }}>—</td>;
+                        const share = b.copyableShare === null ? (b.turnoverPerDay === null ? "?" : `turnover ${b.turnoverPerDay.toFixed(1)}/d`) : `${Math.round(b.copyableShare * 100)}%`;
+                        return <td className="py-1 pl-2 text-right" style={{ color: b.passesHold ? "var(--good)" : "var(--warning)" }}>{b.passesHold ? "✓" : "✗"} {share}</td>;
+                      })()}
                       <td className="py-1 pl-2 text-right font-semibold" style={{ color: w ? "var(--series-1)" : "var(--muted)" }}>
                         {w ? `${(w * 100).toFixed(1)}%` : "—"}
                       </td>
