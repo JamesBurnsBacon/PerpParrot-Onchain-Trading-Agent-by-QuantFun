@@ -73,8 +73,10 @@ finalists the Role model doesn't reject and with no Risk score above the reject 
 (evidence risk aside), weight them by Aggressive fit within the per-source cap, cash buffer and
 gross leverage, and require ≥ 5 sources. `REVIEW_GATE=strict` turns it off.
 
-The scheduled review now reads `fixtures/review-policy.json` (confidence floor 40),
-not the pinned frozen fixture. Relative ranking is fit × latency × min(Role, Risk confidence)/100;
+The scheduled review reads the pinned frozen fixture (confidence floor 60), with the
+owner's 5× gross cap applied at backend startup. The separate `fixtures/review-policy.json`
+40-floor policy is used by the local `strict-gate-check.ts` research harness, not the
+deployed pipeline. Relative ranking is fit × latency × min(Role, Risk confidence)/100;
 only drawdown, leverage, concentration, path and execution risk set the risk veto/cap.
 `selection_runs.review.summary[].gate` records actual compiler checks; `freezeEligible` separately
 records whether the manifest is VALID with at least five sources. The basic gate stays the fallback.
@@ -94,7 +96,7 @@ The overlap of two accounts is the same-direction share of their current books, 
 ## Next
 
 - **Strict gate policy**: with measured evidence the binding limits are the models' confidence
-  (40 floor plus relative weighting), the 5-source freeze minimum, and a Red-Team rebuild request that
+  (60 live floor; 40 only in the local sensitivity, with relative weighting), the 5-source freeze minimum, and a Red-Team rebuild request that
   penalises no one (the core reports `POLICY_VIOLATION`). These are the owner's call.
 - **Evidence for the overlap guard**: whether leaving out overlapping candidates helps returns is
   not measured, and it can make the 25 (and so the AI reviews) change more often; a hysteresis

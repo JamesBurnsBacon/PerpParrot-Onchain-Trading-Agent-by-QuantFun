@@ -209,7 +209,7 @@ test('lower of Role/Risk confidence scales relative weights, and caps leave surp
   const capped=await review(f);assert.ok(Math.abs(capped.sources[0].weight-0.24)<1e-10);
   assert.ok(Math.abs(capped.cashWeight-0.36)<1e-10);
 });
-test('scheduled policy changes only confidence without rewriting the pinned frozen policy',()=>{
+test('local 40-floor research policy changes only confidence without rewriting the pinned frozen policy',()=>{
   const frozen=JSON.parse(readFileSync(new URL('../packages/backend/fixtures/frozen-configuration.json',import.meta.url),'utf8'));
   const scheduled=JSON.parse(readFileSync(new URL('../packages/backend/fixtures/review-policy.json',import.meta.url),'utf8'));
   validate('bucket-policy',scheduled.policy);

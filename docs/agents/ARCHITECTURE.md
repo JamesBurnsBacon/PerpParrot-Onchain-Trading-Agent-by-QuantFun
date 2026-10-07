@@ -151,8 +151,9 @@ Risk scores become CAP / WATCHLIST / REJECT, a binding constraint and allocation
 ceiling through policy code. Choose the largest of drawdown, leverage, concentration,
 path and execution risk as binding, with stable lexicographic tie-breaking. Evidence
 risk remains in the audit but is not a veto or allocation cap; uncertainty is
-expressed through confidence. The pipeline review policy requires minimum Role/Risk
-confidence of 40 and ranks by bucket fit × latency factor × minimum confidence / 100.
+expressed through confidence. The deployed pipeline uses the pinned fixture's
+minimum Role/Risk confidence of 60; the local research policy tests a 40 floor.
+Both rank by bucket fit × latency factor × minimum confidence / 100.
 Weights normalize these scores and then obey risk caps; unused allocation stays cash.
 Essential measured evidence checks remain mandatory. Correlation, linked vault/leader exposure and current overlap
 are checked separately; low historical correlation does not prove diversification.
