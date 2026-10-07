@@ -1,7 +1,7 @@
 "use client";
 import { useRef } from "react";
 import "./lp.css";
-import { ExposureBars, Panel, PaperTable, RunStrip, StatTile, TargetsVsHeld, Waiting } from "../components/Charts";
+import { ExposureBars, Panel, PaperTable, RunStrip, StatTile, TargetPortfolio, Waiting } from "../components/Charts";
 import { LineChart } from "../components/LineChart";
 import { DashHeader } from "../components/lp/DashHeader";
 import { Hero } from "../components/lp/Hero";
@@ -20,7 +20,7 @@ export default function Page() {
   const dash = useRef<HTMLDivElement>(null);
   useDashMotion(dash, data !== null);
   const series = performanceSeries(data?.paper ?? null, data?.equity ?? null, data?.status ?? null);
-  // The newest executed run with a plan: targets vs held.
+  // The newest executed run with a plan: the target portfolio.
   const lastPlanned = data?.recent?.find((r) => r.kind === "mirror" && r.status === "executed" && r.plan);
   const btc = lastReturn(series, "btc");
   const live = liveIsReal(data?.status ?? null, data?.equity ?? null);
@@ -74,11 +74,11 @@ export default function Page() {
 
           <div className="mb-4">
             {lastPlanned ? (
-              <Panel tone={1} title="Targets vs held" meta={time(runTime(lastPlanned))}>
-                <TargetsVsHeld run={lastPlanned} />
+              <Panel tone={1} title="Target portfolio" meta={time(runTime(lastPlanned))}>
+                <TargetPortfolio run={lastPlanned} />
               </Panel>
             ) : (
-              <Panel tone={1} title="Target exposures" meta={data?.exposures ? time(data.exposures.runAt * 1000) : undefined}>
+              <Panel tone={1} title="Target portfolio" meta={data?.exposures ? time(data.exposures.runAt * 1000) : undefined}>
                 {data?.exposures?.exposures.length ? <ExposureBars exposures={data.exposures.exposures} /> : <Waiting what="No exposures yet" source="Computed from the latest run's snapshot" />}
               </Panel>
             )}
