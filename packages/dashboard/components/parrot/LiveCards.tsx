@@ -6,7 +6,7 @@ import type { LiveCard } from "../../lib/parrot-reads";
 import { WalletBird } from "./WalletBird";
 import { CountUp, DryBird, Icon, SavedStamp, StageCard, StatValue } from "./StageBits";
 
-export function LiveCards({ card, onClose, onConfirm }: { card: LiveCard | null; onClose: () => void; onConfirm?: () => void }) {
+export function LiveCards({ card, onClose, onConfirm, saving = false }: { card: LiveCard | null; onClose: () => void; onConfirm?: () => void; saving?: boolean }) {
   if (!card) return null;
   let body: React.ReactNode;
   let label: string;
@@ -50,7 +50,7 @@ export function LiveCards({ card, onClose, onConfirm }: { card: LiveCard | null;
       </li>)}</ul>
       {!plan.orders.length && <p>No orders</p>}
       <div className="sketch-meta"><span>{plan.orders.length} orders</span>{plan.marginScale < 1 && <span title="Margin rule scaling">{Math.round(plan.marginScale * 100)}% scale</span>}{!!plan.skipped.length && <span>{plan.skipped.length} skipped</span>}</div>
-      {onConfirm && <button type="button" className="parrot-button parrot-button--primary" onClick={onConfirm} aria-label="Confirm (save pending request)"><Icon kind="check" />Confirm</button>}
+      {onConfirm && <button type="button" className="parrot-button parrot-button--primary" onClick={onConfirm} disabled={saving} aria-busy={saving} aria-label="Confirm (save pending request)"><Icon kind="check" />{saving ? "Saving…" : "Confirm"}</button>}
       <p className="honesty-line">dry run - nothing is sent</p>
     </>;
   } else {
