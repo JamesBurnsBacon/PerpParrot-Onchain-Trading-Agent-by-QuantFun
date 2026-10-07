@@ -24,7 +24,7 @@ there is no permissive adapter implementation. Strict shape validation and commi
 
 | Dependency | Integration responsibility |
 |---|---|
-| clock / agentTimeoutMs | Monotonic epoch-millisecond clock and a bounded per-stage deadline (1–60,000ms) |
+| clock / agentTimeoutMs | Monotonic epoch-millisecond clock and a bounded per-stage deadline (1–180,000ms for committee review) |
 | quorum / nodeIds | Configured quorum and node allowlist (today one provider node, quorum 1), never model-provided IDs |
 | prompt/model hashes | Exact versioned prompt and model configuration commitment |
 | role / risk | Separate isolated model contexts, approved system prompts, deadlines and response size limits; return per-node observations |

@@ -179,8 +179,8 @@ Status: the review core (`packages/backend/review/workflow.ts`, a Role/Risk/Red-
 `packages/backend/scripts/review-input.ts` builds its input from Score's finalists (frame 1.1.0, live positions),
 and `packages/backend/scripts/review-run.ts` runs it with one model provider (`review/models/openai-paper.ts`),
 auditing every model output; see [production integration status](docs/agents/PRODUCTION_INTEGRATION.md). Its output,
-a frozen configuration, is the only execution authority (§4.7). A real-provider run, the two-model evaluation and a
-schedule (Vercel Cron or AWS) remain.
+a frozen configuration, is the only execution authority (§4.7). A local 40-finalist GPT-6 Sol run and attempted Kimi comparison are documented in
+[docs/agents/KIMI_SOL_COMPARISON_20261007.md](docs/agents/KIMI_SOL_COMPARISON_20261007.md); production deployment and sustained scheduled operation remain separately unverified.
 
 The scheduled review uses the pinned fixture's Aggressive policy, with the owner's
 5× gross cap applied at backend startup. Its minimum Role/Risk confidence is 60.

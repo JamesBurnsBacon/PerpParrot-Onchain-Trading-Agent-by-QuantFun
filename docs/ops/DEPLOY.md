@@ -77,6 +77,7 @@ The backend can fail over its Hyperliquid info reads to NOWNodes' copy (`hype.no
 | `NOWNODES_PROBE` | `on` (with a routing mode other than `official` and a key) probes, in the background and at most every 6 hours per instance, which info methods NOWNodes answers. A method on the allowlist that NOWNodes answers 422 for stops being retried there; nothing is ever added. Off by default. The same probe runs by hand with `NOWNODES_API_KEY=… bun run packages/backend/scripts/probe-nownodes.ts`. |
 | `CONTRACT_CHECK` | `on` (with a key) reads `eth_getCode` from NOWNodes' HyperEVM endpoint (`hype.nownodes.io/evm`) for each AI-review pick and records which have code on HyperEVM in the run's `finalists.contracts`; the dashboard marks them. It shows code, not trading: the 7 such addresses checked on 2026-10-07 held no perp positions at that check. Evidence only: it never selects or excludes. A read that fails is "unread", never "not a contract". Off by default. |
 | `SNAPSHOT_VERIFY` | `on` or `strict` (with a key) reads every source's positions again from NOWNodes before a mirror snapshot is stored and compares them asset by asset (tolerance `SNAPSHOT_VERIFY_TOLERANCE_PCT`, default 1%, and never less than $5). A difference that survives a re-read of both providers stores nothing and fails the run with a 503, which the executor records and alerts on; the next run rebuilds. If NOWNodes cannot be read, `on` stores the snapshot as usual and `strict` refuses it. `strict` without a key refuses to start rather than running unchecked; a tolerance outside 0-50% falls back to 1%. After a mismatch both providers are read again, and the snapshot is refused unless they agree with each other *and* with what it recorded. Off by default; see below. |
+| `REVIEW_MODEL` | OpenAI committee model; defaults to `gpt-6-sol`. The 40-finalist Role/Risk and Red-Team stages each have a bounded 180 s deadline. Kimi is a separate local research comparison, not a production switch. |
 
 Only `meta`, `perpDexs`, `clearinghouseState`, `spotClearinghouseState`, `webData2`, `userVaultEquities`, `spotMeta` and `vaultSummaries` can go to NOWNodes; `portfolio`, fills and the rest always use the official API (NOWNodes answers 422). The executor is not routed. Three NOWNodes failures in a row pause it for 60 s. `GET /pipeline` returns `routing` (reads, average latency and errors per provider, failovers, shadow matches) and the dashboard's Pipeline panel shows it when NOWNodes is in use.
 
@@ -127,7 +128,7 @@ qualified accounts' portfolio and fills every hour, three reads at a time. Prima
 (hyperliquidvaults.com's vaults, the leaderboard's top 200) are read first. Once they are fresh
 and 95% of a scan is (or 3.5 hours after the scan), Score qualifies its top 250. Every 10 minutes Score picks 40 from the qualified list, leaving out
 high-frequency traders (> 100 orders a day). When the 40 change, the AI committee reviews them;
-the result is frozen for `HL_ACCOUNT` and activated if its sources differ from the active set's
+only a valid 5–15-source configuration can be frozen for `HL_ACCOUNT` and activated if its sources differ from the active set's
 (otherwise the run is `kept`). The backend serves the active configuration and the executor
 checks targets against its hash.
 

@@ -136,6 +136,12 @@ test('hung providers hit a bounded deadline and receive cancellation',async()=>{
   const m=await review(f);
   assert.equal(m.reason,'AGENT_FAILURE');assert.equal(signal?.aborted,true);
 });
+test('40-finalist committee can use the 180-second bound but cannot exceed it',async()=>{
+  const f=fixture();f.deps.agentTimeoutMs=180000;
+  assert.equal((await review(f)).status,'VALID');
+  f.deps.agentTimeoutMs=180001;
+  await assert.rejects(review(f),/invalid agent deadline/);
+});
 test('data that expires during either model stage cannot publish VALID',async()=>{
   for(const stage of ['role','redTeam'] as const) {
     const f=fixture();let time=NOW;f.deps.clock=()=>time;

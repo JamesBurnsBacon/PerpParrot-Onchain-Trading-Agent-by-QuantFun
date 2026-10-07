@@ -405,10 +405,10 @@ export class Pipeline {
     const audit: unknown[] = [];
     const stageRows: Record<string, Row[][]> = {};
     const deps = (this.o.paperCommittee ?? openAIPaperCommittee)(
-      { apiKey: this.o.openAiKey ?? "", model: this.o.model ?? "gpt-4.1-mini-2025-04-14" },
+      { apiKey: this.o.openAiKey ?? "", model: this.o.model ?? "gpt-6-sol" },
       {
         clock: this.now,
-        agentTimeoutMs: 60_000,
+        agentTimeoutMs: 180_000,
         assess,
         audit: async (stage, evidence, outputs, draft) =>
           outputs.map((output) => {

@@ -103,7 +103,7 @@ export async function runReview(inputFrame: Frame, inputPolicy: Policy, inputAdd
   validate('candidate-curation-frame',frame); validate('bucket-policy',policy);
   ensure(Number.isSafeInteger(nowMs) && nowMs>=0, 'invalid clock');
   ensure(Number.isInteger(deps.quorum) && deps.quorum>0 && deps.quorum<=deps.nodeIds.length && deps.nodeIds.length<=100 && new Set(deps.nodeIds).size===deps.nodeIds.length && deps.nodeIds.every(id=>typeof id==='string' && id.length>0), 'invalid configured quorum/membership');
-  ensure(Number.isSafeInteger(deps.agentTimeoutMs) && deps.agentTimeoutMs>0 && deps.agentTimeoutMs<=60000,'invalid agent deadline');
+  ensure(Number.isSafeInteger(deps.agentTimeoutMs) && deps.agentTimeoutMs>0 && deps.agentTimeoutMs<=180000,'invalid agent deadline');
   ensure(policy.riskWatchThreshold<=policy.riskRejectThreshold && policy.minConfidence>0 && policy.riskRejectThreshold>0 && policy.redTeamRebuildThreshold>0 && policy.redTeamExcludeThreshold>0, 'invalid thresholds');
   ensure(policy.mode!=='LIVE' || policy.bucket==='AGGRESSIVE', 'only Aggressive can be live');
   const expected = frame.candidates.map(c=>c.candidate);

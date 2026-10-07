@@ -49,9 +49,9 @@ spends API tokens. Omit caches/use a new directory for a fresh market snapshot.
 
 For the owner's GPT-6 Sol comparison, add `--model gpt-6-sol` and use a separate
 output filename and local database directory. The model option overrides `REVIEW_MODEL`;
-otherwise the existing pipeline baseline (`gpt-4.1-mini-2025-04-14`) is used. All calls
+otherwise the pipeline default (`gpt-6-sol`) is used. All calls
 use the supplied `OPENAI_API_KEY`. Sol uses `reasoning_effort: high`, omits temperature
-and allows 32,768 completion tokens including reasoning, retaining the existing 60-second
+and allows 32,768 completion tokens including reasoning, with the bounded 180-second
 stage deadline. Its generation settings are bound into `modelConfigHash` and its returned
 model ID must match exactly; there is no automatic model substitution. API usage and
 returned IDs are recorded in the local report. Sol's documented ID is not a dated snapshot,

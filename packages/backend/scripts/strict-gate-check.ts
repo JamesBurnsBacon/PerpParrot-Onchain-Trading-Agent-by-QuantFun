@@ -24,7 +24,7 @@ import { PacedInfo, getJson } from "../src/pipeline/hl";
 import { parsePortfolio, scoreCandidates, type ScoreInput } from "../src/score";
 
 // The isolated research-runtime builder changes these two limits only in its copy.
-const MAX_RESEARCH_FINALISTS=40,MAX_RESEARCH_TIMEOUT_MS=60000;
+const MAX_RESEARCH_FINALISTS=40,MAX_RESEARCH_TIMEOUT_MS=180000;
 const { values } = parseArgs({
   options: {
     traders: { type: "string", default: "40" },
@@ -43,19 +43,19 @@ const { values } = parseArgs({
     provider: {type:"string",default:"openai"},
     offline: {type:"boolean",default:false},
     "prepare-only": {type:"boolean",default:false},
-    "timeout-ms": {type:"string",default:"60000"},
+    "timeout-ms": {type:"string",default:"180000"},
   },
 });
 const url=process.env.DATABASE_URL;
 if(!values['local-dir']&&(!url||!['localhost','127.0.0.1','[::1]'].includes(new URL(url).hostname)))
   throw new Error('Use --local-dir or a loopback DATABASE_URL; remote databases are forbidden');
 if(!['openai','kimi'].includes(values.provider!))throw new Error('unknown provider');
-const localResearch=values['replay-run']||values.provider==='kimi'||values.offline||values['prepare-only']||values['timeout-ms']!=='60000'||values.finalists!=='40'||values.serial||values['stage-spacing-ms']!=='0';
+const localResearch=values['replay-run']||values.provider==='kimi'||values.offline||values['prepare-only']||values['timeout-ms']!=='180000'||values.finalists!=='40'||values.serial||values['stage-spacing-ms']!=='0';
 if(localResearch&&!values['local-dir'])throw new Error('Research flags require --local-dir; no external database allowed');
 if(values.offline&&(!values.reads||!values.inputs||!values['as-of']))throw new Error('--offline requires reads, inputs and as-of');
 const apiKey=values.provider==='kimi'?process.env.MOONSHOT_API_KEY:process.env.OPENAI_API_KEY;
 if(!apiKey&&!values['prepare-only'])throw new Error('provider API key is required');
-const model=values.model??(values.provider==='kimi'?'kimi-k3':process.env.REVIEW_MODEL??'gpt-4.1-mini-2025-04-14');
+const model=values.model??(values.provider==='kimi'?'kimi-k3':process.env.REVIEW_MODEL??'gpt-6-sol');
 const timeoutMs=Number(values['timeout-ms']);
 const finalists=Number(values.finalists),spacingMs=Number(values['stage-spacing-ms']);
 if(!Number.isSafeInteger(finalists)||finalists<5||finalists>MAX_RESEARCH_FINALISTS)throw new Error('unsupported finalist count; an expanded count requires the isolated research runtime');
@@ -96,7 +96,17 @@ globalThis.fetch=(async(input:Parameters<typeof fetch>[0],init?:RequestInit)=>{
     if(cacheMisses.length)throw new Error('incomplete offline evidence; refusing paid request');
     const started=performance.now();
     try{
-      const response=await realFetch(input,init);entry.httpStatus=response.status;
+      let response:Response;
+      for(let attempt=0;;attempt++){
+        response=await realFetch(input,init);
+        if(response.status!==429||attempt===3)break;
+        entry.rateLimitRetries=attempt+1;
+        const retryAfter=Number(response.headers.get('retry-after'));
+        await response.body?.cancel();
+        await Bun.sleep(Number.isFinite(retryAfter)&&retryAfter>0?Math.min(retryAfter*1000,20_000):[1_000,3_000,10_000][attempt]);
+        if(init?.signal?.aborted)throw init.signal.reason;
+      }
+      entry.httpStatus=response.status;
       const result=await response.clone().json() as {model?:string;usage?:unknown;choices?:{finish_reason:string}[];error?:{code?:string;type?:string;message?:string}};
       Object.assign(entry,{model:result.model,usage:result.usage,finishReason:result.choices?.[0]?.finish_reason,errorCode:result.error?.code,errorType:result.error?.type,errorMessage:result.error?.message?.slice(0,400)});
       return response;
