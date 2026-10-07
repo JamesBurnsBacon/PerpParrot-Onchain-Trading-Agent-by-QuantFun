@@ -321,6 +321,8 @@ export function Hero() {
   return (
     <header className="lp-journey" id="top" ref={root}>
       <section className="lp-stage" aria-label="PerpParrot">
+        {/* The animated headlines come and go; this heading is always in the document (and in the static frame). */}
+        <h1 className="sr-only">PerpParrot</h1>
         <div className="lp-surface">
           <div className="lp-wordmark">
             <Parrot />
@@ -337,9 +339,9 @@ export function Hero() {
             </div>
             <div className="lp-copy">
               <div className="lp-beat first">
-                <h1 className="lp-headline">
+                <h2 className="lp-headline">
                   SO MANY <span className="lp-accent">TRADERS!</span>
-                </h1>
+                </h2>
               </div>
               <div className="lp-beat second" hidden>
                 <h2 className="lp-headline">

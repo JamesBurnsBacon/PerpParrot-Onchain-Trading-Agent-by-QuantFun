@@ -269,6 +269,7 @@ export function PaperTable({ books, series }: { books: PaperView["books"]; serie
     const b = books.find((x) => x.id === s.bookId);
     return b ? [{ s, b }] : [];
   });
+  const cost = (v: number, start: number) => `${usd(v)} (${((v / start) * 100).toFixed(2)}%)`;
   return (
     <div className="overflow-x-auto">
       <table className="tabular w-full whitespace-nowrap text-xs">
@@ -300,6 +301,37 @@ export function PaperTable({ books, series }: { books: PaperView["books"]; serie
           })}
         </tbody>
       </table>
+      {/* The cost diagnostics stay one tap away. */}
+      <details className="lp-details mt-3">
+        <summary>Costs</summary>
+        <table className="tabular w-full whitespace-nowrap text-xs">
+          <thead style={{ color: "var(--muted)" }}>
+            <tr>
+              <th className="py-1 text-left font-normal">Book</th>
+              <th className="py-1 pl-3 text-right font-normal">Fees</th>
+              <th className="py-1 pl-3 text-right font-normal">Funding</th>
+              <th className="py-1 pl-3 text-right font-normal" title="Traded notional per day ÷ starting capital">Turnover / day</th>
+              <th className="py-1 pl-3 text-right font-normal">Trades</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(({ s, b }) => (
+              <tr key={b.id} className="border-t" style={{ borderColor: "var(--grid)" }}>
+                <td className="py-1.5" style={{ color: "var(--ink)" }}>{s.label}</td>
+                <td className="py-1.5 pl-3 text-right" style={{ color: "var(--ink-2)" }}>{cost(b.feesUsd, b.startingEquityUsd)}</td>
+                <td className="py-1.5 pl-3 text-right" style={{ color: "var(--ink-2)" }}>{cost(b.fundingUsd ?? 0, b.startingEquityUsd)}</td>
+                <td className="py-1.5 pl-3 text-right" style={{ color: "var(--ink-2)" }} title={b.tradedSince ? `since ${new Date(b.tradedSince * 1000).toLocaleString()}` : undefined}>
+                  {b.turnoverPerDay == null ? "—" : `${b.turnoverPerDay.toFixed(2)}×`}
+                </td>
+                <td className="py-1.5 pl-3 text-right" style={{ color: "var(--ink-2)" }}>{b.trades}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className="mt-2 text-xs" style={{ color: "var(--muted)" }}>
+          Paper fills at mark ± slippage with taker fees and the live trading rules; funding at HL&apos;s hourly rate. Relative to starting capital.
+        </div>
+      </details>
     </div>
   );
 }

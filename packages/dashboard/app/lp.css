@@ -257,6 +257,7 @@
 .lp-dbrand b { font-weight: 950; }
 .lp-dbrand svg { width: 30px; height: 32px; }
 .lp-dh nav { display: flex; gap: 18px; }
+.lp-alert { margin-left: auto; padding: 4px 12px; border-radius: 99px; background: #fbd9b4; color: #7a3a10; font-size: 12px; font-weight: 900; }
 .lp-dh nav a { color: var(--ink-2); text-decoration: none; font-size: 13px; font-weight: 700; }
 .lp-dh nav a:hover { color: var(--deep); }
 .lp-dash { max-width: 72rem; margin: 0 auto; padding: 36px 24px 0; scroll-margin-top: 56px; }
@@ -319,11 +320,11 @@
 .lp .lp-cells button { border-radius: 90% 8% 90% 8% !important; height: 26px; transform: rotate(-8deg); }
 .lp .lp-grow { background-image: repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.28) 0 8px, transparent 8px 16px); background-size: 22px 22px; animation: lp-stripe 1.4s linear infinite; }
 @keyframes lp-stripe { to { background-position: 22px 0; } }
-.lp-details > summary { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; list-style: none; padding: 5px 16px; border-radius: 99px; background: #efe6d2; font-size: 12px; font-weight: 900; color: var(--ink-2); }
-.lp-details > summary::-webkit-details-marker { display: none; }
-.lp-details > summary::after { content: "+"; font-weight: 950; }
-.lp-details[open] > summary::after { content: "\2212"; }
-.lp-details[open] > summary { margin-bottom: 14px; }
+.lp .lp-details > summary { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; list-style: none; padding: 5px 16px; border-radius: 99px; background: #efe6d2; font-size: 12px; font-weight: 900; color: var(--ink-2); }
+.lp .lp-details > summary::-webkit-details-marker { display: none; }
+.lp .lp-details > summary::after { content: "+"; font-weight: 950; }
+.lp .lp-details[open] > summary::after { content: "\2212"; }
+.lp .lp-details[open] > summary { margin-bottom: 14px; }
 
 .lp-foot { max-width: 72rem; margin: 0 auto; padding: 28px 24px 8px; border-top: 3px dotted #d8c9a8; color: var(--muted); font-size: 12px; }
 .lp-foot-brand { display: flex; align-items: center; gap: 10px; margin-top: 18px; color: var(--ink-2); }

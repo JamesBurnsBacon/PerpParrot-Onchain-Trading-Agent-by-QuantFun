@@ -145,7 +145,10 @@ export function Roster({ roster, now = Date.now() }: { roster: RosterView; now?:
                 <li key={`${e.at}-${e.address}-${i}`} className="grid grid-cols-[3.5rem_6.5rem_1fr] items-center gap-2 border-t py-1" style={{ borderColor: "var(--grid)" }} title={describe(e)}>
                   <span className="tabular" style={{ color: "var(--muted)" }}>{new Date(e.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
                   <span style={{ color: EVENT[e.kind]?.color ?? "var(--ink-2)" }}>{EVENT[e.kind]?.label ?? e.kind}</span>
-                  <span className="font-mono" style={{ color: "var(--ink)" }} title={e.address}>{short(e.address)}</span>
+                  <span className="font-mono" style={{ color: "var(--ink)" }} title={e.address}>
+                    {short(e.address)}
+                    <span className="sr-only"> {describe(e)}</span>
+                  </span>
                 </li>
               ))}
             </ul>

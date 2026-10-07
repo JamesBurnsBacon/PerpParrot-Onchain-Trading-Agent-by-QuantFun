@@ -93,7 +93,7 @@ export function Pipeline({ view }: { view: PipelineView }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="grid gap-3 md:grid-cols-3">
-        <Tile label="Accounts refreshed" note={accounts.qualified ? `${accounts.qualified} qualified` : undefined}>
+        <Tile label="Accounts refreshed" note={[accounts.errors ? `${accounts.errors} errors` : "", accounts.qualified ? `${accounts.qualified} qualified` : ""].filter(Boolean).join(" · ") || undefined}>
           <div className="mb-1.5 flex items-baseline gap-1 text-lg font-semibold tabular">
             {accounts.fresh}
             <span className="text-sm font-normal" style={{ color: "var(--muted)" }}>/ {accounts.listed}</span>

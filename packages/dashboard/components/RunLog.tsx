@@ -39,7 +39,7 @@ export function RunLog({ runs }: { runs: Run[] }) {
               <tr key={r.id} className="border-t" style={{ borderColor: "var(--grid)" }}>
                 <td className="py-1.5" style={{ color: "var(--ink)" }}>{time(runTime(r))}</td>
                 <td className="py-1.5" style={{ color: "var(--ink-2)" }}>
-                  <span style={{ color: s.color }}>{s.icon}</span> {s.label}
+                  <span style={{ color: s.color }}>{s.icon}</span> {s.label}{r.dryRun ? " · dry" : ""}
                 </td>
                 <td className="py-1.5 text-right">{ordersOf(r)}</td>
                 <td className="py-1.5 text-right">{r.evidence?.exposures.length ?? "—"}</td>

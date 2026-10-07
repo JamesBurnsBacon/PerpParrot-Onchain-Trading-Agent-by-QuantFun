@@ -39,6 +39,10 @@ export default function Page() {
   };
   const tone = (v?: number) => (v === undefined || Math.abs(v) < 0.005 ? undefined : v > 0 ? "up" : "down");
   const count = (v?: number) => (v === undefined ? undefined : { value: v, format: (n: number) => pct(n) });
+  // Normal operation shows no status; only an abnormal executor state is surfaced in the header.
+  const alert = data === null ? undefined : !data.status ? "Executor offline" : data.status.controls.paused ? "Paused" : undefined;
+  // Where a bucket's numbers come from: the live account, the Aggressive paper model, or the modeled twins.
+  const origin = (id: string) => (id === "aggressive" ? (live ? "" : "paper · ") : "modeled · ");
 
   return (
     <div className="lp">
@@ -46,12 +50,13 @@ export default function Page() {
       <ScrollBuddy />
       <Hero />
       <div className="lp-dash-wrap" ref={dash}>
-        <DashHeader />
+        <DashHeader alert={alert} />
         <main id="live" className="lp-dash">
           <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
             {BUCKETS.map((k) => {
               const v = lastReturn(series, k.id);
-              const note = k.id === "aggressive" && live ? `${executed} run${executed === 1 ? "" : "s"} executed` : bookNote(k.book);
+              const booked = bookNote(k.book);
+              const note = k.id === "aggressive" && live ? `${executed} run${executed === 1 ? "" : "s"} executed` : booked && `${origin(k.id)}${booked}`;
               return <StatTile key={k.id} label={k.label} color={k.color} value={v === undefined ? "—" : pct(v)} count={count(v)} tone={tone(v)} note={note} />;
             })}
             <StatTile label="BTC" color="var(--muted)" reference value={btc === undefined ? "—" : pct(btc)} count={count(btc)} tone={tone(btc)} note="benchmark" />
