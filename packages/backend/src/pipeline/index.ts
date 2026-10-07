@@ -13,6 +13,7 @@ import { routingStats } from "./info-router";
 import { pickVaults } from "./vaults";
 import { parsePortfolio, scoreCandidates, toFrameCandidates, type ScoreInput, type ScoreResult } from "../score";
 import { buildReviewInput, positionsFromStates, type LivePosition } from "../../review/input.ts";
+import { summarizeOverlap } from "../../review/overlap.ts";
 import { openAIPaperCommittee } from "../../review/models/openai-paper.ts";
 import { runCommitteeReview } from "../../review/committee/workflow.ts";
 import type { Assessment } from "../../review/workflow.ts";
@@ -267,6 +268,13 @@ export class Pipeline {
       const states = await Promise.all(ELIGIBLE_DEXES.map((dex) => hl.post<State>({ type: "clearinghouseState", user: address, ...(dex ? { dex } : {}) }, 2)));
       positions.set(address.toLowerCase(), positionsFromStates(states));
       equity.set(address.toLowerCase(), states.reduce((sum, s) => sum + Number(s.marginSummary.accountValue), 0));
+    }
+    // Each pick's largest same-direction overlap with another pick. Evidence only: nothing here selects.
+    try {
+      const overlap = summarizeOverlap(score.addresses, positions, policy.maxExposureOverlap);
+      await sql`update selection_runs set finalists = coalesce(finalists, '{}'::jsonb) || ${{ overlap }}::jsonb where id = ${id}`;
+    } catch (e) {
+      log("overlap not recorded", { id, error: String((e as Error)?.message ?? e) });
     }
     const built = buildReviewInput({ score, inputs, positions, policy, asOfMs: this.now(), ttlMs: policy.maxFrameAgeMs });
 

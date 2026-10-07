@@ -81,6 +81,7 @@ export function Pipeline({ view }: { view: PipelineView }) {
   const verdicts = new Map((latest?.summary ?? []).filter((s) => s.address).map((s) => [s.address!.toLowerCase(), s]));
   const finalists = [...(latest?.finalists?.finalists ?? [])].sort((a, b) => (a.rank ?? 1e9) - (b.rank ?? 1e9));
   const funnel = latest?.finalists?.funnel ?? [];
+  const overlap = latest?.finalists?.overlap;
   const funnelMax = Math.max(...funnel.map((f) => f.count), 1);
 
   return (
@@ -209,6 +210,7 @@ export function Pipeline({ view }: { view: PipelineView }) {
                   <th className="py-1 pl-2 text-right font-normal" title="Role: reject">Reject</th>
                   <th className="py-1 pl-2 text-right font-normal" title="Risk: leverage">Lev</th>
                   <th className="py-1 pl-2 text-right font-normal" title="Risk: evidence">Evid</th>
+                  {overlap && <th className="py-1 pl-2 text-right font-normal" title="Largest same-direction position overlap with another pick (0–1)">Overlap</th>}
                   <th className="py-1 pl-2 text-right font-normal">Weight</th>
                 </tr>
               </thead>
@@ -226,6 +228,11 @@ export function Pipeline({ view }: { view: PipelineView }) {
                       <Heat v={v?.reject ?? null} bad="high" />
                       <Heat v={v?.leverageRisk ?? null} bad="high" />
                       <Heat v={v?.evidenceRisk ?? null} bad="high" />
+                      {overlap && (
+                        <td className="py-1 pl-2 text-right" style={{ color: (overlap.byAddress[f.address.toLowerCase()] ?? 0) > overlap.threshold ? "var(--critical)" : "var(--ink-2)" }}>
+                          {overlap.byAddress[f.address.toLowerCase()] === undefined ? "—" : overlap.byAddress[f.address.toLowerCase()]!.toFixed(2)}
+                        </td>
+                      )}
                       <td className="py-1 pl-2 text-right font-semibold" style={{ color: w ? "var(--series-1)" : "var(--muted)" }}>
                         {w ? `${(w * 100).toFixed(1)}%` : "—"}
                       </td>
