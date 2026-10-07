@@ -271,6 +271,7 @@ export function PaperTable({ books, series }: { books: PaperView["books"]; serie
             <th className="py-1 pl-3 text-right font-normal">Return</th>
             <th className="py-1 pl-3 text-right font-normal">Fees</th>
             <th className="py-1 pl-3 text-right font-normal">Funding</th>
+            <th className="py-1 pl-3 text-right font-normal" title="Traded notional per day ÷ starting capital">Turnover / day</th>
             <th className="py-1 pl-3 text-right font-normal">Trades</th>
             <th className="py-1 pl-3 text-right font-normal">Positions</th>
           </tr>
@@ -291,6 +292,9 @@ export function PaperTable({ books, series }: { books: PaperView["books"]; serie
                 <td className="py-1.5 pl-3 text-right font-semibold" style={{ color: "var(--ink)" }}>{pct(b.returnPct)}</td>
                 <td className="py-1.5 pl-3 text-right" style={{ color: "var(--ink-2)" }}>{cost(b.feesUsd, b.startingEquityUsd)}</td>
                 <td className="py-1.5 pl-3 text-right" style={{ color: "var(--ink-2)" }}>{cost(b.fundingUsd ?? 0, b.startingEquityUsd)}</td>
+                <td className="py-1.5 pl-3 text-right" style={{ color: "var(--ink-2)" }} title={b.tradedSince ? `since ${new Date(b.tradedSince * 1000).toLocaleString()}` : undefined}>
+                  {b.turnoverPerDay == null ? "—" : `${b.turnoverPerDay.toFixed(2)}×`}
+                </td>
                 <td className="py-1.5 pl-3 text-right" style={{ color: "var(--ink-2)" }}>{b.trades}</td>
                 <td className="py-1.5 pl-3 text-right" style={{ color: "var(--ink-2)" }}>{b.openPositions}</td>
               </tr>
@@ -299,7 +303,7 @@ export function PaperTable({ books, series }: { books: PaperView["books"]; serie
         </tbody>
       </table>
       <div className="mt-2 text-xs" style={{ color: "var(--muted)" }}>
-        Paper fills at mark ± slippage with taker fees, the $10 minimum and the 10% drift rule; funding at HL&apos;s hourly rate. Costs in % of starting capital.
+        Paper fills at mark ± slippage with taker fees and the live trading rules (the $10 minimum, 10% drift, 0.5% equity band scaled by the bucket&apos;s multiplier, closes confirmed over 3 runs); funding at HL&apos;s hourly rate. Costs and turnover relative to starting capital.
       </div>
     </div>
   );

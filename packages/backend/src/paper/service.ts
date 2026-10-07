@@ -123,6 +123,11 @@ export class PaperService {
     // Funding for the interval just held; a gap longer than a day counts as a day.
     const hours = state.lastRunAt ? Math.min(runAt - state.lastRunAt, 86_400) / 3600 : 0;
     for (const book of state.books) {
+      // A book saved before turnover was tracked starts counting now.
+      if (book.tradedUsd === undefined) {
+        book.tradedUsd = 0;
+        book.tradedSince = runAt;
+      }
       accrueFunding(book, markets, hours);
       if (book.kind === "btc") stepBtcBook(book, markets, this.deps.cfg);
       else stepCopyBook(book, exposures, markets, this.deps.cfg, new Set(pendingCloses));
@@ -170,6 +175,12 @@ export class PaperService {
           feesUsd: b.feesUsd,
           fundingUsd: b.fundingUsd ?? 0,
           trades: b.trades,
+          // Traded notional per day ÷ starting capital, since turnover was tracked (at least an hour).
+          turnoverPerDay: b.tradedUsd === undefined || b.tradedSince === undefined || !state?.lastRunAt
+            ? null
+            : b.tradedUsd / b.startingEquityUsd / Math.max((state.lastRunAt - b.tradedSince) / 86_400, 1 / 24),
+          tradedSince: b.tradedSince ?? null,
+          multiplier: b.multiplier,
           openPositions: Object.keys(b.positions).length,
           curve,
         };

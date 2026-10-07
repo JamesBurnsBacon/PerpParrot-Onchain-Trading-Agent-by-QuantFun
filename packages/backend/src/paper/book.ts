@@ -23,6 +23,10 @@ export type PaperBook = {
   // Net funding paid (negative: received). Absent on books saved before funding was modelled.
   fundingUsd?: number;
   trades: number;
+  // Traded notional (|size| × fill price) since `tradedSince` (unix seconds): the book's turnover.
+  // Absent on books saved before turnover was tracked; counted from their next step.
+  tradedUsd?: number;
+  tradedSince?: number;
 };
 
 import { legSkip, type BandConfig } from "../../../shared/rebalance";
@@ -42,7 +46,7 @@ export const newBook = (
   startingEquityUsd: number,
   startedAt: number,
   multiplier = 1,
-): PaperBook => ({ id, label, kind, multiplier, startingEquityUsd, startedAt, cashUsd: startingEquityUsd, positions: {}, feesUsd: 0, trades: 0 });
+): PaperBook => ({ id, label, kind, multiplier, startingEquityUsd, startedAt, cashUsd: startingEquityUsd, positions: {}, feesUsd: 0, trades: 0, tradedUsd: 0, tradedSince: startedAt });
 
 export const equityOf = (book: PaperBook, markets: Map<string, Market>): number => {
   let equity = book.cashUsd;
@@ -59,6 +63,7 @@ const fill = (book: PaperBook, asset: string, delta: number, fillPx: number, fee
   const reducing = p.szi !== 0 && Math.sign(delta) !== Math.sign(p.szi);
   const closed = reducing ? Math.min(Math.abs(delta), Math.abs(p.szi)) : 0;
   book.cashUsd += closed * (fillPx - p.entryPx) * Math.sign(p.szi);
+  if (book.tradedUsd !== undefined) book.tradedUsd += Math.abs(delta) * fillPx;
   const fee = (Math.abs(delta) * fillPx * feeBps) / 10_000;
   book.cashUsd -= fee;
   book.feesUsd += fee;

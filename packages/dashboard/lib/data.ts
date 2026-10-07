@@ -19,6 +19,10 @@ export type PaperView = {
     feesUsd: number;
     fundingUsd?: number; // net paid; negative = received
     trades: number;
+    // Traded notional per day ÷ starting capital (absent on older backends; null until tracked).
+    turnoverPerDay?: number | null;
+    tradedSince?: number | null;
+    multiplier?: number;
     openPositions: number;
     curve: [number, number][];
   }[];
@@ -194,8 +198,8 @@ export const runTime = (r: Run) => {
 // until then its $470 paper model. Balanced and Conservative are modeled: paper books.
 export const BUCKETS = [
   { id: "aggressive", book: "aggressive-470", label: "Aggressive · live", short: "Aggressive", color: "var(--aggressive)" },
-  { id: "balanced", book: "balanced-470", label: "Balanced · modeled", short: "Balanced", color: "var(--balanced)" },
-  { id: "conservative", book: "conservative-470", label: "Conservative · modeled", short: "Conservative", color: "var(--conservative)" },
+  { id: "balanced", book: "balanced-470", label: "Balanced · ×0.5 modeled", short: "Balanced", color: "var(--balanced)" },
+  { id: "conservative", book: "conservative-470", label: "Conservative · ×0.25 modeled", short: "Conservative", color: "var(--conservative)" },
 ] as const;
 
 // Whether the Aggressive line is the live account itself (else its paper model).

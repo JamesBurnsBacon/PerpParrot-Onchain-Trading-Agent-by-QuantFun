@@ -72,6 +72,35 @@ describe("PaperService", () => {
     expect(book.curve.at(-1)).toEqual([1200, expect.closeTo(470 - (176.25 * 0.0006) / 6, 9)]);
   });
 
+  test("tracks turnover per book (traded notional per day ÷ starting capital), the buckets in proportion", async () => {
+    const store = new MemoryPaperStore();
+    const service = new PaperService({ store, specs: defaultBooks(0.5, 0.25), cfg, markets: marketsAt(100_000) });
+    await service.step(600, snapshot(600));
+    const books = (await service.view()).books;
+    const by = (id: string) => books.find((b) => b.id === id)!;
+    // Opened $176.25 of BTC (0.375 × 470) on the first run: counted over at least an hour.
+    expect(by("aggressive-470").turnoverPerDay).toBeCloseTo((176.25 / 470) * 24, 6);
+    expect(by("balanced-10k").turnoverPerDay).toBeCloseTo(by("aggressive-10k").turnoverPerDay! * 0.5, 6);
+    expect(by("conservative-10k").turnoverPerDay).toBeCloseTo(by("aggressive-10k").turnoverPerDay! * 0.25, 6);
+    expect(by("conservative-10k").multiplier).toBe(0.25);
+  });
+
+  test("a book saved before turnover was tracked starts counting at its next step", async () => {
+    const store = new MemoryPaperStore();
+    const service = new PaperService({ store, specs: defaultBooks(0.5), cfg, markets: marketsAt(100_000) });
+    await service.step(600, snapshot(600));
+    const state = (await store.load())!;
+    for (const b of state.books) {
+      delete b.tradedUsd;
+      delete b.tradedSince;
+    }
+    await store.save({ ...state, lastRunAt: 900 }, []); // the store keeps only newer runs
+    await service.step(1200, snapshot(1200));
+    const book = (await service.view()).books.find((b) => b.id === "aggressive-470")!;
+    expect(book.tradedSince).toBe(1200);
+    expect(book.turnoverPerDay).toBe(0); // nothing new to trade on an unchanged snapshot
+  });
+
   test("steps every book once per run and records equity curves", async () => {
     const store = new MemoryPaperStore();
     let price = 100_000;
