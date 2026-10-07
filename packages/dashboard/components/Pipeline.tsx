@@ -139,6 +139,15 @@ export function Pipeline({ view }: { view: PipelineView }) {
             ))}
             <span style={{ color: "var(--ink-2)" }}>{routing.fallbacks} failovers</span>
           </div>
+          {routing.capabilities && (
+            <div className="mt-2 text-xs" style={{ color: "var(--ink-2)" }}>
+              Probed {routing.capabilities.rows.length} info methods on NOWNodes {ago(new Date(routing.capabilities.probedAt).toISOString())}:{" "}
+              {routing.capabilities.rows.filter((r) => r.verdict === "supported").length} served, {routing.capabilities.rows.filter((r) => r.verdict === "unsupported").length} refused (422)
+              {routing.capabilities.rows.some((r) => r.verdict === "inconclusive") ? `, ${routing.capabilities.rows.filter((r) => r.verdict === "inconclusive").length} inconclusive` : ""}.
+              {routing.capabilities.narrowed.length ? ` Not used any more: ${routing.capabilities.narrowed.join(", ")}.` : " The allowlist matches."}
+              {routing.capabilities.newlySupported.length ? ` Served but unused: ${routing.capabilities.newlySupported.join(", ")}.` : ""}
+            </div>
+          )}
         </Tile>
       )}
 

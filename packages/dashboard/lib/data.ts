@@ -88,6 +88,13 @@ export type PipelineView = {
     fallbacks: number;
     shadow: { compared: number; mismatches: number };
     breakerOpen: boolean;
+    // The last NOWNodes capability probe (absent or null when the probe is off).
+    capabilities?: {
+      probedAt: number;
+      rows: { method: string; status: number | null; verdict: "supported" | "unsupported" | "inconclusive"; allowlisted: boolean; drift: boolean; ms: number }[];
+      narrowed: string[];
+      newlySupported: string[];
+    } | null;
   };
   accounts: { listed: number; fresh: number; errors: number; listed_at: string | null; qualified?: number; high_frequency?: number; qualified_at?: string | null };
   selections: {

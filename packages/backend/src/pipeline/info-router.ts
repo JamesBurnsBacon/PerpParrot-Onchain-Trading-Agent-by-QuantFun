@@ -13,6 +13,8 @@
 // NOWNodes' copy answers 422 for portfolio, userFillsByTime, userFunding, metaAndAssetCtxs, vaultDetails,
 // allMids, l2Book and candleSnapshot (measured 2026-10-07), so those never leave the official API.
 
+import { probeCapabilities, type CapabilityReport } from "./capability-probe";
+
 const OFFICIAL_URL = "https://api.hyperliquid.xyz/info";
 const NOWNODES_URL = "https://hype.nownodes.io/info";
 
@@ -30,6 +32,7 @@ export const NOWNODES_CAPABLE = new Set([
 const FALLBACK_TIMEOUT_MS = 15_000;
 const BREAKER_FAILURES = 3;
 const BREAKER_PAUSE_MS = 60_000;
+const PROBE_TTL_MS = 6 * 60 * 60_000;
 
 export type Provider = "official" | "nownodes";
 export type ProviderStats = { requests: number; errors: number; totalMs: number };
@@ -40,6 +43,8 @@ export type RoutingStats = {
   fallbacks: number; // reads that failed on the first provider and succeeded on the other
   shadow: { compared: number; mismatches: number };
   breakerOpen: boolean;
+  // The last NOWNodes capability probe (NOWNODES_PROBE=on); null before it ran or when it is off.
+  capabilities: CapabilityReport | null;
 };
 
 type Env = Record<string, string | undefined>;
@@ -80,7 +85,12 @@ export const makeRoutedFetch = (o: RouterOptions = {}) => {
     fallbacks: 0,
     shadow: { compared: 0, mismatches: 0 },
     breakerOpen: false,
+    capabilities: null,
   };
+  // Methods the probe found NOWNodes answering 422 for although the allowlist serves them.
+  let denied = new Set<string>();
+  let probing = false;
+  let probeNextAt = 0;
   let consecutiveFailures = 0;
   let pausedUntil = 0;
   let splitCounter = 0;
@@ -168,7 +178,23 @@ export const makeRoutedFetch = (o: RouterOptions = {}) => {
       if (key && init && type === "clearinghouseState" && shadowPercent > 0 && res.ok && (++shadowCounter * shadowPercent) % 100 < shadowPercent) void shadowCompare(init, res, key);
       return res;
     };
-    const capable = mode !== "official" && !!key && !!init && type !== null && NOWNODES_CAPABLE.has(type) && url === OFFICIAL_URL;
+    // NOWNODES_PROBE=on (needs a routing mode and a key): a background probe of what NOWNodes serves, at most
+    // every PROBE_TTL_MS per process. It only narrows the allowlist; a failed probe changes nothing.
+    if (mode !== "official" && key && e.NOWNODES_PROBE === "on" && !probing && now() >= probeNextAt) {
+      probing = true;
+      probeNextAt = now() + PROBE_TTL_MS;
+      void probeCapabilities({ url: NOWNODES_URL, key, allowlist: NOWNODES_CAPABLE, fetchImpl: base, now })
+        .then((report) => {
+          stats.capabilities = report;
+          denied = new Set(report.narrowed);
+          if (report.narrowed.length) log("info-router capability probe narrowed the allowlist", { narrowed: report.narrowed });
+        })
+        .catch(() => {})
+        .finally(() => {
+          probing = false;
+        });
+    }
+    const capable = mode !== "official" && !!key && !!init && type !== null && NOWNODES_CAPABLE.has(type) && !denied.has(type) && url === OFFICIAL_URL;
     if (!capable) return url === OFFICIAL_URL ? maybeShadow(await direct(url, init)) : base(url, init);
     stats.breakerOpen = now() < pausedUntil;
     const nownodesFirst = mode === "split" && !stats.breakerOpen && (++splitCounter * Number(e.INFO_SPLIT_PERCENT ?? 25)) % 100 < Number(e.INFO_SPLIT_PERCENT ?? 25);
