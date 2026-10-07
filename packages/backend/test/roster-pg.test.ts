@@ -3,7 +3,7 @@
 // release a wallet that exited → remove one at a 50% trading loss → freeze and activate.
 import { describe, expect, test } from "bun:test";
 import { SQL } from "bun";
-import { Pipeline, reviewPolicy, windDownCaps } from "../src/pipeline";
+import { Pipeline, reviewPolicy, seatLeverage, windDownCaps } from "../src/pipeline";
 import { PacedInfo } from "../src/pipeline/hl";
 import { checkFrozenConfiguration, type FrozenConfiguration } from "../../shared/frozen";
 import { keccakUtf8 } from "../src/snapshot";
@@ -21,7 +21,7 @@ describe.skipIf(!url)("Roster on Postgres", async () => {
   if (!url) return;
   const sql = new SQL(url, { prepare: process.env.TEST_PG_PREPARE === "1" });
   await sql.unsafe("drop table if exists roster_events, roster_seats, configurations, selection_runs, pipeline_accounts, run_snapshots cascade");
-  for (const name of ["20261006120000_mirror.sql", "20261007120000_pipeline.sql", "20261007150000_pipeline_qualified.sql", "20261007160000_pipeline_primary.sql", "20261008020000_roster.sql", "20261008020000_roster.sql"]) {
+  for (const name of ["20261006120000_mirror.sql", "20261007120000_pipeline.sql", "20261007150000_pipeline_qualified.sql", "20261007160000_pipeline_primary.sql", "20261008020000_roster.sql", "20261008020000_roster.sql", "20261008030000_roster_leverage.sql", "20261008030000_roster_leverage.sql"]) {
     await sql.unsafe(await migration(name));
   }
   await sql`insert into configurations (hash, configuration, status, activated_at)
@@ -46,7 +46,7 @@ describe.skipIf(!url)("Roster on Postgres", async () => {
     await sql`insert into run_snapshots (run_at, snapshot_hash, configuration_hash, body) values (${runAt}, ${keccakUtf8(body)}, ${configuration.configurationHash}, ${body})`;
   };
   const bench = async (entries: { address: string; fit: number; passesHold?: boolean }[], approvedAt: number) => {
-    const rows = entries.map((e) => ({ address: e.address, fit: e.fit, approvedAt, copyableShare: 0.7, closedPositions: 12, turnoverPerDay: 0.5, tradedPerDayOverEquity: 0.1, passesHold: e.passesHold ?? true }));
+    const rows = entries.map((e) => ({ address: e.address, fit: e.fit, approvedAt, copyableShare: 0.7, closedPositions: 12, turnoverPerDay: 0.5, tradedPerDayOverEquity: 0.1, passesHold: e.passesHold ?? true, averageLeverage: 0.4 }));
     await sql`insert into selection_runs (started_at, finished_at, status, review)
       values (${new Date(approvedAt).toISOString()}, ${new Date(approvedAt).toISOString()}, 'benched', ${JSON.stringify({ bench: rows, receiptHash: `0x${"ab".repeat(32)}` })}::text::jsonb)`;
   };
@@ -63,6 +63,8 @@ describe.skipIf(!url)("Roster on Postgres", async () => {
     expect(result.changes.filter((c) => c.startsWith("admitted"))).toEqual([`admitted ${newcomer(1)} (open seat)`]);
     const rows = await seats();
     expect(rows.find((r) => r.address === newcomer(1))).toMatchObject({ state: "probation", weight_units: 133_333 });
+    // Its 30-day average leverage is kept for the snapshot's normalization; seeded seats get theirs at the seat review.
+    expect((await seatLeverage(sql)).find((l) => l.address === newcomer(1))).toEqual({ address: newcomer(1), averageLeverage: 0.4 });
     const config = await active();
     checkFrozenConfiguration(keccakUtf8, config, config.configurationHash, T0 * 1000 + HOUR);
     expect(config.sources.map((s) => s.sourceAddress)).toContain(newcomer(1));

@@ -128,6 +128,7 @@ export function Roster({ roster, now = Date.now() }: { roster: RosterView; now?:
                   <th className="py-1 text-left font-normal">Wallet</th>
                   <th className="py-1 pl-2 text-left font-normal">State</th>
                   <th className="w-1/4 py-1 pl-2 text-left font-normal">Weight</th>
+                  <th className="py-1 pl-2 text-right font-normal" title="The wallet's 30-day average leverage → the scale that copies it at 2× (×1: not measured yet)">Usual lev</th>
                   <th className="w-1/4 py-1 pl-2 text-left font-normal">Tenure</th>
                   <th className="py-1 pl-2 text-left font-normal">Activity</th>
                 </tr>
@@ -146,6 +147,9 @@ export function Roster({ roster, now = Date.now() }: { roster: RosterView; now?:
                         <Track value={s.weightUnits / maxWeight} color="var(--series-1)" />
                         <span className="w-12 text-right font-semibold">{(s.weightUnits / 1e4).toFixed(1)}%</span>
                       </span>
+                    </td>
+                    <td className="py-1.5 pl-2 text-right" style={{ color: "var(--ink-2)" }}>
+                      {s.averageLeverage == null ? "—" : `${s.averageLeverage.toFixed(2)}× → ×${(2 / Math.max(s.averageLeverage, 0.05)).toFixed(1)}`}
                     </td>
                     <td className="py-1.5 pl-2"><Clock seat={s} now={now} /></td>
                     <td className="py-1.5 pl-2"><Activity seat={s} now={now} /></td>

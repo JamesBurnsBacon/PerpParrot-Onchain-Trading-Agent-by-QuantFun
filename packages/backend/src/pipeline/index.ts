@@ -416,7 +416,7 @@ export class Pipeline {
     const bench: BenchEntry[] = approved.map((a) => {
       const address = a.sourceAddress.toLowerCase();
       const h = holds.get(address) ?? { copyableShare: null, closedPositions: 0, turnoverPerDay: null, tradedPerDayOverEquity: null };
-      return { address, fit: a.fit, approvedAt: this.now(), ...h, passesHold: passesHoldGate(h) };
+      return { address, fit: a.fit, approvedAt: this.now(), ...h, passesHold: passesHoldGate(h), averageLeverage: measured.get(address)?.averageLeverage ?? null };
     });
     // Every reviewed wallet's verdict, for the roster's seat review (warning signs, approval, fit).
     const approvedSet = new Set(bench.map((b) => b.address));
@@ -570,9 +570,9 @@ export class Pipeline {
         // The baseline is taken on the next roster step.
       }
       await sql`insert into roster_seats (address, state, weight_units, fit, turnover_per_day, traded_per_day_over_equity, admitted_at,
-          min_tenure_until, admitted_by, equity_at_admission, pnl_at_admission)
+          min_tenure_until, admitted_by, equity_at_admission, pnl_at_admission, average_leverage)
         values (${a.entry.address}, 'probation', ${a.weightUnits}, ${a.entry.fit}, ${a.entry.turnoverPerDay}, ${a.entry.tradedPerDayOverEquity}, ${at},
-          ${new Date(a.minTenureUntil).toISOString()}, ${latest.id}, ${reading?.equity ?? null}, ${reading?.pnl ?? null})`;
+          ${new Date(a.minTenureUntil).toISOString()}, ${latest.id}, ${reading?.equity ?? null}, ${reading?.pnl ?? null}, ${a.entry.averageLeverage ?? null})`;
       await event(a.entry.address, "admitted", { reason: "open seat", weightUnits: a.weightUnits, fit: a.entry.fit, copyableShare: a.entry.copyableShare,
         turnoverPerDay: a.entry.turnoverPerDay, tenureUntil: new Date(a.minTenureUntil).toISOString() });
     }
@@ -640,7 +640,12 @@ export class Pipeline {
       const result = scoreCandidates(inputs, { finalists: inputs.length, allowUnknown: ["minTrades"] });
       if (result.finalists.length === 0) throw new Error("no seat passed Score's filters");
       await this.review(id as number, inputs, result, 0, undefined, "seats");
-      const [run] = await sql`select review -> 'verdicts' as verdicts, finalists -> 'holds' as holds from selection_runs where id = ${id}`;
+      const [run] = await sql`select review -> 'verdicts' as verdicts, finalists -> 'holds' as holds, finalists -> 'measured' as measured from selection_runs where id = ${id}`;
+      // Fresh 30-day average leverage for each seat (the snapshot's normalization).
+      for (const [address, m] of Object.entries((run?.measured ?? {}) as Record<string, Measured>)) {
+        if (m.averageLeverage === null) continue;
+        await sql`update roster_seats set average_leverage = ${m.averageLeverage} where address = ${address} and state in ${sql([...ACTIVE])}`;
+      }
       // Fresh hold measures for each seat (the monitored turnover; seeded seats start without them).
       for (const [address, h] of Object.entries((run?.holds ?? {}) as Record<string, HoldMeasures>)) {
         await sql`update roster_seats set turnover_per_day = ${h.turnoverPerDay}, traded_per_day_over_equity = ${h.tradedPerDayOverEquity}
@@ -691,6 +696,7 @@ const seatFromRow = (r: Record<string, unknown>): Seat => ({
   pnlAtAdmission: num(r.pnl_at_admission),
   windDownUntil: iso(r.wind_down_until),
   caps: (r.caps as Record<string, number> | null) ?? null,
+  averageLeverage: num(r.average_leverage),
   reviewedAt: iso(r.reviewed_at),
   unqualifiedReviews: Number(r.unqualified_reviews ?? 0),
 });
@@ -713,6 +719,17 @@ export const windDownCaps = async (sql: SQL): Promise<WindDownSource[]> => {
       address: r.address,
       caps: Object.entries(r.caps).map(([asset, leverage]) => ({ asset, leverageE9: BigInt(Math.round(leverage * 1e9)).toString() })),
     }));
+  } catch {
+    return [];
+  }
+};
+
+// Each seat's 30-day average leverage, for the snapshot's normalization. Before the migration that adds
+// it there are none, and every wallet is copied as it is.
+export const seatLeverage = async (sql: SQL): Promise<{ address: string; averageLeverage: number | null }[]> => {
+  try {
+    const rows = await sql`select address, average_leverage from roster_seats where state in ${sql([...ACTIVE])}`;
+    return rows.map((r: { address: string; average_leverage: number | null }) => ({ address: r.address, averageLeverage: r.average_leverage === null ? null : Number(r.average_leverage) }));
   } catch {
     return [];
   }

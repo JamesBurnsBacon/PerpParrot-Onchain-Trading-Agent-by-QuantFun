@@ -46,6 +46,7 @@ export type Seat = {
   windDownUntil: number | null;
   // Winding down: the signed leverage (notional ÷ equity) per perp we still follow, ratcheted down.
   caps: Record<string, number> | null;
+  averageLeverage?: number | null; // 30-day average gross leverage (the snapshot's normalization)
   reviewedAt: number | null; // the last 12-hourly seat review
   unqualifiedReviews: number; // consecutive seat reviews that found it off the qualified list
 };
@@ -56,6 +57,8 @@ export type BenchEntry = HoldMeasures & {
   fit: number;
   approvedAt: number;
   passesHold: boolean;
+  // 30-day average gross leverage (evidence.ts averageLeverage): the snapshot's normalization.
+  averageLeverage?: number | null;
 };
 
 export type Transition = { to: SeatState; reason: string };

@@ -107,7 +107,9 @@ leverage, and needs at least 5. `REVIEW_GATE=strict` turns this off.
    the deploy. `20261008010000_run_targets.sql` adds the target history; until it runs, each run
    alerts "target history not saved" and otherwise trades as before. `20261008020000_roster.sql`
    adds the roster (`roster_seats`, `roster_events`, status `benched`) and must run **before** the
-   roster deploy: until then `/cron/pipeline/roster` fails and reviews can't save their bench. Both only add tables, columns
+   roster deploy: until then `/cron/pipeline/roster` fails and reviews can't save their bench.
+   `20261008030000_roster_leverage.sql` adds each seat's average leverage (the normalization) and must
+   run **before** that deploy: until then admissions fail. Both only add tables, columns
    and a wider status check, and are safe to run twice. The new code reads the new columns, so
    until they exist the pipeline routes fail.
 2. **Vercel variables**:

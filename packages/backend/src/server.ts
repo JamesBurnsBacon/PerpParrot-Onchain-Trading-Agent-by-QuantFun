@@ -7,7 +7,7 @@ import { SQL } from "bun";
 import { waitUntil } from "@vercel/functions";
 import { EligibilityTracker, MemoryEligibilityStore } from "./eligibility";
 import { ActiveConfigurationSource, FileConfigurationSource } from "./configuration-source";
-import { MAX_GROSS_LEVERAGE, Pipeline, reviewPolicy, windDownCaps } from "./pipeline";
+import { MAX_GROSS_LEVERAGE, Pipeline, reviewPolicy, seatLeverage, windDownCaps } from "./pipeline";
 import { SnapshotError, SnapshotService } from "./service";
 import { exposuresFromSnapshot, MemoryPaperStore, PaperService, defaultBooks } from "./paper/service";
 import { targetsFromSnapshot } from "../../shared/copy";
@@ -93,7 +93,7 @@ const pipeline = sql
 const service = new SnapshotService({
   // Relative to packages/backend, wherever the process starts (vercel.json bundles fixtures/ and frozen/).
   configurations: sql ? new ActiveConfigurationSource(sql, fileConfiguration) : fileConfiguration,
-  ...(sql ? { windDown: () => windDownCaps(sql) } : {}),
+  ...(sql ? { windDown: () => windDownCaps(sql), leverage: () => seatLeverage(sql) } : {}),
   eligibility: new EligibilityTracker(sql ? new PostgresEligibilityStore(sql) : new MemoryEligibilityStore(), undefined, (m) =>
     log("eligibility refused", { reason: m }),
   ),
