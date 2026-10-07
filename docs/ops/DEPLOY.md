@@ -95,8 +95,9 @@ the result is frozen for `HL_ACCOUNT` and activated if its sources differ from t
 (otherwise the run is `kept`). The backend serves the active configuration and the executor
 checks targets against its hash.
 
-**Basic gate (default):** the review core can't pass anyone yet, because the frame has no
-measured out-of-sample or execution evidence. When it rejects, the pipeline keeps finalists the
+**Basic gate (default):** the AI review sees measured evidence for each finalist (hold time,
+leverage, trailing holdouts, execution fit, exposure overlap; docs/ingest/PIPELINE.md "Review
+gate"), but its strict rules rarely keep the 5 sources a freeze needs. When it rejects, the pipeline keeps finalists the
 Role model doesn't reject and that have no Risk score above the reject threshold (evidence risk
 aside). It weights them by Aggressive fit, within the per-source cap, cash buffer and gross
 leverage, and needs at least 5. `REVIEW_GATE=strict` turns this off.

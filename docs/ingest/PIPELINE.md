@@ -53,9 +53,21 @@ exists, nothing is picked and the active configuration (or the fixture) stays.
 
 ## Review gate
 
-The review core can't pass any candidate yet. `score/frame.ts` and `review/input.ts` leave the
-out-of-sample metrics, execution fit and the frame's exposure overlap null, and `compile` requires them.
-Until measured evidence lands, the **basic gate** (`REVIEW_GATE`, default `basic`) applies: keep
+At selection, `src/pipeline/evidence.ts` measures each finalist from its last 30 days of fills,
+its month history and its live positions. It fills the frame fields the review core's strict
+gate requires:
+- median hold time, average leverage and time in market;
+- two trailing 7-day holdouts: out-of-sample Sharpe, Sortino, drawdown and stability (also inside
+  Score's lookback, so read them as recent performance);
+- execution coverage (share of traded notional in ≥ $20M-OI markets) and execution fit (that
+  share × the part of a hold a copy 10 minutes late catches × an order-rate discount);
+- concentration, liquidation distance, and the frame's current exposure overlap between finalists
+  (`review/overlap.ts`, the same measure as "Exposure overlap" below).
+
+Measured on live data (2026-10-07, 220 accounts, 25 finalists), the model's evidence risk fell
+from 80 for everyone to 30–60. The strict gate still kept one candidate: the models' confidence
+is mostly under the policy's 60, and a freeze needs 5 sources. When the core rejects, the
+**basic gate** (`REVIEW_GATE`, default `basic`) applies: keep
 finalists the Role model doesn't reject and with no Risk score above the reject threshold
 (evidence risk aside), weight them by Aggressive fit within the per-source cap, cash buffer and
 gross leverage, and require ≥ 5 sources. `REVIEW_GATE=strict` turns it off.
@@ -64,14 +76,14 @@ gross leverage, and require ≥ 5 sources. `REVIEW_GATE=strict` turns it off.
 
 The overlap of two accounts is the same-direction share of their current books, in [0, 1] (`review/overlap.ts`): each book is the net signed notional per market, summed over dexes and divided by its gross, and the overlap is the sum of the smaller shares over the markets both hold in the same direction. An empty book, or one that nets to zero, overlaps with nothing (0). It compares composition only, so two accounts that each hold a single market in the same direction overlap at 1.0 whatever their size or leverage.
 
-- **Measured, always on.** Each review already reads the 25 picks' positions, so it records every pick's largest overlap with another pick under `selection_runs.finalists.overlap` (no extra Hyperliquid reads), and the dashboard shows it as an Overlap column. It does not change the pick, and the frame's `currentExposureOverlap` stays null.
+- **Measured, always on.** Each review already reads the 25 picks' positions, so it records every pick's largest overlap with another pick under `selection_runs.finalists.overlap` (no extra Hyperliquid reads), and the dashboard shows it as an Overlap column. It does not change the pick. The same measure fills the frame's `currentExposureOverlap` for each pair of finalists the AI reviews (see "Review gate").
 - **Optional guard, off by default.** With `PICK_OVERLAP_GUARD=on` and `NOWNODES_API_KEY`, the pick reads the top 60 candidates' positions NOWNodes first (the official API only as a fallback), leaves out a candidate that overlaps one already chosen by more than the policy's `maxExposureOverlap`, and scores again without it (`pipeline/overlap-pick.ts`). The pick never shrinks (if fewer than 25 remain after leaving some out, the left-out ones come back in rank order), and a failed read or a paused NOWNodes leaves Score's own pick. What it did is recorded under `finalists.overlapGuard`. Env vars and the warning about pick churn: `docs/ops/DEPLOY.md`.
 
 ## Next
 
-- **Measured evidence** (out-of-sample windows, execution fit, and the frame's exposure overlap,
-  which the picks' overlap above could now fill) so the strict review can pass candidates.
-  Source: #33's `review/measured-evidence.ts`.
+- **Strict gate policy**: with measured evidence the binding limits are the models' confidence
+  (`minConfidence` 60), the 5-source freeze minimum, and a Red-Team rebuild request that
+  penalises no one (the core reports `POLICY_VIOLATION`). These are the owner's call.
 - **Evidence for the overlap guard**: whether leaving out overlapping candidates helps returns is
   not measured, and it can make the 25 (and so the AI reviews) change more often; a hysteresis
   (keep a current pick unless it overlaps above a looser threshold) is the next step if it does.
