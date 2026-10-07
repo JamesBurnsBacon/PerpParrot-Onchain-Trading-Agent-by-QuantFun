@@ -8,13 +8,15 @@
 // The active configuration is what the 10-minute mirror loop copies from its next run on.
 import type { SQL } from "bun";
 import { FILLS_PAGE, fillStats, isHighFrequency, pickLeaderboard, sameAddresses, scoringWindows, type Fill, type LeaderboardRow, type Tracked } from "./derive";
-import { EVIDENCE_DAYS, exposureOverlap, measure, type HlFill, type Measured } from "./evidence";
+import { EVIDENCE_DAYS, measure, type HlFill, type Measured } from "./evidence";
 import { ENTER_OI_USD, fetchOpenInterest } from "../eligibility";
 import { PacedInfo, getJson } from "./hl";
 import { routingStats } from "./info-router";
+import { overlapGuard, readPositionsBulk, type GuardSummary, type PositionReader } from "./overlap-pick";
 import { pickVaults } from "./vaults";
 import { parsePortfolio, scoreCandidates, toFrameCandidates, type ScoreInput, type ScoreResult } from "../score";
 import { buildReviewInput, positionsFromStates, type LivePosition } from "../../review/input.ts";
+import { exposureOverlap, summarizeOverlap } from "../../review/overlap.ts";
 import { openAIPaperCommittee } from "../../review/models/openai-paper.ts";
 import { runCommitteeReview } from "../../review/committee/workflow.ts";
 import type { Assessment } from "../../review/workflow.ts";
@@ -30,6 +32,7 @@ const HOUR = 3_600_000;
 const LEADERBOARD = "https://stats-data.hyperliquid.xyz/Mainnet/leaderboard";
 const QUALIFIED = 250; // Score's top distinct accounts over the scan
 const PICKS = 25; // picked every 10 minutes from the qualified list, and reviewed
+const GUARD_POOL = 60; // candidates whose books the overlap guard reads (PICK_OVERLAP_GUARD=on)
 const CLAIMS = 200; // accounts one refresh claims; unprocessed ones are released
 const WORKERS = 3; // concurrent Hyperliquid reads in one refresh, sharing its weight budget
 // Qualifying waits for 95% of the scan, or this long after it with what is fresh (cold start).
@@ -44,6 +47,10 @@ export type PipelineOptions = {
   log: (msg: string, data?: Record<string, unknown>) => void;
   now?: () => number;
   info?: (perMinute: number) => PacedInfo; // Hyperliquid info client (tests)
+  // PICK_OVERLAP_GUARD=on (and NOWNODES_API_KEY): prefer picks whose books do not overlap (overlap-pick.ts).
+  overlapGuard?: boolean;
+  positions?: PositionReader; // book reader for the guard (tests)
+  picks?: number; // how many accounts a pick keeps (default PICKS; tests)
   // "strict": only the review core's VALID manifest activates. "basic" (default): when the core
   // rejects for missing measured evidence, keep the finalists the AI rated acceptable (below).
   gate?: "strict" | "basic";
@@ -88,7 +95,7 @@ export class Pipeline {
     const listedAt = new Date(this.now());
     // One row per address: an upsert can't touch the same row twice.
     const rows = [...new Map(([...vaults, ...traders] as Tracked[]).map((t) => [t.address, t])).values()].map((t) => ({
-      address: t.address, source: t.source, kind: t.kind, name: t.name, account_value: t.accountValue, closed: t.closed, listed_at: listedAt,
+      address: t.address, source: t.source, kind: t.kind, name: t.name, account_value: t.accountValue, closed: t.closed, listed_at: listedAt.toISOString(),
       primary_source: t.primary,
     }));
     for (let i = 0; i < rows.length; i += 1000) {
@@ -144,11 +151,11 @@ export class Pipeline {
             );
             const { tradeCount, makerShare, ordersPerDay } = fillStats(fills, this.now());
             await sql`
-              update pipeline_accounts set portfolio = ${portfolio}::jsonb, trade_count = ${tradeCount}, maker_share = ${makerShare},
+              update pipeline_accounts set portfolio = ${JSON.stringify(portfolio)}::jsonb, trade_count = ${tradeCount}, maker_share = ${makerShare},
                 orders_per_day = ${ordersPerDay}, refreshed_at = now(), fills_at = now(), attempted_at = null, error = null
               where address = ${address}`;
           } else {
-            await sql`update pipeline_accounts set portfolio = ${portfolio}::jsonb, refreshed_at = now(), attempted_at = null, error = null where address = ${address}`;
+            await sql`update pipeline_accounts set portfolio = ${JSON.stringify(portfolio)}::jsonb, refreshed_at = now(), attempted_at = null, error = null where address = ${address}`;
           }
           refreshed++;
         } catch (e) {
@@ -203,7 +210,9 @@ export class Pipeline {
     if (!force && ready.length / rows.length < 0.9) return { status: "waiting", reason: `${ready.length}/${rows.length} qualified accounts have fresh fills` };
     const highFrequency = ready.filter((r) => isHighFrequency(r.orders_per_day)).length;
     const inputs = ready.filter((r) => !isHighFrequency(r.orders_per_day)).map(toInput);
-    const result = scoreCandidates(inputs, { finalists: PICKS });
+    let result = scoreCandidates(inputs, { finalists: this.o.picks ?? PICKS });
+    const guard = await this.guarded(inputs, result);
+    if (guard) result = guard.result;
 
     // The AI review runs only when the 25 change (a rejected set isn't reviewed again).
     const [last] = await sql`select finalists -> 'finalists' as finalists from selection_runs
@@ -215,14 +224,38 @@ export class Pipeline {
       where status = 'running' or (status = 'failed' and started_at > now() - interval '30 minutes') limit 1`;
     if (busy && (busy.status === "running" || !force)) return { status: "waiting", reason: busy.status === "running" ? "a review is running" : "a review failed in the last 30 minutes" };
 
-    const [{ id }] = await sql`insert into selection_runs (started_at, status, accounts) values (${new Date(this.now())}, 'running', ${inputs.length}) returning id`;
+    const [{ id }] = await sql`insert into selection_runs (started_at, status, accounts) values (${new Date(this.now()).toISOString()}, 'running', ${inputs.length}) returning id`;
     try {
-      const outcome = await this.review(id as number, inputs, result, highFrequency);
+      const outcome = await this.review(id as number, inputs, result, highFrequency, guard?.summary);
       return { id, ...outcome };
     } catch (e) {
       log("selection failed", { id, error: (e as Error).message });
       await sql`update selection_runs set status = 'failed', error = ${(e as Error).message}, finished_at = now() where id = ${id}`;
       return { id, status: "failed", reason: (e as Error).message };
+    }
+  }
+
+  // The overlap guard (opt-in): the top GUARD_POOL candidates' books are read NOWNodes first and the pick
+  // prefers candidates that don't overlap one already chosen. Any failure leaves Score's own pick.
+  private async guarded(inputs: ScoreInput[], base: ScoreResult): Promise<{ result: ScoreResult; summary: GuardSummary } | undefined> {
+    const { log, policy } = this.o;
+    const on = this.o.overlapGuard ?? (process.env.PICK_OVERLAP_GUARD === "on" && !!process.env.NOWNODES_API_KEY);
+    const threshold = policy?.maxExposureOverlap;
+    if (!on || typeof threshold !== "number" || !Number.isFinite(threshold)) return undefined;
+    try {
+      const pool = scoreCandidates(inputs, { finalists: GUARD_POOL });
+      const g = await overlapGuard({ ranked: pool.finalists, want: this.o.picks ?? PICKS, threshold, read: this.o.positions ?? readPositionsBulk, now: this.now });
+      if (!g) {
+        log("overlap guard skipped", { reason: "a read failed or NOWNodes paused" });
+        return undefined;
+      }
+      const dropped = new Set(g.excluded);
+      const result = dropped.size ? scoreCandidates(inputs.filter((i) => !dropped.has(i.address)), { finalists: this.o.picks ?? PICKS }) : base;
+      log("overlap guard", { ...g.summary, changed: !sameAddresses(base.finalists, result.finalists) });
+      return { result, summary: g.summary };
+    } catch (e) {
+      log("overlap guard failed", { error: String((e as Error)?.message ?? e) });
+      return undefined;
     }
   }
 
@@ -236,7 +269,7 @@ export class Pipeline {
     if (!listed || (qualified && (qualified as Date) >= (listed as Date))) return undefined;
     const rows = (await sql`
       select address, kind, account_value, closed, portfolio, trade_count, maker_share, orders_per_day, refreshed_at, primary_source, error
-      from pipeline_accounts where listed_at >= ${listed} ::timestamptz - interval '10 minutes'`) as (AccountRow & { refreshed_at: Date | null; primary_source: boolean; error: string | null })[];
+      from pipeline_accounts where listed_at >= ${(listed as Date).toISOString()}::timestamptz - interval '10 minutes'`) as (AccountRow & { refreshed_at: Date | null; primary_source: boolean; error: string | null })[];
     const isFresh = (r: (typeof rows)[number]) => r.portfolio !== null && r.refreshed_at !== null && this.now() - r.refreshed_at.getTime() < 12 * HOUR;
     const fresh = rows.filter(isFresh);
     // A primary source whose last read failed doesn't hold the list up.
@@ -251,13 +284,13 @@ export class Pipeline {
     return { accounts: fresh.length, qualified: result.finalists.length };
   }
 
-  private async review(id: number, inputs: ScoreInput[], result: ScoreResult, highFrequency: number): Promise<{ status: string; reason?: string }> {
+  private async review(id: number, inputs: ScoreInput[], result: ScoreResult, highFrequency: number, guard?: GuardSummary): Promise<{ status: string; reason?: string }> {
     const { sql, log, policy } = this.o;
     const score = toFrameCandidates(result);
     const byAddress = new Map(result.candidates.map((c) => [c.address, c]));
     const finalists = result.finalists.map((address) => ({ address, kind: byAddress.get(address)?.kind, score: byAddress.get(address)?.score, rank: byAddress.get(address)?.rank }));
     const funnel = result.funnel;
-    await sql`update selection_runs set finalists = ${{ finalists, funnel, highFrequency }}::jsonb where id = ${id}`;
+    await sql`update selection_runs set finalists = ${JSON.stringify({ finalists, funnel, highFrequency, ...(guard ? { overlapGuard: guard } : {}) })}::jsonb where id = ${id}`;
     if (score.candidates.length === 0) throw new Error(`no frame candidates (${result.finalists.length} finalists)`);
 
     // Live positions and equity of each finalist (the review's evidence and the leverage check).
@@ -269,6 +302,13 @@ export class Pipeline {
       const states = await Promise.all(ELIGIBLE_DEXES.map((dex) => hl.post<State>({ type: "clearinghouseState", user: address, ...(dex ? { dex } : {}) }, 2)));
       positions.set(address.toLowerCase(), positionsFromStates(states));
       equity.set(address.toLowerCase(), states.reduce((sum, s) => sum + Number(s.marginSummary.accountValue), 0));
+    }
+    // Each pick's largest same-direction overlap with another pick. Evidence only: nothing here selects.
+    try {
+      const overlap = summarizeOverlap(score.addresses, positions, policy.maxExposureOverlap);
+      await sql`update selection_runs set finalists = coalesce(finalists, '{}'::jsonb) || ${JSON.stringify({ overlap })}::jsonb where id = ${id}`;
+    } catch (e) {
+      log("overlap not recorded", { id, error: String((e as Error)?.message ?? e) });
     }
     // Measured evidence (evidence.ts): fills over the last 30 days, paged forward (2,000 a page),
     // and which markets the copy loop can trade.
@@ -286,9 +326,9 @@ export class Pipeline {
       }
       measured.set(address, measure({ input: byInput.get(address)!, fills, positions: positions.get(address) ?? [], eligible, nowMs: this.now() }));
     }
-    const overlap = (a: string, b: string) => exposureOverlap(positions.get(a) ?? [], positions.get(b) ?? []);
-    await sql`update selection_runs set finalists = finalists || ${{ measured: Object.fromEntries(measured) }}::jsonb where id = ${id}`;
-    const built = buildReviewInput({ score, inputs, positions, policy, asOfMs: this.now(), ttlMs: policy.maxFrameAgeMs, measured, overlap });
+    const pairOverlap = (a: string, b: string) => exposureOverlap(positions.get(a) ?? [], positions.get(b) ?? []);
+    await sql`update selection_runs set finalists = coalesce(finalists, '{}'::jsonb) || ${JSON.stringify({ measured: Object.fromEntries(measured) })}::jsonb where id = ${id}`;
+    const built = buildReviewInput({ score, inputs, positions, policy, asOfMs: this.now(), ttlMs: policy.maxFrameAgeMs, measured, overlap: pairOverlap });
 
     // Gross leverage if every chosen source keeps today's book (README §4.6 policy check).
     const assess = (sources: readonly { sourceAddress: string; weight: number }[]): Assessment => {
@@ -338,7 +378,7 @@ export class Pipeline {
       receiptHash: receipt.receiptHash,
       audit,
     };
-    await sql`update selection_runs set review = ${review}::jsonb where id = ${id}`;
+    await sql`update selection_runs set review = ${JSON.stringify(review)}::jsonb where id = ${id}`;
     let payload: Omit<FrozenConfiguration, "configurationHash">;
     if (manifest.status === "VALID") {
       // Freeze for our account (as freezePaperSession: bound to the review receipt).
@@ -351,7 +391,7 @@ export class Pipeline {
         log("selection rejected", { id, reason: manifest.reason, basicSources: basic.length });
         return { status: "rejected", reason: `${manifest.reason}; basic gate kept ${basic.length}` };
       }
-      await sql`update selection_runs set review = review || ${{ gate: "basic", basicSources: basic }}::jsonb where id = ${id}`;
+      await sql`update selection_runs set review = review || ${JSON.stringify({ gate: "basic", basicSources: basic })}::jsonb where id = ${id}`;
       payload = {
         schemaVersion: "1.0.0",
         account: this.o.account.toLowerCase(),
@@ -381,7 +421,7 @@ export class Pipeline {
     await sql.begin(async (tx) => {
       await tx`update configurations set status = 'retired' where status = 'active'`;
       await tx`insert into configurations (hash, configuration, status, selection_id, activated_at)
-        values (${configuration.configurationHash}, ${configuration}::jsonb, 'active', ${id}, now())
+        values (${configuration.configurationHash}, ${JSON.stringify(configuration)}::jsonb, 'active', ${id}, now())
         on conflict (hash) do update set status = 'active', activated_at = now()`;
       await tx`update selection_runs set status = 'activated', configuration_hash = ${configuration.configurationHash}, finished_at = now() where id = ${id}`;
     });

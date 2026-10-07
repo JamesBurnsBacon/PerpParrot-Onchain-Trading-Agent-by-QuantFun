@@ -236,20 +236,3 @@ export const measure = (args: {
     liquidationDistance: liquidation.length ? Math.min(...liquidation) : null,
   };
 };
-
-// Today's exposure two sources share: per asset, the smaller of their same-sign weights (each
-// position's share of its own gross), summed. 0 when either is flat.
-export const exposureOverlap = (a: LivePosition[], b: LivePosition[]): number => {
-  const weights = (ps: LivePosition[]) => {
-    const gross = ps.reduce((s, p) => s + Math.abs(p.signedNotionalUsd), 0);
-    return new Map(gross > 0 ? ps.map((p) => [p.market, p.signedNotionalUsd / gross]) : []);
-  };
-  const wa = weights(a);
-  const wb = weights(b);
-  let overlap = 0;
-  for (const [market, x] of wa) {
-    const y = wb.get(market);
-    if (y !== undefined && Math.sign(x) === Math.sign(y)) overlap += Math.min(Math.abs(x), Math.abs(y));
-  }
-  return clamp(overlap, 0, 1);
-};

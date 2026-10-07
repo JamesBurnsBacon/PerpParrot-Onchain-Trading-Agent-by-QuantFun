@@ -81,6 +81,8 @@ export function Pipeline({ view }: { view: PipelineView }) {
   const verdicts = new Map((latest?.summary ?? []).filter((s) => s.address).map((s) => [s.address!.toLowerCase(), s]));
   const finalists = [...(latest?.finalists?.finalists ?? [])].sort((a, b) => (a.rank ?? 1e9) - (b.rank ?? 1e9));
   const funnel = latest?.finalists?.funnel ?? [];
+  const overlap = latest?.finalists?.overlap;
+  const guard = latest?.finalists?.overlapGuard;
   const funnelMax = Math.max(...funnel.map((f) => f.count), 1);
 
   return (
@@ -198,6 +200,12 @@ export function Pipeline({ view }: { view: PipelineView }) {
             <h3 className="mb-1 text-xs font-semibold" style={{ color: "var(--ink-2)" }}>
               Finalists · AI verdicts <span className="font-normal" style={{ color: "var(--muted)" }}>0–100 · red = concern</span>
             </h3>
+            {guard && (
+              <p className="mb-1 text-xs" style={{ color: "var(--ink-2)" }}>
+                Overlap guard: read {guard.reads} books ({guard.provider.nownodes} via NOWNodes, {guard.provider.official} via Hyperliquid) in {(guard.ms / 1000).toFixed(1)} s · left out {guard.excluded} overlapping candidate{guard.excluded === 1 ? "" : "s"} above {guard.threshold}
+                {guard.failed ? ` · ${guard.failed} reads failed` : ""}
+              </p>
+            )}
             <table className="tabular w-full whitespace-nowrap text-xs">
               <thead style={{ color: "var(--muted)" }}>
                 <tr>
@@ -209,6 +217,7 @@ export function Pipeline({ view }: { view: PipelineView }) {
                   <th className="py-1 pl-2 text-right font-normal" title="Role: reject">Reject</th>
                   <th className="py-1 pl-2 text-right font-normal" title="Risk: leverage">Lev</th>
                   <th className="py-1 pl-2 text-right font-normal" title="Risk: evidence">Evid</th>
+                  {overlap && <th className="py-1 pl-2 text-right font-normal" title="Largest same-direction position overlap with another pick (0–1)">Overlap</th>}
                   <th className="py-1 pl-2 text-right font-normal">Weight</th>
                 </tr>
               </thead>
@@ -226,6 +235,11 @@ export function Pipeline({ view }: { view: PipelineView }) {
                       <Heat v={v?.reject ?? null} bad="high" />
                       <Heat v={v?.leverageRisk ?? null} bad="high" />
                       <Heat v={v?.evidenceRisk ?? null} bad="high" />
+                      {overlap && (
+                        <td className="py-1 pl-2 text-right" style={{ color: (overlap.byAddress[f.address.toLowerCase()] ?? 0) > overlap.threshold ? "var(--critical)" : "var(--ink-2)" }}>
+                          {overlap.byAddress[f.address.toLowerCase()] === undefined ? "—" : overlap.byAddress[f.address.toLowerCase()]!.toFixed(2)}
+                        </td>
+                      )}
                       <td className="py-1 pl-2 text-right font-semibold" style={{ color: w ? "var(--series-1)" : "var(--muted)" }}>
                         {w ? `${(w * 100).toFixed(1)}%` : "—"}
                       </td>

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { episodesFromFills, executionCoverage, executionFit, exposureOverlap, holdMinutes, holdouts, measure, timeInMarket, type HlFill } from "../src/pipeline/evidence";
+import { episodesFromFills, executionCoverage, executionFit, holdMinutes, holdouts, measure, timeInMarket, type HlFill } from "../src/pipeline/evidence";
 import type { ScoreInput } from "../src/score";
 
 const H = 3_600_000;
@@ -71,13 +71,6 @@ describe("execution", () => {
     expect(executionFit(1, 1000, 100)).toBe(50);
     expect(executionFit(0.5, 1000, 5)).toBe(50);
     expect(executionFit(null, 360, 5)).toBeNull();
-  });
-
-  test("overlap: same-sign shares of each book; opposite sides and flat books share nothing", () => {
-    const pos = (market: string, signedNotionalUsd: number) => ({ market, signedNotionalUsd, leverage: null, liquidationDistance: null });
-    expect(exposureOverlap([pos("BTC", 60), pos("ETH", 40)], [pos("BTC", 30), pos("SOL", 70)])).toBeCloseTo(0.3);
-    expect(exposureOverlap([pos("BTC", 60)], [pos("BTC", -60)])).toBe(0);
-    expect(exposureOverlap([], [pos("BTC", 60)])).toBe(0);
   });
 });
 
