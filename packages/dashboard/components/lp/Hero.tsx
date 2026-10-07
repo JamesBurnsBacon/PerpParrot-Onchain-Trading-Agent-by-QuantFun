@@ -362,7 +362,8 @@ export function Hero() {
                   <div className="lp-sweep" aria-hidden="true" />
                   <div className="lp-halo rainbow" aria-hidden="true" />
                   <div className="lp-portrait">
-                    <Image src="/lp/mascot.jpg" alt="Clay parrot mascot wearing a rainbow cap" width={524} height={528} priority />
+                    {/* unoptimized: served as the static file. On Vercel the /_next/image endpoint answered 404 behind the services rewrite (/(.*) -> dashboard). */}
+                    <Image src="/lp/mascot.jpg" alt="Clay parrot mascot wearing a rainbow cap" width={524} height={528} priority unoptimized />
                   </div>
                   <div className="lp-bird-badge" aria-hidden="true">
                     <Parrot />
