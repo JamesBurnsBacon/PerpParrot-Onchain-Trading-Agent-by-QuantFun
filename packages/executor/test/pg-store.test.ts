@@ -117,6 +117,33 @@ describe.skipIf(!url)("PostgresStore", async () => {
 });
 
 describe.skipIf(!process.env.TEST_DATABASE_URL)("postgresRunLock", () => {
+  test("a failed unlock still frees the lock: the connection is closed, not returned to the pool", async () => {
+    const sqlA = new SQL(process.env.TEST_DATABASE_URL!, { max: 2 });
+    const sqlB = new SQL(process.env.TEST_DATABASE_URL!);
+    const key = 0x7e57_0003;
+    // The unlock query fails (as when the 10:00 run's statements failed), everything else works.
+    const failingUnlock = new Proxy(sqlA, {
+      get(target, prop) {
+        if (prop !== "reserve") return Reflect.get(target, prop);
+        return async () => {
+          const conn = await target.reserve();
+          return new Proxy(conn, {
+            apply(fn, self, args) {
+              if ((args[0] as string[]).join("").includes("pg_advisory_unlock")) return Promise.reject(new Error("prepared statement does not exist"));
+              return Reflect.apply(fn, self, args);
+            },
+          });
+        };
+      },
+    });
+    const release = await postgresRunLock(failingUnlock, key).acquire(1000);
+    await release();
+    await (await postgresRunLock(sqlB, key).acquire(1000))(); // not stuck
+    await (await postgresRunLock(sqlA, key).acquire(1000))(); // and sqlA's pool still works
+    await sqlA.close();
+    await sqlB.close();
+  });
+
   test("one holder across connections; released for the next; times out while held", async () => {
     const sqlA = new SQL(process.env.TEST_DATABASE_URL!);
     const sqlB = new SQL(process.env.TEST_DATABASE_URL!);
