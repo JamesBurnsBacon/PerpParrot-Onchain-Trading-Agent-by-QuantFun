@@ -1,6 +1,5 @@
 "use client";
 import { useEffect, useState } from "react";
-import type { BacktestArtifact, FunnelArtifact } from "../../shared/dashboard";
 
 // Same origin by default: vercel.json routes these paths to the backend and executor
 // services (and next.config.ts proxies them to the local servers under `next dev`).
@@ -145,8 +144,6 @@ export type DashboardData = {
   recent: Run[] | null; // full records with plans and evidence, newest first
   status: Status | null;
   exposures: Exposures | null;
-  backtest: BacktestArtifact | null;
-  funnel: FunnelArtifact | null;
   pipeline: PipelineView | null;
   loadedAt: number;
 };
@@ -161,18 +158,16 @@ const get = async <T,>(url: string): Promise<T | null> => {
 };
 
 export const load = async (): Promise<DashboardData> => {
-  const [paper, runs, equity, recent, status, exposures, backtest, funnel, pipeline] = await Promise.all([
+  const [paper, runs, equity, recent, status, exposures, pipeline] = await Promise.all([
     get<PaperView>(`${BACKEND}/paper`),
     get<Run[]>(`${EXECUTOR}/runs?summary=1&limit=144`),
     get<Equity>(`${EXECUTOR}/equity`),
     get<Run[]>(`${EXECUTOR}/runs?limit=8`),
     get<Status>(`${EXECUTOR}/status`),
     get<Exposures>(`${BACKEND}/exposures`),
-    get<BacktestArtifact>(`${BACKEND}/artifacts/backtest`),
-    get<FunnelArtifact>(`${BACKEND}/artifacts/funnel`),
     get<PipelineView>(`${BACKEND}/pipeline`),
   ]);
-  return { paper, runs, equity, recent, status, exposures, backtest, funnel, pipeline, loadedAt: Date.now() };
+  return { paper, runs, equity, recent, status, exposures, pipeline, loadedAt: Date.now() };
 };
 
 // Refreshes every minute: mirror runs land every 10 min, so this is plenty live.

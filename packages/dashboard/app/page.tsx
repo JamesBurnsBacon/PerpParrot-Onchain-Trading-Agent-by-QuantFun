@@ -1,8 +1,7 @@
 "use client";
 import { useRef } from "react";
 import "./lp.css";
-import { ExposureBars, Funnel, Panel, PaperTable, RunStrip, StatTile, TargetsVsHeld, Waiting } from "../components/Charts";
-import { Finalists } from "../components/Finalists";
+import { ExposureBars, Panel, PaperTable, RunStrip, StatTile, TargetsVsHeld, Waiting } from "../components/Charts";
 import { LineChart } from "../components/LineChart";
 import { DashHeader } from "../components/lp/DashHeader";
 import { Hero } from "../components/lp/Hero";
@@ -14,12 +13,6 @@ import { Roster } from "../components/Roster";
 import { RunLog } from "../components/RunLog";
 import { BUCKETS, liveIsReal, performanceSeries, pct, runTime, stamp, time, useDashboard, usd, type Series } from "../lib/data";
 
-// First word of a label, or the whole label when another series shares that first word.
-const shortLabel = (label: string, all: string[]) => {
-  const first = (l: string) => l.split(" ")[0];
-  return all.filter((l) => first(l) === first(label)).length > 1 ? label : first(label);
-};
-
 const lastReturn = (series: Series[], id: string) => series.find((s) => s.id === id)?.points.at(-1)?.[1];
 
 export default function Page() {
@@ -27,7 +20,6 @@ export default function Page() {
   const dash = useRef<HTMLDivElement>(null);
   useDashMotion(dash, data !== null);
   const series = performanceSeries(data?.paper ?? null, data?.equity ?? null, data?.status ?? null);
-  const finalists = data?.funnel?.finalists ?? [];
   // The newest executed run with a plan: targets vs held.
   const lastPlanned = data?.recent?.find((r) => r.kind === "mirror" && r.status === "executed" && r.plan);
   const btc = lastReturn(series, "btc");
@@ -77,7 +69,7 @@ export default function Page() {
             </Panel>
           </div>
 
-          <div className="mb-4 grid gap-4 md:grid-cols-2">
+          <div className="mb-4">
             {lastPlanned ? (
               <Panel tone={1} title="Targets vs held" meta={time(runTime(lastPlanned))}>
                 <TargetsVsHeld run={lastPlanned} />
@@ -87,9 +79,6 @@ export default function Page() {
                 {data?.exposures?.exposures.length ? <ExposureBars exposures={data.exposures.exposures} /> : <Waiting what="No exposures yet" source="Computed from the latest run's snapshot" />}
               </Panel>
             )}
-            <Panel tone={3} title="Heartbeat" meta="10 min">
-              {data?.runs?.length ? <RunStrip runs={data.runs} /> : <Waiting what="No runs yet" source="executor /runs" />}
-            </Panel>
           </div>
 
           <div className="mb-4">
@@ -105,33 +94,8 @@ export default function Page() {
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
-            <Panel tone={3} title="Backtest vs BTC" meta={data?.backtest ? data.backtest.window : undefined}>
-              {data?.backtest?.series.length ? (
-                <LineChart
-                  series={data.backtest.series.map((s, i) => ({
-                    id: s.id,
-                    label: s.label,
-                    short: shortLabel(s.label, data.backtest!.series.map((x) => x.label)),
-                    color: s.id === "btc" ? "var(--muted)" : `var(--series-${(i % 4) + 1})`,
-                    reference: s.id === "btc",
-                    points: s.points.map(([t, v]) => [t, (v - 1) * 100] as [number, number]),
-                  }))}
-                  format={(v) => pct(v, 1)}
-                  xFormat={(t) => new Date(t).toLocaleDateString([], { month: "short", day: "numeric" })}
-                  height={240}
-                />
-              ) : (
-                <Waiting what="Backtest not published yet" source="dashboard_artifacts · backtest" />
-              )}
-            </Panel>
-            <Panel tone={2} title="Selection funnel">
-              {data?.funnel?.steps.length ? <Funnel steps={data.funnel.steps} /> : <Waiting what="Funnel not published yet" source="dashboard_artifacts · funnel" />}
-            </Panel>
-          </div>
-
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
-            <Panel tone={1} title="Finalists" meta={finalists.length ? `${finalists.filter((f) => f.picked).length} / ${finalists.length}` : undefined}>
-              {finalists.length ? <Finalists finalists={finalists} /> : <Waiting what="Finalists not published yet" source="dashboard_artifacts · funnel.finalists" />}
+            <Panel tone={3} title="Heartbeat" meta="10 min">
+              {data?.runs?.length ? <RunStrip runs={data.runs} /> : <Waiting what="No runs yet" source="executor /runs" />}
             </Panel>
             <Panel tone={2} title="Run log">
               {data?.recent?.some((r) => r.kind === "mirror") ? <RunLog runs={data.recent} /> : <Waiting what="No runs yet" source="executor /runs" />}
