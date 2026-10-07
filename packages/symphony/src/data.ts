@@ -1,0 +1,98 @@
+import type { Source, DashboardSnapshot } from "./types";
+export const DEMO_TIMESTAMP = "2026-10-07T00:00:00.000Z";
+export const sources: Source[] = [
+  {
+    id: "atlas",
+    name: "Atlas",
+    market: "BTC / ETH",
+    risk: "Medium",
+    weight: 30,
+    return30d: 18.4,
+    drawdown: 8.2,
+    btc: 15,
+    eth: 6,
+    description: "Synthetic trend-following source with measured exposure.",
+  },
+  {
+    id: "northstar",
+    name: "Northstar",
+    market: "BTC",
+    risk: "Medium",
+    weight: 25,
+    return30d: 12.8,
+    drawdown: 6.5,
+    btc: 12,
+    eth: 0,
+    description: "Synthetic directional Bitcoin source.",
+  },
+  {
+    id: "garden",
+    name: "Garden",
+    market: "ETH",
+    risk: "Low",
+    weight: 20,
+    return30d: 9.7,
+    drawdown: 4.1,
+    btc: 0,
+    eth: 12,
+    description: "Synthetic Ether exposure source.",
+  },
+  {
+    id: "quiet",
+    name: "Quiet",
+    market: "ETH",
+    risk: "Low",
+    weight: 15,
+    return30d: 6.3,
+    drawdown: 3.4,
+    btc: 0,
+    eth: -6,
+    description:
+      "Synthetic short Ether source; negative contribution is preserved.",
+  },
+  {
+    id: "orange",
+    name: "Orange",
+    market: "BTC",
+    risk: "High",
+    weight: 10,
+    return30d: 27.6,
+    drawdown: 16.8,
+    btc: 8,
+    eth: 0,
+    description: "Synthetic momentum source with larger historical swings.",
+  },
+];
+export const plan = {
+  mode: "demo" as const,
+  status: "Review required",
+  configurationHash: "synthetic-config-47",
+  snapshotHash: "synthetic-snapshot-47",
+  allocationUsd: 10000,
+  exposureCapPct: 100,
+  sources: sources.map(({ id, name, weight }) => ({ id, name, weight })),
+  orders: [
+    {
+      asset: "BTC",
+      isBuy: true,
+      notionalUsd: 3500,
+      targetUsd: 3500,
+      currentUsd: 0,
+    },
+    {
+      asset: "ETH",
+      isBuy: true,
+      notionalUsd: 1200,
+      targetUsd: 1200,
+      currentUsd: 0,
+    },
+  ],
+  disclaimer:
+    "Synthetic plan and synthetic identifiers. No orders submitted, no fee estimate, no fills recorded.",
+};
+export const demoData: DashboardSnapshot = {
+  mode: "demo",
+  loadedAt: DEMO_TIMESTAMP,
+  sources,
+  evidence: { plan: { status: "available", data: plan } },
+};

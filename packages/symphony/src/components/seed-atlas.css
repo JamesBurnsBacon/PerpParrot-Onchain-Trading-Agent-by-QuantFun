@@ -1,0 +1,60 @@
+.seed-atlas {
+  margin: 0 0 24px;
+  border: 1px solid #425a8a;
+  background: #10172b;
+  padding: 14px 18px;
+}
+.seed-atlas summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: #e4eafd;
+}
+.seed-atlas summary span {
+  font-size: 11px;
+  color: #a7b6d2;
+  margin-left: 20px;
+}
+.seed-atlas-grid {
+  display: grid;
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  gap: 9px;
+  margin-top: 17px;
+}
+.seed-atlas-grid button {
+  padding: 0;
+  border: 1px solid #33456a;
+  text-align: left;
+  overflow: hidden;
+}
+.seed-atlas-grid button[aria-pressed="true"] {
+  border-color: #ffd52a;
+  box-shadow: 0 0 0 1px #ffd52a;
+}
+.seed-atlas-grid canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.seed-atlas-grid span {
+  display: block;
+  padding: 8px;
+  font-size: 11px;
+}
+.seed-atlas p {
+  font-size: 11px;
+  color: #b0bfd8;
+  margin-top: 14px;
+  line-height: 1.6;
+}
+@media (max-width: 800px) {
+  .seed-atlas-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .seed-atlas summary span {
+    display: block;
+    margin: 7px 0 0;
+  }
+  .seed-atlas-grid button {
+    min-height: 80px;
+  }
+}
