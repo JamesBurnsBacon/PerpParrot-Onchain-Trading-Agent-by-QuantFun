@@ -1,0 +1,88 @@
+.scene-signature {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 13px 0;
+  color: #cad8e5;
+  max-width: 380px;
+  pointer-events: none;
+}
+.signature-feathers {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  min-width: 100px;
+}
+.signature-feathers > span {
+  width: 22px;
+  height: 51px;
+  opacity: 0.6;
+  transition:
+    opacity 0.2s,
+    color 0.2s;
+}
+.signature-feathers .feather-identity {
+  width: 29px;
+  height: 51px;
+}
+.signature-feathers .chosen {
+  opacity: 1;
+  filter: drop-shadow(0 0 5px #eaff9560);
+}
+.signature-feathers .muted {
+  opacity: 0.17;
+}
+.scene-signature strong,
+.scene-signature span,
+.scene-signature small {
+  display: block;
+}
+.scene-signature strong {
+  font-size: 12px;
+  color: #f1e4c5;
+}
+.scene-signature span {
+  font-size: 10px;
+  margin-top: 4px;
+}
+.scene-signature small {
+  font-size: 9px;
+  margin-top: 5px;
+  line-height: 1.4;
+  color: #9eabb9;
+}
+.flight-scene-footer .scene-signature {
+  padding: 0;
+}
+.cinematic-creature .creature-copy .scene-signature {
+  margin-top: 15px;
+}
+.flight-scene-footer {
+  align-items: center;
+}
+@media (max-width: 600px) {
+  .flight-scene-footer .scene-signature {
+    max-width: 230px;
+    gap: 7px;
+  }
+  .flight-scene-footer .signature-feathers {
+    min-width: 60px;
+  }
+  .flight-scene-footer .signature-feathers > span {
+    width: 12px;
+  }
+  .flight-scene-footer .signature-feathers .feather-identity {
+    width: 21px;
+  }
+  .flight-scene-footer .scene-signature small {
+    display: none;
+  }
+  .cinematic-creature .creature-copy .scene-signature {
+    margin-top: 10px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .signature-feathers > span {
+    transition: none;
+  }
+}

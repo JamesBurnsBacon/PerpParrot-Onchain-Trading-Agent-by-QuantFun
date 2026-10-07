@@ -1,0 +1,78 @@
+:root {
+  --yellow: #e8ff70;
+  --mint: #9bf1db;
+}
+.brand-dot {
+  color: #e8ff70;
+}
+.portfolio-score {
+  margin-top: 0;
+  padding-top: 64px;
+  background: linear-gradient(120deg, #4733a4 0%, #211b49 55%, #142c32 100%);
+}
+.score-heading h2 {
+  font-weight: 700;
+  letter-spacing: -2.8px;
+}
+.score-heading h2 em {
+  font: inherit;
+  font-style: normal;
+  color: #e8ff70;
+}
+.score-number {
+  font:
+    700 32px/1.1 "Manrope",
+    Arial,
+    sans-serif;
+  color: #b9a0ff;
+}
+.score-number small {
+  color: #c9c1ed;
+}
+.score-kicker {
+  color: #cbbee8;
+}
+.formation-rehearsal button[aria-pressed="true"] {
+  background: #e8ff70;
+  border-color: #e8ff70;
+}
+.workspace-content {
+  border-top: 1px solid #7c60d947;
+}
+.workspace-tabs button[aria-selected="true"] {
+  color: #dcf998;
+  border-bottom-color: #dcf998;
+}
+.source-inspector {
+  background: linear-gradient(160deg, #25234250, #19312935);
+}
+.source-select strong {
+  color: #e6eee8;
+}
+.closing {
+  border-top: 1px solid #7260c638;
+}
+.closing h2 {
+  font-weight: 700;
+  color: #e9edf3;
+}
+.closing h2 em {
+  font: inherit;
+  font-style: normal;
+  color: #e8ff70;
+}
+.closing-link svg {
+  color: #e8ff70;
+}
+@media (max-width: 600px) {
+  .score-heading h2 {
+    letter-spacing: -2px;
+  }
+  .closing h2 {
+    font-size: 34px;
+    letter-spacing: -1.5px;
+  }
+  .score-number {
+    display: none;
+  }
+}

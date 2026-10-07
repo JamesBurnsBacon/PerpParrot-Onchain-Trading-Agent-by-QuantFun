@@ -1,0 +1,1118 @@
+/* A material flight rig. One unchanged original raster is composited into
+   body and two independent wing layers; all transforms use the conductor. */
+.flight-art .parrot-rig {
+  position: absolute;
+  left: -14%;
+  top: -2%;
+  width: 133%;
+  height: auto;
+  aspect-ratio: 3/2;
+  z-index: 2;
+  mix-blend-mode: screen;
+  mask-image: radial-gradient(
+    ellipse 59% 54% at 53% 49%,
+    #000 47%,
+    transparent 100%
+  );
+  transform-origin: 40% 47%;
+  will-change: transform;
+  pointer-events: none;
+  isolation: isolate;
+}
+.flight-art .parrot-rig img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  mask-image: none;
+  mix-blend-mode: normal;
+  filter: none;
+  pointer-events: none;
+  will-change: transform;
+}
+.parrot-rig .rig-body {
+  z-index: 3;
+  clip-path: polygon(
+    0 27%,
+    36% 27%,
+    46% 36%,
+    48% 42%,
+    57% 62%,
+    100% 69%,
+    100% 100%,
+    0 100%
+  );
+}
+.parrot-rig .rig-wing-left {
+  z-index: 1;
+  clip-path: polygon(0 0, 43% 0, 43% 32%, 38% 39%, 18% 32%, 0 22%);
+  transform-origin: 31% 33%;
+}
+.parrot-rig .rig-wing-right {
+  z-index: 2;
+  clip-path: polygon(
+    36% 42%,
+    40% 32%,
+    64% 15%,
+    100% 0,
+    100% 66%,
+    65% 65%,
+    43% 57%
+  );
+  transform-origin: 40% 42%;
+}
+.flight-notation {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  pointer-events: none;
+  overflow: visible;
+}
+.flight-notation g path {
+  fill: none;
+  stroke: #a0bafa;
+  stroke-width: 0.85;
+  opacity: 0.31;
+  stroke-linecap: round;
+}
+.flight-notation g path:nth-child(2n) {
+  stroke: #ebbf6e;
+  opacity: 0.23;
+}
+.flight-notation .notation-feather {
+  fill: none;
+  stroke: #e8cb8e;
+  stroke-width: 1.45;
+  opacity: 0.68;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.flight-notation text {
+  font:
+    italic 19px Georgia,
+    serif;
+  fill: #b8c7de;
+  opacity: 0.72;
+}
+.flight-art .orbit-line {
+  display: none;
+}
+.flight-art .flight-caption {
+  z-index: 5;
+  bottom: 21px;
+  right: 16px;
+}
+.flight-caption > span {
+  font-size: 8px;
+  letter-spacing: 1.4px;
+  color: #9eafc4;
+}
+.flight-caption strong {
+  font:
+    italic 27px/1.13 Georgia,
+    serif;
+  color: #f0dfbc;
+  margin-top: 9px;
+}
+.cue-takeoff {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 0;
+  margin-top: 9px;
+  min-height: 36px;
+  font-size: 11px;
+  color: #c5d8e9;
+  border-bottom: 1px solid #788d9b50;
+  white-space: nowrap;
+}
+.cue-takeoff:hover:not(:disabled) {
+  color: #ffdf98;
+  border-color: #ffdf9870;
+}
+.cue-takeoff:disabled {
+  opacity: 0.5;
+}
+.flight-hero .hero-copy h1 {
+  color: #e7eadf;
+  text-shadow: 0 2px 25px #0b101988;
+}
+.flight-hero .hero-copy h1 em {
+  color: #f4e3bd;
+}
+.flight-topline > span:first-child {
+  letter-spacing: 1.5px;
+}
+.flight-controls .mode-controls {
+  background: #14232b55;
+}
+.flight-section .flight-bottom {
+  position: relative;
+  z-index: 5;
+}
+.flight-section .seed-atlas {
+  position: relative;
+  z-index: 5;
+}
+@media (min-width: 1101px) {
+  .flight-art .parrot-rig {
+    top: 3%;
+    left: -11%;
+    width: 132%;
+  }
+  .flight-art .flight-caption {
+    right: 0;
+    bottom: 27px;
+  }
+  .flight-notation {
+    width: 105%;
+    left: -2%;
+  }
+}
+@media (min-width: 601px) and (max-width: 1100px) {
+  .flight-hero {
+    grid-template-columns: 1fr 1.1fr;
+  }
+  .flight-hero .hero-copy h1 {
+    width: 112%;
+    font-size: clamp(58px, 7.2vw, 81px);
+    letter-spacing: -4px;
+  }
+  .flight-hero .hero-copy h1 em {
+    letter-spacing: -3.5px;
+  }
+  .flight-hero .hero-copy > p {
+    max-width: 300px;
+    font-size: 14px;
+  }
+  .flight-art {
+    margin-left: -20px !important;
+    width: calc(100% + 30px) !important;
+  }
+  .flight-art .parrot-rig {
+    left: -8%;
+    top: 14%;
+    width: 126%;
+  }
+  .flight-notation {
+    opacity: 0.7;
+  }
+  .flight-art .flight-caption {
+    right: 3px;
+    bottom: 20px;
+  }
+  .flight-caption strong {
+    font-size: 23px;
+  }
+  .flight-caption > span {
+    font-size: 7px;
+  }
+  .cue-takeoff {
+    font-size: 10px;
+  }
+  .flight-hero .hero-actions {
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+}
+@media (max-width: 600px) {
+  .flight-art .parrot-rig {
+    left: -12%;
+    top: -2%;
+    width: 128%;
+  }
+  .flight-hero .hero-copy h1 {
+    width: 100%;
+    font-size: clamp(54px, 17vw, 72px);
+    letter-spacing: -3px;
+  }
+  .flight-hero .hero-copy h1 em {
+    letter-spacing: -2.4px;
+  }
+  .flight-art .flight-caption {
+    right: 18px;
+    bottom: 1px;
+  }
+  .flight-caption strong {
+    font-size: 20px;
+  }
+  .flight-caption > span {
+    font-size: 7px;
+    letter-spacing: 0.7px;
+  }
+  .cue-takeoff {
+    font-size: 10px;
+    padding: 8px 0;
+    margin-top: 5px;
+    gap: 5px;
+    min-height: 36px;
+  }
+  .flight-notation .notation-feather {
+    stroke-width: 1.8;
+  }
+  .flight-notation text {
+    font-size: 19px;
+  }
+  .flight-notation {
+    opacity: 0.65;
+  }
+  .flight-art {
+    margin-top: 8px !important;
+    min-height: 350px !important;
+    height: 350px !important;
+  }
+  .flight-hero .hero-copy > p {
+    font-size: 15px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .flight-art .parrot-rig,
+  .flight-art .parrot-rig img {
+    will-change: auto;
+    transform: none !important;
+  }
+  .flight-notation {
+    opacity: 0.55;
+  }
+}
+/* Parrotverse: a character-first signal playground, never an execution claim. */
+.parrotverse {
+  --play-acid: #edff70;
+  --play-cobalt: #425cfd;
+  --play-coral: #ff927e;
+  position: relative;
+}
+.parrotverse .flight-topline {
+  border-color: #8295ff38;
+  color: #a5b4ea;
+}
+.parrotverse .flight-topline > span {
+  font:
+    700 9px "Manrope",
+    sans-serif;
+  letter-spacing: 1.4px;
+}
+.parrotverse .hero-copy .overline {
+  font-size: 9px;
+  letter-spacing: 1px;
+  color: #b8c8e8;
+}
+.parrotverse .status-dot {
+  background: var(--play-acid);
+  box-shadow: 0 0 12px #edff702c;
+}
+.parrotverse .flight-hero .hero-copy h1 {
+  font:
+    800 clamp(80px, 8.3vw, 118px)/0.91 "Manrope",
+    sans-serif;
+  letter-spacing: -6.5px;
+  width: 100%;
+  margin: 30px 0 31px;
+  color: #f1f4ff;
+  text-shadow: none;
+}
+.parrotverse .flight-hero .hero-copy h1 em {
+  font:
+    800 1.23em/0.91 "Manrope",
+    sans-serif;
+  letter-spacing: -8px;
+  display: inline-block;
+  transform: skewX(-6deg);
+  color: var(--play-acid);
+}
+.flock-period {
+  color: var(--play-coral);
+}
+.parrotverse .hero-copy > p {
+  font-size: 16px;
+  line-height: 1.75;
+  color: #aabddb;
+  max-width: 365px;
+}
+.parrotverse .hero-actions {
+  gap: 24px;
+  margin-top: 28px;
+}
+.parrotverse .hero-actions .button {
+  background: var(--play-acid);
+  color: #182044;
+  font-size: 12px;
+  padding: 15px 20px;
+  border-radius: 5px;
+  box-shadow: 4px 4px 0 #edff7024;
+}
+.parrotverse .hero-actions .button:hover {
+  background: #f4ffad;
+  box-shadow: 4px 4px 0 #edff7045;
+}
+.parrotverse .hero-actions .text-button {
+  color: #bed1ef;
+  font-size: 11px;
+  border-color: #748bd466;
+}
+.parrotverse .hero-footnote {
+  font-size: 8px;
+  line-height: 1.9;
+  color: #8e9fbd;
+  letter-spacing: 0.9px;
+}
+.parrotverse-portal {
+  position: absolute;
+  inset: 32px -16px 16px 40px;
+  border-radius: 45% 42% 38% 43%;
+  background:
+    radial-gradient(ellipse at 42% 28%, #6585f16b, transparent 65%),
+    linear-gradient(132deg, #233abbad, #162557b0 56%, #4a386645);
+  border: 1px solid #95a5ff42;
+  z-index: 0;
+  transform: rotate(-8deg);
+  box-shadow: inset 0 0 85px #1d31b92b;
+  overflow: hidden;
+  pointer-events: none;
+}
+.parrotverse-portal:after {
+  content: "";
+  position: absolute;
+  inset: 26px -20px -26px 18px;
+  border: 1px solid #91abfc23;
+  border-radius: 48%;
+  transform: rotate(25deg);
+}
+.portal-perimeter {
+  position: absolute;
+  inset: 16px;
+  border: 1px dashed #93aff029;
+  border-radius: 47% 44% 41% 42%;
+}
+.portal-wordmark {
+  position: absolute;
+  top: 56px;
+  left: 39px;
+  font:
+    800 102px "Manrope",
+    sans-serif;
+  letter-spacing: -9px;
+  transform: rotate(8deg);
+  color: #bed0ff0c;
+}
+.portal-coordinates {
+  position: absolute;
+  bottom: 57px;
+  left: 33px;
+  font: 8px/1.7 monospace;
+  letter-spacing: 1px;
+  color: #91a5c677;
+  transform: rotate(8deg);
+}
+.parrotverse .flight-art canvas {
+  z-index: 1;
+  opacity: 0.85;
+}
+.parrotverse .flight-notation {
+  opacity: 0.38;
+}
+.parrotverse .flight-art .parrot-rig {
+  z-index: 3;
+}
+.parrotverse .flight-art .flight-caption {
+  z-index: 5;
+  right: 3px;
+  bottom: 18px;
+}
+.parrotverse .flight-caption > span {
+  font:
+    700 9px "Manrope",
+    sans-serif;
+  color: #abbbe6;
+  letter-spacing: 1.1px;
+}
+.parrotverse .flight-caption strong {
+  font:
+    800 27px/1.03 "Manrope",
+    sans-serif;
+  letter-spacing: -1.3px;
+  color: #ebeeff;
+  margin-top: 10px;
+  transform: rotate(-3deg);
+}
+.parrotverse .cue-takeoff {
+  font:
+    700 12px "Manrope",
+    sans-serif;
+  min-height: 44px;
+  padding: 11px 16px;
+  gap: 9px;
+  background: var(--play-acid);
+  color: #172442;
+  border: 0;
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 #edff702a;
+  margin-top: 17px;
+  white-space: nowrap;
+}
+.parrotverse .cue-takeoff:hover:not(:disabled) {
+  background: #f4ffad;
+  color: #172442;
+}
+.parrotverse .cue-takeoff:disabled {
+  box-shadow: none;
+  opacity: 0.45;
+}
+.feed-caption {
+  display: block;
+  font:
+    9px/1.7 "Manrope",
+    sans-serif;
+  color: #8fa2c1;
+  max-width: 180px;
+  margin-top: 10px;
+}
+.flight-pass {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  z-index: 5;
+  background: var(--play-coral);
+  color: #172447;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 24px 14px 14px;
+  transform: rotate(7deg);
+  clip-path: polygon(
+    0 0,
+    94% 0,
+    94% 12%,
+    100% 18%,
+    94% 25%,
+    100% 32%,
+    94% 39%,
+    100% 46%,
+    94% 53%,
+    100% 60%,
+    94% 67%,
+    100% 74%,
+    94% 81%,
+    100% 88%,
+    94% 94%,
+    94% 100%,
+    0 100%
+  );
+  pointer-events: none;
+}
+.pass-mark {
+  font:
+    800 22px "Manrope",
+    sans-serif;
+  letter-spacing: -2px;
+  border: 2px solid #22335a;
+  width: 37px;
+  height: 39px;
+  display: grid;
+  place-items: center;
+  position: relative;
+  transform: rotate(-6deg);
+}
+.pass-mark > span {
+  position: absolute;
+  right: -7px;
+  top: -11px;
+  color: var(--play-acid);
+  font-size: 20px;
+  text-shadow: 1px 1px #22335a;
+}
+.flight-pass > div:nth-child(2) {
+  display: grid;
+  gap: 3px;
+}
+.flight-pass > div:nth-child(2) > span {
+  font:
+    700 8px "Manrope",
+    sans-serif;
+  letter-spacing: 0.8px;
+}
+.flight-pass strong {
+  font:
+    800 18px "Manrope",
+    sans-serif;
+  letter-spacing: -0.7px;
+}
+.flight-pass small {
+  font:
+    600 6px "Manrope",
+    sans-serif;
+  letter-spacing: 0.3px;
+}
+.pass-perforation {
+  border-left: 1px dashed #1d305768;
+  position: absolute;
+  right: 18px;
+  top: 0;
+  bottom: 0;
+}
+.parrotverse .flight-bottom {
+  border-top: 1px solid #738ad537;
+  border-bottom: 1px solid #738ad514;
+  padding-bottom: 22px;
+}
+.parrotverse .flight-controls .mode-controls {
+  background: #15234b66;
+  border-color: #536cc54a;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.parrotverse .mode-controls button[aria-pressed="true"] {
+  background: var(--play-acid);
+  color: #172344;
+}
+.parrotverse .intensity input {
+  accent-color: var(--play-acid);
+}
+.parrotverse .flight-memory > span:last-child {
+  font-size: 10px;
+  font-weight: 700;
+  color: #c0d0f3;
+  letter-spacing: 0.5px;
+}
+.parrotverse .flight-memory > .tiny {
+  color: #7e94b7;
+  font-size: 8px;
+}
+.parrotverse .flight-hero {
+  min-height: 690px;
+}
+@media (min-width: 1101px) {
+  .parrotverse .flight-art .parrot-rig {
+    left: -8%;
+    top: 8%;
+    width: 128%;
+  }
+  .parrotverse .flight-art .flight-caption {
+    right: 0;
+    bottom: 8px;
+  }
+  .parrotverse-portal {
+    inset: 28px -10px 5px 40px;
+  }
+}
+@media (min-width: 601px) and (max-width: 1100px) {
+  .parrotverse .flight-hero .hero-copy h1 {
+    font-size: clamp(63px, 7.4vw, 83px);
+    width: 100%;
+    letter-spacing: -4.2px;
+  }
+  .parrotverse .flight-hero .hero-copy h1 em {
+    letter-spacing: -5px;
+  }
+  .parrotverse .hero-copy > p {
+    font-size: 14px;
+    max-width: 295px;
+  }
+  .parrotverse .hero-actions {
+    gap: 18px;
+  }
+  .parrotverse .hero-actions .button {
+    font-size: 11px;
+    padding: 13px 15px;
+  }
+  .parrotverse .hero-actions .text-button {
+    font-size: 10px;
+  }
+  .parrotverse .flight-art .parrot-rig {
+    left: -3%;
+    top: 20%;
+    width: 121%;
+  }
+  .parrotverse-portal {
+    inset: 60px -15px 25px 7px;
+  }
+  .flight-pass {
+    right: 0;
+    top: 38px;
+    padding: 12px 20px 12px 12px;
+    gap: 11px;
+  }
+  .pass-mark {
+    width: 31px;
+    height: 33px;
+    font-size: 19px;
+  }
+  .flight-pass strong {
+    font-size: 15px;
+  }
+  .flight-pass > div:nth-child(2) > span {
+    font-size: 7px;
+  }
+  .flight-pass small {
+    font-size: 5px;
+  }
+  .parrotverse .flight-caption strong {
+    font-size: 23px;
+  }
+  .parrotverse .flight-art .flight-caption {
+    right: 0;
+    bottom: 3px;
+  }
+  .parrotverse .cue-takeoff {
+    font-size: 11px;
+    padding: 11px 13px;
+  }
+  .portal-wordmark {
+    font-size: 82px;
+    top: 80px;
+    left: 22px;
+  }
+  .parrotverse .flight-hero {
+    min-height: 650px;
+  }
+}
+@media (max-width: 600px) {
+  .parrotverse .flight-topline > span {
+    font-size: 8px;
+    letter-spacing: 0.4px;
+  }
+  .parrotverse .flight-hero .hero-copy h1 {
+    font-size: clamp(58px, 15vw, 76px);
+    line-height: 0.91;
+    width: 100%;
+    letter-spacing: -3.5px;
+    margin-top: 28px;
+    margin-bottom: 25px;
+  }
+  .parrotverse .flight-hero .hero-copy h1 em {
+    letter-spacing: -4.5px;
+    font-size: 1.23em;
+  }
+  .parrotverse .hero-copy .overline {
+    font-size: 9px;
+    letter-spacing: 0.3px;
+  }
+  .parrotverse .hero-copy > p {
+    font-size: 15px;
+    max-width: 320px;
+  }
+  .parrotverse .hero-actions {
+    gap: 21px;
+    flex-wrap: wrap;
+    margin-top: 24px;
+  }
+  .parrotverse .hero-actions .button {
+    font-size: 12px;
+    min-height: 46px;
+    padding: 13px 16px;
+    gap: 12px;
+  }
+  .parrotverse .hero-actions .text-button {
+    font-size: 11px;
+    min-height: 36px;
+  }
+  .parrotverse .hero-footnote {
+    font-size: 9px;
+    margin-top: 22px;
+  }
+  .parrotverse .flight-art {
+    height: 390px !important;
+    min-height: 390px !important;
+    margin-top: 19px !important;
+  }
+  .parrotverse .flight-art .parrot-rig {
+    left: -9%;
+    top: 8%;
+    width: 124%;
+  }
+  .parrotverse-portal {
+    inset: 22px 4px 2px 19px;
+  }
+  .flight-pass {
+    right: 16px;
+    top: 2px;
+    gap: 11px;
+    padding: 11px 20px 11px 12px;
+  }
+  .flight-pass strong {
+    font-size: 15px;
+  }
+  .flight-pass > div:nth-child(2) > span {
+    font-size: 7px;
+  }
+  .flight-pass small {
+    font-size: 5px;
+  }
+  .pass-mark {
+    font-size: 18px;
+    width: 29px;
+    height: 31px;
+  }
+  .portal-wordmark {
+    font-size: 74px;
+    top: 62px;
+    left: 26px;
+  }
+  .portal-coordinates {
+    font-size: 6px;
+    bottom: 55px;
+    left: 24px;
+  }
+  .parrotverse .flight-art .flight-caption {
+    right: 18px;
+    bottom: 4px;
+  }
+  .parrotverse .flight-caption > span {
+    font-size: 8px;
+  }
+  .parrotverse .flight-caption strong {
+    font-size: 21px;
+    line-height: 1.04;
+    letter-spacing: -0.8px;
+  }
+  .parrotverse .cue-takeoff {
+    font-size: 11px;
+    min-height: 42px;
+    padding: 10px 13px;
+    margin-top: 11px;
+  }
+  .parrotverse .feed-caption {
+    font-size: 9px;
+    max-width: 160px;
+    margin-top: 8px;
+  }
+  .parrotverse .flight-hero {
+    min-height: 0;
+  }
+  .parrotverse .flight-bottom {
+    padding-top: 19px;
+  }
+  .parrotverse .flight-notation {
+    opacity: 0.25;
+  }
+}
+@media (max-width: 360px) {
+  .parrotverse .flight-hero .hero-copy h1 {
+    font-size: 58px;
+  }
+  .parrotverse .hero-actions {
+    gap: 14px;
+  }
+  .parrotverse .hero-actions .button {
+    font-size: 11px;
+    padding: 13px 12px;
+  }
+  .parrotverse .hero-actions .text-button {
+    font-size: 10px;
+  }
+  .flight-pass {
+    right: 13px;
+  }
+  .parrotverse .flight-caption strong {
+    font-size: 20px;
+  }
+}
+/* Product first: the workspace is the solid primary action; art play is secondary. */
+.parrotverse .cue-takeoff {
+  background: #1329537a;
+  border: 1px solid #bedb755f;
+  color: #d6e994;
+  box-shadow: none;
+  font-weight: 600;
+  padding: 10px 14px;
+}
+.parrotverse .cue-takeoff:hover:not(:disabled) {
+  background: #91af5b13;
+  border-color: #d4ed94;
+  color: #edffb9;
+  box-shadow: none;
+}
+.parrotverse .hero-actions .button {
+  background: var(--play-acid);
+  color: #152140;
+  font-weight: 800;
+  border-color: var(--play-acid);
+}
+
+/* A panoramic flight deck: foreground copy, atmosphere, articulated character. */
+.parrotverse .flight-hero {
+  display: block;
+  position: relative;
+  min-height: clamp(720px, calc(100svh - 130px), 1020px);
+  isolation: isolate;
+  overflow: clip;
+  margin-top: 0;
+}
+.parrotverse .flight-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0 -4% 0 12%;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 75% 42%, #4b39ca66, transparent 57%),
+    radial-gradient(ellipse at 83% 80%, #08387b66, transparent 55%);
+}
+.parrotverse .hero-copy {
+  position: relative;
+  z-index: 6;
+  width: 52%;
+  padding-top: 76px;
+  padding-bottom: 135px;
+}
+.parrotverse .hero-copy h1 {
+  font-size: clamp(88px, 8.8vw, 142px);
+  line-height: 0.91;
+  letter-spacing: -7px;
+  width: 100%;
+}
+.parrotverse .hero-copy h1 em {
+  font-size: 1.17em;
+}
+.parrotverse .hero-copy p {
+  max-width: 330px;
+  margin-top: 30px;
+}
+.parrotverse .hero-actions {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+}
+.parrotverse .hero-footnote {
+  margin-top: 23px;
+}
+.parrotverse .flight-art {
+  position: absolute;
+  right: -8%;
+  top: 0;
+  width: 80%;
+  height: 100%;
+  min-height: 0;
+  margin: 0 !important;
+}
+.parrotverse .flight-art .parrot-rig {
+  left: -8%;
+  top: 13%;
+  width: 118%;
+}
+.parrotverse .parrotverse-portal {
+  inset: 4% -5% 4% 4%;
+  border-radius: 50%;
+  border: none;
+  background: radial-gradient(
+    ellipse at 62% 48%,
+    #425cfd72 0%,
+    #3429b540 40%,
+    transparent 69%
+  );
+  transform: translateY(calc(var(--flight-progress, 0) * 38px)) rotate(-13deg)
+    scale(calc(1 + var(--flight-progress, 0) * 0.055));
+}
+.parrotverse .portal-perimeter {
+  inset: 6% 0 6% 13%;
+  border: 1px solid #79a9ff30;
+  box-shadow:
+    0 0 95px #3a52ff20,
+    inset 0 0 100px #333cf714;
+}
+.parrotverse .parrotverse-portal::after {
+  inset: 13% 7% 13% 20%;
+  border: 1px solid #79a9ff25;
+}
+.parrotverse .portal-wordmark {
+  left: 36%;
+  top: 28%;
+  font-size: clamp(170px, 22vw, 350px);
+  opacity: 0.035;
+}
+.parrotverse .portal-coordinates {
+  display: none;
+}
+.parrotverse .flight-pass {
+  top: 8%;
+  right: 14%;
+  transform: rotate(8deg);
+}
+.parrotverse .flight-caption {
+  right: 15%;
+  bottom: 12%;
+}
+.parrotverse .flight-notation {
+  opacity: 0.6;
+  transform: translateY(calc(var(--flight-progress, 0) * -22px));
+}
+.flight-scene-footer {
+  position: absolute;
+  bottom: 27px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid #899bd52c;
+  padding-top: 20px;
+  z-index: 7;
+  font-size: 11px;
+  letter-spacing: 0.13em;
+  color: #adc5e4;
+}
+.flight-scene-footer b {
+  color: #edff70;
+  margin-right: 12px;
+}
+.flight-scene-footer a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #ecf6ff;
+  font-size: 12px;
+  letter-spacing: 0;
+  padding: 8px 0;
+}
+@media (min-width: 1500px) {
+  .parrotverse .flight-art {
+    width: 83%;
+    right: -8%;
+  }
+  .parrotverse .flight-art .parrot-rig {
+    top: 9%;
+  }
+}
+@media (min-width: 601px) and (max-width: 1100px) {
+  .parrotverse .flight-hero {
+    min-height: 790px;
+  }
+  .parrotverse .hero-copy {
+    padding-top: 58px;
+    width: 54%;
+  }
+  .parrotverse .hero-copy h1 {
+    font-size: clamp(72px, 9vw, 98px);
+    letter-spacing: -5px;
+  }
+  .parrotverse .hero-copy p {
+    max-width: 270px;
+    font-size: 14px;
+  }
+  .parrotverse .flight-art {
+    width: 92% !important;
+    right: -20%;
+    top: 0;
+    height: 100% !important;
+  }
+  .parrotverse .flight-art .parrot-rig {
+    top: 31%;
+    left: -3%;
+    width: 110%;
+  }
+  .parrotverse .flight-pass {
+    right: 27%;
+    top: 12%;
+  }
+  .parrotverse .flight-caption {
+    right: 26%;
+    bottom: 12%;
+  }
+  .parrotverse .parrotverse-portal {
+    inset: 18% -4% 7% 9%;
+  }
+  .parrotverse .flight-notation {
+    opacity: 0.3;
+  }
+}
+@media (max-width: 600px) {
+  .parrotverse .flight-hero {
+    min-height: 0;
+    overflow: clip;
+    padding-bottom: 88px;
+  }
+  .parrotverse .hero-copy {
+    width: 100%;
+    padding-top: 38px;
+    padding-bottom: 18px;
+  }
+  .parrotverse .hero-copy h1 {
+    font-size: clamp(58px, 16vw, 82px);
+    letter-spacing: -3.7px;
+  }
+  .parrotverse .hero-copy h1 em {
+    letter-spacing: -4px;
+  }
+  .parrotverse .hero-copy p {
+    margin-top: 22px;
+    max-width: 300px;
+  }
+  .parrotverse .hero-actions {
+    gap: 14px;
+  }
+  .parrotverse .flight-art {
+    position: relative;
+    width: calc(100% + 40px) !important;
+    right: auto;
+    left: -20px;
+    top: 0;
+    height: 460px !important;
+  }
+  .parrotverse .flight-art .parrot-rig {
+    left: -15%;
+    top: 13%;
+    width: 135%;
+  }
+  .parrotverse .parrotverse-portal {
+    inset: 2% -17% 2% -8%;
+  }
+  .parrotverse .flight-pass {
+    right: 25px;
+    top: 1%;
+    transform: rotate(8deg) scale(0.86);
+    transform-origin: top right;
+  }
+  .parrotverse .flight-caption {
+    right: 27px;
+    bottom: 4%;
+  }
+  .parrotverse .flight-caption strong {
+    font-size: 25px;
+  }
+  .parrotverse .flight-notation {
+    opacity: 0.4;
+  }
+  .flight-scene-footer {
+    bottom: 20px;
+    align-items: flex-start;
+    gap: 12px;
+    font-size: 9px;
+    letter-spacing: 0.08em;
+  }
+  .flight-scene-footer a {
+    padding: 0;
+    font-size: 11px;
+    gap: 6px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .parrotverse .parrotverse-portal,
+  .parrotverse .flight-notation {
+    transform: none;
+  }
+}
+
+/* Interactive caption belongs to the bounded scene, never the cropped art. */
+.parrotverse .flight-hero > .flight-caption {
+  right: 24px;
+  bottom: 104px;
+  width: 205px;
+  max-width: calc(100% - 48px);
+}
+@media (min-width: 601px) and (max-width: 1100px) {
+  .parrotverse .flight-hero > .flight-caption {
+    right: 24px;
+    bottom: 104px;
+  }
+}
+@media (max-width: 600px) {
+  .parrotverse .flight-hero > .flight-caption {
+    right: 7px;
+    bottom: 106px;
+    width: 205px;
+    max-width: calc(100% - 14px);
+  }
+}

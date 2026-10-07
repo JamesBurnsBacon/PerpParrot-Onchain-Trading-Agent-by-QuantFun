@@ -1,0 +1,121 @@
+:root {
+  --conduct-x: 0px;
+  --conduct-y: 0px;
+  --conduct-rotation: 0deg;
+  --conduct-pulse: 0.75;
+  --conduct-pointer-x: 0px;
+  --conduct-pointer-y: 0px;
+}
+.app-shell {
+  position: relative;
+  isolation: isolate;
+}
+.app-shell > header,
+.app-shell > main,
+.app-shell > footer {
+  position: relative;
+  z-index: 1;
+}
+.ambient-score {
+  position: fixed;
+  inset: -5%;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  contain: strict;
+  opacity: var(--conduct-pulse);
+  transform: translate3d(var(--conduct-pointer-x), var(--conduct-pointer-y), 0);
+}
+.ambient-score svg {
+  height: 110%;
+  width: 110%;
+  position: absolute;
+  inset: -5%;
+  transform: translate3d(var(--conduct-x), var(--conduct-y), 0)
+    rotate(var(--conduct-rotation));
+}
+.ambient-wave {
+  fill: none;
+  stroke: #5c7aec;
+  stroke-width: 0.9;
+  opacity: 0.2;
+}
+.ambient-wave:nth-child(3n) {
+  stroke: #ffd75b;
+  opacity: 0.12;
+}
+.ambient-wave:nth-child(4n) {
+  stroke: #fe8c72;
+  opacity: 0.12;
+}
+.ambient-orbit {
+  position: absolute;
+  border: 1px solid #7890e326;
+  border-radius: 50%;
+  width: 80vw;
+  height: 80vw;
+  transform: translate3d(var(--conduct-x), var(--conduct-y), 0)
+    rotate(var(--conduct-rotation));
+}
+.ambient-orbit-one {
+  left: 35%;
+  top: -25%;
+  box-shadow: 0 0 160px #304bf008 inset;
+}
+.ambient-orbit-two {
+  left: -45%;
+  top: 35%;
+  width: 100vw;
+  height: 100vw;
+  border-color: #ffd95616;
+}
+.workspace-content:before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  background: radial-gradient(ellipse at 75% 35%, #243a7019, transparent 65%);
+  transform: translate3d(var(--conduct-pointer-x), var(--conduct-pointer-y), 0);
+}
+.workspace-content {
+  position: relative;
+  isolation: isolate;
+}
+.closing:after {
+  content: "";
+  position: absolute;
+  right: 10%;
+  top: 0;
+  width: 140px;
+  height: 140px;
+  border: 1px solid #758eff28;
+  border-radius: 50%;
+  pointer-events: none;
+  transform: translate3d(var(--conduct-x), var(--conduct-y), 0);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ambient-score {
+    opacity: 0.55;
+  }
+}
+@media (max-width: 600px) {
+  .ambient-wave {
+    opacity: 0.12;
+  }
+  .ambient-orbit-one {
+    width: 150vw;
+    height: 150vw;
+    left: 10%;
+  }
+  .closing:after {
+    width: 80px;
+    height: 80px;
+  }
+}
+
+.score-marks {
+  animation: none;
+  transform: translate3d(0, calc(var(--conduct-y) * 0.12), 0);
+  opacity: var(--conduct-pulse);
+}
