@@ -92,6 +92,24 @@ export const countedGross = (signed: bigint[]): bigint => {
   return long >= short ? long + short / 2n : short + long / 2n;
 };
 
+// At most MAX_POSITIONS perps (owner, 2026-10-07: the book holds 5–15 positions): keep the largest by
+// |exposure| and scale them up so the counted gross is unchanged; the rest go to 0 (their closes
+// still wait for confirmation, so a perp hovering at the edge doesn't churn). Ties by asset name.
+export const MAX_POSITIONS = 15;
+export const limitPositions = (
+  exposures: { asset: string; exposureE9: bigint }[],
+  max = MAX_POSITIONS,
+): { asset: string; exposureE9: bigint }[] => {
+  const held = exposures.filter((e) => e.exposureE9 !== 0n);
+  if (held.length <= max) return exposures;
+  const kept = [...held].sort((a, b) => (abs(b.exposureE9) > abs(a.exposureE9) ? 1 : abs(b.exposureE9) < abs(a.exposureE9) ? -1 : a.asset < b.asset ? -1 : 1)).slice(0, max);
+  const before = countedGross(held.map((e) => e.exposureE9));
+  const after = countedGross(kept.map((e) => e.exposureE9));
+  return kept
+    .map((e) => ({ asset: e.asset, exposureE9: after > 0n ? (e.exposureE9 * before) / after : e.exposureE9 }))
+    .sort((a, b) => (a.asset < b.asset ? -1 : 1));
+};
+
 // Scales all exposures down pro-rata so the counted gross ≤ the policy's maxGrossLeverage.
 export const capGrossExposure = (
   exposures: { asset: string; exposureE9: bigint }[],
@@ -104,7 +122,7 @@ export const capGrossExposure = (
 
 // A run's target exposures (README §4.4): every source must be in the frozen configuration and hold
 // only eligible assets, each contributes at its frozen weight (normalized to the target leverage when
-// the snapshot lists it), and gross is capped at the policy's maxGrossLeverage. Used for the executor's targets and the paper books.
+// the snapshot lists it), at most 15 perps are kept, and gross is capped at the policy's maxGrossLeverage. Used for the executor's targets and the paper books.
 export const targetsFromSnapshot = (snapshot: PositionsSnapshot): { asset: string; exposureE9: bigint }[] => {
   const frozen = new Map(snapshot.configuration.sources.map((s) => [s.sourceAddress.toLowerCase(), s]));
   const eligible = new Set(snapshot.eligibleAssets);
@@ -126,7 +144,7 @@ export const targetsFromSnapshot = (snapshot: PositionsSnapshot): { asset: strin
     caps: caps.get(s.address),
     ...(scales.has(s.address) ? { scaleE6: scales.get(s.address)!, maxGrossE9 } : {}),
   }));
-  return capGrossExposure(computeExposures(sources), maxGrossE9);
+  return capGrossExposure(limitPositions(computeExposures(sources)), maxGrossE9);
 };
 
 // Closes wait for confirmation (owner, 2026-10-07): a perp whose target went to 0 is closed only once
