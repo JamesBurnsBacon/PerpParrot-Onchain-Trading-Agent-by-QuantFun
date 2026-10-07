@@ -415,21 +415,24 @@ export class Pipeline {
     const receipt = await runCommitteeReview(built.frame, policy, built.addresses, built.evidence, this.now(), deps);
     const { manifest } = receipt;
     const field = (stage: string, candidate: number, name: string) => stageRows[stage]?.[0]?.find((r) => r.candidate === candidate)?.[name] ?? null;
-    const summary = built.frame.candidates.map(({ candidate, metrics }) => ({
+    const summary = built.frame.candidates.map(({ candidate, metrics }) => {
+      const role=stageRows.role?.[0]?.find(r=>r.candidate===candidate), risk=stageRows.risk?.[0]?.find(r=>r.candidate===candidate);
+      return {
       candidate,
       address: built.addresses.get(candidate),
       kind: built.frame.candidates[candidate]!.kind,
       metrics,
-      gate: stageRows.role?.[0]&&stageRows.risk?.[0] ? candidateGate(metrics,stageRows.role[0].find(r=>r.candidate===candidate)!,stageRows.risk[0].find(r=>r.candidate===candidate)!,policy):null,
+      gate: role&&risk ? candidateGate(metrics,role,risk,policy):null,
       aggressiveFit: field("role", candidate, "aggressiveFit"),
       reject: field("role", candidate, "reject"),
       leverageRisk: field("risk", candidate, "leverageRisk"),
       evidenceRisk: field("risk", candidate, "evidenceRisk"),
-    }));
+    };});
     const review = {
       summary,
       skipped: [...score.skipped, ...built.skipped],
       manifest: { status: manifest.status, reason: manifest.reason, sources: manifest.sources.map((s) => ({ address: s.sourceAddress, weight: s.weight })) },
+      freezeEligible: manifest.status === "VALID" && manifest.sources.length >= 5,
       receiptHash: receipt.receiptHash,
       audit,
     };

@@ -7,6 +7,7 @@ import type {Frame, Policy, Row, Observation} from '../packages/shared/src/contr
 import {validate} from '../packages/shared/src/validate.ts';
 import {commitment,policyCommitment,snapshotCommitment} from '../packages/shared/src/commitments.ts';
 import {validateManifest,requireFrozenLiveManifest} from '../packages/shared/src/authorization.ts';
+import {proposeFreeze} from '../packages/shared/src/frozen.ts';
 const H='0x'+'a'.repeat(64);
 const NOW=1000000;
 function fixture() {
@@ -216,6 +217,11 @@ test('scheduled policy changes only confidence without rewriting the pinned froz
   assert.equal(frozen.policy.minConfidence,60);
   assert.equal(frozen.policyHash,policyCommitment(frozen.policy));
   assert.equal(frozen.configurationHash,'0x088fe80aef2b0d1d58a2e483073105c141fcf4d13ef80f934dfe811c81e6e1dd');
+});
+test('a valid committee draft below five sources still cannot be frozen',async()=>{
+  const f=fixture();f.policy.mode='LIVE';f.policy.bucket='AGGRESSIVE';
+  const manifest=await review(f);assert.equal(manifest.status,'VALID');assert.equal(manifest.sources.length,3);
+  assert.throws(()=>proposeFreeze(manifest,'0x'+'f'.repeat(40),999,NOW),/5–25 sources/);
 });
 test('freshness is checked at manifest issuance, including expiry on the final clock read',async()=>{
   const f=fixture();let reads=0;f.deps.clock=()=>++reads>=5?f.frame.expiresAtMs:NOW;
