@@ -9,6 +9,7 @@
 //
 // --inputs caches the fetched accounts (the slow part, ~5 min) so reruns only redo the review.
 import { parseArgs } from "node:util";
+import {rename} from 'node:fs/promises';
 import { SQL } from "bun";
 import {localReviewDb} from './local-review-db';
 import {candidateGate} from '../review/workflow';
@@ -35,10 +36,12 @@ const url=process.env.DATABASE_URL;
 if(!values['local-dir']&&(!url||!['localhost','127.0.0.1','[::1]'].includes(new URL(url).hostname)))
   throw new Error('Use --local-dir or a loopback DATABASE_URL; remote databases are forbidden');
 if(!process.env.OPENAI_API_KEY)throw new Error('OPENAI_API_KEY is required');
-const sql=values['local-dir']?await localReviewDb(values['local-dir']):new SQL(url!);
+// The local adapter implements the tagged reads/writes/transactions used by review(), not Bun's full driver.
+const sql=values['local-dir']?await localReviewDb(values['local-dir']) as unknown as SQL:new SQL(url!);
 // Reuse identical public reads for same-input model comparisons. Never cache keys or model calls.
 const reads:Record<string,unknown>=values.reads&&await Bun.file(values.reads).exists()?await Bun.file(values.reads).json():{};
 const modelCalls:{model:string;usage:unknown;elapsedMs:number}[]=[];
+let saveReads=Promise.resolve();
 const realFetch=globalThis.fetch;
 globalThis.fetch=(async(input:Parameters<typeof fetch>[0],init?:RequestInit)=>{
   const url=String(input instanceof Request?input.url:input);
@@ -51,7 +54,12 @@ globalThis.fetch=(async(input:Parameters<typeof fetch>[0],init?:RequestInit)=>{
     modelCalls.push({model:result.model,usage:result.usage,elapsedMs:Math.round(performance.now()-started)});
   }
   if(publicRead&&response.ok&&response.headers.get('content-type')?.includes('json')){
-    reads[key]=await response.clone().json();if(values.reads)await Bun.write(values.reads,JSON.stringify(reads));
+    reads[key]=await response.clone().json();
+    if(values.reads){
+      const path=values.reads;
+      saveReads=saveReads.then(async()=>{await Bun.write(`${path}.tmp`,JSON.stringify(reads));await rename(`${path}.tmp`,path);});
+      await saveReads;
+    }
   }
   return response;
 }) as typeof fetch;
@@ -128,10 +136,14 @@ const compare=(threshold:number)=>summary.filter(c=>{
   const r=rows.get(c.candidate);return r?.role&&r.risk&&candidateGate(c.metrics,r.role as Row,r.risk as Row,{...policy,riskRejectThreshold:threshold}).reasons.length===0;
 }).length;
 const passing=summary.filter(c=>c.gate?.reasons.length===0);
+const oldGateSameRatings=summary.filter(c=>{
+  const r=rows.get(c.candidate);return r?.role&&r.risk&&Number(r.risk.evidenceRisk)<policy.riskRejectThreshold&&
+    candidateGate(c.metrics,r.role as Row,r.risk as Row,{...policy,minConfidence:60}).reasons.length===0;
+}).length;
 const blockers:Record<string,number>={};for(const c of summary)for(const reason of c.gate?.reasons??['no-model-output'])blockers[reason]=(blockers[reason]??0)+1;
 const report={asOf:new Date(now).toISOString(),accounts:inputs.length,finalists:summary.length,modelCalls,
   kinds:summary.reduce((n,c)=>(n[c.kind]=(n[c.kind]??0)+1,n),{} as Record<string,number>),
-  candidatePass:passing.length,passingKinds:passing.reduce((n,c)=>(n[c.kind]=(n[c.kind]??0)+1,n),{} as Record<string,number>),
+  candidatePass:passing.length,oldGateSameRatings,passingKinds:passing.reduce((n,c)=>(n[c.kind]=(n[c.kind]??0)+1,n),{} as Record<string,number>),
   blockers,outcome,freezeEligible:run.review?.freezeEligible??false,manifest:run.review?.manifest,
   proposalsNotApplied:[85,90,95].map(threshold=>({riskRejectThreshold:threshold,candidatePass:compare(threshold),scope:'candidate checks only; not a portfolio approval'}))};
 console.log('CHECK',JSON.stringify(report));
