@@ -114,6 +114,7 @@ export type PipelineView = {
     configuration_hash: string | null;
     error: string | null;
     manifest: { status: string; reason: string; sources: { address: string; weight: number }[] } | null;
+    gate?: "strict" | "basic" | "none" | null;
   }[];
   active: { hash: string; activated_at: string; sources: { candidate: number; sourceAddress: string; weightUnits: number; ceilingUnits: number }[] } | null;
   // The latest run only (absent on older backends).

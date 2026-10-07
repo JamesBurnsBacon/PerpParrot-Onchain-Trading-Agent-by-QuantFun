@@ -77,6 +77,19 @@ describe.skipIf(!url)("Roster on Postgres", async () => {
     expect((await at(T0).roster()).status).toBe("kept");
   });
 
+  test("a rejected review revokes an earlier bench approval for the same wallet", async () => {
+    const candidate = newcomer(4);
+    await bench([{ address: candidate, fit: 90 }], (T0 + 60) * 1000);
+    const inspectBench = () => (at(T0 + 600) as unknown as { freshBench(nowMs: number): Promise<{ address: string }[]> }).freshBench((T0 + 600) * 1000);
+    expect((await inspectBench()).map((entry) => entry.address)).toContain(candidate);
+
+    await sql`insert into selection_runs (started_at, finished_at, status, review)
+      values (${new Date((T0 + 120) * 1000).toISOString()}, ${new Date((T0 + 120) * 1000).toISOString()}, 'rejected',
+        ${JSON.stringify({ gate: "none", manifest: { status: "INVALID_BUCKET", reason: "POLICY_VIOLATION", sources: [] }, bench: [], verdicts: [{ address: candidate, approved: false, riskReject: false, fit: 90, liquidatedAt: null }] })}::text::jsonb)`;
+    expect((await inspectBench()).map((entry) => entry.address)).not.toContain(candidate);
+    expect((await at(T0 + 600).roster()).changes).not.toContain(`admitted ${candidate} (open seat)`);
+  });
+
   test("a change of policy (the 5× gross cap) re-freezes the same seats under it", async () => {
     const policy = { ...reviewPolicy(configuration), maxGrossLeverage: 5 };
     const pipeline = new Pipeline({ sql, account: configuration.account, policy, log: () => {}, now: () => T0 * 1000 + 6 * 60_000, info: (perMinute) => new PacedInfo(perMinute, info, async () => {}) });
