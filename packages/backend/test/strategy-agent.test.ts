@@ -29,7 +29,7 @@ function model(calls:AgentInput[],wait?:()=>Promise<void>,invalid=false):AgentOp
     expect(body.input).not.toContain('0x');if(wait)await wait();
     const result=modelRows(input);if(invalid)result.candidates[0].evidence[0].valueJson='0.9';
     return Response.json({id:'response-test',model:'gpt-6-astra',status:'completed',
-      output:[{type:'message',content:[{type:'output_text',text:JSON.stringify(result)}]}],usage:{input_tokens:100,output_tokens:200,total_tokens:300}});
+      output:[{type:'reasoning',content:null},{type:'message',content:[{type:'output_text',text:JSON.stringify(result)}]}],usage:{input_tokens:100,output_tokens:200,total_tokens:300}});
   }) as typeof fetch};
 }
 function positions(reads:string[]) {
