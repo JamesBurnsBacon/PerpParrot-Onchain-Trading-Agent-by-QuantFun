@@ -20,7 +20,7 @@ describe.skipIf(!url)("Roster fresh start on Postgres", async () => {
   if (!url) return;
   const sql = new SQL(url, { prepare: process.env.TEST_PG_PREPARE === "1" });
   await sql.unsafe("drop table if exists roster_events, roster_seats, configurations, selection_runs, pipeline_accounts, run_snapshots, paper_state, paper_points, paper_state_archive, paper_points_archive, pipeline_controls cascade");
-  for (const name of ["20261006120000_mirror.sql", "20261007120000_pipeline.sql", "20261007150000_pipeline_qualified.sql", "20261007160000_pipeline_primary.sql", "20261008020000_roster.sql", "20261008030000_roster_leverage.sql", "20261008050000_fresh_start.sql", "20261008050000_fresh_start.sql"]) {
+  for (const name of ["20261006120000_mirror.sql", "20261007120000_pipeline.sql", "20261007150000_pipeline_qualified.sql", "20261007160000_pipeline_primary.sql", "20261008020000_roster.sql", "20261008030000_roster_leverage.sql", "20261008040000_regular_screened_cohort.sql", "20261008050000_fresh_start.sql", "20261008050000_fresh_start.sql"]) {
     await sql.unsafe(await migration(name));
   }
   await sql`insert into configurations (hash, configuration, status, activated_at)
