@@ -181,11 +181,13 @@ const pipeline = new Pipeline({
     let queue=Promise.resolve(),lastStart=0;
     const wrap=<Args extends unknown[],Result>(stage:string,fn:(...args:Args)=>Promise<Result>)=>(...args:Args)=>{
       const call=async()=>{
-        if(values.serial){const delay=Math.max(0,lastStart+spacingMs-Date.now());if(delay)await Bun.sleep(delay);lastStart=Date.now();}
+        if(values.serial&&!values['prepare-only']){const delay=Math.max(0,lastStart+spacingMs-Date.now());if(delay)await Bun.sleep(delay);lastStart=Date.now();}
+        const signal=args[args.length-1];
+        if(signal instanceof AbortSignal)signal.throwIfAborted();
         try{return await fn(...args);}
         catch(error){stageFailures.push({stage,error:error instanceof Error?error.name:'unknown',message:error instanceof Error?error.message.slice(0,500):'unknown'});throw error;}
       };
-      if(!values.serial)return call();
+      if(!values.serial||values['prepare-only'])return call();
       const next=queue.then(call);queue=next.then(()=>{},()=>{});return next;
     };
     const role=wrap('role',deps.role),risk=wrap('risk',deps.risk),red=wrap('redTeam',deps.redTeam);
