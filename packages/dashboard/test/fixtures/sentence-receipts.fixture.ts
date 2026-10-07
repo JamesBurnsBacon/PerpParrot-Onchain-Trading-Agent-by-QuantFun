@@ -70,11 +70,11 @@ if (!only) {
   begin(); const offset = requests.length;
   say("Greetings before any facts."); assert.equal(requests.length, offset);
   receipts.observers.onStrategyFacts!(facts);
-  for (let i = 0; i < 11; i++) say(`Burst sentence number ${i}.`);
+  for (let i = 0; i < 11; i++) say(`Burst sentence number ${i} done.`);
   assert.equal(requests.length - offset, 2, "two in flight");
   assert.equal(receipts.feed.skipped, 2, "greeting plus oldest waiting dropped");
-  assert.equal(receipts.rows.find(r => r.claim === "Burst sentence number 2.")?.state, "skipped");
-  await finish(offset); assert.equal(requests[offset + 2].claim, "Burst sentence number 3.");
+  assert.equal(receipts.rows.find(r => r.claim === "Burst sentence number 2 done.")?.state, "skipped");
+  await finish(offset); assert.equal(requests[offset + 2].claim, "Burst sentence number 3 done.");
   // Changing turns flushes old text against old facts, including in-flight/waiting work.
   receipts.observers.onParrotDelta!("An unfinished old turn sentence");
   const nextFacts = "Wallet B is selected instead. No orders are placed.";
@@ -87,12 +87,12 @@ if (!only) {
   assert(requests.slice(offset + 1).every(r => r.signal.aborted));
   begin(); receipts.observers.onStrategyFacts!(facts); const cap = requests.length;
   for (let i = 0; i < 15; i++) {
-    say(`Sequential sentence number ${i}.`); say(`Sequential sentence number ${i}.`);
+    say(`Sequential sentence number ${i} done.`); say(`Sequential sentence number ${i} done.`);
     if (i < 12) await finish(cap + i);
   }
   assert.equal(requests.length - cap, 12, "twelve per turn and dedupe");
   // Retain last ten judgments even when current feed is all skipped speech.
-  for (let i = 0; i < 30; i++) say(`Overflow sentence number ${i}.`);
+  for (let i = 0; i < 30; i++) say(`Overflow sentence number ${i} done.`);
   assert.equal(receipts.rows.filter(r => r.decision).length, 10);
   const calls = receipts.calls, cost = receipts.cost;
   begin(); assert.equal(receipts.calls, calls); assert.equal(receipts.cost, cost); assert.equal(receipts.status, "off");

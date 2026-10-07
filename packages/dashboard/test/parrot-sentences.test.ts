@@ -49,3 +49,11 @@ test("fuzz streaming loses no non-whitespace characters (terminal tiny fragment 
     expect(out.join("").replace(/\s/g, "")).toBe(text.replace(/\s/g, ""));
   }
 });
+
+test("silence flush never judges a decimal cut in half, but real sentence ends still flush", () => {
+  const s = createSentenceSplitter();
+  expect(s.push("The Sharpe is 1.")).toEqual([]);
+  expect(s.flushIfSettled()).toEqual([]);
+  expect(s.push("25 on the receipt.")).toEqual([]);
+  expect(s.flushIfSettled()).toEqual(["The Sharpe is 1.25 on the receipt."]);
+});

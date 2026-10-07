@@ -14,13 +14,14 @@ export function readDecisionsEnv(env: Record<string, string | undefined>) {
     ipHourly: number("DECISIONS_IP_HOURLY_LIMIT", 240, Number.MAX_SAFE_INTEGER, true),
     globalDaily: number("DECISIONS_GLOBAL_DAILY_LIMIT", 3000, Number.MAX_SAFE_INTEGER, true) };
 }
-type JudgeDeps = { env: ReturnType<typeof readDecisionsEnv>; fetchImpl: typeof fetch; now: () => number; timeoutMs?: number };
+type JudgeDeps = { env: ReturnType<typeof readDecisionsEnv>; fetchImpl: typeof fetch; now: () => number; timeoutMs?: number; bodyTimeoutMs?: number };
 type Deps = JudgeDeps & { limiter: ChatLimiter; chatEnv: { ipSalt: string; limits: LimitConfig } };
 class Rejected extends Error {}
 // Bound both incoming JSON and upstream JSON, including chunked bodies.
-async function readJson(stream: ReadableStream<Uint8Array> | null, limit: number): Promise<unknown> {
+async function readJson(stream: ReadableStream<Uint8Array> | null, limit: number, deadlineMs = 5_000): Promise<unknown> {
   if (!stream) throw new Error("body");
   const reader = stream.getReader(), chunks: Uint8Array[] = []; let size = 0;
+  const timer = setTimeout(() => { void reader.cancel().catch(() => {}); }, deadlineMs); // a stalled body must not hold the handler
   try {
     for (;;) {
       const { done, value } = await reader.read(); if (done) break;
@@ -29,7 +30,7 @@ async function readJson(stream: ReadableStream<Uint8Array> | null, limit: number
       chunks.push(value);
     }
     return JSON.parse(Buffer.concat(chunks).toString("utf8"));
-  } finally { reader.releaseLock(); }
+  } finally { clearTimeout(timer); reader.releaseLock(); }
 }
 export async function judgeClaim(claim: string, deps: JudgeDeps, facts?: string): Promise<Decision> {
   const request = buildDecisionsRequest(claim, deps.env.model, facts), start = deps.now(), controller = new AbortController();
@@ -55,7 +56,7 @@ export async function handleReceipt(req: Request, deps: Deps): Promise<Response>
   let claim: string, facts: string | undefined;
   try {
     if (req.headers.get("content-type")?.split(";")[0].trim().toLowerCase() !== "application/json") throw new Error();
-    const body = await readJson(req.body, 16_384);
+    const body = await readJson(req.body, 16_384, deps.bodyTimeoutMs);
     if (!keys(body, "claim") && !keys(body, "claim,facts")) throw new Error();
     claim = claimText(body.claim);
     if (Object.hasOwn(body, "facts")) facts = factsText(body.facts);

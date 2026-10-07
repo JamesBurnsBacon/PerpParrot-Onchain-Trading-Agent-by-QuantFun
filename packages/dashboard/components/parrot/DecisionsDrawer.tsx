@@ -9,7 +9,10 @@ export function DecisionsDrawer({ rows, initial, calls, cost, opener, onClose }:
   const dialog = useRef<HTMLDialogElement>(null);
   // Keep the selection and its evidence stable as new speech arrives or old rows are evicted.
   const [selected, setSelected] = useState(initial);
-  const row = rows.find(r => r.id === selected.id) ?? selected;
+  const latest = useRef(selected);
+  const found = rows.find(r => r.id === selected.id);
+  if (found) latest.current = found;
+  const row = found ?? latest.current;
   const choices = rows.filter(r => r.decision).slice(0, 10);
   if (!choices.some(r => r.id === row.id)) choices.unshift(row);
   useEffect(() => {

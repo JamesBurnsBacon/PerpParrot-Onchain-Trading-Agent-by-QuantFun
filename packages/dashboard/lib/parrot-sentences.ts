@@ -33,5 +33,5 @@ export function createSentenceSplitter() {
     }
     return out;
   }
-  return { push(delta: string) { buffer = (buffer + delta).trimStart(); return drain(false); }, flush() { return drain(true); }, reset() { buffer = ""; } };
+  return { push(delta: string) { buffer = (buffer + delta).trimStart(); return drain(false); }, flush() { return drain(true); }, flushIfSettled() { return /\d\.$/.test(buffer.trimEnd()) ? [] : drain(true); }, reset() { buffer = ""; } };
 }

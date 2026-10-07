@@ -25,7 +25,7 @@ export function useSentenceReceipts(options: Options = {}) {
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined), mounted = useRef(true);
   function stop() { clearTimeout(timer.current); splitter.current.reset(); queue.current?.stop(); queue.current = null; }
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; stop(); }; }, []);
-  function flush() { splitter.current.flush().forEach(sentence => queue.current?.push(sentence)); }
+  function flush(settled = false) { (settled ? splitter.current.flushIfSettled() : splitter.current.flush()).forEach(sentence => queue.current?.push(sentence)); }
   function begin() {
     stop(); setFacts(""); setFeed(emptyReceiptFeed()); setWorked(false); setJudged([]);
     let previous = emptyReceiptFeed();
@@ -44,7 +44,7 @@ export function useSentenceReceipts(options: Options = {}) {
     onParrotDelta: delta => {
       clearTimeout(timer.current); splitter.current.push(delta).forEach(sentence => queue.current?.push(sentence));
       // Let the following delta attach closing quotes or finish a decimal/address.
-      if (/[.!?。！？…\n]["'”’」』）)\]}\s]*$/u.test(delta)) timer.current = setTimeout(flush, 180);
+      if (/[.!?。！？…\n]["'”’」』）)\]}\s]*$/u.test(delta)) timer.current = setTimeout(() => { flush(true); timer.current = setTimeout(() => flush(), 900); }, 180); // a trailing digit-dot waits once for its decimals
     },
     onStrategyFacts: receipt => { clearTimeout(timer.current); flush(); queue.current?.setFacts(receipt); setFacts(receipt); },
     onEnd: stop,

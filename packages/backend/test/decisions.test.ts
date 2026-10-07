@@ -182,3 +182,12 @@ test("facts-vs-request consistency in isDecision", async () => {
   value.request.input = JSON.stringify({ claim, receipt: other });
   expect(isDecision(value, { claim, facts })).toBe(false);
 });
+
+test("a stalled request body is cut off before any limiter reservation or upstream call", async () => {
+  const { deps, reserved } = setup();
+  const stalled = new ReadableStream<Uint8Array>({ start(c) { c.enqueue(new TextEncoder().encode('{"claim":"Wallet A')); } });
+  const request = new Request("http://localhost/decide/receipt", { method: "POST", headers: { "Content-Type": "application/json" }, body: stalled, duplex: "half" } as RequestInit);
+  const started = Date.now();
+  expect((await handleReceipt(request, { ...deps, bodyTimeoutMs: 50 })).status).toBe(400);
+  expect(Date.now() - started).toBeLessThan(2000); expect(reserved).toHaveLength(0);
+});
