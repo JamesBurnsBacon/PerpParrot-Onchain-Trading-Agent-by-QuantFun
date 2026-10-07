@@ -1,10 +1,11 @@
 # Evidence-bound AI review on the merged project
 
-Updated 2026-10-07 after the review/mirror merge, with the mirror running as the backend
-and executor services and the review committee server-side. The integration choices stand: use the existing snapshot/targets/executor
-path, Aggressive LIVE proposal policy and pinned configuration hash. This contribution
-does not restore the removed paper mirror, preview executor, onchain consumer or nonce
-tables.
+Scope: the evidence-bound review wrapper and separate paper lifecycle library,
+updated 2026-10-07. Production selection reuses the committee components but persists
+its audit in `selection_runs.review`, then feeds the bench and roster. The lifecycle
+storage described below is not the production scheduler or configuration authority.
+See [the integration map](PRODUCTION_INTEGRATION.md) and
+[PIPELINE.md](../ingest/PIPELINE.md) for that path.
 
 ## Review and persistence
 
@@ -50,8 +51,8 @@ The adapter produces one honestly labeled local `paper-provider` observation
 (quorum 1). It is not proof that several independent observations agree. Pass a pinned model, versioned
 prompts, server-only API key and matching `committeeAudit` callback explicitly.
 Construct separate model configurations for evaluation; do not treat competing
-models as a quorum. Tests use fake HTTP and synthetic specialist responses; no
-billable model request was made.
+models as a quorum. The tests described here use fake HTTP and synthetic specialist responses; those
+tests make no billable model requests. This does not describe production provider usage.
 
 ## Integration checks
 
@@ -69,9 +70,10 @@ billable model request was made.
 
 PGlite verifies local SQL semantics; PostgreSQL service tests separately exercise
 main's existing persistence adapters in CI. Neither proves live deployment or real
-fills. A real-provider committee run, two-model point-in-time selection/shadow
-evaluation, review/monitor scheduling (Vercel Cron or AWS, not decided) and funded
-validation remain gates. Existing mirror/executor implementation status is recorded
+fills. Production selection and roster reviews are scheduled by Vercel Cron;
+this separate paper-monitor lifecycle is not wired as an additional production job.
+Two-model point-in-time selection/shadow evaluation and deployment-specific funded
+validation remain separate evidence requirements. Current runtime integration is recorded
 in [docs/ops/RUNBOOK.md](../ops/RUNBOOK.md) and
 [production integration status](PRODUCTION_INTEGRATION.md).
 

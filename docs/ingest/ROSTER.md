@@ -71,7 +71,7 @@ The active configuration becomes a **roster**: a set of seats, each holding one 
 
 ### 4.1 Admission: filling an open seat
 - **The bench.** The top approved candidates are kept as a ranked bench: Score's 25, reviewed by the AI, filtered by the copyability gates of §5. It holds every wallet a review of the picks approved in the last 12 h, as of that wallet's latest review (a later review that didn't approve it takes it off).
-- **Filling a seat.** When a seat is open, the highest-fit bench candidate whose approval is fresh (reviewed within 12 h) is admitted at the next 10-minute select. A fresh approval needs no new AI call.
+- **Filling a seat.** When a seat is open, the highest-fit bench candidate whose approval is fresh (reviewed within 12 h) is admitted by the next 10-minute roster job (`:x6`). A fresh approval needs no new AI call.
 - **Rate limit:** at most **2 admissions per hour** and **8 per day**. The cap keeps the roster from turning over in a burst, as it did this morning. Below 5 seats the limit doesn't apply, so the roster can always be frozen.
 - **Cooldown:** a released wallet can't be re-admitted for 24 h, so a wallet can't ping-pong in and out.
 - **Late entry:** a wallet admitted while holding positions is copied at once, whole book (owner: copy everything).

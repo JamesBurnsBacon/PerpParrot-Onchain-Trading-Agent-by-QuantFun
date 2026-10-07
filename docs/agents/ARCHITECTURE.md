@@ -1,25 +1,27 @@
 # Agent architecture v1
 
-Status: design contract for the server-side review core; this is not deployed trading
-code. See [integration guide](INTEGRATION.md) and
-[production integration status](PRODUCTION_INTEGRATION.md) for implemented behavior
-and outstanding gates. The initial design was drafted against baseline
-`0f07e229028c84d62caecf00d1e842adc774a9e8`; the current branch also contains the
-backend score/snapshot service, shared contracts, the mirror run (backend targets plus
-executor) and the dashboard. Their presence and local tests do not establish a
-real-provider review run, production deployment, or funded execution.
+Scope: the strict server-side review core's design contract, initially drafted
+against `0f07e229028c84d62caecf00d1e842adc774a9e8`. The core is now called by the
+production pipeline. This page explains its schemas, validation and research
+hypotheses; it is not a deployment attestation or the complete production workflow.
+See [the integration map](PRODUCTION_INTEGRATION.md),
+[PIPELINE.md](../ingest/PIPELINE.md) and [ROSTER.md](../ingest/ROSTER.md) for scheduled
+review, the basic/strict gate distinction, bench admission and configuration activation.
 
 ## Decisions and precedence
 
-This contribution refines README §4.6 and resolves its weight-output question:
-LLMs judge; code allocates. In case of conflict, this document governs the proposed
-agent integration. It does not silently change the README's execution design.
+LLMs judge; code validates and allocates. The checked-in implementation, configuration
+and current pipeline/roster documentation determine production behavior. This design
+contract does not override the roster or activate a model-produced manifest directly.
+The diagram below describes the strict core and its downstream boundary; production
+selection reaches that boundary through the reviewed bench and roster.
 
 Three decision specialists: Role Analyst, Risk Auditor, Red-Team Critic. A fourth
 Narrative Agent explains validated results outside the economic path. Role and Risk
 receive the same numeric evidence independently and never see each other's output.
 Red Team gets the constructed portfolio in fresh context. There is no agent chat,
-memory, dynamic delegation, execution agent or inference in the 10-minute loop.
+memory, dynamic delegation or execution agent in the core. Scheduled selection and
+roster reviews can call models; the snapshot/targets/executor mirror path does not.
 
 ```mermaid
 flowchart TD
@@ -47,12 +49,12 @@ Hashes are identifiers, not a proof that backend metrics are accurate. Backtest
 cutoffs must precede every evaluation window; never feed future OOS results into a
 historical selection. Current-snapshot survivorship must be disclosed.
 
-## Proposed bucket policy
+## Strict-core policy and research hypotheses
 
 Live bucket: **Aggressive**, per README §4.3 (team decision 2026-10-06, replacing this
 contribution's earlier Balanced-live proposal); Conservative and Balanced are computed in
-simulation. This is configuration for a
-future adapter, not permission to fund or trade. $10–20 runs are smoke checks only.
+simulation. This describes the strict core; production paper books use the
+multipliers documented in README §4.3. Neither description grants permission to fund or trade. $10–20 runs are smoke checks only.
 Conservative here is a low-risk **perp-copy simulation**. Lending/yield execution
 from the README remains unresolved and outside this contract; unsupported vaults
 cannot be relabeled as copyable HyperCore sources.
@@ -83,8 +85,8 @@ asset composition. Apply those ideas at the boundaries below:
 
 - Keep hard eligibility and comparative ranking distinct. PerpParrot's $10k account
   value, 30-day history, 10-trade and 25-point requirements are eligibility gates;
-  its month-window Sortino, Calmar, drawdown and PnL-consistency percentiles order the
-  surviving cohort. Review risk limits remain binding even when a source ranks well.
+  its weighted month-window Sharpe, Sortino, Calmar, drawdown and PnL-consistency
+  percentiles, with the configured pure-taker penalty, order the surviving cohort. Review risk limits remain binding even when a source ranks well.
 - Treat the current score as cohort-relative. Adding or removing eligible candidates
   can change percentiles without changing a source's own record. Preserve raw metrics,
   score version, input window and cohort/snapshot hash with each result; never present
@@ -196,8 +198,8 @@ reason OK, matching nested bucket/mode, and only Aggressive eligible for LIVE in
 These are adapter semantic checks; JSON Schema alone cannot enforce them.
 
 Each mirror run binds its evidence to the frozen configuration: the executor rejects
-targets whose configurationHash or account differs from its pinned
-FROZEN_CONFIGURATION_HASH and HL_ACCOUNT, and records `{snapshotHash,
+targets whose configurationHash differs from the active configuration (or the pinned
+FROZEN_CONFIGURATION_HASH fallback), or whose account differs from HL_ACCOUNT, and records `{snapshotHash,
 configurationHash, exposures}` with the run so anyone can fetch the snapshot and
 recompute its keccak256.
 
@@ -208,13 +210,15 @@ is the integration reference. Deterministic cloid, expiry and reconciliation rem
 required. No signing rewrite, automatic transport failover after uncertainty, key
 migration or executor refactor is part of this contribution.
 
-## Implementation gates
+## Implementation and remaining evidence
 
-1. Adopt schemas with strict runtime validation and semantic checks in shared.
-2. Build deterministic compiler/validator against replay fixtures before model calls.
-3. Run prompt evals and a real-provider review run; then connect the review adapter.
-4. Prove frozen-configuration mirror behavior and existing executor runs unchanged.
-5. Only then integrate receipts and decide how reviews are scheduled (Vercel Cron or AWS).
+Strict schemas, deterministic compilation, provider adapters and frozen-configuration
+integration are implemented and exercised by the review and service tests. Vercel
+Cron schedules production selection and roster jobs; see the root `vercel.json`.
+The separate paper lifecycle is described in [PAPER_LIFECYCLE.md](PAPER_LIFECYCLE.md).
 
-No live capital, leverage settings, source reselection, orders or deployment changes
-are made by this documentation/contracts contribution.
+Deployment health and funded execution require current run evidence. Multi-model
+comparison, point-in-time backtests and calibration of the research hypotheses above
+remain evidence requirements; implementation or passing tests cannot establish
+investment quality. Use [the integration map](PRODUCTION_INTEGRATION.md) and
+[runbook](../ops/RUNBOOK.md) for current operational verification.
