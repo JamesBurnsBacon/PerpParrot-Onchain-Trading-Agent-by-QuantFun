@@ -10,6 +10,9 @@
 // --inputs caches the fetched accounts (the slow part, ~5 min) so reruns only redo the review.
 import { parseArgs } from "node:util";
 import { SQL } from "bun";
+import {localReviewDb} from './local-review-db';
+import {candidateGate} from '../review/workflow';
+import type {Frame,Row} from '../../shared/src/contracts.ts';
 import { Pipeline, reviewPolicy } from "../src/pipeline";
 import { fillStats, pickLeaderboard, type LeaderboardRow } from "../src/pipeline/derive";
 import { pickVaults } from "../src/pipeline/vaults";
@@ -22,19 +25,38 @@ const { values } = parseArgs({
     vaults: { type: "string", default: "40" },
     inputs: { type: "string" },
     gate: { type: "string", default: "strict" },
+    "local-dir": {type:"string"},
+    reads: {type:"string"},
+    output: {type:"string"},
+    "as-of": {type:"string"},
   },
 });
-const url = process.env.DATABASE_URL;
-if (!url || /supabase|pooler/.test(url)) throw new Error("set DATABASE_URL to a local Postgres (never production)");
-if (!process.env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is required");
-
-const sql = new SQL(url);
+const url=process.env.DATABASE_URL;
+if(!values['local-dir']&&(!url||!['localhost','127.0.0.1','[::1]'].includes(new URL(url).hostname)))
+  throw new Error('Use --local-dir or a loopback DATABASE_URL; remote databases are forbidden');
+if(!process.env.OPENAI_API_KEY)throw new Error('OPENAI_API_KEY is required');
+const sql=values['local-dir']?await localReviewDb(values['local-dir']):new SQL(url!);
+// Reuse identical public reads for same-input model comparisons. Never cache keys or model calls.
+const reads:Record<string,unknown>=values.reads&&await Bun.file(values.reads).exists()?await Bun.file(values.reads).json():{};
+const realFetch=globalThis.fetch;
+globalThis.fetch=(async(input:Parameters<typeof fetch>[0],init?:RequestInit)=>{
+  const url=String(input instanceof Request?input.url:input);
+  const publicRead=/^https:\/\/(api.hyperliquid.xyz|stats-data.hyperliquid.xyz|hyperliquidvaults.com)\//.test(url);
+  const key=JSON.stringify([url,init?.body??'']);
+  if(publicRead&&Object.hasOwn(reads,key))return Response.json(reads[key]);
+  const response=await realFetch(input,init);
+  if(publicRead&&response.ok&&response.headers.get('content-type')?.includes('json')){
+    reads[key]=await response.clone().json();if(values.reads)await Bun.write(values.reads,JSON.stringify(reads));
+  }
+  return response;
+}) as typeof fetch;
 const log = (m: string, d?: object) => console.log(new Date().toISOString().slice(11, 19), m, JSON.stringify(d ?? {}).slice(0, 300));
-const now = Date.now();
+const now = values["as-of"] ? Date.parse(values["as-of"]) : Date.now();
+if(!Number.isSafeInteger(now))throw new Error("invalid --as-of");
 const cache = values.inputs ? Bun.file(values.inputs) : undefined;
 let inputs: ScoreInput[] = cache && (await cache.exists()) ? await cache.json() : [];
 if (inputs.length === 0) {
-  const vaults = await pickVaults(Number(values.vaults), now, log);
+  const vaults = await pickVaults(now, log);
   const board = await getJson<{ leaderboardRows: LeaderboardRow[] }>("https://stats-data.hyperliquid.xyz/Mainnet/leaderboard");
   const traders = pickLeaderboard(board.leaderboardRows, Number(values.traders), new Set(vaults.map((v) => v.address)));
   const hl = new PacedInfo(900);
@@ -55,17 +77,21 @@ log("accounts", { count: inputs.length });
 const result = scoreCandidates(inputs, { finalists: 25 });
 const pipeline = new Pipeline({
   sql,
+  now:()=>now,
   account: "0x7269502c48c582768ee38e4e71e7572e6ebf70f7",
-  policy: reviewPolicy(await Bun.file(new URL("../fixtures/frozen-configuration.json", import.meta.url)).json()),
+  policy: reviewPolicy(await Bun.file(new URL("../fixtures/review-policy.json", import.meta.url)).json()),
   openAiKey: process.env.OPENAI_API_KEY,
   gate: values.gate === "basic" ? "basic" : "strict",
   log,
 });
 const [{ id }] = await sql`insert into selection_runs (started_at, status, accounts) values (now(), 'running', ${inputs.length}) returning id`;
 // review() is the pipeline's selection step after Score (private; this script is its harness).
-console.log(await (pipeline as unknown as { review: (...a: unknown[]) => Promise<unknown> }).review(Number(id), inputs, result, 0));
+let outcome:unknown;
+try {outcome=await (pipeline as unknown as { review: (...a: unknown[]) => Promise<unknown> }).review(Number(id), inputs, result, 0);}
+catch(error){outcome={status:'failed',reason:(error as Error).message};}
+console.log(outcome);
 
-const [run] = await sql`select finalists -> 'measured' as measured, review from selection_runs where id = ${id}`;
+const [run] = await sql`select finalists -> 'measured' as measured, finalists -> 'additional' as additional, review from selection_runs where id = ${id}`;
 const rows = new Map<number, Record<string, Record<string, unknown>>>();
 for (const record of (run.review?.audit ?? []) as { stage: string; output: { results?: Record<string, unknown>[] } }[])
   for (const r of record.output.results ?? []) rows.set(Number(r.candidate), { ...rows.get(Number(r.candidate)), [record.stage]: r });
@@ -82,4 +108,18 @@ for (const s of (run.review?.summary ?? []) as { candidate: number; address: str
   );
 }
 console.log("\nmanifest", JSON.stringify({ status: run.review?.manifest?.status, reason: run.review?.manifest?.reason, sources: run.review?.manifest?.sources?.length }));
+const summary=(run.review?.summary??[]) as {candidate:number;kind:string;metrics:Frame['candidates'][number]['metrics'];gate:{reasons:string[]}|null}[];
+const policy=reviewPolicy(await Bun.file(new URL('../fixtures/review-policy.json',import.meta.url)).json());
+const compare=(threshold:number)=>summary.filter(c=>{
+  const r=rows.get(c.candidate);return r?.role&&r.risk&&candidateGate(c.metrics,r.role as Row,r.risk as Row,{...policy,riskRejectThreshold:threshold}).reasons.length===0;
+}).length;
+const passing=summary.filter(c=>c.gate?.reasons.length===0);
+const blockers:Record<string,number>={};for(const c of summary)for(const reason of c.gate?.reasons??['no-model-output'])blockers[reason]=(blockers[reason]??0)+1;
+const report={asOf:new Date(now).toISOString(),accounts:inputs.length,finalists:summary.length,
+  kinds:summary.reduce((n,c)=>(n[c.kind]=(n[c.kind]??0)+1,n),{} as Record<string,number>),
+  candidatePass:passing.length,passingKinds:passing.reduce((n,c)=>(n[c.kind]=(n[c.kind]??0)+1,n),{} as Record<string,number>),
+  blockers,outcome,manifest:run.review?.manifest,
+  proposalsNotApplied:[85,90,95].map(threshold=>({riskRejectThreshold:threshold,candidatePass:compare(threshold),scope:'candidate checks only; not a portfolio approval'}))};
+console.log('CHECK',JSON.stringify(report));
+if(values.output)await Bun.write(values.output,JSON.stringify({report,run},null,2));
 await sql.close();

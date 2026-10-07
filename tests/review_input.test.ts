@@ -17,7 +17,7 @@ test('Score finalists become a 1.1.0 frame that passes the schema and input comm
   assert.deepEqual(first!.clones,[address(99)]);
   assert.equal(first!.metrics.cloneCount,1);
   for(const field of ['executionCoverage','executionFit','concentration','liquidationDistance','btcBeta'] as const)assert.equal(first!.metrics[field],null);
-  assert.equal(first!.metrics.survivorshipQuality,'UNKNOWN');
+  assert.equal(first!.metrics.survivorshipQuality,'CURRENT_SNAPSHOT');
 });
 test('model evidence is anonymous: counts, not clone addresses, and no source addresses',()=>{
   const args=setup(),built=buildReviewInput(args),payload=JSON.stringify(built.committee);
@@ -64,4 +64,24 @@ test('end to end: a frame built from Score reaches the review, which rejects it 
     redTeam:async()=>{throw new Error('not reached');},assess:()=>{throw new Error('not reached');}};
   const manifest=await runReview(frame,args.policy,addresses,NOW+1000,deps);
   assert.equal(manifest.reason,'INSUFFICIENT_EVIDENCE');assert.equal(manifest.sources.length,0);
+});
+
+test('additional evidence reaches committee hashes and fits 4 KB without truncating aggregate exposures',()=>{
+  const args=setup(),addr=address(1);
+  const book=Array.from({length:15},(_,i)=>({market:`COIN${i}`,signedNotionalUsd:100,leverage:2,liquidationDistance:0.3}));
+  book.push({market:'xyz:GOLD',signedNotionalUsd:10,leverage:2,liquidationDistance:0.3});
+  args.positions.set(addr,book);
+  const additional=new Map([[addr,{patterns:{observedFills:20,increasesAfterLoss:0.2,repeatedRoundTrips:0.1,costBasisAdds:5,closedEpisodes:10,continuityBreaks:0},exposureByClass:{crypto:{longUsd:1500,shortUsd:0},gold:{longUsd:10,shortUsd:0},oil:{longUsd:0,shortUsd:0},other:{longUsd:0,shortUsd:0}},
+    measurement:{version:'path-beta-v1' as const,fromMs:NOW-30*86400000,toMs:NOW,fillHistory:'API_BOUNDED' as const,btcDailyPairs:28,exposureScope:'core+xyz current positions; all before detail cap' as const}}]]);
+  // Fixture's synthetic clock may be <30 days; timestamps remain nonnegative.
+  additional.get(addr)!.measurement.fromMs=Math.max(0,NOW-30*86400000);
+  const measured=new Map([[addr,{btcBeta:1.25}]]);
+  const built=buildReviewInput({...args,additional,measured});
+  const row=built.committee.finalists[0]!;
+  assert.equal(row.metrics.btcBeta,1.25);assert.equal(row.metrics.survivorshipQuality,'CURRENT_SNAPSHOT');
+  assert.equal(row.exposureByClass?.gold.longUsd,10);assert.equal(row.patterns.costBasisAdds,5);
+  assert.ok(row.positions.length<=12);assert.ok(Buffer.byteLength(JSON.stringify(row))<=4096);
+  const original=built.committee.evidenceHash;
+  additional.get(addr)!.patterns.increasesAfterLoss=0.8;
+  assert.notEqual(buildReviewInput({...args,additional,measured}).committee.evidenceHash,original);
 });

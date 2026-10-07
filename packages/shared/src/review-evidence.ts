@@ -10,6 +10,8 @@ const position = z.object({
   leverage: z.number().finite().nonnegative().nullable(),
   liquidationDistance: ratio.nullable(),
 }).strict();
+const classExposure=z.object({longUsd:z.number().finite().nonnegative(),shortUsd:z.number().finite().nonnegative()}).strict();
+export const exposureSchema=z.object({crypto:classExposure,gold:classExposure,oil:classExposure,other:classExposure}).strict();
 export const finalistSchema = z.object({
   candidate: z.number().int().min(0).max(24),
   kind: z.enum(['TRADER', 'HYPERCORE_VAULT', 'ERC4626_HYPERCORE']),
@@ -24,7 +26,18 @@ export const finalistSchema = z.object({
     increasesAfterLoss: ratio.nullable(),
     repeatedRoundTrips: ratio.nullable(),
     observedFills: z.number().int().min(0).max(10000).nullable(),
+    costBasisAdds: z.number().int().nonnegative().optional(),
+    closedEpisodes: z.number().int().nonnegative().optional(),
+    continuityBreaks: z.number().int().nonnegative().optional(),
   }).strict(),
+  exposureByClass: exposureSchema.optional(),
+  measurement: z.object({
+    version:z.literal('path-beta-v1'),
+    fromMs:timestamp,toMs:timestamp,
+    fillHistory:z.enum(['API_BOUNDED','TRUNCATED']),
+    btcDailyPairs:z.number().int().min(0).max(31),
+    exposureScope:z.literal('core+xyz current positions; all before detail cap'),
+  }).strict().optional(),
 }).strict();
 export const evidenceSchema = z.object({
   asOfMs: timestamp,
