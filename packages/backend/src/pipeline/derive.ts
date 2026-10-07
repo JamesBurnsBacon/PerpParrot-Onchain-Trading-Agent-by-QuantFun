@@ -59,10 +59,14 @@ export type Tracked = {
   name: string | null;
   accountValue: number;
   closed: boolean | null;
+  primary: boolean; // hyperliquidvaults.com or the leaderboard's top 200: refreshed first
 };
 
+// The leaderboard's top traders by month PnL that count as primary sources.
+export const PRIMARY_TRADERS = 200;
+
 // Leaderboard traders with ≥ $10k account value and positive month and all-time PnL, by month
-// PnL (README §4.1 cheap filters). The scan keeps all of them (~13k).
+// PnL (README §4.1 cheap filters). The scan keeps all of them (~13k); the top 200 are primary.
 export const pickLeaderboard = (rows: LeaderboardRow[], count: number, exclude: ReadonlySet<string>): Tracked[] => {
   const pnl = (row: LeaderboardRow, window: string) => Number(row.windowPerformances.find(([w]) => w === window)?.[1].pnl ?? NaN);
   return rows
@@ -70,12 +74,13 @@ export const pickLeaderboard = (rows: LeaderboardRow[], count: number, exclude: 
     .filter(({ row, month, allTime, value }) => value >= 10_000 && month > 0 && allTime > 0 && !exclude.has(row.ethAddress.toLowerCase()))
     .sort((a, b) => b.month - a.month)
     .slice(0, count)
-    .map(({ row, value }) => ({
+    .map(({ row, value }, i) => ({
       address: row.ethAddress.toLowerCase(),
       source: "leaderboard",
       kind: "trader",
       name: row.displayName,
       accountValue: value,
       closed: false,
+      primary: i < PRIMARY_TRADERS,
     }));
 };

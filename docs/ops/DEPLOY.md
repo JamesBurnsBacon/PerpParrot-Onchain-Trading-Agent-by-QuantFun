@@ -82,8 +82,9 @@ Every 12 hours (00:15 and 12:15 UTC) the backend scans every leaderboard trader 
 month and all-time PnL) and HyperCore vault (hyperliquidvaults.com's list first, then
 Hyperliquid's: open, not a child, ≥ $10k, ≥ 39 days old), about 14k accounts. The refresh
 (every 5 minutes, 900 weight/min) keeps their portfolios within 12 hours and reads the
-qualified accounts' portfolio and fills every hour. Once 95% of a scan is refreshed, Score
-qualifies its top 250. Every 10 minutes Score picks 25 from the qualified list, leaving out
+qualified accounts' portfolio and fills every hour, three reads at a time. Primary sources
+(hyperliquidvaults.com's vaults, the leaderboard's top 200) are read first. Once they are fresh
+and 95% of a scan is (or 3.5 hours after the scan), Score qualifies its top 250. Every 10 minutes Score picks 25 from the qualified list, leaving out
 high-frequency traders (> 100 orders a day). When the 25 change, the AI committee reviews them;
 the result is frozen for `HL_ACCOUNT` and activated if its sources differ from the active set's
 (otherwise the run is `kept`). The backend serves the active configuration and the executor
@@ -96,7 +97,8 @@ aside). It weights them by Aggressive fit, within the per-source cap, cash buffe
 leverage, and needs at least 5. `REVIEW_GATE=strict` turns this off.
 
 1. **Supabase**: run `supabase/migrations/20261007120000_pipeline.sql`, then
-   `20261007150000_pipeline_qualified.sql`, **before** the deploy. Both only add tables, columns
+   `20261007150000_pipeline_qualified.sql` and `20261007160000_pipeline_primary.sql`, **before**
+   the deploy. Both only add tables, columns
    and a wider status check, and are safe to run twice. The new code reads the new columns, so
    until they exist the pipeline routes fail.
 2. **Vercel variables**:

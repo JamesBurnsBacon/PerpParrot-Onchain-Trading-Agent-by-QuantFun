@@ -16,9 +16,11 @@ export class PacedInfo {
     private readonly sleep = (ms: number) => Bun.sleep(ms),
   ) {}
 
-  // Waits until `weight` more fits the budget since this client was created, then posts.
+  // Reserves `weight` and waits until it fits the budget since this client was created, then
+  // posts. Reserving first lets concurrent callers share one budget.
   async post<T>(body: Record<string, unknown>, weight = 20, itemsPerWeight?: (value: T) => number): Promise<T> {
-    const due = this.started + ((this.spent + weight) / this.perMinute) * 60_000;
+    this.spent += weight;
+    const due = this.started + (this.spent / this.perMinute) * 60_000;
     if (due > Date.now()) await this.sleep(due - Date.now());
     for (let attempt = 0; ; attempt++) {
       const res = await this.fetchImpl(INFO_URL, {
@@ -33,7 +35,7 @@ export class PacedInfo {
       }
       if (!res.ok) throw new Error(`HL info ${body.type} failed: ${res.status}`);
       const value = (await res.json()) as T;
-      this.spent += weight + (itemsPerWeight ? Math.floor(itemsPerWeight(value) / 20) : 0);
+      this.spent += itemsPerWeight ? Math.floor(itemsPerWeight(value) / 20) : 0;
       return value;
     }
   }
