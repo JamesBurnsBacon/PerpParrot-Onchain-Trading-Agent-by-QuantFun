@@ -65,13 +65,24 @@ gate requires:
 - concentration, liquidation distance, and the frame's current exposure overlap between finalists
   (`review/overlap.ts`, the same measure as "Exposure overlap" below).
 
-Measured on live data (2026-10-07, 220 accounts, 25 finalists), the model's evidence risk fell
+Historical baseline before the confidence-policy change (2026-10-07, 220 accounts, 25 finalists): the model's evidence risk fell
 from 80 for everyone to 30–60. The strict gate still kept one candidate: the models' confidence
 is mostly under the policy's 60, and a freeze needs 5 sources. When the core rejects, the
-**basic gate** (`REVIEW_GATE`, default `basic`) applies: keep
+**basic gate** (`REVIEW_GATE`, default `basic`) applies, including when a VALID draft has fewer than five sources: keep
 finalists the Role model doesn't reject and with no Risk score above the reject threshold
 (evidence risk aside), weight them by Aggressive fit within the per-source cap, cash buffer and
 gross leverage, and require ≥ 5 sources. `REVIEW_GATE=strict` turns it off.
+
+The scheduled review now reads `fixtures/review-policy.json` (confidence floor 40),
+not the pinned frozen fixture. Relative ranking is fit × latency × min(Role, Risk confidence)/100;
+only drawdown, leverage, concentration, path and execution risk set the risk veto/cap.
+`selection_runs.review.summary[].gate` records actual compiler checks; `freezeEligible` separately
+records whether the manifest is VALID with at least five sources. The basic gate stays the fallback.
+
+Additional committee evidence uses the already-read fills for observed path ratios and one BTC
+hourly-candle request per review for daily beta. Current crypto/gold/oil/other totals include all
+positions in core + xyz before the 12-position detail cap. Survivorship is CURRENT_SNAPSHOT.
+Definitions, limits and the local check command: [strict evidence](../agents/STRICT_EVIDENCE.md).
 
 ## Exposure overlap
 
@@ -83,7 +94,7 @@ The overlap of two accounts is the same-direction share of their current books, 
 ## Next
 
 - **Strict gate policy**: with measured evidence the binding limits are the models' confidence
-  (`minConfidence` 60), the 5-source freeze minimum, and a Red-Team rebuild request that
+  (40 floor plus relative weighting), the 5-source freeze minimum, and a Red-Team rebuild request that
   penalises no one (the core reports `POLICY_VIOLATION`). These are the owner's call.
 - **Evidence for the overlap guard**: whether leaving out overlapping candidates helps returns is
   not measured, and it can make the 25 (and so the AI reviews) change more often; a hysteresis
