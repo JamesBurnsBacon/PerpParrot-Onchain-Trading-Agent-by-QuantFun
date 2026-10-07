@@ -222,10 +222,14 @@ export const BUCKETS = [
 ] as const;
 
 // Whether the Aggressive line is the live account itself (else its paper model).
-export const liveIsReal = (status: Status | null, equity: Equity | null) => status?.dryRun === false && (equity?.points.length ?? 0) > 0;
+// Live once the newest executed run traded for real and the account has live equity points. Read from
+// the runs, not /status: the dashboard's executor (Vercel) stays in dry run while the long-running one
+// (Railway) trades.
+export const liveIsReal = (recent: Run[] | null, equity: Equity | null) =>
+  recent?.find((r) => r.kind === "mirror" && r.status === "executed")?.dryRun === false && (equity?.points.length ?? 0) > 0;
 
 // Each bucket and BTC as % return: the live account from its first executed run, paper books from their starting capital.
-export const performanceSeries = (paper: PaperView | null, equity: Equity | null, status: Status | null): Series[] => {
+export const performanceSeries = (paper: PaperView | null, equity: Equity | null, recent: Run[] | null): Series[] => {
   const series: Series[] = [];
   const book = (id: string) => paper?.books.find((b) => b.id === id);
   // Paper books start from their capital, so the first fills' fees show. A curve that begins at its
@@ -235,7 +239,7 @@ export const performanceSeries = (paper: PaperView | null, equity: Equity | null
     return b.startedAt !== undefined && b.curve[0]?.[0] === b.startedAt ? [[b.startedAt * 1000 - 60_000, 0] as [number, number], ...points] : points;
   };
   for (const k of BUCKETS) {
-    const b = k.id === "aggressive" && liveIsReal(status, equity) ? undefined : book(k.book);
+    const b = k.id === "aggressive" && liveIsReal(recent, equity) ? undefined : book(k.book);
     const points = b ? bookReturns(b) : k.id === "aggressive" ? toReturns(equity?.points ?? []) : [];
     if (points.length) series.push({ id: k.id, bookId: b?.id, label: k.label, short: k.short, color: k.color, points });
   }
