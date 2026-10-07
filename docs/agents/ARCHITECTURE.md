@@ -38,7 +38,7 @@ flowchart TD
   M --> N[Narrative / dashboard only]
 ```
 
-~25 scored finalists become ~6–10 preflight candidates when evidence permits;
+~40 scored finalists become ~6–10 preflight candidates when evidence permits;
 these are targets, not a requirement to fill slots. Candidate indices are internal.
 The trusted backend keeps index→address mapping bound to snapshotHash; addresses,
 names, descriptions, bios, dates in prose, and arbitrary strings never reach decision

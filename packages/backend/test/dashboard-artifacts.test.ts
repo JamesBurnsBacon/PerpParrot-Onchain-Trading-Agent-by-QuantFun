@@ -15,7 +15,7 @@ const funnel = (): FunnelArtifact => ({
   generatedAt: Date.UTC(2026, 9, 6),
   steps: [
     { stage: "universe", label: "Addresses", count: 47_000 },
-    { stage: "finalists", label: "Finalists", count: 25 },
+    { stage: "finalists", label: "Finalists", count: 40 },
     { stage: "frozen", label: "Frozen set", count: 11 },
   ],
   finalists: [{ address: `0x${"ab".repeat(20)}`, kind: "vault", score: 0.91, picked: true, rationale: "steady" }],
@@ -51,7 +51,7 @@ describe("checkFunnelArtifact", () => {
 
   test("catches a stage larger than the one before", () => {
     const a = funnel();
-    a.steps[2].count = 30;
+    a.steps[2].count = 41;
     expect(checkFunnelArtifact(a).join()).toContain("larger than the step before");
   });
 

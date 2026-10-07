@@ -13,10 +13,13 @@ test('input evidence rejects metadata injection, incomplete pairs and future/dup
   const duplicate=structuredClone(evidenceFixture);duplicate.finalists[0].equityCurve[1].atMs=duplicate.finalists[0].equityCurve[0].atMs;
   assert.throws(() => validateEvidence(duplicate));
 });
-test('25 finalists and a complete pair matrix stay within the model request budget', () => {
+test('40 finalists and a complete pair matrix stay within the model request budget', () => {
   const evidence=structuredClone(evidenceFixture);
-  evidence.finalists=Array.from({length:25},(_,candidate) => ({...structuredClone(evidence.finalists[0]),candidate}));
-  evidence.pairs=Array.from({length:25},(_,a) => Array.from({length:24-a},(_,offset) => ({a,b:a+offset+1,correlation:0.2,linkedSource:false}))).flat();
+  evidence.finalists=Array.from({length:40},(_,candidate) => ({...structuredClone(evidence.finalists[0]),candidate}));
+  evidence.pairs=Array.from({length:40},(_,a) => Array.from({length:39-a},(_,offset) => ({a,b:a+offset+1,correlation:0.2,linkedSource:false}))).flat();
   validateEvidence(evidence);
   assert.ok(byteLength(evidence)<COMMITTEE_PAYLOAD_BYTES);
+  const tooMany=structuredClone(evidence);
+  tooMany.finalists.push({...structuredClone(evidence.finalists[0]),candidate:40});
+  assert.throws(()=>validateEvidence(tooMany));
 });

@@ -13,7 +13,7 @@ export const DEFAULT_CONFIG: ScoreConfig = {
   maxSkippedTimeShare: 0.2,
   cloneCorrelation: 0.9,
   minOverlapDays: 20,
-  finalists: 25,
+  finalists: 40,
   finalistSplit: "proportional",
   allowUnknown: [],
   pureTakerMakerShare: 0.05,
