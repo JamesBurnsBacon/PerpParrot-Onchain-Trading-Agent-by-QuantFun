@@ -16,7 +16,9 @@ const PLAN_TTL_MS = 60_000;
 const PLAN_CACHE_MAX = 50;
 // A plan costs about 25 public Hyperliquid reads; the same shortlist within a minute reuses the last one.
 const planCache = new Map<string, { at: number; plan: DryRunPlan }>();
-export const resetPlanCache = () => planCache.clear(); // tests
+// Requests for the same preview that arrive while its plan is being built share that one build (one set of reads).
+const planBuilds = new Map<string, Promise<DryRunPlan>>();
+export const resetPlanCache = () => { planCache.clear(); planBuilds.clear(); }; // tests
 
 // The browser sends back the intent it got from /live/strategy, which carries `reply` and `clarify`; those are replaced here
 // (free text never reaches a hash or a store). Any other key outside the tool schema is refused.
@@ -53,11 +55,16 @@ export const handleLivePlan = async (req: Request, deps: LiveRequestDeps): Promi
     const now = (deps.planDeps?.now ?? Date.now)();
     let hit = planCache.get(preview.previewHash);
     if (!hit || now - hit.at > PLAN_TTL_MS) {
-      hit = { at: now, plan: await buildDryRunPlan(preview, deps.planDeps) };
+      let build = planBuilds.get(preview.previewHash);
+      if (!build) {
+        build = buildDryRunPlan(preview, deps.planDeps).finally(() => planBuilds.delete(preview.previewHash));
+        planBuilds.set(preview.previewHash, build);
+      }
+      hit = { at: now, plan: await build };
       planCache.set(preview.previewHash, hit);
       for (const key of planCache.keys()) { if (planCache.size <= PLAN_CACHE_MAX) break; planCache.delete(key); }
     }
-    return json({ ok: true, previewHash: preview.previewHash, sources: addresses.length, plan: hit.plan });
+    return json({ ok: true, previewHash: preview.previewHash, sources: addresses.length, addresses, plan: hit.plan });
   } catch (error) { return failed(error); }
 };
 

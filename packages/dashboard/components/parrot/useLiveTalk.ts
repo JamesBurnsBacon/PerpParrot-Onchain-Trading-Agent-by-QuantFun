@@ -96,7 +96,7 @@ export function useLiveTalk(onStrategy: (chat: ChatResponse) => void, onStale: (
   }, [cleanup, end]);
 
   const confirmContext = (run: Runtime | null, signal: () => AbortSignal): ConfirmContext => ({
-    intent: lastIntent.current, addresses: shown.current, transcripts: run?.events.transcripts ?? [],
+    intent: lastIntent.current, addresses: shown.current, get transcripts() { return run?.events.transcripts ?? []; }, // read live: run.events is replaced on every event
     pending: pending.current, setPending: p => { pending.current = p; },
     now: Date.now, newNonce: () => Math.random().toString(36).slice(2, 10),
     post: (path, body, guard) => post(path, body, guard, signal()),
@@ -110,7 +110,7 @@ export function useLiveTalk(onStrategy: (chat: ChatResponse) => void, onStale: (
   async function confirmNow() {
     const run = active.current;
     const outcome = await confirmByButton(confirmContext(run, () => AbortSignal.timeout(20_000)));
-    if (!outcome) return;
+    if (!outcome || outcome.stale) return; // a late answer for a replaced confirmation shows nothing
     applyOutcome(outcome);
     if (run && !run.closing && run.channel?.readyState === "open") {
       const text = `(The visitor pressed the Confirm button. ${outcome.facts})`.slice(0, 1500);

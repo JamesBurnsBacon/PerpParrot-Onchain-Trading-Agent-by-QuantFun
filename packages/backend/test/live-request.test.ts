@@ -48,6 +48,13 @@ describe("sketchOrders (pure)", () => {
     expect(plan.marginScale).toBe(1);
     expect(isDryRunPlan(plan)).toBe(true);
   });
+  test("an order that rounds down below the minimum is skipped, not sent as a smaller one", () => {
+    const lots = new Map<string, PlanMarket>([["TINY", { markPx: 6, szDecimals: 0, maxLeverage: 10, tradable: true }]]);
+    const plan = sketchOrders(new Map([["TINY", 10.5]]), lots, 470, NOW); // 10.5 / 6 = 1.75 coins -> 1 coin = $6
+    expect(plan.orders).toEqual([]);
+    expect(plan.skipped).toEqual([{ asset: "TINY", reason: "BELOW_MIN_ORDER", targetUsd: 10.5 }]);
+    expect(sketchOrders(new Map([["TINY", 13]]), lots, 470, NOW).orders[0]).toMatchObject({ size: "2", notionalUsd: 12 }); // positive control
+  });
   test("skips unknown and untradable markets and legs under the minimum order, and never invents an order", () => {
     const plan = sketchOrders(cases({ BTC: 100, NOPE: 100, DOGE: 100, ETH: 5 }), MARKETS, 470, NOW);
     expect(plan.orders.map(o => o.asset)).toEqual(["BTC"]);
@@ -76,14 +83,25 @@ describe("/live/plan and /live/request", () => {
   beforeEach(resetPlanCache);
   test("plan saves nothing, is capped by the rate limiter, and a repeat within a minute reuses the reads", async () => {
     const d = deps();
-    const first = await (await handleLivePlan(post("/live/plan", { intent: args }), d)).json() as { ok: boolean; previewHash: string; plan: unknown };
+    const first = await (await handleLivePlan(post("/live/plan", { intent: args }), d)).json() as { ok: boolean; previewHash: string; plan: unknown; addresses: string[] };
     expect(first.ok).toBe(true);
+    expect(first.addresses).toHaveLength(10); // the shortlist the server resolved, so the browser can check it is the one on screen
     expect(isDryRunPlan(first.plan)).toBe(true);
     expect(d.store.requests.size).toBe(0);
     const reads = d.calls.n;
     expect(reads).toBeGreaterThan(0);
     await handleLivePlan(post("/live/plan", { intent: args }), d);
     expect(d.calls.n).toBe(reads); // cached
+  });
+  test("simultaneous plans for one shortlist share a single set of Hyperliquid reads", async () => {
+    const d = deps();
+    const bodies = await Promise.all([1, 2, 3, 4].map(() => handleLivePlan(post("/live/plan", { intent: args }), d).then(r => r.json() as Promise<{ ok: boolean }>)));
+    expect(bodies.every(b => b.ok)).toBe(true);
+    const oneBuild = d.calls.n;
+    resetPlanCache();
+    const solo = deps();
+    await handleLivePlan(post("/live/plan", { intent: args }), solo);
+    expect(oneBuild).toBe(solo.calls.n);
   });
   test("request saves exactly one PENDING simulation request for the hash the visitor was shown", async () => {
     const d = deps();

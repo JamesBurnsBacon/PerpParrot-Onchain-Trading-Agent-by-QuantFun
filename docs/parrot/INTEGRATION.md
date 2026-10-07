@@ -49,6 +49,15 @@ There is no “force live” switch. The pipeline operator prepares the database
 
 Check book context independently of shortlist source. Never relabel fixtures, manufacture paper history or change Score thresholds. The standalone `/parrot/receipts` receipt intentionally stays sample; `/parrot/receipts/live` uses the current turn's code-built facts. A caller-supplied receipt does not attest its provenance.
 
+## Voice confirmation routes
+
+| Route | What it does | Writes |
+| --- | --- | --- |
+| `POST /live/plan` `{intent}` | Selects the shortlist from the current finalists, builds the preview, then a hypothetical dry-run order sketch from public Hyperliquid reads (`packages/backend/src/live/plan.ts`, about 25 reads, cached 60 s per preview hash). Returns `{previewHash, sources, plan}`. | Nothing |
+| `POST /live/request` `{intent, previewHash}` | Saves one PENDING simulation request through the same `savePreviewRequest` as `/chat/preview`; refuses with 409 `changed` if the preview hash is no longer the one the visitor was shown. | One `strategy_requests` row |
+
+Both are gated by `LIVE_ENABLED` and use the `preview` limiter kind (zero cost). The tools `request_confirmation` and `confirm_request` are defined in `packages/backend/src/live/config.ts`; the browser-side gate (nonce, window, transcript check, button) is `packages/dashboard/lib/parrot-confirm.ts`. The dry-run sketch signs and sends nothing and imports no executor code. Shared type: `packages/shared/dry-run-plan.ts`.
+
 ## Local testing with real wallets (no database, no production writes)
 
 To see real wallet metrics instead of the labelled sample without touching the production database, score a local file of real accounts:
