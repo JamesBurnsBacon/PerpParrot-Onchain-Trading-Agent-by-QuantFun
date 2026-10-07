@@ -21,11 +21,11 @@ const log = (msg: string, extra: Record<string, unknown> = {}) =>
 
 // Supabase Postgres supplies durable run claims, runs, controls and action journals.
 // Production configuration rejects a missing DATABASE_URL.
-// On Vercel, a small pool that lets go quickly: Supabase's session pooler allows 20 connections
-// across every instance of both services (raised from 15 on 2026-10-07). 3, not fewer: a run holds
-// one for the run lock (lock.ts) while its queries need another, and an operator action may wait on
-// the lock with a third.
-const sql = process.env.DATABASE_URL ? new SQL(process.env.DATABASE_URL, config.vercel ? { max: 3, idleTimeout: 5 } : {}) : undefined;
+// Small pools: Supabase's session pooler allows 20 connections across every instance of both
+// services (raised from 15 on 2026-10-07). 3, not fewer: a run holds one for the run lock (lock.ts)
+// while its queries need another, and an operator action may wait on the lock with a third. On
+// Vercel they let go quickly; the long-running executor (Railway) keeps 4 instead of Bun's 10.
+const sql = process.env.DATABASE_URL ? new SQL(process.env.DATABASE_URL, config.vercel ? { max: 3, idleTimeout: 5 } : { max: 4 }) : undefined;
 const store = sql ? new PostgresStore(sql) : new MemoryStore();
 // The dashboard's reads (/status, /runs, /equity) and the watchdog go through Supabase's transaction
 // pooler (port 6543) when EXECUTOR_READ_DATABASE_URL is set: they hold no session state, and a burst of
