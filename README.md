@@ -88,6 +88,9 @@
 ## 4. Components
 
 ### 4.1 Ingest (backend)
+
+The [research screening v1 methodology](docs/ingest/RESEARCH_SCREENING_V1.md) documents the October 6 first-pass shortlist, exact return and selection rules, and two reproducible high-return examples. It describes a local research snapshot; formal Score eligibility remains separate.
+
 - **Universe:**
   - the leaderboard file (~47.5k addresses)
   - the HyperCore vault list (~3.1k open)
