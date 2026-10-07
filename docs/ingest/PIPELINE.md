@@ -48,17 +48,29 @@ exists, nothing is picked and the active configuration (or the fixture) stays.
 
 ## Review gate
 
-The review core can't pass any candidate yet. `score/frame.ts` and `review/input.ts` leave the
-out-of-sample metrics, execution fit and exposure overlap null, and `compile` requires them.
-Until measured evidence lands, the **basic gate** (`REVIEW_GATE`, default `basic`) applies: keep
+At selection, `src/pipeline/evidence.ts` measures each finalist from its last 30 days of fills,
+its month history and its live positions. It fills the frame fields the review core's strict
+gate requires:
+- median hold time, average leverage and time in market;
+- two trailing 7-day holdouts: out-of-sample Sharpe, Sortino, drawdown and stability (also inside
+  Score's lookback, so read them as recent performance);
+- execution coverage (share of traded notional in ≥ $20M-OI markets) and execution fit (that
+  share × the part of a hold a copy 10 minutes late catches × an order-rate discount);
+- concentration, liquidation distance and current exposure overlap between finalists.
+
+Measured on live data (2026-10-07, 220 accounts, 25 finalists), the model's evidence risk fell
+from 80 for everyone to 30–60. The strict gate still kept one candidate: the models' confidence
+is mostly under the policy's 60, and a freeze needs 5 sources. When the core rejects, the
+**basic gate** (`REVIEW_GATE`, default `basic`) applies: keep
 finalists the Role model doesn't reject and with no Risk score above the reject threshold
 (evidence risk aside), weight them by Aggressive fit within the per-source cap, cash buffer and
 gross leverage, and require ≥ 5 sources. `REVIEW_GATE=strict` turns it off.
 
 ## Next
 
-- **Measured evidence** (out-of-sample windows, execution fit, exposure overlap) so the strict
-  review can pass candidates. Source: #33's `review/measured-evidence.ts`.
+- **Strict gate policy**: with measured evidence the binding limits are the models' confidence
+  (`minConfidence` 60), the 5-source freeze minimum, and a Red-Team rebuild request that
+  penalises no one (the core reports `POLICY_VIOLATION`). These are the owner's call.
 - **Gradual exit** for sources that leave the set (README §4.5: reduce-only legs, then DCA out).
   The first version switches targets directly.
 - **Stored month history** per account (denser than `allTime` beyond 30 days; README §4.1).
