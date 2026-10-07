@@ -1,5 +1,5 @@
 // The vault half of the scan: hyperliquidvaults.com's "qualified" HyperCore vaults (~180,
-// screened by TVL and age, ranked by its hv_score) first, then the rest of Hyperliquid's own vault
+// screened by TVL and age, ranked by its hv_score; primary sources) first, then the rest of Hyperliquid's own vault
 // list under the same screen (open, not a child, TVL ≥ $10k, at least 39 days old). The site has no public API: its page loads the list from a TanStack server
 // function whose ID changes when the site redeploys, so a stale ID is re-found in its bundle.
 import { getJson } from "./hl";
@@ -83,14 +83,14 @@ export const pickVaults = async (nowMs: number, log: (msg: string, data?: Record
   const picked: Tracked[] = site
     .filter((v) => v.current_tvl >= 10_000)
     .sort((a, b) => b.hv_score - a.hv_score)
-    .map((v) => ({ address: v.vault_address.toLowerCase(), source: "vault", kind: "hypercore-vault", name: v.name, accountValue: v.current_tvl, closed: false }));
+    .map((v) => ({ address: v.vault_address.toLowerCase(), source: "vault", kind: "hypercore-vault", name: v.name, accountValue: v.current_tvl, closed: false, primary: true }));
   const seen = new Set(picked.map((v) => v.address));
   const vaults = await getJson<StatsVault[]>("https://stats-data.hyperliquid.xyz/Mainnet/vaults", 60_000);
   for (const { summary: s } of vaults) {
     const address = s.vaultAddress.toLowerCase();
     if (seen.has(address) || s.isClosed || s.relationship?.type === "child" || Number(s.tvl) < 10_000 || nowMs - s.createTimeMillis < 39 * 86_400_000) continue;
     seen.add(address);
-    picked.push({ address, source: "vault", kind: "hypercore-vault", name: s.name, accountValue: Number(s.tvl), closed: false });
+    picked.push({ address, source: "vault", kind: "hypercore-vault", name: s.name, accountValue: Number(s.tvl), closed: false, primary: false });
   }
   return picked;
 };
