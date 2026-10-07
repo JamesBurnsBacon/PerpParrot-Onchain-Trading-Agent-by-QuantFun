@@ -78,19 +78,6 @@
   background: linear-gradient(90deg, #6cc04a, #eac744, #f29a2e, #9683bf, #639ec4);
   box-shadow: 0 3px 0 rgba(48, 41, 27, 0.08);
 }
-.lp-pbar-rider {
-  position: absolute;
-  top: -6px;
-  left: 0;
-  width: 36px;
-  height: 38px;
-  transform: translateX(-50%);
-  animation: lp-rider 0.5s ease-in-out infinite alternate;
-}
-@keyframes lp-rider {
-  from { margin-top: 0; rotate: -6deg; }
-  to { margin-top: -4px; rotate: 6deg; }
-}
 .lp-pop-feather {
   position: fixed;
   width: 20px;
@@ -380,7 +367,7 @@
 .lp .exposure-flow-wallet:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
 .lp .exposure-flow-weight { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; }
 .lp .exposure-flow-target { position: absolute; transform: translateY(-50%); font-size: 12px; line-height: 1.4; }
-.lp .exposure-flow-asset { display: block; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lp .exposure-flow-asset { display: block; font-weight: 700; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lp .exposure-flow-target strong { display: block; font-size: 13px; overflow-wrap: anywhere; }
 .lp .exposure-flow-key { display: flex; flex-wrap: wrap; gap: 6px 16px; color: var(--ink-2); font-size: 11px; }
 .lp .exposure-flow-key span { display: inline-flex; align-items: center; gap: 6px; }
@@ -416,6 +403,6 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .lp-journey.lp-moving { height: auto; }
-  .lp-twinkle, .lp-pbar-rider, .lp-peek, .lp .lp-grow { animation: none !important; }
+  .lp-twinkle, .lp-peek, .lp .lp-grow { animation: none !important; }
   .lp .lp-tile { transition: none; }
 }
