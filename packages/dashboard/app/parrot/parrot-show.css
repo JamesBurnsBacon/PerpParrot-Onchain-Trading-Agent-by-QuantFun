@@ -325,3 +325,10 @@ html:has(.parrot-show), body:has(.parrot-show) { height: 100%; overflow: hidden;
 .parrot-show .thinking-bubble i { width: 8px; height: 8px; border-radius: 50%; background: #26312b; animation: seed-hop .5s ease-in-out infinite alternate; }
 .parrot-show .thinking-bubble i:nth-child(2) { animation-delay: .17s; }
 .parrot-show .thinking-bubble i:nth-child(3) { animation-delay: .34s; }
+
+/* The talk button never moves: the button column and the status column have fixed widths, so "Listening" / "Muted" / the mute button appearing change nothing. */
+.parrot-show .parrot-live { grid-template-columns: 140px 150px; justify-content: center; column-gap: 12px; }
+.parrot-show .parrot-talk-row { width: 140px; justify-content: flex-start; }
+.parrot-show .parrot-live-status { max-width: 150px; }
+/* Reserve the receipt's space from the start (the dock is top-aligned), so the buttons do not jump up when the first audited sentence appears. */
+.parrot-show .voice-dock { min-height: 196px; justify-content: flex-start; }
