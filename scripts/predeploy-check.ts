@@ -123,7 +123,7 @@ if (process.env.DATABASE_URL) {
   section("Supabase");
   const sql = new SQL(process.env.DATABASE_URL);
   try {
-    const want = ["run_snapshots", "executor_run_claims", "executor_runs", "executor_controls", "executor_order_batches", "eligibility_state", "paper_state", "paper_points", "dashboard_artifacts", "review_audit", "paper_sessions", "paper_events"];
+    const want = ["run_snapshots", "executor_run_claims", "executor_runs", "executor_controls", "executor_order_batches", "run_targets", "eligibility_state", "paper_state", "paper_points", "dashboard_artifacts", "review_audit", "paper_sessions", "paper_events"];
     const rows = await sql`select table_name from information_schema.tables where table_schema = 'public'`;
     const have = new Set(rows.map((r: { table_name: string }) => r.table_name));
     const missing = want.filter((t) => !have.has(t));

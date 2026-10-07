@@ -5,6 +5,7 @@ import { loadAccount, loadMarkets, type InfoFn } from "./hyperliquid";
 import { planFlatten, planOrders, type Market, type Plan, type PlanConfig } from "./planner";
 import type { ExecutorStore, RunRecord } from "./store";
 import type { TargetSource } from "./targets";
+import { targetRows } from "./target-rows";
 import { noLock, type RunLock } from "./lock";
 
 export type RunnerConfig = {
@@ -41,6 +42,9 @@ export type RunnerDeps = {
 export const cloidFor = (runId: string, asset: string): Hex => keccak256(toHex(`${runId}:${asset}`)).slice(0, 34) as Hex;
 
 type CancelToken = { cancelled: boolean };
+
+// A run's plan and what it was sized from (the target history rows need both).
+type Planned = { plan: Plan; runAt: number; sizingEquityUsd: number; exposures: Map<string, number>; configurationHash: string | null; snapshotHash: string | null };
 
 export class Runner {
   // One run at a time: runs are 10 minutes apart, so queueing is enough (README §4.8).
@@ -122,7 +126,11 @@ export class Runner {
       // Targets = exposure × our equity now (account = truth).
       const equity = this.deps.exchange.dryRun && config.dryRunEquityUsd ? config.dryRunEquityUsd : Math.max(account.equityUsd, 0);
       // A dry run sized on dryRunEquityUsd plans its margin on that equity too.
-      return planOrders(new Map(exposures.map((e) => [e.asset, e.fraction * equity])), { ...account, equityUsd: equity }, markets, config.plan);
+      const plan = planOrders(new Map(exposures.map((e) => [e.asset, e.fraction * equity])), { ...account, equityUsd: equity }, markets, config.plan);
+      return {
+        plan, runAt: runAt * 1000, sizingEquityUsd: equity, exposures: new Map(exposures.map((e) => [e.asset, e.fraction])),
+        configurationHash: targets.configurationHash, snapshotHash: targets.snapshotHash,
+      };
     }, expiresAt));
   }
 
@@ -130,7 +138,10 @@ export class Runner {
   flatten(by: string): Promise<RunRecord> {
     const id = `flatten-${this.deps.now()}`;
     return this.serial(id, (token) =>
-      this.run(id, id, "flatten", { by }, token, async (markets, account) => planFlatten(account, markets, this.deps.config.plan.slippageBps)),
+      this.run(id, id, "flatten", { by }, token, async (markets, account) => ({
+        plan: planFlatten(account, markets, this.deps.config.plan.slippageBps),
+        runAt: this.deps.now(), sizingEquityUsd: account.equityUsd, exposures: new Map(), configurationHash: null, snapshotHash: null,
+      })),
     );
   }
 
@@ -140,12 +151,13 @@ export class Runner {
     kind: RunRecord["kind"],
     evidence: unknown,
     token: CancelToken,
-    makePlan: (markets: Map<string, Market>, account: Awaited<ReturnType<typeof loadAccount>>, record: RunRecord) => Promise<Plan>,
+    makePlan: (markets: Map<string, Market>, account: Awaited<ReturnType<typeof loadAccount>>, record: RunRecord) => Promise<Planned>,
     expiresAt?: number,
   ): Promise<RunRecord> {
     const { store, exchange, info, alert, now, config } = this.deps;
     const record: RunRecord = { id, runId, kind, status: "executed", dryRun: exchange.dryRun, startedAt: now(), finishedAt: 0, evidence };
     let release: (() => Promise<void>) | undefined;
+    let history: (Planned & { markets: Map<string, Market>; account: Awaited<ReturnType<typeof loadAccount>> }) | undefined;
     try {
       release = await (this.deps.lock ?? noLock).acquire(config.runTimeoutMs);
       const unresolved = await store.unresolvedOrderBatches();
@@ -163,8 +175,10 @@ export class Runner {
       }
       const [markets, account] = await Promise.all([loadMarkets(info), loadAccount(info, config.account)]);
       record.equityUsd = account.equityUsd;
-      const plan = await makePlan(markets, account, record);
+      const planned = await makePlan(markets, account, record);
+      const { plan } = planned;
       record.plan = plan;
+      history = { ...planned, markets, account };
 
       // Re-read durable controls after asynchronous work and before each exchange
       // action. A pause or expiry while loading accounts/updating leverage must
@@ -282,6 +296,13 @@ export class Runner {
       record.finishedAt = now();
       try {
         await store.saveRun(record);
+        // Target history is a record, not a control: a failed write is alerted, never fails the run.
+        if (history) {
+          const { markets, account, plan, ...sizing } = history;
+          await Promise.resolve()
+            .then(() => store.saveTargets(targetRows({ record, plan, markets, account, ...sizing, cloidFor: (asset) => cloidFor(id, asset) })))
+            .catch((e) => alert(`${runId}: target history not saved: ${(e as Error).message}`).catch(() => undefined));
+        }
       } finally {
         // A failed unlock must not hide the run (or a saveRun error); Postgres releases the
         // session lock with its connection anyway.

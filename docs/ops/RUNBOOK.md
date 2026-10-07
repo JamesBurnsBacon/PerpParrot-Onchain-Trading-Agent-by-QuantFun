@@ -188,6 +188,7 @@ redeploy of the current deployment), then flatten. While paused, runs are still 
 | `GET {executor}/runs?limit=N` (≤ 200) | per run: `runId`, `kind`, `status`, `dryRun`, equity, `plan` (orders, skipped legs with reasons, margin scale), `results` (per-order fill/error), `evidence` (snapshot hash, configuration hash, targets) | public, CORS `*` |
 | Supabase `executor_runs` | same rows as `/runs` | anon `select` |
 | Supabase `run_snapshots` | each run's snapshot JSON (`body`, exact bytes) and its keccak hash | anon `select` |
+| Supabase `run_targets` | target history: one row per perp per run (target exposure and USD, held, gap, the order or skip reason, the fill) | anon `select` |
 | Supabase `executor_controls` | kill-switch state | anon `select` |
 
 ### Publishing the backtest, funnel and finalists
