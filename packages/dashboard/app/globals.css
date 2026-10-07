@@ -15,6 +15,10 @@
   --series-2: #eb6834;
   --series-3: #1baf7a;
   --series-4: #eda100;
+  /* Buckets: Aggressive orange, Balanced light yellow, Conservative green. */
+  --aggressive: #ef7d1a;
+  --balanced: #e6c12f;
+  --conservative: #2a9d4b;
   --long: #2a78d6;
   --short: #e34948;
   --good: #0ca30c;
@@ -41,6 +45,9 @@
     --series-2: #d95926;
     --series-3: #199e70;
     --series-4: #c98500;
+    --aggressive: #f58d2f;
+    --balanced: #f6dd70;
+    --conservative: #3cb862;
     --long: #3987e5;
     --short: #e66767;
     --up: #0ca30c;
@@ -64,6 +71,9 @@
   --series-2: #d95926;
   --series-3: #199e70;
   --series-4: #c98500;
+  --aggressive: #f58d2f;
+  --balanced: #f6dd70;
+  --conservative: #3cb862;
   --long: #3987e5;
   --short: #e66767;
   --up: #0ca30c;
