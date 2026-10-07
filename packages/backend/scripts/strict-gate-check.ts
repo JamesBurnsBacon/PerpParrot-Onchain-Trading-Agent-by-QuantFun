@@ -26,6 +26,7 @@ const { values } = parseArgs({
     vaults: { type: "string", default: "40" },
     inputs: { type: "string" },
     gate: { type: "string", default: "strict" },
+    model: {type:"string"},
     "local-dir": {type:"string"},
     reads: {type:"string"},
     output: {type:"string"},
@@ -36,11 +37,12 @@ const url=process.env.DATABASE_URL;
 if(!values['local-dir']&&(!url||!['localhost','127.0.0.1','[::1]'].includes(new URL(url).hostname)))
   throw new Error('Use --local-dir or a loopback DATABASE_URL; remote databases are forbidden');
 if(!process.env.OPENAI_API_KEY)throw new Error('OPENAI_API_KEY is required');
+const model=values.model??process.env.REVIEW_MODEL??'gpt-4.1-mini-2025-04-14';
 // The local adapter implements the tagged reads/writes/transactions used by review(), not Bun's full driver.
 const sql=values['local-dir']?await localReviewDb(values['local-dir']) as unknown as SQL:new SQL(url!);
 // Reuse identical public reads for same-input model comparisons. Never cache keys or model calls.
 const reads:Record<string,unknown>=values.reads&&await Bun.file(values.reads).exists()?await Bun.file(values.reads).json():{};
-const modelCalls:{model:string;usage:unknown;elapsedMs:number}[]=[];
+const modelCalls:{model:string;stage:string;reasoningEffort:string|null;usage:unknown;elapsedMs:number}[]=[];
 let saveReads=Promise.resolve();
 const realFetch=globalThis.fetch;
 globalThis.fetch=(async(input:Parameters<typeof fetch>[0],init?:RequestInit)=>{
@@ -51,7 +53,8 @@ globalThis.fetch=(async(input:Parameters<typeof fetch>[0],init?:RequestInit)=>{
   const started=performance.now(),response=await realFetch(input,init);
   if(url==='https://api.openai.com/v1/chat/completions'&&response.ok){
     const result=await response.clone().json() as {model:string;usage:unknown};
-    modelCalls.push({model:result.model,usage:result.usage,elapsedMs:Math.round(performance.now()-started)});
+    const request=JSON.parse(String(init?.body));
+    modelCalls.push({model:result.model,stage:request.response_format?.json_schema?.name,reasoningEffort:request.reasoning_effort??null,usage:result.usage,elapsedMs:Math.round(performance.now()-started)});
   }
   if(publicRead&&response.ok&&response.headers.get('content-type')?.includes('json')){
     reads[key]=await response.clone().json();
@@ -112,6 +115,7 @@ const pipeline = new Pipeline({
   account: "0x7269502c48c582768ee38e4e71e7572e6ebf70f7",
   policy: reviewPolicy(await Bun.file(new URL("../fixtures/review-policy.json", import.meta.url)).json()),
   openAiKey: process.env.OPENAI_API_KEY,
+  model,
   gate: values.gate === "basic" ? "basic" : "strict",
   log,
 });
@@ -156,7 +160,7 @@ const oldGateSameRatings=summary.filter(c=>{
     candidateGate(c.metrics,r.role as Row,r.risk as Row,{...policy,minConfidence:60}).reasons.length===0;
 }).length;
 const blockers:Record<string,number>={};for(const c of summary)for(const reason of c.gate?.reasons??['no-model-output'])blockers[reason]=(blockers[reason]??0)+1;
-const report={asOf:new Date(now).toISOString(),accounts:inputs.length,highFrequencyExcluded:highFrequency,scored:selectedInputs.length,finalists:summary.length,modelCalls,
+const report={asOf:new Date(now).toISOString(),requestedModel:model,accounts:inputs.length,highFrequencyExcluded:highFrequency,scored:selectedInputs.length,finalists:summary.length,modelCalls,
   kinds:summary.reduce((n,c)=>(n[c.kind]=(n[c.kind]??0)+1,n),{} as Record<string,number>),
   candidatePass:passing.length,oldGateSameRatings,passingKinds:passing.reduce((n,c)=>(n[c.kind]=(n[c.kind]??0)+1,n),{} as Record<string,number>),
   blockers,outcome,freezeEligible:run.review?.freezeEligible??false,manifest:run.review?.manifest,
