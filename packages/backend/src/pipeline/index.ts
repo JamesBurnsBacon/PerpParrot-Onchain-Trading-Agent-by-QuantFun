@@ -130,7 +130,9 @@ export class Pipeline {
       select id, started_at, finished_at, status, accounts, configuration_hash, error, review -> 'manifest' as manifest
       from selection_runs order by started_at desc limit 10`;
     const [active] = await sql`select hash, activated_at, configuration -> 'sources' as sources from configurations where status = 'active'`;
-    return { accounts: counts, selections: runs, active: active ?? null };
+    // The latest run's finalists, funnel and per-candidate AI verdicts (dashboard).
+    const [latest] = await sql`select id, finalists, review -> 'summary' as summary from selection_runs order by started_at desc limit 1`;
+    return { accounts: counts, selections: runs, active: active ?? null, latest: latest ?? null };
   }
 
   // Runs a selection when one is due (or `force`) and enough accounts are fresh.
