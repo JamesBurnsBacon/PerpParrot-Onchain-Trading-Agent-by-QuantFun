@@ -23,7 +23,7 @@ import { MemorySnapshotStore } from "./snapshot";
 import { handleChat, handlePreview, MemoryRequestStore, PostgresRequestStore, type ChatDeps, type ChatEnv } from "./chat/handler";
 import { MemoryChatLimiter, PostgresChatLimiter } from "./chat/limits";
 import { callIntentModel } from "./chat/openai";
-import { createFinalistsSource, type TrackedAccountRow } from "./chat/finalists";
+import { createFinalistsSource, localFinalistsRows, type TrackedAccountRow } from "./chat/finalists";
 import { readLiveEnv } from "./live/config";
 import { handleLiveSession, handleLiveStrategy } from "./live/handler";
 import { validateRuntimePolicy } from "../../shared/src/policy-runtime";
@@ -182,7 +182,7 @@ const decisionsEnv = readDecisionsEnv(env);
 // without Postgres, or without enough fresh accounts, the labelled sample is used.
 const parrotFinalists = createFinalistsSource(sql ? () => sql`
   select address, kind, account_value, closed, portfolio, trade_count, maker_share from pipeline_accounts
-  where listed_at >= (select max(listed_at) from pipeline_accounts) - interval '10 minutes'` as Promise<TrackedAccountRow[]> : undefined, { log });
+  where listed_at >= (select max(listed_at) from pipeline_accounts) - interval '10 minutes'` as Promise<TrackedAccountRow[]> : localFinalistsRows(env, sql !== undefined), { log });
 let chatDeps: Promise<ChatDeps> | undefined;
 const loadChatDeps = (): Promise<ChatDeps> => chatDeps ??= configurations.load(Date.now()).then(
   ({ policy }): ChatDeps => {
