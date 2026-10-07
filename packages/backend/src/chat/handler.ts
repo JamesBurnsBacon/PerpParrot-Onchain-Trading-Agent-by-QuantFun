@@ -50,7 +50,7 @@ const REPLIES = {
   budget: "Squawk, my daily chat budget needs a rest.",
   model_unavailable: "Squawk, I cannot read your message right now.",
   invalid_model_output: "Squawk, I could not understand that safely; please try again.",
-  infeasible: "Squawk, that selection cannot fit the limits enforced by code.",
+  infeasible: "Squawk, that preview cannot be saved with the base policy. An operator must review it.",
   too_few_sources: "Squawk, I need more eligible sources for that preview.",
   unavailable: "Squawk, I cannot prepare that selection right now.",
 } as const;
@@ -148,7 +148,7 @@ export const handleChat = async (req: Request, deps: ChatDeps): Promise<Response
       audit("clarify", { intent: { riskStyle, maxSources, diversification, leverageComfort, requestedLeverage, avoidClones, horizon }, promptTokens, completionTokens });
       return json({ ok: true, reply: intent.reply, clarify: intent.clarify, intent, model: deps.env.model, latencyMs: deps.now() - started });
     }
-    const { policyResult: _policyResult, intent: effective, ...selection } = selectStrategy(intent, deps.basePolicy, await deps.finalists());
+    const { intent: effective, ...selection } = selectStrategy(intent, deps.basePolicy, await deps.finalists());
     const latencyMs = deps.now() - started;
     audit("ok", { intent: { riskStyle, maxSources, diversification, leverageComfort, requestedLeverage, avoidClones, horizon }, promptTokens, completionTokens });
     return json({ ok: true, reply: intent.reply, clarify: intent.clarify, intent: effective, ...selection, model: deps.env.model, latencyMs });
@@ -180,8 +180,8 @@ export const handlePreview = async (req: Request, deps: ChatDeps): Promise<Respo
   try {
     const reservation = await reserve(req, deps, "preview");
     if (!reservation.ok) { audit(reservation.reason); return denied(reservation); }
-    const { policyResult, intent: effective, shortlist: { addresses } } = selectStrategy(intent, deps.basePolicy, await deps.finalists());
-    const preview = buildPreview({ intent: effective, policyResult, addresses });
+    const { intent: effective, shortlist: { addresses } } = selectStrategy(intent, deps.basePolicy, await deps.finalists());
+    const preview = buildPreview({ intent: effective, basePolicy: deps.basePolicy, addresses });
     const requestId = deps.newId();
     await deps.requests.save({ id: requestId, createdAtMs: deps.now(), previewHash: preview.previewHash, intent: effective, preview });
     audit("ok");

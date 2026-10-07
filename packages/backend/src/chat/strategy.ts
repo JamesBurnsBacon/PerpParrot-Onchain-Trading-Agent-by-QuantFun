@@ -1,5 +1,5 @@
 import type { Policy } from "../../../shared/src/contracts";
-import { intentToPreview, shortlist, type FinalistLike, type StrategyIntent } from "../../../shared/strategy-intent";
+import { shortlist, type FinalistLike, type StrategyIntent } from "../../../shared/strategy-intent";
 import type { WalletEvidence, WalletChanges } from "../../../shared/wallet-evidence";
 import { VIBE_THRESHOLDS } from "../../../shared/wallet-persona";
 type Data = { finalists: FinalistLike[]; dataSource: "live" | "sample" };
@@ -7,24 +7,9 @@ const excluded = ["overflow", "ruin", "low-coverage", "no-intervals"];
 // A wider conservative score window lets calm candidates enter when switching from a larger score-led list.
 // This changes shortlist priority only, never Score or policy.
 const windowLimit = (intent: StrategyIntent, cap: number) => intent.riskStyle === "conservative" ? Math.min(25, Math.ceil(cap * 1.2)) : cap;
-// main's intentToPreview throws when the risk limits need more sources than the visitor allowed ("safe, a few wallets" asks for 5
-// but the conservative limits need 6). Raise the limit to the smallest feasible number instead of failing the conversation.
-const compile = (intent: StrategyIntent, basePolicy: Policy) => {
-  try { return { policyResult: intentToPreview(intent, basePolicy), intent, raisedFrom: null as number | null }; }
-  catch (error) {
-    if (!(error instanceof RangeError) || !error.message.startsWith("infeasible")) throw error;
-    for (let n = intent.maxSources + 1; n <= 25; n++) {
-      const raised = { ...intent, maxSources: n };
-      try { return { policyResult: intentToPreview(raised, basePolicy), intent: raised, raisedFrom: intent.maxSources as number | null }; }
-      catch (retry) { if (!(retry instanceof RangeError)) throw retry; }
-    }
-    throw error;
-  }
-};
-export const selectStrategy = (requested: StrategyIntent, basePolicy: Policy, data: Data) => {
-  const { policyResult, intent, raisedFrom } = compile(requested, basePolicy);
-  const { changes, clamps, requiredSources, maxSources } = policyResult;
-  const summary = { changes, clamps, requiredSources, maxSources, ...(raisedFrom === null ? {} : { raisedFrom }) };
+export const selectStrategy = (intent: StrategyIntent, _basePolicy: Policy, data: Data) => {
+  const maxSources = intent.maxSources;
+  const summary = { changes: [], clamps: [], maxSources };
   // The team's shortlist accepts only its contract fields; sample metadata stays display-only.
   const finalists = data.finalists.map(({ address, kind, score, flags, maxDrawdown, realizedVol, cloneOf }) =>
     ({ address, kind, score, flags, maxDrawdown, realizedVol, cloneOf }));
@@ -33,7 +18,7 @@ export const selectStrategy = (requested: StrategyIntent, basePolicy: Policy, da
   const addresses = intent.riskStyle === "conservative"
     ? shortlist(finalists, { ...intent, maxSources: limit }, limit).slice(0, maxSources)
     : shortlist(finalists, intent, maxSources);
-  return { policyResult, intent, policy: summary, shortlist: { addresses, dataSource: data.dataSource } };
+  return { intent, policy: summary, shortlist: { addresses, dataSource: data.dataSource } };
 };
 const rounded = (n: number | null) => n === null ? null : Math.round(n * 10000) / 10000;
 export const explainSelection = (intent: StrategyIntent, basePolicy: Policy, data: Data, previous?: string[]): { evidence: WalletEvidence[]; changes?: WalletChanges } => {

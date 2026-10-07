@@ -5,7 +5,7 @@ test("v1 prompt is bounded, stable and has exactly two messages", () => {
   expect(CHAT_SYSTEM_PROMPT).toContain("v2");
   expect(CHAT_SYSTEM_PROMPT.length).toBeLessThanOrEqual(1500);
   expect(PROMPT_HASH).toBe(new Bun.CryptoHasher("sha256").update(CHAT_SYSTEM_PROMPT).digest("hex"));
-  expect(PROMPT_HASH).toBe("752cc4f83d3a1afb5d6aeb7181305a31e9d743a6681e192dfbdd7c773d282371");
+  expect(PROMPT_HASH).toBe("dd2f22546f5c7fcd6d51d6ac2b330b57b91d6a627324fe158600d505743538fe");
   const messages = buildMessages([{ role: "parrot", text: "hello" }], "hi");
   expect(messages).toEqual([
     { role: "system", content: CHAT_SYSTEM_PROMPT },

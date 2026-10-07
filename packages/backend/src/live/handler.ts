@@ -81,17 +81,15 @@ export const handleLiveSession = async (req: Request, deps: LiveDeps): Promise<R
   } catch { return failure(503, "unavailable"); }
 };
 
-export const strategyFacts = (intent: StrategyIntent, selection: Omit<ReturnType<typeof selectStrategy>, "policyResult" | "intent"> & Partial<ReturnType<typeof explainSelection>>): string => {
+export const strategyFacts = (intent: StrategyIntent, selection: Omit<ReturnType<typeof selectStrategy>, "intent"> & Partial<ReturnType<typeof explainSelection>>): string => {
   const { policy, shortlist } = selection;
   const safety = "No orders are placed; an operator must review and freeze any strategy.";
   const core = [
-    `Style: ${intent.riskStyle}. Sources: ${shortlist.addresses.length}; source limit: ${policy.maxSources}; needs at least ${policy.requiredSources}.`,
-    ...(policy.raisedFrom === undefined ? [] : [`The source limit was raised from ${policy.raisedFrom} to ${policy.maxSources} because the risk limits need at least ${policy.requiredSources} sources.`]),
+    `Style: ${intent.riskStyle}. Sources: ${shortlist.addresses.length}; source limit: ${policy.maxSources}.`,
     `Diversification: ${intent.diversification}. Leverage comfort: ${intent.leverageComfort}.`,
-    `Requested leverage: ${intent.requestedLeverage === null ? "not specified" : `${intent.requestedLeverage}x`}.`,
+    ...(intent.requestedLeverage === null ? [] : [`Requested leverage: ${intent.requestedLeverage}x (preview only; nothing is applied or traded).`]),
     `Avoid clones: ${intent.avoidClones}. Horizon: ${intent.horizon}.`,
-    ...policy.changes.map(c => `${c.field}: ${c.from} to ${c.to}.`),
-    ...policy.clamps.map(c => `${c.field}: requested ${c.requested}x, policy cap ${c.applied}x.`),
+    "Used for picking wallets: style, source limit, clone filter. Noted only: diversification, leverage comfort, horizon.",
     "Simulation preview.",
     `Data source: ${shortlist.dataSource}.`,
   ].join(" ");
@@ -127,9 +125,9 @@ export const handleLiveStrategy = async (req: Request, deps: LiveDeps): Promise<
     const data = await deps.finalists();
     const previous = (body as { previous?: string[] }).previous;
     if (previous?.some(id => !data.finalists.some(f => f.address === id))) return failure(400, "invalid_model_output");
-    const { policyResult, intent: effective, ...selected } = selectStrategy(intent, deps.basePolicy, data);
+    const { intent: effective, ...selected } = selectStrategy(intent, deps.basePolicy, data);
     const selection = { ...selected, ...explainSelection(intent, deps.basePolicy, data, previous) };
-    buildPreview({ intent: effective, policyResult, addresses: selection.shortlist.addresses });
+    buildPreview({ intent: effective, basePolicy: deps.basePolicy, addresses: selection.shortlist.addresses });
     return json({ ok: true, intent: effective, ...selection, facts: strategyFacts(effective, selection) });
   } catch (error) {
     const code = error instanceof PreviewError ? error.code : error instanceof RangeError ? "infeasible" : "unavailable";

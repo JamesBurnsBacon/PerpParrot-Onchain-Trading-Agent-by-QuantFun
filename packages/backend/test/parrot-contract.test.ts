@@ -34,8 +34,7 @@ test("parrot selector uses main ordering and the conservative 2M window over con
       const m = riskStyle === "conservative" ? Math.min(25, Math.ceil(1.2 * maxSources)) : maxSources;
       const selected = selectStrategy(intent, base, data);
       expect(selected.shortlist.addresses).toEqual(shortlist(rows, { ...intent, maxSources: m }, m).slice(0, maxSources));
-      expect(selected.policy).toEqual({ changes: selected.policyResult.changes, clamps: selected.policyResult.clamps,
-        requiredSources: selected.policyResult.requiredSources, maxSources });
+      expect(selected.policy).toEqual({ changes: [], clamps: [], maxSources });
     }
   }
   const aggressive = selectStrategy(intents['aggressive/many'], base, data).shortlist.addresses;
@@ -43,24 +42,24 @@ test("parrot selector uses main ordering and the conservative 2M window over con
   expect(conservative.filter(a => !aggressive.includes(a))).toHaveLength(2);
 });
 
-test("parrot preview keeps tighter base limits, clamps leverage and always simulates", async () => {
+test("parrot preview preserves every base limit and always simulates", async () => {
   const data = await loadFinalists();
   const tight = { ...base, maxSourceWeight: .08, cashBuffer: .4000001, maxGrossLeverage: .8,
     maxPairCorrelation: .3, maxExposureOverlap: .2 };
   for (const riskStyle of ["aggressive", "balanced", "conservative"] as const) {
     const intent: StrategyIntent = { ...intents.clamped, riskStyle, maxSources: 25, requestedLeverage: 100 };
-    const { policyResult, shortlist: { addresses } } = selectStrategy(intent, tight, data);
-    const preview = buildPreview({ intent, policyResult, addresses });
-    expect(preview.policy).toEqual(policyResult.policy);
+    const { policy, shortlist: { addresses } } = selectStrategy(intent, tight, data);
+    const preview = buildPreview({ intent, basePolicy: tight, addresses });
+    expect(preview.policy).toEqual({ ...tight, mode: "SIMULATION" });
     expect(preview.policy.mode).toBe("SIMULATION");
     expect(preview.policy.cashBuffer).toBeGreaterThanOrEqual(tight.cashBuffer);
     for (const field of ["maxGrossLeverage", "maxSourceWeight", "maxPairCorrelation", "maxExposureOverlap"] as const)
       expect(preview.policy[field]).toBeLessThanOrEqual(tight[field]);
-    expect(policyResult.clamps).toEqual([{ field: "maxGrossLeverage", requested: 100, applied: .8 }]);
+    expect(policy).toEqual({ changes: [], clamps: [], maxSources: 25 });
     expect(preview.cashUnits).toBe(400001);
     expect(preview.sources.reduce((n, s) => n + s.weightUnits, preview.cashUnits)).toBe(1_000_000);
-    expect(Object.keys(preview).sort()).toEqual(["cashUnits", "policy", "previewHash", "sources", "version", "weighting"]);
-    expect(buildPreview({ intent, policyResult, addresses })).toEqual(preview);
+    expect(Object.keys(preview).sort()).toEqual(["approvalRequired", "cashUnits", "policy", "previewHash", "sources", "version", "weighting"]);
+    expect(buildPreview({ intent, basePolicy: tight, addresses })).toEqual(preview);
   }
 });
 

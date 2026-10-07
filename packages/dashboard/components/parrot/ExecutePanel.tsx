@@ -8,12 +8,11 @@ export function ExecutePanel({ chat, demo, result, busy, failure, onConfirm, exe
   chat: ChatResponse; demo: boolean; result: PreviewResponse | null; busy: boolean;
   failure: Failure | null; onConfirm: () => void; executionDisabled: boolean;
 }) {
-  const bucket = result?.preview.policy.bucket;
   return <div className="space-y-4">
     <Panel title={demo ? "A simulated request." : "A request. Then a human review."} meta={demo ? <Badge kind="CACHED DEMO" /> : <span className="parrot-eyebrow">03 / EXECUTE</span>}>
-      <p className="text-sm leading-relaxed" style={{ color: "var(--ink-2)" }}>{demo ? "Try a simulated strategy request. Nothing is saved or sent for review." : "Save a bounded strategy for an operator to review and freeze. This page only creates a PENDING request."}</p>
+      <p className="text-sm leading-relaxed" style={{ color: "var(--ink-2)" }}>{demo ? "Try a simulated strategy request. Nothing is saved or sent for review." : "Save a wallet exploration request for an operator to review and freeze. This page only creates a PENDING request."}</p>
       <div className="my-5 grid grid-cols-2 gap-3">
-        <StatTile label="Bucket" value={typeof bucket === "string" ? bucket : chat.intent.riskStyle.toUpperCase()} />
+        <StatTile label="Requested style" value={chat.intent.riskStyle.toUpperCase()} />
         <StatTile label="Sources" value={String(result?.preview.sources.length ?? chat.shortlist.addresses.length)} />
       </div>
       <span className="parrot-chip font-bold">simulation preview, awaiting operator freeze</span>
@@ -30,6 +29,6 @@ export function ExecutePanel({ chat, demo, result, busy, failure, onConfirm, exe
       {failure && <div className="parrot-error mt-4" role="alert"><p>{describeError(failure.code, failure.retryAfterSec)}</p></div>}
       {result && <details className="parrot-details mt-4"><summary>Show preview JSON</summary><pre>{JSON.stringify(result, null, 2)}</pre></details>}
     </Panel>
-    <div className="parrot-terminal"><span aria-hidden="true">&gt; </span>{demo ? "intent → code limits → simulated request" : "intent → code limits → pending request"}<br /><span className="opacity-80">{demo ? "Simulation only. No operator review or execution." : "Operator freeze and a signed report are separate steps."}</span></div>
+    <div className="parrot-terminal"><span aria-hidden="true">&gt; </span>{demo ? "intent → wallet shortlist → simulated request" : "intent → wallet shortlist → pending request"}<br /><span className="opacity-80">{demo ? "Simulation only. No operator review or execution." : "An operator must review and freeze separately. Nothing is applied or traded."}</span></div>
   </div>;
 }

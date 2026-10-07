@@ -148,12 +148,14 @@ test("live malformed success, secret echoes and thrown errors stay private", asy
   expect(JSON.stringify(logs)).not.toContain(key);
 });
 
-test("live strategy clamps 100x to 3x with deterministic safe facts", async () => {
+test("live strategy records 100x as context with deterministic safe facts", async () => {
   const d = deps(); d.fetchImpl = (async (_url: string | URL | Request, _init?: RequestInit) => { throw new Error("must not call"); }) as unknown as typeof fetch;
   const body = await check(await handleLiveStrategy(request({ intent: args }), d), 200);
   expect(Object.keys(body).sort()).toEqual(["evidence", "facts", "intent", "ok", "policy", "shortlist"]);
-  expect(body.policy.clamps).toEqual([{ field: "maxGrossLeverage", requested: 100, applied: 3 }]);
-  expect(body.facts).toContain("requested 100x, policy cap 3x");
+  expect(body.policy).toEqual({ changes: [], clamps: [], maxSources: args.maxSources });
+  expect(body.facts).toContain("Requested leverage: 100x (preview only; nothing is applied or traded).");
+  expect(body.facts).toContain("Used for picking wallets: style, source limit, clone filter. Noted only: diversification, leverage comfort, horizon.");
+  expect(body.facts).not.toMatch(/policy cap|raised from|needs at least/);
   expect(body.facts).toContain("Data source: sample.");
   expect(body.facts).not.toContain("untrusted-wallet");
   expect(body.facts).not.toMatch(/[\n<>*`#]/);
@@ -161,11 +163,10 @@ test("live strategy clamps 100x to 3x with deterministic safe facts", async () =
   expect(body.facts).toEndWith("No orders are placed; an operator must review and freeze any strategy.");
 });
 
-test("live conservative strategy is a simulation preview with every policy change", async () => {
+test("live conservative strategy is a simulation preview without policy changes", async () => {
   const body = await check(await handleLiveStrategy(request({ intent: { ...args, riskStyle: "conservative", diversification: "high" } }), deps()), 200);
-  expect(body.policy.changes).toContainEqual({ field: "mode", from: "LIVE", to: "SIMULATION" });
+  expect(body.policy.changes).toEqual([]);
   expect(body.facts).toContain("Simulation preview");
-  for (const c of body.policy.changes) expect(body.facts).toContain(`${c.field}: ${c.from} to ${c.to}.`);
   expect(body.facts.length).toBeLessThanOrEqual(1200);
 });
 
@@ -189,20 +190,28 @@ test("live strategy rejects outer keys and maps feasibility, loader and preview 
   await check(await handleLiveStrategy(request({ intent: args }), failed), 503, "unavailable");
 });
 
-test("live tool raises a source maximum below requiredSources to the smallest feasible number and says so", async () => {
+test("live safe, a few wallets keeps the requested maximum of five", async () => {
   const response = await handleLiveStrategy(request({ intent: { ...args, riskStyle: "conservative", maxSources: 5 } }), deps());
   expect(response.status).toBe(200);
   const body = await response.json() as { policy: { maxSources: number; requiredSources: number; raisedFrom?: number }; shortlist: { addresses: string[] }; facts: string };
-  expect(body.policy.raisedFrom).toBe(5);
-  expect(body.policy.maxSources).toBe(body.policy.requiredSources);
-  expect(body.shortlist.addresses.length).toBeLessThanOrEqual(body.policy.maxSources);
-  expect(body.facts).toContain(`raised from 5 to ${body.policy.maxSources}`);
+  expect(body.policy).not.toHaveProperty("raisedFrom");
+  expect(body.policy).not.toHaveProperty("requiredSources");
+  expect(body.policy.maxSources).toBe(5);
+  expect(body.shortlist.addresses).toHaveLength(5);
+  expect(body.facts).not.toContain("raised from");
   expect((body as unknown as { intent: { maxSources: number } }).intent.maxSources).toBe(body.policy.maxSources);
 });
 
-test("the real /live/strategy response always passes the dashboard guard (contract), including a raised limit", async () => {
+test("the real /live/strategy response always passes the dashboard guard (contract), including a conservative five-wallet limit", async () => {
   for (const intent of [args, { ...args, riskStyle: "conservative", maxSources: 5 }, { ...args, requestedLeverage: 100 }]) {
     const body: unknown = await (await handleLiveStrategy(request({ intent }), deps())).json();
     expect(isLiveStrategy(body)).toBe(true);
   }
+});
+
+test.each([null, 0.5, 1e-7, 1000])("requested leverage %s is formatted exactly or omitted when absent", async requestedLeverage => {
+  const body = await check(await handleLiveStrategy(request({ intent: { ...args, requestedLeverage } }), deps()), 200);
+  if (requestedLeverage === null) expect(body.facts).not.toContain("Requested leverage:");
+  else expect(body.facts).toContain(`Requested leverage: ${requestedLeverage}x (preview only; nothing is applied or traded).`);
+  expect(body.facts.length).toBeLessThanOrEqual(1200);
 });

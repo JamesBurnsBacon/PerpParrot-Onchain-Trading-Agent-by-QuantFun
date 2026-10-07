@@ -49,7 +49,7 @@ function ParrotContent() {
   useEffect(() => {
     if (chat && chat !== lastChat.current) {
       const diff = diffWallets(lastChat.current?.shortlist.addresses ?? [], chat.shortlist.addresses);
-      fxRef.current.trigger("strategy", chat.shortlist.addresses.length, diff.removed.length, chat.policy.clamps.length > 0);
+      fxRef.current.trigger("strategy", chat.shortlist.addresses.length, diff.removed.length);
     }
     lastChat.current = chat;
   }, [chat]);

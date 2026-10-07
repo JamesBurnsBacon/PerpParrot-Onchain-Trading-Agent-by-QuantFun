@@ -1,37 +1,41 @@
 # Talk to the Parrot
 
 `/parrot` is a voice-first demo page: a visitor talks to an animated clay parrot (OpenAI GPT-Live), and the parrot turns the conversation into a
-**bounded strategy** that code checks, shortlists wallets for, and can save as a **pending request**. It sits **outside** the 10-minute trading loop
+**wallet-exploration conversation** that code uses to shortlist wallets and can save as a **pending request**. It sits **outside** the 10-minute trading loop
 and has no trading authority.
 
 ```
 visitor voice ──WebRTC──► GPT-Live (gpt-live-1) ──delegates──► backend model (gpt-5.6-terra)
                                                                    │ may call ONE tool: set_strategy
-browser ◄── facts + result ◄── POST /live/strategy (our code: validate → clamp → shortlist) ◄──┘
+browser ◄── facts + result ◄── POST /live/strategy (our code: validate → shortlist) ◄──┘
 browser ── hold to confirm ──► POST /chat/preview ──► PENDING request (hash). An operator must still review and freeze.
 ```
 
 ## What it can and cannot do
 
-- **Can:** hear a strategy idea, map it to enums and bounded numbers (`StrategyIntent`), show the policy changes, clamps and a wallet shortlist,
-  explain them in the parrot's voice, and save a pending request.
+- **Can:** hear a strategy idea, map it to enums and bounded numbers (`StrategyIntent`), show a wallet shortlist,
+  explain the picks in the parrot's voice, and save a pending request.
 - **Cannot:** place orders, hold keys, freeze or change a frozen configuration, call `/reports`, or read admin tokens. The code under `packages/backend/src/chat`
   and `src/live` references none of `ADMIN_TOKEN`, `HL_API_WALLET_KEY`, `CRE_API_KEY`.
-- **The model never allocates.** `intentToPreview` can only tighten the base policy (a request for 100x becomes the policy cap). Every style produces a **simulation preview**; an operator must review and freeze separately. Only code builds the facts the parrot speaks. Visitor text and model prose never enter state or the prompt as facts.
+- **The model never allocates.** Requested leverage (including 100x) is display/context only: it is never applied, clamped, traded, or written into policy. Every saved preview copies the **base policy unchanged except `mode: "SIMULATION"`**, with `approvalRequired: true`. An operator must review and freeze separately; confirmation creates only a PENDING request. Only code builds the facts the parrot speaks. Visitor text and model prose never enter state or the prompt as facts.
 - **Honest labels.** With Postgres and enough refreshed accounts the finalists are **live**: Score (unchanged) run over `pipeline_accounts`, the accounts the selection pipeline refreshed (read-only, cached 5 minutes, up to 25 finalists). Otherwise (no database, fewer than 30 refreshed accounts, fewer than 5 finalists, or any failure) the **sample data** is used and the page shows the `SAMPLE DATA` badge; `dataSource` in every response says which. Nothing on the page is a forecast.
 
 ## Strategy contract
 
-`packages/shared/strategy-intent.ts` is the team's single source for `StrategyIntent`, validation, `intentToPreview` and `shortlist`. `packages/backend/src/strategy-intent-adapter.ts` maps real Score outputs to that contract; Parrot does not alter either module. Diversification and leverage comfort use `low | medium | high`.
+`packages/shared/strategy-intent.ts` is the team's single source for `StrategyIntent`, validation and `shortlist`. `packages/backend/src/strategy-intent-adapter.ts` maps real Score outputs to that contract; Parrot does not alter either module and does not call the shared tightening compiler `intentToPreview`. The strict `set_strategy` schema remains unchanged. Diversification and leverage comfort use `low | medium | high`.
 
-The policy summary is `{ changes, clamps, requiredSources, maxSources }`: the source limit is the visitor's maximum, and the UI/facts state "needs at least N". Infeasible limits return HTTP 422 without raising that maximum. Text-chat clarification returns reply, clarify, intent, model and latency, without policy or shortlist. Every saved PENDING preview contains the compiled SIMULATION policy, rounds cash up to millionths, and has exact integer allocation totals. The deterministic hash retains the `perpparrot:parrot-preview:v1` domain; it never grants execution authority.
+The policy summary is `{ changes: [], clamps: [], maxSources }`. N is exactly the visitor's source limit (5–25); there is no feasibility lift or automatic source-count raising. The shortlist contains up to N eligible wallets: aggressive uses top Score, balanced uses the lowest maxDrawdown in the top-2N Score window, and conservative uses the widened window described below then lowest realizedVol. The clone filter still applies. Only style, source limit and clone filter shape these picks. Diversification, leverage comfort, horizon and requested leverage are noted as context only.
+
+Text-chat clarification returns reply, clarify, intent, model and latency, without policy or shortlist. Every saved PENDING preview contains the base policy in SIMULATION mode and `approvalRequired: true`, rounds cash up to millionths, and has exact integer allocation totals. The base runtime policy validator and allocation checks still apply: a preview that cannot fit the base allocation is rejected with HTTP 422, without rewriting policy or raising N. The deterministic hash retains the `perpparrot:parrot-preview:v1` domain and binds the structured intent, base simulation policy and allocation; it never grants execution authority. The live freeze validators remain unchanged and do not accept a simulation preview as a live configuration.
+
+Code-built facts say `Requested leverage: Nx (preview only; nothing is applied or traded).` when leverage is provided, and always distinguish the variables used for picking wallets from those noted only.
 
 ## Endpoints
 
 | Route | Purpose | Switch |
 | --- | --- | --- |
 | `POST /live/session` | Exchange the browser's SDP for a GPT-Live session. The session config (model, voice, prompts, tools, delegation) is **server-owned**; the body is `{sdp}` only | `LIVE_ENABLED=true` |
-| `POST /live/strategy` | Body `{ intent, previous? }`: optional `previous` is up to 25 distinct known finalist ids. Unknown keys/ids are rejected. Validate, clamp, shortlist, return code-built facts. No model call | `LIVE_ENABLED=true` |
+| `POST /live/strategy` | Body `{ intent, previous? }`: optional `previous` is up to 25 distinct known finalist ids. Unknown keys/ids are rejected. Validate, shortlist, return code-built facts. No model call | `LIVE_ENABLED=true` |
 | `POST /chat`, `POST /chat/preview` | Text intent extraction (strict JSON schema) and the pending-request preview | `CHAT_ENABLED=true` |
 
 Both switches are **off by default** and independent. Turn Live on only for recording and judging.
@@ -89,7 +93,7 @@ The recorded Live event fixture is a protocol replay adapted from the earlier re
 
 ## Earlier verification record (2026-10-06)
 
-- Real API, text-driven through the real WebRTC protocol: session creation (201), delegated `set_strategy` call, clamp 100x → 3x, spoken explanation grounded in the facts,
+- Real API, text-driven through the real WebRTC protocol: session creation (201), delegated `set_strategy` call and spoken explanation grounded in the then-current facts (the earlier recording does not verify today's wallet-exploration behavior),
   `event_not_allowed` for browser reconfiguration, 429 after the per-IP limit, normal and requested close with usage.
 - Offline: backend suite against a real Postgres 16 (701 tests), recorded real GPT-Live events replayed through the event reducer, mutation controls for the limiter, kill switch, body validation and config forwarding.
 - **Not verified:** live microphone calls and voice quality in a browser, a deployment on Vercel, and the default Turbopack build (the webpack build passes).

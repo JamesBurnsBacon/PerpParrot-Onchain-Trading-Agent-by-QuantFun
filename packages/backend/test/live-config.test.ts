@@ -14,7 +14,7 @@ test("live config snapshot has only one strict bounded function and server-owned
   expect(LIVE_INSTRUCTIONS.length).toBeLessThanOrEqual(2500);
   expect(BACKEND_INSTRUCTIONS).toContain(STRATEGY_FIELD_GUIDE);
   expect(CHAT_SYSTEM_PROMPT).toContain(STRATEGY_FIELD_GUIDE);
-  expect(new Bun.CryptoHasher("sha256").update(CHAT_SYSTEM_PROMPT).digest("hex")).toBe("752cc4f83d3a1afb5d6aeb7181305a31e9d743a6681e192dfbdd7c773d282371");
+  expect(new Bun.CryptoHasher("sha256").update(CHAT_SYSTEM_PROMPT).digest("hex")).toBe("dd2f22546f5c7fcd6d51d6ac2b330b57b91d6a627324fe158600d505743538fe");
 });
 
 test("live env defaults and invalid optional numbers never block startup", () => {
@@ -35,4 +35,13 @@ test("the untrusted browser cannot send any event that reconfigures or steers th
   const allowed = buildLiveConfig(readLiveEnv({})).client.data_channel.allowed_client_events;
   expect(allowed).toEqual(["response.item.create", "response.create", "session.close"]);
   for (const forbidden of ["session.update", "session.instructions.append", "session.thinking.append", "session.commentary.append"]) expect(allowed).not.toContain(forbidden);
+});
+
+test("parrot prompts describe exploration without claiming leverage is applied or clamped", () => {
+  for (const instructions of [LIVE_INSTRUCTIONS, BACKEND_INSTRUCTIONS, CHAT_SYSTEM_PROMPT]) {
+    expect(instructions).not.toMatch(/clamp|Limits are enforced by code|A hundred X|The code said no/);
+    expect(instructions).toContain("preview");
+    expect(instructions).toContain("applied or traded");
+    expect(instructions).toContain("an operator must review and freeze");
+  }
 });

@@ -1,7 +1,6 @@
 import { WALLET_TAGS, isSelectionReason, type WalletEvidence, type WalletChanges } from "../../shared/wallet-evidence";
 import type { StrategyIntent } from "../../shared/strategy-intent";
 
-export type Clamp = { field: string; requested: number; applied: number };
 export type ChatResponse = {
   ok: true;
   evidence?: WalletEvidence[];
@@ -10,10 +9,9 @@ export type ChatResponse = {
   clarify: string | null;
   intent: StrategyIntent;
   policy: {
-    requiredSources: number;
     maxSources: number;
-    changes: { field: string; from: number | string; to: number | string }[];
-    clamps: Clamp[];
+    changes: [];
+    clamps: [];
   };
   shortlist: { addresses: string[]; dataSource: "live" | "sample" };
   model: string;
@@ -23,6 +21,7 @@ export type PreviewResponse = {
   ok: true;
   requestId: string;
   preview: {
+    approvalRequired: true;
     version: "1";
     weighting: string;
     policy: Record<string, unknown>;
@@ -44,7 +43,6 @@ const address = (v: unknown): v is string => str(v) && /^0x[0-9a-fA-F]{40}$/.tes
 // Synthetic and live candidates share the same address contract.
 const walletId = address;
 const oneOf = (v: unknown, choices: string[]) => str(v) && choices.includes(v);
-const scalar = (v: unknown) => str(v) || finite(v);
 
 const isIntent = (v: unknown): v is StrategyIntent => record(v) &&
   oneOf(v.riskStyle, ["aggressive", "balanced", "conservative"]) &&
@@ -79,9 +77,9 @@ export function isChatResponse(v: unknown): v is ChatResponse {
   if (v.evidence !== undefined && (!isWalletEvidence(v.evidence) || JSON.stringify(v.evidence.map(e => e.address)) !== JSON.stringify(v.shortlist.addresses))) return false;
   if (v.changes !== undefined && (!isWalletChanges(v.changes) || v.changes.added.some(e => !(v.shortlist as {addresses: string[]}).addresses.includes(e.address)) || v.changes.removed.some(e => (v.shortlist as {addresses: string[]}).addresses.includes(e.address)))) return false;
   const p = v.policy;
-  return integer(p.requiredSources) && integer(p.maxSources) && p.requiredSources <= p.maxSources && p.maxSources >= 5 && p.maxSources <= 25 && p.maxSources === v.intent.maxSources &&
-    Array.isArray(p.changes) && p.changes.every(c => record(c) && str(c.field) && scalar(c.from) && scalar(c.to)) &&
-    Array.isArray(p.clamps) && p.clamps.every(c => record(c) && str(c.field) && finite(c.requested) && finite(c.applied)) &&
+  return Object.keys(p).every(k => ["changes", "clamps", "maxSources"].includes(k)) && integer(p.maxSources) && p.maxSources >= 5 && p.maxSources <= 25 && p.maxSources === v.intent.maxSources &&
+    Array.isArray(p.changes) && p.changes.length === 0 &&
+    Array.isArray(p.clamps) && p.clamps.length === 0 &&
     Array.isArray(v.shortlist.addresses) && v.shortlist.addresses.length <= p.maxSources && new Set(v.shortlist.addresses).size === v.shortlist.addresses.length && v.shortlist.addresses.every(walletId) &&
     oneOf(v.shortlist.dataSource, ["live", "sample"]);
 }
@@ -89,7 +87,7 @@ export function isChatResponse(v: unknown): v is ChatResponse {
 export function isPreviewResponse(v: unknown): v is PreviewResponse {
   if (!record(v) || v.ok !== true || !str(v.requestId) || !v.requestId || !record(v.preview)) return false;
   const p = v.preview;
-  return p.version === "1" &&
+  return p.approvalRequired === true && p.version === "1" &&
     str(p.weighting) && record(p.policy) && p.policy.mode === "SIMULATION" && integer(p.cashUnits) && str(p.previewHash) && p.previewHash.length > 0 &&
     Array.isArray(p.sources) && p.sources.every(s => record(s) && walletId(s.address) && integer(s.weightUnits) && integer(s.ceilingUnits));
 }
@@ -112,7 +110,7 @@ export function describeError(code: string, retryAfterSec?: number): string {
     case "too_large": return "That's a beakful! Keep your message to 500 characters.";
     case "model_unavailable": return "The model is unavailable; please try again shortly.";
     case "invalid_model_output": return "My answer didn't pass the code checks; please try again.";
-    case "infeasible": return "Those preferences don't fit the policy limits. Try more sources or less leverage.";
+    case "infeasible": return "That preview cannot be saved with the base policy. An operator must review it.";
     case "too_few_sources": return "There aren't enough eligible wallets for that mix. Let's try a broader selection.";
     case "network": return "I can't reach the nest; check your connection or play the cached demo.";
     default: return "My answer couldn't be checked. Please try again.";
@@ -124,11 +122,6 @@ export function intentChips(intent: StrategyIntent): string[] {
   return [intent.riskStyle[0].toUpperCase() + intent.riskStyle.slice(1), `Up to ${intent.maxSources} sources`,
     `${levels[intent.diversification]} diversification`, `${levels[intent.leverageComfort]} leverage comfort`,
     intent.avoidClones ? "Avoid clones" : "Clones allowed"];
-}
-
-export function clampBanner(clamps: Clamp[]): string | null {
-  if (!clamps.length) return null;
-  return clamps.map(c => `Capped by code: you asked ${c.requested}x, the policy allows ${c.applied}x`).join(". ");
 }
 
 // Milliseconds relative to the start. Zero duration is the reduced-motion schedule.

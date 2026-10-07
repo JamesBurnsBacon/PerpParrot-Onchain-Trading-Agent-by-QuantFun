@@ -20,7 +20,7 @@ export const labPresets: ParrotPreset[] = LAB.map(l => {
   const template = PARROT_PRESETS[0], n = l.wallets.length;
   return { ...template, id: l.id, label: l.label,
     chat: { ...template.chat, intent: { ...template.chat.intent, riskStyle: l.riskStyle, maxSources: n },
-      policy: { ...template.chat.policy, maxSources: n, requiredSources: Math.min(n, 6) },
+      policy: { ...template.chat.policy, maxSources: n },
       shortlist: { addresses: l.wallets.map(w => w.address), dataSource: "sample" }, evidence: l.wallets, changes: undefined } };
 });
 
