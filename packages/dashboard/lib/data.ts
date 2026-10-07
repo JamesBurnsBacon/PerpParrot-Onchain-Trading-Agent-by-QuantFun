@@ -215,9 +215,9 @@ export const runTime = (r: Run) => {
 // Aggressive is the live bucket: the account's own curve once it trades for real (not dry run),
 // until then its $470 paper model. Balanced and Conservative are modeled: paper books.
 export const BUCKETS = [
-  { id: "aggressive", book: "aggressive-470", label: "Aggressive · live", short: "Aggressive", color: "var(--aggressive)" },
-  { id: "balanced", book: "balanced-470", label: "Balanced · ×0.5 modeled", short: "Balanced", color: "var(--balanced)" },
-  { id: "conservative", book: "conservative-470", label: "Conservative · ×0.25 modeled", short: "Conservative", color: "var(--conservative)" },
+  { id: "aggressive", book: "aggressive-470", label: "Aggressive", short: "Aggressive", color: "var(--aggressive)" },
+  { id: "balanced", book: "balanced-470", label: "Balanced ×0.5", short: "Balanced", color: "var(--balanced)" },
+  { id: "conservative", book: "conservative-470", label: "Conservative ×0.25", short: "Conservative", color: "var(--conservative)" },
 ] as const;
 
 // Whether the Aggressive line is the live account itself (else its paper model).
@@ -236,7 +236,7 @@ export const performanceSeries = (paper: PaperView | null, equity: Equity | null
   }
   const btc = paper?.books.find((b) => b.kind === "btc");
   const points = btc ? bookReturns(btc) : [];
-  if (btc && points.length) series.push({ id: "btc", bookId: btc.id, label: "BTC buy & hold", short: "BTC", color: "var(--muted)", reference: true, points });
+  if (btc && points.length) series.push({ id: "btc", bookId: btc.id, label: "BTC", short: "BTC", color: "var(--muted)", reference: true, points });
   return series;
 };
 
