@@ -20,12 +20,12 @@ export default function Page() {
   const data = useDashboard();
   const dash = useRef<HTMLDivElement>(null);
   useDashMotion(dash, data !== null);
-  const series = performanceSeries(data?.paper ?? null, data?.equity ?? null, data?.status ?? null);
+  const series = performanceSeries(data?.paper ?? null, data?.equity ?? null, data?.recent ?? null);
   // The newest executed run with a plan: the target portfolio.
   const lastPlanned = data?.recent?.find((r) => r.kind === "mirror" && r.status === "executed" && r.plan);
   const btc = lastReturn(series, "btc");
-  const live = liveIsReal(data?.status ?? null, data?.equity ?? null);
-  const executed = data?.equity?.runs ?? 0;
+  const live = liveIsReal(data?.recent ?? null, data?.equity ?? null);
+  const executed = data?.equity?.points.length ?? 0; // live runs (the equity curve is live runs only)
   // The heartbeat starts one run window (10 min) before the paper books' current start.
   const booksStart = Math.min(...(data?.paper?.books ?? []).map((b) => b.startedAt ?? Infinity));
   const heartbeatSince = Number.isFinite(booksStart) ? booksStart * 1000 - 600_000 : undefined;
@@ -113,7 +113,7 @@ export default function Page() {
           </div>
         </main>
         <footer className="lp-foot">
-          {data?.status?.dryRun ? "Dry run · " : ""}Perpetuals carry liquidation risk · Not investment advice
+          {data?.recent?.length && !live ? "Dry run · " : ""}Perpetuals carry liquidation risk · Not investment advice
           <div className="lp-foot-brand">
             <Parrot />
             <b>PerpParrot</b>
