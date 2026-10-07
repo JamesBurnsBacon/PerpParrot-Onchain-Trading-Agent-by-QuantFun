@@ -2,7 +2,7 @@
 
 > Copy the best Hyperliquid perps traders and vaults, picked by quant screens and an AI agent, mirrored every ten minutes.
 >
-> **TOKEN2049 Origins Hackathon** · Track: **AI x Crypto** · Status: scoring, AI review, mirror runs and executor built; dry run live on Vercel (perpparrot.vercel.app)
+> **TOKEN2049 Origins Hackathon** · Tracks: **AI x Crypto** · **NOWNodes Multichain Infrastructure Challenge** · Status: scoring, AI review, mirror runs and executor built; dry run live on Vercel (perpparrot.vercel.app)
 >
 > **Direction (2026-10-07): no Chainlink CRE.** We no longer depend on Chainlink approving us for real usage, and the
 > product is simpler without it: **read Hyperliquid → process (score, frozen configuration, targets) → AI review →
@@ -308,7 +308,7 @@ Status: built (`packages/dashboard`): live account vs paper books vs BTC, target
 | Storage / hosting | Supabase. One Vercel project with three services (root `vercel.json`): dashboard at `/`, backend at `/api/backend`, executor at `/api/executor`, Vercel Cron for the snapshot pre-build, the run and the missed-run watchdog. Live trading moves the executor to one long-running process (nonces and run ordering; `Dockerfile` + `railway.json`); the leaderboard download, once built, may need one too (too slow for a function). |
 | Secrets | Vercel env vars. `.env.example` only in the repo. Runbook: `docs/ops/RUNBOOK.md`. |
 | Testing | Fixtures, then $10–20 mainnet runs before the freeze. No testnet. |
-| Under consideration | NOWNodes (HyperEVM RPC + an Info API copy): we'd like to enter its Multichain Infrastructure Challenge if it fits, and it can also help with rate limits. Not decided or built yet. |
+| NOWNodes challenge | NOWNodes (HyperEVM RPC + an Info API copy), our entry in its Multichain Infrastructure Challenge: a failover for the backend's Hyperliquid info reads and the first choice for the overlap guard's position reads. Both are opt-in and off by default; see "NOWNodes" below. |
 | Unused | No AgentKit. |
 
 ## 6. Timeline (SGT)
@@ -395,7 +395,13 @@ Budget ~1 h of testing per 2 h of features. Integrate only tested modules.
 - DefiLlama yields API (chain "Hyperliquid L1"): 529 pools, 75 with ≥ $1M TVL.
 - When a vault trades on HyperCore via CoreWriter, its HyperCore account shares the contract's address, so on the leaderboard it **looks like a normal address**. Hence the `eth_getCode` check.
 
-### NOWNodes (under consideration: infra, and possibly the Multichain Infrastructure Challenge)
+### NOWNodes (our Multichain Infrastructure Challenge entry)
+- **Where we use it** (all opt-in, set with `NOWNODES_API_KEY`; with nothing set the backend uses Hyperliquid only, as before):
+  - **Failover**: with `INFO_ROUTING=overflow`, an official-API read that fails (429, 5xx, timeout) is retried on NOWNodes for the eight methods it serves (`packages/backend/src/pipeline/info-router.ts`).
+  - **Shadow check**: `INFO_SHADOW_PERCENT=N` compares N% of official `clearinghouseState` reads with NOWNodes in the background (account value, position count).
+  - **First choice for bulk reads**: with `PICK_OVERLAP_GUARD=on`, the top 60 candidates' positions are read NOWNodes first (about 120 reads in ~2 s, none of the official API's 1,200 weight/min) so the pick can leave out candidates that overlap one already chosen (`packages/backend/src/pipeline/overlap-pick.ts`).
+  - **Dashboard**: the Pipeline panel shows reads, latency and failovers per provider when NOWNodes is in use, and the overlap guard's summary above the finalists table.
+  - **Limits, stated plainly**: NOWNodes is slower per read (below) and does not serve `portfolio` or fills, so the existing paths stay on Hyperliquid; the defaults are Hyperliquid only; the guard's effect on returns is not measured.
 - `hype.nownodes.io` has two parts (key in the `api-key` header; measured 2026-10-07):
   - **HyperEVM JSON-RPC** at `/evm` (`eth_blockNumber` answers; `/` is a 404).
   - **A copy of HL's Info API** at `/info`. It serves `meta`, `perpDexs`, `clearinghouseState`, `spotClearinghouseState`, `webData2`, `userVaultEquities`, `spotMeta` and `vaultSummaries`.
