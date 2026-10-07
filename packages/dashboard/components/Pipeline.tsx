@@ -68,7 +68,7 @@ function Tile({ label, children, note }: { label: string; children: React.ReactN
   );
 }
 
-// scan ~14k accounts every 12 h → refresh every 5 min → Score qualifies ~250 → every 10 min pick 40
+// Revisit the completed 10,987-account regular screen every 12 h → qualify 250 → pick 40 every 10 min
 // (no high-frequency traders) → AI review when they change → freeze → activate when the sources change.
 export function Pipeline({ view }: { view: PipelineView }) {
   const { accounts, selections, active, latest, routing, verification } = view;
@@ -93,7 +93,7 @@ export function Pipeline({ view }: { view: PipelineView }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="grid gap-3 md:grid-cols-3">
-        <Tile label="Accounts refreshed" note={[accounts.errors ? `${accounts.errors} errors` : "", accounts.qualified ? `${accounts.qualified} qualified` : ""].filter(Boolean).join(" · ") || undefined}>
+        <Tile label="Regular-screened accounts refreshed" note={`${accounts.errors ? `${accounts.errors} errors · ` : ""}${accounts.qualified ? `${accounts.qualified} qualified${accounts.high_frequency ? ` (${accounts.high_frequency} high-frequency)` : ""} · ` : ""}scanned ${when(accounts.listed_at)}`}>
           <div className="mb-1.5 flex items-baseline gap-1 text-lg font-semibold tabular">
             {accounts.fresh}
             <span className="text-sm font-normal" style={{ color: "var(--muted)" }}>/ {accounts.listed}</span>
@@ -224,6 +224,11 @@ export function Pipeline({ view }: { view: PipelineView }) {
         <div className="grid gap-4 md:grid-cols-[14rem_1fr]">
           <div className="min-w-0">
             <h3 className="mb-1 text-xs font-semibold" style={{ color: "var(--ink-2)" }}>Score funnel · run #{latest?.id}</h3>
+            {latest?.finalists?.screenedCohort && (
+              <p className="mb-2 text-xs" style={{ color: "var(--ink-2)" }}>
+                Initial regular screen: {latest.finalists.screenedCohort.count.toLocaleString()} → qualified limit {latest.finalists.qualifiedLimit ?? 250} → pick limit {latest.finalists.pickLimit ?? 40}
+              </p>
+            )}
             <ul className="text-xs">
               {funnel.map((f) => (
                 <li key={f.stage} className="grid grid-cols-[6.5rem_1fr_2rem] items-center gap-2 py-0.5">

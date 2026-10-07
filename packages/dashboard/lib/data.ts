@@ -123,6 +123,9 @@ export type PipelineView = {
     finalists: {
       finalists: { address: string; kind?: string; score?: number; rank?: number }[];
       funnel: { stage: string; count: number }[];
+      screenedCohort?: { schema: string; count: number; screenedAt: string; policyHash: string };
+      qualifiedLimit?: number;
+      pickLimit?: number;
       // Same-direction position overlap among the picks (absent on older runs).
       overlap?: { threshold: number; pairs: number; above: number; max: number; top: { a: string; b: string; overlap: number }[]; byAddress: Record<string, number> };
       // Which picks are contracts on HyperEVM, via NOWNodes' /evm (CONTRACT_CHECK=on; evidence only, absent otherwise).

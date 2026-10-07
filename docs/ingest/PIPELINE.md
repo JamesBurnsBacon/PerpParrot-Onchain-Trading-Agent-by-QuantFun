@@ -1,15 +1,17 @@
 # Ingest → qualify → pick → review → go-live
 
-Owner decisions of 2026-10-07. Code: `packages/backend/src/pipeline/`, cron routes in the root
+Owner decisions of 2026-10-07, revised to start from the completed regular research screen. Code: `packages/backend/src/pipeline/`, cron routes in the root
 `vercel.json`, tables in `supabase/migrations/*pipeline*.sql`. Nothing here changes the 10-minute
 mirror loop (README §4.7).
 
 ## Decisions
 
-- **Scan twice a day** (12-hour cron, 00:15 and 12:15 UTC). Sources, primarily
-  hyperliquidvaults.com (vaults) and the Hyperliquid leaderboard (traders), plus a broad scan of
-  every leaderboard account and HyperCore vault with ≥ $10k account value or TVL (~13–14k
-  accounts).
+- **Scan twice a day** (12-hour cron, 00:15 and 12:15 UTC). The candidate universe is the
+  completed 2026-10-06 regular research screen: 10,987 public addresses, including 10,889
+  traders and 98 vaults. `packages/backend/fixtures/regular-screened-cohort-20261006.json`
+  pins its address, kind, screening time and policy hash. Live leaderboard and vault listings
+  update metadata and priority only; they cannot silently add unscreened accounts. A future
+  expansion requires a new screened cohort and a reviewable fixture change.
 - **Primary sources**: hyperliquidvaults.com's vaults and the leaderboard's top 200 by month PnL
   hold many of the winners. The data refresh reads them first, and the qualified list waits for
   them.
@@ -37,19 +39,19 @@ All are backend routes protected by `CRON_SECRET`. Operators can call them with 
 
 | Route | Schedule | Work | Writes |
 |---|---|---|---|
-| `/cron/pipeline/scan` | 00:15, 12:15 UTC | Leaderboard file (~40 MB): ≥ $10k, positive month and all-time PnL. hyperliquidvaults.com's vault list (its TanStack server function), plus Hyperliquid's own vault list (open, not a child, ≥ $10k TVL, ≥ 39 days old). File reads only, no per-account calls. | `pipeline_accounts` (upsert, `listed_at`) |
+| `/cron/pipeline/scan` | 00:15, 12:15 UTC | Register the pinned 10,987 regular-screened addresses. Leaderboard and vault listings enrich only matching addresses with current names, equity and priority. Preserve old rows for audit but exclude unscreened rows from qualification. | `pipeline_accounts` (upsert, `listed_at`, `research_screened`) |
 | `/cron/pipeline/refresh` | every 5 min, ≤ 240 s, 3 reads at a time | First, qualified accounts whose data is over 1 h old: `portfolio` + `userFillsByTime` (30 days, newest 2,000) → trade count, maker share, orders per day. Then the scan's accounts not refreshed for 11 h, primary sources first: `portfolio` only. Keeps only the `month` and `allTime` windows. Unfinished claims are released. | `pipeline_accounts` |
 | `/cron/pipeline/select` | every 10 min (`:x4`) | 1. **Qualify** when the qualified list is older than the scan, every primary source is fresh, and ≥ 95% of the scan is (or the scan is 3.5 h old): Score the population (trade count may be unknown here) and keep its top 250. 2. **Pick**: Score the qualified accounts with fresh fills, high-frequency traders left out, keep 40 (with the optional overlap guard, see below). 3. **Review** the 40 if they changed: the wallets the AI approves, with their hold measures (copyable share at 90 min, book turnover), become the **bench**. | `pipeline_accounts.qualified_at`, `selection_runs` (`review -> 'bench'`) |
 | `/cron/pipeline/roster` | every 10 min (`:x6`) | The per-wallet roster ([ROSTER.md](ROSTER.md)). Observe the latest snapshot; remove a wallet only at a 50% trading loss; seats end probation, release on 6 h idle (probation) or an exit (flat 3 runs). Wind seats down (follow exits, ignore new entries, caps carried in each snapshot's `windDown`) on a warning sign: high-frequency (every step), or at the 12-hourly seat review a Risk reject, a liquidation, or (past tenure) lost approval or 2 reviews off the qualified list. Fill open seats from the fresh bench (≤ 2 an hour, 8 a day, 24 h cooldown) at fixed weights. Freeze and **activate** when the seats change. Seeds itself from the active configuration the first time. | `roster_seats`, `roster_events`, `configurations` |
 
 **Hyperliquid budget**: the limit is 1,200 weight per minute per IP. Most info calls cost 20;
 fills cost 20 plus 1 per 20 fills; `clearinghouseState` costs 2. The refresh paces itself to 900
-per minute, which leaves room for the snapshot cron. Rough load: the population is ~14k × 20
-every 12 h (~390/min), and the qualified list is ~250 × ~60 every hour (~250/min). `429` /
+per minute, which leaves room for the snapshot cron. Rough load: the population is 10,987 × 20
+every 12 h (~305/min), and the qualified list is ~250 × ~60 every hour (~250/min). `429` /
 `Retry-After` is honoured.
 
-**Cold start**: the first full refresh of a scan takes ~6 h, so the first qualified list is built
-3.5 h after the scan from what is fresh (~60%, primary sources included). Until a qualified list
+**Cold start**: the first full refresh of a scan may take hours, so the first qualified list is built
+3.5 h after the scan from what is fresh (primary sources included). Until a qualified list
 exists, nothing is picked and the active configuration (or the fixture) stays.
 
 ## Review gate

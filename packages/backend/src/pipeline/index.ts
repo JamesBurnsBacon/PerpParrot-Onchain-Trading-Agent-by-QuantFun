@@ -1,5 +1,5 @@
 // The selection pipeline (docs/ingest/PIPELINE.md), run by the backend's cron routes:
-//   scan:    every leaderboard trader and HyperCore vault with ≥ $10k (~14k; every 12 h)
+//   scan:    the frozen regular-screened cohort (10,987 accounts; every 12 h)
 //   refresh: portfolios of the scan within 12 h; portfolio + fills of the qualified list hourly
 //            (every 5 min, within a weight budget)
 //   select:  every 10 min: Score qualifies ~250 once the scan is refreshed, picks 40 from them
@@ -24,6 +24,7 @@ import { checkContracts, nownodesCode, type CodeReader } from "./contract-check"
 import { overlapGuard, readPositionsBulk, type GuardSummary, type PositionReader } from "./overlap-pick";
 import { pickVaults } from "./vaults";
 import { parsePortfolio, scoreCandidates, toFrameCandidates, type ScoreInput, type ScoreResult } from "../score";
+import { loadScreenedCohort, validateScreenedCohort, type ScreenedCohort } from "./screened-cohort";
 import { buildReviewInput, positionsFromStates, type LivePosition, type AdditionalEvidence } from "../../review/input.ts";
 import { exposureOverlap, summarizeOverlap } from "../../review/overlap.ts";
 import { openAIPaperCommittee } from "../../review/models/openai-paper.ts";
@@ -66,6 +67,7 @@ export type PipelineOptions = {
   // CONTRACT_CHECK=on (and NOWNODES_API_KEY): record which picks are contracts on HyperEVM (contract-check.ts). Evidence only.
   contractCode?: CodeReader;
   picks?: number; // how many accounts a pick keeps (default PICKS; tests)
+  screenedCohort?: ScreenedCohort; // deterministic small cohort in integration tests
   // "strict": only the review core's VALID manifest activates. "basic" (default): when the core
   // rejects for missing measured evidence, keep the finalists the AI rated acceptable (below).
   gate?: "strict" | "basic";
@@ -73,7 +75,7 @@ export type PipelineOptions = {
 
 type AccountRow = {
   address: string;
-  kind: "trader" | "hypercore-vault";
+  kind: "trader" | "hypercore-vault" | "erc4626-vault";
   account_value: number;
   closed: boolean | null;
   portfolio: unknown;
@@ -104,24 +106,41 @@ export class Pipeline {
 
   async scan(): Promise<{ leaderboard: number; vaults: number }> {
     const { sql, log } = this.o;
-    const vaults = await pickVaults(this.now(), log);
-    const board = await getJson<{ leaderboardRows: LeaderboardRow[] }>(LEADERBOARD);
-    const traders = pickLeaderboard(board.leaderboardRows, Infinity, new Set(vaults.map((v) => v.address)));
+    const cohort = this.o.screenedCohort ? validateScreenedCohort(this.o.screenedCohort) : await loadScreenedCohort();
+    // Bulk listings add current names, equity and priority. They never enlarge the screened universe.
+    const [vaultResult, boardResult] = await Promise.allSettled([
+      pickVaults(this.now(), log),
+      getJson<{ leaderboardRows: LeaderboardRow[] }>(LEADERBOARD),
+    ]);
+    const vaults = vaultResult.status === "fulfilled" ? vaultResult.value : [];
+    const board = boardResult.status === "fulfilled" ? boardResult.value.leaderboardRows : [];
+    if (vaultResult.status === "rejected") log("vault listing unavailable", { error: String(vaultResult.reason) });
+    if (boardResult.status === "rejected") log("leaderboard unavailable", { error: String(boardResult.reason) });
+    const traders = pickLeaderboard(board, Infinity, new Set(vaults.map((v) => v.address)));
+    const live = new Map(([...vaults, ...traders] as Tracked[]).map((t) => [t.address, t]));
     const listedAt = new Date(this.now());
-    // One row per address: an upsert can't touch the same row twice.
-    const rows = [...new Map(([...vaults, ...traders] as Tracked[]).map((t) => [t.address, t])).values()].map((t) => ({
-      address: t.address, source: t.source, kind: t.kind, name: t.name, account_value: t.accountValue, closed: t.closed, listed_at: listedAt.toISOString(),
-      primary_source: t.primary,
-    }));
+    const rows = cohort.accounts.map(({ address, kind }) => {
+      const listed = live.get(address);
+      const t = listed?.kind === kind ? listed : undefined;
+      return { address, source: kind === "trader" ? "leaderboard" : "vault", kind, name: t?.name ?? null,
+        account_value: t?.accountValue ?? 0, closed: t?.closed ?? null,
+        listed_at: listedAt.toISOString(), primary_source: t?.primary ?? false, research_screened: true };
+    });
     for (let i = 0; i < rows.length; i += 1000) {
       await sql`
         insert into pipeline_accounts ${sql(rows.slice(i, i + 1000))}
         on conflict (address) do update set source = excluded.source, kind = excluded.kind, name = excluded.name,
-          account_value = excluded.account_value, closed = excluded.closed, listed_at = excluded.listed_at,
-          primary_source = excluded.primary_source`;
+          account_value = case when excluded.account_value > 0 then excluded.account_value else pipeline_accounts.account_value end,
+          closed = coalesce(excluded.closed, pipeline_accounts.closed), listed_at = excluded.listed_at,
+          primary_source = excluded.primary_source, research_screened = true`;
     }
-    log("pipeline scanned", { leaderboard: traders.length, vaults: vaults.length });
-    return { leaderboard: traders.length, vaults: vaults.length };
+    // Preserve old rows for audit, but exclude them from future qualification.
+    await sql`update pipeline_accounts set research_screened = false, qualified_at = null where research_screened and listed_at < ${listedAt.toISOString()}`;
+    const leaderboard = cohort.accounts.filter((a) => a.kind === "trader").length;
+    const vaultCount = cohort.count - leaderboard;
+    log("pipeline scanned", { cohort: cohort.schema, policyHash: cohort.policyHash, screenedAt: cohort.screenedAt,
+      accounts: cohort.count, leaderboard, vaults: vaultCount, liveMetadata: live.size });
+    return { leaderboard, vaults: vaultCount };
   }
 
   // Refreshes until `deadlineMs`, three reads at a time: first the qualified accounts whose fills
@@ -131,7 +150,7 @@ export class Pipeline {
   // when the latest scan is over 12 h old.
   async refresh(deadlineMs: number): Promise<{ scanned: boolean; refreshed: number; failed: number }> {
     const { sql, log } = this.o;
-    const [{ listed }] = await sql`select max(listed_at) as listed from pipeline_accounts`;
+    const [{ listed }] = await sql`select max(listed_at) as listed from pipeline_accounts where research_screened`;
     let scanned = false;
     if (!listed || this.now() - (listed as Date).getTime() > 12.5 * HOUR) {
       await this.scan();
@@ -142,9 +161,9 @@ export class Pipeline {
       update pipeline_accounts set attempted_at = now()
       where address in (
         select address from pipeline_accounts
-        where (attempted_at is null or attempted_at < now() - interval '10 minutes')
+        where research_screened and (attempted_at is null or attempted_at < now() - interval '10 minutes')
           and ((qualified_at is not null and (fills_at is null or fills_at < now() - interval '1 hour'))
-            or (listed_at >= (select max(listed_at) from pipeline_accounts) - interval '10 minutes'
+            or (listed_at >= (select max(listed_at) from pipeline_accounts where research_screened) - interval '10 minutes'
               and (refreshed_at is null or refreshed_at < now() - interval '11 hours')))
         order by qualified_at is null, not primary_source, refreshed_at nulls first, account_value desc limit ${CLAIMS} for update skip locked)
       returning address, qualified_at is not null as qualified, primary_source, refreshed_at, account_value`) as { address: string; qualified: boolean; primary_source: boolean; refreshed_at: Date | null; account_value: number }[];
@@ -159,7 +178,9 @@ export class Pipeline {
         const { address, qualified } = claimed[next++];
         try {
           const portfolio = scoringWindows(await hl.post<unknown>({ type: "portfolio", user: address }));
-          parsePortfolio(portfolio); // reject a malformed response now, not at selection
+          const windows = parsePortfolio(portfolio); // reject a malformed response now, not at selection
+          const equity = windows.month?.accountValueHistory.at(-1)?.[1] ?? windows.allTime?.accountValueHistory.at(-1)?.[1];
+          if (equity === undefined || !Number.isFinite(equity) || equity < 0) throw new Error("portfolio: missing current equity");
           if (qualified) {
             const fills = await hl.post<Fill[]>(
               { type: "userFillsByTime", user: address, startTime: this.now() - 30 * 24 * HOUR, aggregateByTime: true },
@@ -168,11 +189,11 @@ export class Pipeline {
             );
             const { tradeCount, makerShare, ordersPerDay } = fillStats(fills, this.now());
             await sql`
-              update pipeline_accounts set portfolio = ${JSON.stringify(portfolio)}::text::jsonb, trade_count = ${tradeCount}, maker_share = ${makerShare},
+              update pipeline_accounts set portfolio = ${JSON.stringify(portfolio)}::text::jsonb, account_value = ${equity}, trade_count = ${tradeCount}, maker_share = ${makerShare},
                 orders_per_day = ${ordersPerDay}, refreshed_at = now(), fills_at = now(), attempted_at = null, error = null
               where address = ${address}`;
           } else {
-            await sql`update pipeline_accounts set portfolio = ${JSON.stringify(portfolio)}::text::jsonb, refreshed_at = now(), attempted_at = null, error = null where address = ${address}`;
+            await sql`update pipeline_accounts set portfolio = ${JSON.stringify(portfolio)}::text::jsonb, account_value = ${equity}, refreshed_at = now(), attempted_at = null, error = null where address = ${address}`;
           }
           refreshed++;
         } catch (e) {
@@ -191,15 +212,15 @@ export class Pipeline {
   async status() {
     const { sql } = this.o;
     const [counts] = await sql`
-      select count(*) filter (where listed_at >= (select max(listed_at) from pipeline_accounts) - interval '10 minutes')::int as listed,
-        count(*) filter (where listed_at >= (select max(listed_at) from pipeline_accounts) - interval '10 minutes'
+      select count(*) filter (where listed_at >= (select max(listed_at) from pipeline_accounts where research_screened) - interval '10 minutes')::int as listed,
+        count(*) filter (where listed_at >= (select max(listed_at) from pipeline_accounts where research_screened) - interval '10 minutes'
           and refreshed_at > now() - interval '12 hours')::int as fresh,
         count(*) filter (where error is not null)::int as errors,
         count(*) filter (where qualified_at is not null)::int as qualified,
         count(*) filter (where qualified_at is not null and orders_per_day > 100)::int as high_frequency,
         max(qualified_at) as qualified_at,
         max(listed_at) as listed_at
-      from pipeline_accounts`;
+      from pipeline_accounts where research_screened`;
     const runs = await sql`
       select id, started_at, finished_at, status, accounts, configuration_hash, error, review -> 'manifest' as manifest
       from selection_runs order by started_at desc limit 10`;
@@ -223,7 +244,7 @@ export class Pipeline {
 
     const rows = (await sql`
       select address, kind, account_value, closed, portfolio, trade_count, maker_share, orders_per_day, fills_at
-      from pipeline_accounts where qualified_at is not null`) as (AccountRow & { fills_at: Date | null })[];
+      from pipeline_accounts where research_screened and qualified_at is not null`) as (AccountRow & { fills_at: Date | null })[];
     if (rows.length === 0) return { status: "waiting", reason: "no qualified list yet" };
     const ready = rows.filter((r) => r.portfolio !== null && r.fills_at !== null && this.now() - r.fills_at.getTime() < 2 * HOUR);
     if (!force && ready.length / rows.length < 0.9) return { status: "waiting", reason: `${ready.length}/${rows.length} qualified accounts have fresh fills` };
@@ -294,11 +315,11 @@ export class Pipeline {
   // qualified have no fills yet, so the trade count may be unknown here; the pick requires it.
   private async qualify(force: boolean): Promise<{ accounts: number; qualified: number } | undefined> {
     const { sql } = this.o;
-    const [{ listed, qualified }] = await sql`select max(listed_at) as listed, max(qualified_at) as qualified from pipeline_accounts`;
+    const [{ listed, qualified }] = await sql`select max(listed_at) as listed, max(qualified_at) as qualified from pipeline_accounts where research_screened`;
     if (!listed || (qualified && (qualified as Date) >= (listed as Date))) return undefined;
     const rows = (await sql`
       select address, kind, account_value, closed, portfolio, trade_count, maker_share, orders_per_day, refreshed_at, primary_source, error
-      from pipeline_accounts where listed_at >= ${(listed as Date).toISOString()}::timestamptz - interval '10 minutes'`) as (AccountRow & { refreshed_at: Date | null; primary_source: boolean; error: string | null })[];
+      from pipeline_accounts where research_screened and listed_at >= ${(listed as Date).toISOString()}::timestamptz - interval '10 minutes'`) as (AccountRow & { refreshed_at: Date | null; primary_source: boolean; error: string | null })[];
     const isFresh = (r: (typeof rows)[number]) => r.portfolio !== null && r.refreshed_at !== null && this.now() - r.refreshed_at.getTime() < 12 * HOUR;
     const fresh = rows.filter(isFresh);
     // A primary source whose last read failed doesn't hold the list up.
@@ -317,11 +338,15 @@ export class Pipeline {
   // review of the wallets holding seats (its verdicts; never the admission bench).
   private async review(id: number, inputs: ScoreInput[], result: ScoreResult, highFrequency: number, guard?: GuardSummary, scope: "picks" | "seats" = "picks"): Promise<{ status: string; reason?: string }> {
     const { sql, log, policy } = this.o;
+    const cohort = this.o.screenedCohort ?? await loadScreenedCohort();
     const score = toFrameCandidates(result);
     const byAddress = new Map(result.candidates.map((c) => [c.address, c]));
     const finalists = result.finalists.map((address) => ({ address, kind: byAddress.get(address)?.kind, score: byAddress.get(address)?.score, rank: byAddress.get(address)?.rank }));
     const funnel = result.funnel;
-    await sql`update selection_runs set finalists = ${JSON.stringify({ finalists, funnel, highFrequency, ...(guard ? { overlapGuard: guard } : {}), ...(scope === "seats" ? { scope } : {}) })}::text::jsonb where id = ${id}`;
+    await sql`update selection_runs set finalists = ${JSON.stringify({ finalists, funnel, highFrequency,
+      screenedCohort: { schema: cohort.schema, count: cohort.count, screenedAt: cohort.screenedAt, policyHash: cohort.policyHash },
+      qualifiedLimit: QUALIFIED, pickLimit: this.o.picks ?? PICKS,
+      ...(guard ? { overlapGuard: guard } : {}), ...(scope === "seats" ? { scope } : {}) })}::text::jsonb where id = ${id}`;
     if (score.candidates.length === 0) throw new Error(`no frame candidates (${result.finalists.length} finalists)`);
 
     // Which picks are contracts on HyperEVM, via NOWNodes' /evm. Evidence only: nothing here selects or excludes.
@@ -602,7 +627,7 @@ export class Pipeline {
     if (due.length) {
       const verdicts = await this.reviewSeats(trading().map((s) => s.address));
       if (verdicts) {
-        const qualified = new Set<string>((await sql`select address from pipeline_accounts where qualified_at is not null`).map((r: { address: string }) => r.address));
+        const qualified = new Set<string>((await sql`select address from pipeline_accounts where research_screened and qualified_at is not null`).map((r: { address: string }) => r.address));
         const approved = verdicts.filter((v) => v.approved && v.fit > 0);
         const meanFit = approved.length ? approved.reduce((sum, v) => sum + v.fit, 0) / approved.length : 0;
         const seatUnits = ((1 - policy.cashBuffer) / targetSeats(seats.filter((s) => ACTIVE.includes(s.state)), [])) * 1e6;

@@ -3,10 +3,19 @@ import { FILLS_PAGE, fillStats, isHighFrequency, keepsActive, pickLeaderboard, s
 import { decodeSeroval } from "../src/pipeline/vaults";
 import { basicSources } from "../src/pipeline";
 import { PacedInfo } from "../src/pipeline/hl";
+import { loadScreenedCohort, validateScreenedCohort } from "../src/pipeline/screened-cohort";
 import type { Policy, Row } from "../../shared/src/contracts.ts";
 
 const DAY = 86_400_000;
 const NOW = Date.parse("2026-10-07T12:00:00Z");
+
+test("completed regular screen is a unique 10,987-address trader and vault cohort", async () => {
+  const cohort = await loadScreenedCohort();
+  expect(cohort.count).toBe(10_987);
+  expect(cohort.accounts.filter((a) => a.kind === "trader")).toHaveLength(10_889);
+  expect(cohort.accounts.filter((a) => a.kind !== "trader")).toHaveLength(98);
+  expect(() => validateScreenedCohort({ ...cohort, accounts: [cohort.accounts[0]!, cohort.accounts[0]!], count: 2 })).toThrow();
+});
 
 describe("fillStats", () => {
   test("counts distinct (coin, oid) once and takes the 30-day maker share by notional", () => {

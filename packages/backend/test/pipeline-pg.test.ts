@@ -22,6 +22,7 @@ describe.skipIf(!url)("Pipeline on Postgres", async () => {
   await sql.unsafe(await migration("20261007150000_pipeline_qualified.sql")); // safe to run twice
   await sql.unsafe(await migration("20261007160000_pipeline_primary.sql"));
   await sql.unsafe(await migration("20261007160000_pipeline_primary.sql"));
+  await sql.unsafe(await migration("20261008040000_regular_screened_cohort.sql"));
   await sql.unsafe("drop table if exists pipeline_controls");
   await sql.unsafe(await migration("20261008050000_fresh_start.sql"));
 
@@ -59,9 +60,15 @@ describe.skipIf(!url)("Pipeline on Postgres", async () => {
     return Response.json(Array.from({ length: n }, (_, k) => ({ coin: "BTC", oid: k, px: "100", sz: "1", crossed: k % 2 === 0, time: NOW - span + (k * span) / n })));
   }) as unknown as typeof fetch;
 
+  const screened = sample.flatMap((s, i) => s.accountValue >= 10_000 ? [{ address: address(i), kind: "trader" as const }] : []).slice(0, -1);
   const pipelineAt = (nowMs: number) =>
     new Pipeline({
       sql,
+      screenedCohort: {
+        schema: "research-screen.v1.regular", screenedAt: new Date(NOW).toISOString(), policyHash: "test-policy",
+        count: screened.length,
+        accounts: screened,
+      },
       account: address(999),
       policy: {} as Policy,
       log: () => {},
@@ -69,14 +76,16 @@ describe.skipIf(!url)("Pipeline on Postgres", async () => {
       info: (perMinute) => new PacedInfo(perMinute, info, async () => {}),
     });
   const pipeline = pipelineAt(NOW);
-  const passing = sample.filter((s) => s.accountValue >= 10_000).length;
+  const passing = screened.length;
 
-  test("scan lists every ≥ $10k leaderboard account once, and is safe to repeat", async () => {
+  test("scan lists only screened addresses once, and is safe to repeat", async () => {
     expect(await pipeline.scan()).toEqual({ leaderboard: passing, vaults: 0 });
     expect(await pipeline.scan()).toEqual({ leaderboard: passing, vaults: 0 });
-    const [{ n, primary }] = await sql`select count(*)::int as n, count(*) filter (where primary_source)::int as primary from pipeline_accounts`;
+    const [{ n, primary }] = await sql`select count(*)::int as n, count(*) filter (where primary_source)::int as primary from pipeline_accounts where research_screened`;
     expect(n).toBe(passing);
     expect(primary).toBe(passing); // all within the leaderboard's top 200
+    const [{ excluded }] = await sql`select count(*)::int as excluded from pipeline_accounts where address = ${address(23)}`;
+    expect(excluded).toBe(0); // this address passes the live leaderboard screen, but not the pinned cohort
   });
 
   test("refresh stores the scoring windows only, without fills, and releases nothing it finished", async () => {

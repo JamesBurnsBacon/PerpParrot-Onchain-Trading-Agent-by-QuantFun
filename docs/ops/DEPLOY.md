@@ -146,16 +146,20 @@ leverage, and needs at least 5. `REVIEW_GATE=strict` turns this off.
    adds the roster (`roster_seats`, `roster_events`, status `benched`) and must run **before** the
    roster deploy: until then `/cron/pipeline/roster` fails and reviews can't save their bench.
    `20261008030000_roster_leverage.sql` adds each seat's average leverage (the normalization) and must
-   run **before** that deploy: until then admissions fail. Both only add tables, columns
-   and a wider status check, and are safe to run twice. The new code reads the new columns, so
+   run **before** that deploy: until then admissions fail. Apply
+   `20261008040000_regular_screened_cohort.sql` before deploying the fixed 10,987-address
+   cohort; it adds `research_screened` and permits ERC-4626 vaults. The migrations are safe
+   to run twice. The new code reads the new columns, so
    until they exist the pipeline routes fail.
 2. **Vercel variables**:
    - `HL_ACCOUNT` = our account (`0x7269502c48c582768ee38e4e71e7572e6ebf70f7`).
    - `DRY_RUN_EQUITY_USD=10000`.
-   - `OPENAI_API_KEY` (already set).
+   - `OPENAI_API_KEY` as a server-only Vercel variable. Verify it exists in the target
+     environment; the local `.env.openai` does not configure Vercel.
 3. **Merge** and wait for Ready. Watch `GET /api/backend/pipeline`:
-   - `accounts.qualified` appears once the latest scan is 95% refreshed: from a 200-account
-     list right away, from a full 14k scan after ~8 hours;
+   - `accounts.listed` becomes 10,987 after the screened-cohort scan. `accounts.qualified`
+     appears once primary sources and at least 95% of the cohort are fresh (or at the
+     documented 3.5-hour cold-start point with partial refreshed data);
    - the qualified accounts' fills are read within about an hour, then the next `:x4` run picks
      40 and reviews them, and `active` shows the sources;
    - the next `:x0` run trades toward them (dry run).
