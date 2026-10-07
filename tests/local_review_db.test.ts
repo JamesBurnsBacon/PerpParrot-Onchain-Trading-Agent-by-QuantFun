@@ -11,5 +11,7 @@ test('isolated review harness stores exact JSON and rolls back failed transactio
     assert.deepEqual((await sql`select finalists from selection_runs where id=${r.id}`)[0].finalists,payload);
     await assert.rejects(sql.begin(async tx=>{await tx`update selection_runs set status='failed' where id=${r.id}`;throw new Error('rollback');}),/rollback/);
     assert.equal((await sql`select status from selection_runs where id=${r.id}`)[0].status,'running');
+    await sql`update selection_runs set status='benched' where id=${r.id}`;
+    assert.equal((await sql`select status from selection_runs where id=${r.id}`)[0].status,'benched');
   }finally{await sql.close();}
 });
