@@ -42,10 +42,16 @@ export function parseDemoVideo(url: string): DemoVideo | null {
     return { kind: "iframe", src: src.href, title: "PerpParrot demo on YouTube" };
   }
 
-  const vimeoId = ["vimeo.com", "www.vimeo.com"].includes(host)
-    ? /^\/(\d+)\/?$/.exec(parsed.pathname)?.[1]
-    : host === "player.vimeo.com" ? /^\/video\/(\d+)\/?$/.exec(parsed.pathname)?.[1] : undefined;
-  if (vimeoId) return { kind: "iframe", src: `https://player.vimeo.com/video/${vimeoId}`, title: "PerpParrot demo on Vimeo" };
+  // Unlisted Vimeo videos carry an access hash: player.vimeo.com/video/<id>?h=<hash> or vimeo.com/<id>/<hash>.
+  const vimeo = ["vimeo.com", "www.vimeo.com"].includes(host)
+    ? /^\/(\d+)(?:\/([A-Za-z0-9]{6,32}))?\/?$/.exec(parsed.pathname)
+    : host === "player.vimeo.com" ? /^\/video\/(\d+)\/?$/.exec(parsed.pathname) : null;
+  if (vimeo) {
+    const hash = vimeo[2] ?? parsed.searchParams.get("h") ?? undefined;
+    const src = new URL(`https://player.vimeo.com/video/${vimeo[1]}`);
+    if (hash !== undefined && /^[A-Za-z0-9]{6,32}$/.test(hash)) src.searchParams.set("h", hash);
+    return { kind: "iframe", src: src.href, title: "PerpParrot demo on Vimeo" };
+  }
 
   if (/\.(mp4|webm)$/i.test(parsed.pathname)) return { kind: "video", src: parsed.href };
   return null;

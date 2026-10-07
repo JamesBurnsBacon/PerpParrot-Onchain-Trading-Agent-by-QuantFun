@@ -37,6 +37,14 @@ describe("parseDemoVideo", () => {
     }
   });
 
+  test("keeps the access hash of unlisted Vimeo videos, and only a valid one", () => {
+    const hashed = { kind: "iframe", src: "https://player.vimeo.com/video/123456789?h=abc123def4", title: "PerpParrot demo on Vimeo" };
+    assert.deepEqual(parseDemoVideo("https://player.vimeo.com/video/123456789?h=abc123def4&autoplay=1"), hashed);
+    assert.deepEqual(parseDemoVideo("https://vimeo.com/123456789/abc123def4"), hashed);
+    assert.deepEqual(parseDemoVideo("https://player.vimeo.com/video/123456789?h=bad%22hash"), { ...hashed, src: "https://player.vimeo.com/video/123456789" });
+    assert.equal(parseDemoVideo("https://vimeo.com/123456789/not/a/hash"), null);
+  });
+
   test("canonicalizes Vimeo URLs", () => {
     for (const url of ["https://vimeo.com/123456789", "https://www.vimeo.com/123456789", "https://player.vimeo.com/video/123456789?autoplay=1"]) {
       assert.deepEqual(parseDemoVideo(url), { kind: "iframe", src: "https://player.vimeo.com/video/123456789", title: "PerpParrot demo on Vimeo" });
