@@ -240,7 +240,7 @@ export function TargetPortfolio({ run }: { run: Run }) {
                 const r = rows.find((l) => l.asset === hover)!;
                 return `${r.asset}: ${pct((r.target / equity) * 100, 1)} of equity`;
               })()
-            : `gridlines every ${pct(step * 100, 0).replace("+", "")} of equity${hidden > 0 ? ` · +${hidden} more` : ""}${run.plan?.marginScale !== undefined && run.plan.marginScale < 1 ? ` · margin ×${run.plan.marginScale.toFixed(2)}` : ""}`}
+            : `${hidden > 0 ? `+${hidden} more` : ""}${run.plan?.marginScale !== undefined && run.plan.marginScale < 1 ? `${hidden > 0 ? " · " : ""}margin ×${run.plan.marginScale.toFixed(2)}` : ""}`}
         </span>
       </div>
     </div>
