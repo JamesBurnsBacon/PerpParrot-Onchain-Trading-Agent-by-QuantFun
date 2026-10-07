@@ -106,7 +106,6 @@ function ParrotContent() {
         <section className="parrot-stage" aria-label="Talk with PerpParrot">
           <div className="parrot-scene">
             <span className="show-shout" aria-hidden="true">SQUAWK!</span>
-            <div className="show-rosette" aria-hidden="true">ALL<br />BEAK</div>
             <ParrotAvatar state={state} stream={live.remoteStream} live={live.view.phase === "live" && !live.view.playbackBlocked} />
             {state === "thinking" && <div className="thinking-bubble" role="status" aria-label="Thinking"><i /><i /><i /></div>}
           </div>

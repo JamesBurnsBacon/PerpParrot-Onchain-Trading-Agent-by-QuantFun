@@ -11,6 +11,8 @@ export function LiveTalk({ live, disabled }: { live: ReturnType<typeof useLiveTa
     : view.status.startsWith("Conversation ended") ? "Ended" : view.status.startsWith("Allow microphone") ? "Allow mic" : "Try again";
   const status = view.phase === "connecting" ? "Connecting…" : view.phase === "closing" ? "Ending…"
     : live.active ? (view.muted && view.avatar === "listening" ? "Muted" : { listening: "Listening", thinking: "Thinking", speaking: "Speaking" }[view.avatar]) : idleStatus;
+  // The state drives the pill color: listening, thinking, speaking, muted, connecting/closing, or idle.
+  const meta = view.phase === "connecting" ? "connecting" : view.phase === "closing" ? "closing" : live.active ? (view.muted && view.avatar === "listening" ? "muted" : view.avatar) : "idle";
   return <div className="parrot-live">
     <div className="parrot-talk-row">
     <button type="button" className={`parrot-talk${live.active ? " parrot-talk--active" : ""}`}
@@ -28,8 +30,10 @@ export function LiveTalk({ live, disabled }: { live: ReturnType<typeof useLiveTa
     </button>}
     </div>
     {!waiting && <span className="parrot-talk-label" aria-hidden="true">{label}</span>}
+    <div className="parrot-meta" data-state={meta}>
     <p id="parrot-live-status" className="parrot-live-status" role="status"><Icon kind={view.phase === "live" ? "check" : view.status && !live.active && idleStatus !== "Ended" && idleStatus !== "Canceled" ? "alert" : "sound"} />{status}{!live.active && view.status && <span className="sr-only">{view.status}</span>}</p>
-    {view.phase === "live" && <span className="parrot-countdown" role="timer" aria-label={`${view.remaining} seconds remaining`}>{Math.floor(view.remaining / 60)}:{String(view.remaining % 60).padStart(2, "0")}</span>}
+    {view.phase === "live" && <span className="parrot-countdown" data-low={view.remaining <= 30 ? "true" : undefined} role="timer" aria-label={`${view.remaining} seconds remaining`}>{Math.floor(view.remaining / 60)}:{String(view.remaining % 60).padStart(2, "0")}</span>}
+    </div>
     {live.active && view.playbackBlocked && <button type="button" className="parrot-button" onClick={() => void live.resumeAudio()}>Enable audio</button>}
     <div className="sr-only" aria-live="polite" aria-relevant="text">
       <p>{view.user && `You: ${view.user}`}</p>

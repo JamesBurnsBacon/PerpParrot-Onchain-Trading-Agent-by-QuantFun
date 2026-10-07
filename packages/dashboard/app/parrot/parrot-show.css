@@ -19,7 +19,6 @@ html:has(.parrot-show), body:has(.parrot-show) { height: 100%; overflow: hidden;
 .parrot-show .parrot-stage { min-width: 0; min-height: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 18px; }
 .parrot-show .parrot-scene { position: relative; width: min(66%, 320px); aspect-ratio: 1; flex-shrink: 1; min-height: 0; }
 .parrot-show .show-shout { position: absolute; z-index: 2; top: -20%; left: -16%; font-size: clamp(30px, 5vw, 70px); font-weight: 1000; letter-spacing: -.07em; transform: rotate(-11deg); text-shadow: 3px 4px 0 #fffcf5; }
-.parrot-show .show-rosette { position: absolute; right: -22%; bottom: 3%; z-index: 3; width: 90px; height: 90px; display: grid; place-content: center; line-height: .95; text-align: center; font-size: 23px; font-weight: 950; background: #eac744; border: 3px solid #26312b; border-radius: 35% 48% 30% 48%; transform: rotate(14deg); box-shadow: 4px 6px 0 #26312b20; }
 .parrot-show .parrot-avatar { width: 100%; height: 100%; position: relative; isolation: isolate; animation: bird-bob 2.6s ease-in-out infinite; }
 .parrot-show .parrot-portrait { width: 100%; height: 100%; overflow: hidden; border-radius: 46% 46% 40% 45%; border: 5px solid #fffcf5; box-shadow: 0 12px 0 #34773630, 0 22px 40px #56432925; }
 .parrot-show .parrot-portrait img { width: 100%; height: 100%; object-fit: cover; }
@@ -150,7 +149,6 @@ html:has(.parrot-show), body:has(.parrot-show) { height: 100%; overflow: hidden;
 .parrot-show .parrot-stage { flex-direction: row; gap: 12px; padding-top: 18px; }
 .parrot-show .parrot-scene { width: 42%; flex-shrink: 0; }
 .parrot-show .show-shout { font-size: 32px; top: -23%; left: -2%; }
-.parrot-show .show-rosette { width: 54px; height: 54px; font-size: 16px; right: -9%; bottom: -5%; border-width: 2px; }
 .parrot-show .parrot-avatar::before { border-width: 8px; }
 .parrot-show .parrot-portrait { border-width: 3px; }
 .parrot-show .voice-dock { width: 53%; gap: 8px; }
@@ -210,8 +208,7 @@ html:has(.parrot-show), body:has(.parrot-show) { height: 100%; overflow: hidden;
 .parrot-show .parrot-live { display: grid; gap: 3px 7px; }
 .parrot-show .parrot-talk-row { grid-row: 1 / 4; }
 .parrot-show .parrot-talk-label { font-size: 16px; }
-.parrot-show .parrot-mute { width: 44px; }
-.parrot-show .show-rosette { display: none; } }
+.parrot-show .parrot-mute { width: 44px; }}
 /* A2: compact audited receipt. The two real buttons retain the native modal drawer contract. */
 .parrot-show .compact-receipt { width: 100%; max-width: 320px; border: 1px dashed #526046; border-radius: 14px; background: #fffcf5; overflow: hidden; }
 .parrot-show .compact-receipt button { width: 100%; min-height: 44px; padding: 4px 10px; background: transparent; border: 0; color: #26312b; font-size: 12px; display: flex; align-items: center; justify-content: center; gap: 6px; }
@@ -308,7 +305,6 @@ html:has(.parrot-show), body:has(.parrot-show) { height: 100%; overflow: hidden;
 .parrot-show .parrot-stage { gap: 28px; padding-top: 22px; }
 .parrot-show .parrot-scene { width: min(60%, 36dvh); }
 .parrot-show .show-shout { top: -33%; left: -12%; font-size: clamp(28px, 3.4vw, 50px); transform: rotate(-5deg); }
-.parrot-show .show-rosette { right: -26%; bottom: -4%; width: 66px; height: 66px; font-size: 14px; transform: rotate(10deg); }
 .parrot-show .voice-dock { gap: 14px; }
 .parrot-show .parrot-live { gap: 6px 14px; }
 .parrot-show .compact-receipt { margin-top: 0; max-width: 300px; }
@@ -354,3 +350,50 @@ html:has(.parrot-show), body:has(.parrot-show) { height: 100%; overflow: hidden;
 .parrot-show .parrot-countdown { grid-column: 1 / -1; grid-row: 3; }
 .parrot-show .parrot-live > .parrot-button { grid-column: 1 / -1; grid-row: 4; }
 .parrot-show .voice-dock { min-height: 244px; }
+
+
+/* Status and time: one centered row of two pills directly under the talk button. The pill color follows the state. */
+.parrot-show .parrot-meta { grid-column: 1 / -1; grid-row: 2; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.parrot-show .parrot-live-status, .parrot-show .parrot-countdown { grid-column: auto; grid-row: auto; display: inline-flex; align-items: center; gap: 5px; margin: 0; max-width: none; padding: 4px 12px; border: 2px solid #26312b; border-radius: 999px; font-size: 13px; font-weight: 900; line-height: 1.1; white-space: nowrap; background: #fffcf5; }
+.parrot-show .parrot-live-status svg { width: 14px; height: 14px; }
+.parrot-show .parrot-meta[data-state="listening"] .parrot-live-status { background: #cfe5b2; }
+.parrot-show .parrot-meta[data-state="thinking"] .parrot-live-status { background: #f6dd7a; }
+.parrot-show .parrot-meta[data-state="speaking"] .parrot-live-status { background: #f6b36a; }
+.parrot-show .parrot-meta[data-state="muted"] .parrot-live-status { background: #f8d0ae; }
+.parrot-show .parrot-meta:is([data-state="connecting"], [data-state="closing"]) .parrot-live-status { background: #e3dcc4; }
+.parrot-show .parrot-countdown { font-variant-numeric: tabular-nums; border-style: dashed; border-color: #526046; background: transparent; }
+.parrot-show .parrot-countdown[data-low="true"] { background: #f4b79a; border-style: solid; border-color: #7a2a0c; color: #7a2a0c; animation: time-low 1s ease-in-out infinite alternate; }
+@keyframes time-low { to { transform: scale(1.08); } }
+.parrot-show .parrot-live > .parrot-button { grid-row: 3; }
+.parrot-show .voice-dock { min-height: 232px; }
+
+/* Room to breathe: the talk button has a 7px shadow, so the status row sits clearly below it. */
+.parrot-show .parrot-live { row-gap: 16px; }
+.parrot-show .parrot-meta { margin-top: 6px; gap: 10px; }
+.parrot-show .parrot-live-status, .parrot-show .parrot-countdown { padding: 5px 14px; }
+.parrot-show .voice-dock { min-height: 250px; gap: 16px; }
+
+/* Top-aligned column: the parrot and the buttons keep their place whether or not the audited receipt has appeared below them. */
+.parrot-show .parrot-stage { justify-content: flex-start; padding-top: 10px; }
+
+/* The audit result (verdict label, percentage, meter) reads at a glance: bigger, same card. */
+.parrot-show .compact-receipt-verdict { gap: 10px; }
+.parrot-show .compact-receipt-stamp { font-size: 16px; font-weight: 950; letter-spacing: .01em; }
+.parrot-show .compact-receipt-grounding { font-size: 22px; font-weight: 950; line-height: 1; gap: 8px; font-variant-numeric: tabular-nums; }
+.parrot-show .compact-receipt-meter { width: 52px; height: 8px; }
+.parrot-show .compact-receipt-state { font-size: 15px; font-weight: 850; }
+
+/* The fall/gain numbers always fit their bird's cell, whatever the window width: they scale with the cell (container query) and never wrap or spill. */
+.parrot-show .wire-bird { container-type: inline-size; }
+.parrot-show .bird-stats { gap: 3px 5px; max-width: 100%; justify-content: center; flex-wrap: nowrap; font-size: clamp(8px, 11cqi, 12px); }
+.parrot-show .bird-stats b { min-width: 0; }
+.parrot-show .bird-stats i { font-size: .8em; }
+.parrot-show .bird-wire[data-rows="1"] .bird-stats { font-size: clamp(8px, 11cqi, 13px); }
+.parrot-show .bird-wire:is([data-rows="3"], [data-rows="4"]) .bird-stats { font-size: clamp(7px, 10cqi, 10px); gap: 2px 3px; }
+.parrot-show .bird-stats { font-size: clamp(7px, 9.4cqi, 12px); gap: 2px 4px; }
+.parrot-show .bird-wire[data-rows="1"] .bird-stats { font-size: clamp(7px, 9.4cqi, 13px); }
+.parrot-show .bird-wire:is([data-rows="3"], [data-rows="4"]) .bird-stats { font-size: clamp(7px, 9cqi, 10px); gap: 2px; }
+.parrot-show .bird-stats b { letter-spacing: -.02em; }
+
+/* per-wallet fall/gain numbers follow the container-query size so they fit their cell at any width */
+.parrot-show .bird-wire .wire-bird .bird-stats b { font-size: inherit; }
