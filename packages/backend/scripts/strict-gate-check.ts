@@ -13,9 +13,9 @@ import {rename} from 'node:fs/promises';
 import { SQL } from "bun";
 import {localReviewDb} from './local-review-db';
 import {candidateGate} from '../review/workflow';
-import type {Frame,Row} from '../../shared/src/contracts.ts';
+import type {Frame,Policy,Row} from '../../shared/src/contracts.ts';
 import { Pipeline, reviewPolicy } from "../src/pipeline";
-import { fillStats, pickLeaderboard, type LeaderboardRow } from "../src/pipeline/derive";
+import { fillStats, isHighFrequency, pickLeaderboard, type LeaderboardRow } from "../src/pipeline/derive";
 import { pickVaults } from "../src/pipeline/vaults";
 import { PacedInfo, getJson } from "../src/pipeline/hl";
 import { parsePortfolio, scoreCandidates, type ScoreInput } from "../src/score";
@@ -74,7 +74,7 @@ const log = (m: string, d?: object) => console.log(new Date().toISOString().slic
 const now = values["as-of"] ? Date.parse(values["as-of"]) : Date.now();
 if(!Number.isSafeInteger(now))throw new Error("invalid --as-of");
 const cache = values.inputs ? Bun.file(values.inputs) : undefined;
-let inputs: ScoreInput[] = cache && (await cache.exists()) ? await cache.json() : [];
+let inputs: (ScoreInput & {ordersPerDay?:number|null})[] = cache && (await cache.exists()) ? await cache.json() : [];
 if (inputs.length === 0) {
   const vaults = await pickVaults(now, log);
   const board = await getJson<{ leaderboardRows: LeaderboardRow[] }>("https://stats-data.hyperliquid.xyz/Mainnet/leaderboard");
@@ -84,8 +84,8 @@ if (inputs.length === 0) {
     try {
       const portfolio = await hl.post<unknown>({ type: "portfolio", user: t.address });
       const fills = await hl.post<Parameters<typeof fillStats>[0]>({ type: "userFillsByTime", user: t.address, startTime: now - 30 * 86_400_000, aggregateByTime: true }, 20, (f) => f.length);
-      const { tradeCount, makerShare } = fillStats(fills, now);
-      inputs.push({ address: t.address, kind: t.kind, accountValue: t.accountValue, closed: t.closed, ...parsePortfolio(portfolio), history: null, tradeCount, makerShare });
+      const { tradeCount, makerShare, ordersPerDay } = fillStats(fills, now);
+      inputs.push({ address: t.address, kind: t.kind, accountValue: t.accountValue, closed: t.closed, ...parsePortfolio(portfolio), history: null, tradeCount, makerShare,ordersPerDay });
       if(inputs.length%10===0)log('fetched',{accounts:inputs.length});
     } catch (e) {
       log("skipped", { address: t.address, error: (e as Error).message });
@@ -94,8 +94,17 @@ if (inputs.length === 0) {
   if (cache) await Bun.write(cache, JSON.stringify(inputs));
 }
 log("accounts", { count: inputs.length });
-
-const result = scoreCandidates(inputs, { finalists: 25 });
+// Match select()'s no-HFT screen. Old input caches lacked the observed order-rate field.
+const statsHl=new ReadCachedInfo(600);
+for(const input of inputs)if(input.ordersPerDay===undefined){
+  const fills=await statsHl.post<Parameters<typeof fillStats>[0]>({type:'userFillsByTime',user:input.address,startTime:now-30*86_400_000,aggregateByTime:true},20,f=>f.length);
+  Object.assign(input,fillStats(fills,now));
+}
+if(cache)await Bun.write(cache,JSON.stringify(inputs));
+const selectedInputs=inputs.filter(input=>!isHighFrequency(input.ordersPerDay??null));
+const highFrequency=inputs.length-selectedInputs.length;
+log('no-HFT screen',{excluded:highFrequency,scored:selectedInputs.length});
+const result = scoreCandidates(selectedInputs, { finalists: 25 });
 const pipeline = new Pipeline({
   sql,
   now:()=>now,
@@ -109,7 +118,7 @@ const pipeline = new Pipeline({
 const [{ id }] = await sql`insert into selection_runs (started_at, status, accounts) values (now(), 'running', ${inputs.length}) returning id`;
 // review() is the pipeline's selection step after Score (private; this script is its harness).
 let outcome:unknown;
-try {outcome=await (pipeline as unknown as { review: (...a: unknown[]) => Promise<unknown> }).review(Number(id), inputs, result, 0);}
+try {outcome=await (pipeline as unknown as { review: (...a: unknown[]) => Promise<unknown> }).review(Number(id), selectedInputs, result, highFrequency);}
 catch(error){outcome={status:'failed',reason:(error as Error).message};}
 console.log(outcome);
 
@@ -132,20 +141,26 @@ for (const s of (run.review?.summary ?? []) as { candidate: number; address: str
 console.log("\nmanifest", JSON.stringify({ status: run.review?.manifest?.status, reason: run.review?.manifest?.reason, sources: run.review?.manifest?.sources?.length }));
 const summary=(run.review?.summary??[]) as {candidate:number;kind:string;metrics:Frame['candidates'][number]['metrics'];gate:{reasons:string[]}|null}[];
 const policy=reviewPolicy(await Bun.file(new URL('../fixtures/review-policy.json',import.meta.url)).json());
-const compare=(threshold:number)=>summary.filter(c=>{
-  const r=rows.get(c.candidate);return r?.role&&r.risk&&candidateGate(c.metrics,r.role as Row,r.risk as Row,{...policy,riskRejectThreshold:threshold}).reasons.length===0;
+const compare=(overrides:Partial<Policy>)=>summary.filter(c=>{
+  const r=rows.get(c.candidate);return r?.role&&r.risk&&candidateGate(c.metrics,r.role as Row,r.risk as Row,{...policy,...overrides}).reasons.length===0;
 }).length;
+const proposals:Partial<Policy>[]=[
+  ...[85,90,95].map(riskRejectThreshold=>({riskRejectThreshold})),
+  ...[35,30].map(minConfidence=>({minConfidence})),
+  ...[40,30].map(minExecutionFit=>({minExecutionFit})),
+  {riskRejectThreshold:85,minExecutionFit:40},
+];
 const passing=summary.filter(c=>c.gate?.reasons.length===0);
 const oldGateSameRatings=summary.filter(c=>{
   const r=rows.get(c.candidate);return r?.role&&r.risk&&Number(r.risk.evidenceRisk)<policy.riskRejectThreshold&&
     candidateGate(c.metrics,r.role as Row,r.risk as Row,{...policy,minConfidence:60}).reasons.length===0;
 }).length;
 const blockers:Record<string,number>={};for(const c of summary)for(const reason of c.gate?.reasons??['no-model-output'])blockers[reason]=(blockers[reason]??0)+1;
-const report={asOf:new Date(now).toISOString(),accounts:inputs.length,finalists:summary.length,modelCalls,
+const report={asOf:new Date(now).toISOString(),accounts:inputs.length,highFrequencyExcluded:highFrequency,scored:selectedInputs.length,finalists:summary.length,modelCalls,
   kinds:summary.reduce((n,c)=>(n[c.kind]=(n[c.kind]??0)+1,n),{} as Record<string,number>),
   candidatePass:passing.length,oldGateSameRatings,passingKinds:passing.reduce((n,c)=>(n[c.kind]=(n[c.kind]??0)+1,n),{} as Record<string,number>),
   blockers,outcome,freezeEligible:run.review?.freezeEligible??false,manifest:run.review?.manifest,
-  proposalsNotApplied:[85,90,95].map(threshold=>({riskRejectThreshold:threshold,candidatePass:compare(threshold),scope:'candidate checks only; not a portfolio approval'}))};
+  proposalsNotApplied:proposals.map(overrides=>({overrides,candidatePass:compare(overrides),scope:'candidate checks only; not a portfolio approval'}))};
 console.log('CHECK',JSON.stringify(report));
 if(values.output)await Bun.write(values.output,JSON.stringify({report,run},null,2));
 await sql.close();

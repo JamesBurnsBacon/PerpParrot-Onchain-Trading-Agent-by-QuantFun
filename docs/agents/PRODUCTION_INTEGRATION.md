@@ -6,6 +6,12 @@ in `packages/backend/review`.
 [Runbook](../ops/RUNBOOK.md) and [deploy guide](../ops/DEPLOY.md) cover operations.
 Nothing here authorizes real trades.
 
+Current review work: the scheduled pipeline now supplies measured evidence and local
+real-provider rehearsals exercise its strict review and configuration path. See
+[measurement definitions](STRICT_EVIDENCE.md) for scope and reproduction. Local success
+does not establish production deployment or the strict gate's 12/25 acceptance target;
+the basic fallback remains available.
+
 The [evidence-bound paper review integration](PAPER_LIFECYCLE.md) now connects rich
 specialist inputs, per-node audit, persistent paper freeze and monitoring-only
 reviews. A dry-run integration test follows the merged snapshot/targets/executor
@@ -18,8 +24,8 @@ path; the removed parallel preview lane is not restored.
 | Anonymous rich review evidence | `shared/src/committee-evidence.ts` binds the summary frame, full curve/positions/patterns and matrix, rejects contradictions, and bounds the combined finalist at 4 KB. It does not turn the spike's scores into specialist judgments. |
 | Audit persistence | `backend/review/audit.ts` persists bound prompt/evidence and strictly validated committee output through a service-only idempotent RPC (`persist_review_audit`, `supabase/migrations/20261006130000_review_audit.sql`). Real provider output has not been persisted yet. |
 | Review core | `backend/review/workflow.ts` (`runReview`) and `backend/review/committee/`: Role/Risk/Red-Team over the bound evidence, per-node structured output, per-field median aggregation when there are several observations. |
-| Review input from Score | `backend/review/input.ts` (`buildReviewInput`, run by `backend/scripts/review-input.ts`): Score finalists -> a candidate-curation-frame **1.1.0** (adds `isSharpe`, `isSortino`, `isCalmar`, `lookbackDays`, `scoreFlags`, `cloneCount`; clone addresses stay at candidate level for audit) and the anonymous evidence (month PnL curve, up to 12 live positions, fill patterns `null` until fills are ingested). Fields no module supplies yet are `null` = unknown, and `compile` rejects candidates without OOS and execution evidence, so no candidate can pass yet. |
-| Server-side model provider | `backend/review/models/openai-paper.ts` (`openAIPaperCommittee`): Role, Risk and Red-Team over the bound committee evidence, one honest provider node (quorum 1), strict output schemas, the evidence's contract version on every output. Prompts default to `shared/src/prompts.ts` (byte-identical to `SYSTEM_PROMPTS.md` v1.1.0); `endpoint` takes any OpenAI-compatible URL. `backend/scripts/review-run.ts` runs it through `runCommitteeReview` with an append-only local audit file. Not yet: a real-provider run, or a schedule for reviews. |
+| Review input from Score | `backend/review/input.ts` (`buildReviewInput`): Score finalists -> a candidate-curation-frame **1.1.0** and anonymous evidence. The scheduled pipeline supplies hold/leverage, recent-window diagnostics, execution fit, overlap, measured fill patterns, daily BTC beta and current cross-asset exposure. Missing values stay unknown; recent-window diagnostics are within the selection lookback, not independent out-of-sample validation. |
+| Server-side model provider | `backend/review/models/openai-paper.ts` (`openAIPaperCommittee`): Role, Risk and Red-Team over bound evidence, one provider node (quorum 1), strict output schemas. Prompts remain byte-identical to `SYSTEM_PROMPTS.md` v1.1.0. The scheduled pipeline persists its audit in `selection_runs.review`; `strict-gate-check.ts` exercises this with real calls in a local database. This does not verify the separate `persist_review_audit` RPC in production. |
 | Frozen configuration | `shared/src/frozen.ts` (`proposeFreeze`): the review's output that becomes the mirror's only execution authority. LIVE is **Aggressive** only (README §4.3). |
 
 ## Mirror path
@@ -39,13 +45,14 @@ HyperEVM freeze consumer and preview tables that were here were replaced by the 
 
 ## Remaining gates for the review core
 
-1. Run the committee against a real provider. Rich evidence, server provider
-   requests, per-node audit and paper monitoring-only behavior have integration
-   tests; no billable model run has been made or persisted.
+1. Reach the strict gate's acceptance target on repeated real-provider observations:
+   at least 12/25 candidate passes in most runs and a VALID manifest with at least five
+   sources. Local real calls and audit persistence have been exercised; production
+   deployment and reliability remain separate checks. Keep the basic fallback.
 2. Run the two-model point-in-time evaluation, select the winner and persist the full
    sanitized prompt/output audit with verified hashes and paper shadow state.
-3. Decide whether and where reviews run on a schedule (Vercel Cron or AWS) and store
-   the model key as a server-only secret there.
+3. Verify the implemented Vercel Cron pipeline on the deployed environment, including
+   the server-only model key, migrations and persisted audit.
 4. Produce the Aggressive LIVE frozen configuration for our account and freeze it
    (`packages/backend/scripts/freeze.ts`, then set `FROZEN_CONFIGURATION_HASH` in both
    services).

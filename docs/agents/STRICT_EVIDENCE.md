@@ -44,6 +44,8 @@ Repeat with the same timestamp/cache and a new output filename for a new real mo
 observation on the same public reads. Cached public responses bypass waiting; cache
 misses still obey pacing. Model responses are **never** cached by this harness. This
 spends API tokens. Omit caches/use a new directory for a fresh market snapshot.
+The harness applies production's no-HFT filter before Score (over 100 observed orders/day).
+It reports exclusions separately, including when reusing an older input cache.
 
 `--local-dir` uses an isolated PGlite database and the existing pipeline migration.
 It exercises the same SQL and review path, but does not certify Bun's network driver,
@@ -54,7 +56,9 @@ The report separates candidate checks, pair/Red-Team/capacity results, the manif
 and `freezeEligible` (VALID plus >=5 sources). Counterfactual threshold counts use the
 **same saved Role/Risk ratings**, change no running policy and do not constitute
 portfolio approval. The shared reject threshold affects both Role rejection and the
-five trading risks. Any proposed threshold change still needs the owner's decision.
+five trading risks. The report also measures confidence-floor and execution-fit changes
+individually, and a combined scenario. These are sensitivity checks, not calibrated safe
+thresholds. Any proposed threshold change still needs the owner's decision.
 
 Private caches, model audit rows and generated reports belong in ignored `work/` only.
 Commit code/tests and concise measured summaries; never commit raw account histories or keys.
