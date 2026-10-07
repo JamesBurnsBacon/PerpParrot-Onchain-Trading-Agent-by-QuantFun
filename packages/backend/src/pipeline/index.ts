@@ -55,6 +55,8 @@ export type PipelineOptions = {
   policy: Policy; // the bucket policy reviews run under (the fixture's Aggressive LIVE policy)
   openAiKey?: string;
   model?: string;
+  /** Local research/test dependency injection. Production always uses the OpenAI default. */
+  paperCommittee?: typeof openAIPaperCommittee;
   log: (msg: string, data?: Record<string, unknown>) => void;
   now?: () => number;
   info?: (perMinute: number) => PacedInfo; // Hyperliquid info client (tests)
@@ -402,7 +404,7 @@ export class Pipeline {
 
     const audit: unknown[] = [];
     const stageRows: Record<string, Row[][]> = {};
-    const deps = openAIPaperCommittee(
+    const deps = (this.o.paperCommittee ?? openAIPaperCommittee)(
       { apiKey: this.o.openAiKey ?? "", model: this.o.model ?? "gpt-4.1-mini-2025-04-14" },
       {
         clock: this.now,
