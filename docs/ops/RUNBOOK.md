@@ -129,8 +129,8 @@ configuration (e.g. the fixture before the go-live freeze). First-time setup, st
          (session pooler), `BACKEND_URL=https://<domain>/api/backend`, `HL_ACCOUNT`,
          `FROZEN_CONFIGURATION_HASH`, `ADMIN_TOKEN`, and `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID`
          for alerts. No `DRY_RUN` and no `DRY_RUN_EQUITY_USD` (it sizes dry runs only).
-         `MAX_GROSS_LEVERAGE` is a backstop that fails a run: keep it above the policy's gross cap
-         (5x), e.g. 6. Its pool keeps 4 connections of the session pooler's 15.
+         `MAX_GROSS_LEVERAGE` is a backstop that fails a run: gross can reach 7.5x (the 5x cap
+         plus up to 50% for the market-exposure offset), so set it just above, e.g. 8. Its pool keeps 4 connections of the session pooler's 15.
       2. Deploy it still in dry run; `GET /status` on Railway shows `dryRun: true`.
       3. Merge the PR that removes `/api/executor/cron/run` from `vercel.json`. Until then both
          trigger each `:x0` and whichever claims it first runs it (a Vercel dry run could take
