@@ -12,6 +12,9 @@ import { parseArgs } from "node:util";
 import {rename} from 'node:fs/promises';
 import { SQL } from "bun";
 import {localReviewDb} from './local-review-db';
+import {kimiPaperCommittee} from '../review/models/kimi-paper';
+import {openAIPaperCommittee} from '../review/models/openai-paper';
+import {commitment} from '../../shared/src/commitments.ts';
 import {candidateGate} from '../review/workflow';
 import type {Frame,Policy,Row} from '../../shared/src/contracts.ts';
 import { Pipeline, reviewPolicy } from "../src/pipeline";
@@ -31,18 +34,38 @@ const { values } = parseArgs({
     reads: {type:"string"},
     output: {type:"string"},
     "as-of": {type:"string"},
+    finalists: {type:"string",default:"40"},
+    serial: {type:"boolean",default:false},
+    "stage-spacing-ms": {type:"string",default:"0"},
+    provider: {type:"string",default:"openai"},
+    offline: {type:"boolean",default:false},
+    "prepare-only": {type:"boolean",default:false},
+    "timeout-ms": {type:"string",default:"60000"},
   },
 });
 const url=process.env.DATABASE_URL;
 if(!values['local-dir']&&(!url||!['localhost','127.0.0.1','[::1]'].includes(new URL(url).hostname)))
   throw new Error('Use --local-dir or a loopback DATABASE_URL; remote databases are forbidden');
-if(!process.env.OPENAI_API_KEY)throw new Error('OPENAI_API_KEY is required');
-const model=values.model??process.env.REVIEW_MODEL??'gpt-4.1-mini-2025-04-14';
+if(!['openai','kimi'].includes(values.provider!))throw new Error('unknown provider');
+const localResearch=values.provider==='kimi'||values.offline||values['prepare-only']||values['timeout-ms']!=='60000'||values.finalists!=='40'||values.serial||values['stage-spacing-ms']!=='0';
+if(localResearch&&!values['local-dir'])throw new Error('Research flags require --local-dir; no external database allowed');
+if(values.offline&&(!values.reads||!values.inputs||!values['as-of']))throw new Error('--offline requires reads, inputs and as-of');
+const apiKey=values.provider==='kimi'?process.env.MOONSHOT_API_KEY:process.env.OPENAI_API_KEY;
+if(!apiKey&&!values['prepare-only'])throw new Error('provider API key is required');
+const model=values.model??(values.provider==='kimi'?'kimi-k3':process.env.REVIEW_MODEL??'gpt-4.1-mini-2025-04-14');
+const timeoutMs=Number(values['timeout-ms']);
+const finalists=Number(values.finalists),spacingMs=Number(values['stage-spacing-ms']);
+if(!Number.isSafeInteger(finalists)||finalists<5||finalists>40)throw new Error('finalists must be 5..40');
+if(!Number.isSafeInteger(spacingMs)||spacingMs<0||spacingMs>120000||spacingMs>0&&!values.serial)throw new Error('spacing requires serial and 0..120000ms');
+if(!Number.isSafeInteger(timeoutMs)||timeoutMs<1000||timeoutMs>300000)throw new Error('invalid timeout');
 // The local adapter implements the tagged reads/writes/transactions used by review(), not Bun's full driver.
 const sql=values['local-dir']?await localReviewDb(values['local-dir']) as unknown as SQL:new SQL(url!);
 // Reuse identical public reads for same-input model comparisons. Never cache keys or model calls.
 const reads:Record<string,unknown>=values.reads&&await Bun.file(values.reads).exists()?await Bun.file(values.reads).json():{};
-const modelCalls:{model:string;stage:string;reasoningEffort:string|null;usage:unknown;elapsedMs:number}[]=[];
+const modelCalls:Record<string,unknown>[]=[];
+const preparedRequests:unknown[]=[];
+const cacheMisses:string[]=[];
+const stageFailures:{stage:string;error:string;message:string}[]=[];
 let saveReads=Promise.resolve();
 const realFetch=globalThis.fetch;
 globalThis.fetch=(async(input:Parameters<typeof fetch>[0],init?:RequestInit)=>{
@@ -50,12 +73,29 @@ globalThis.fetch=(async(input:Parameters<typeof fetch>[0],init?:RequestInit)=>{
   const publicRead=/^https:\/\/(api.hyperliquid.xyz|stats-data.hyperliquid.xyz|hyperliquidvaults.com)\//.test(url);
   const key=JSON.stringify([url,init?.body??'']);
   if(publicRead&&Object.hasOwn(reads,key))return Response.json(reads[key]);
-  const started=performance.now(),response=await realFetch(input,init);
-  if(url==='https://api.openai.com/v1/chat/completions'&&response.ok){
-    const result=await response.clone().json() as {model:string;usage:unknown};
-    const request=JSON.parse(String(init?.body));
-    modelCalls.push({model:result.model,stage:request.response_format?.json_schema?.name,reasoningEffort:request.reasoning_effort??null,usage:result.usage,elapsedMs:Math.round(performance.now()-started)});
+  if(publicRead&&values.offline){cacheMisses.push(commitment('perpparrot:research-cache-key:v1',key));throw new Error('offline public-read cache miss');}
+  const isModel=['https://api.openai.com/v1/chat/completions','https://api.moonshot.cn/v1/chat/completions'].includes(url);
+  if(isModel){
+    const request=JSON.parse(String(init?.body)),user=JSON.parse(request.messages[1].content);
+    const entry:Record<string,unknown>={requestedModel:request.model,stage:request.response_format.json_schema.name,
+      reasoningEffort:request.reasoning_effort??null,maxCompletionTokens:request.max_completion_tokens,
+      evidenceHash:user.evidence.evidenceHash,policyHash:user.evidence.policyHash,snapshotHash:user.evidence.snapshotHash,
+      promptHash:commitment('perpparrot:prompt:v1',request.messages[0].content),
+      schemaHash:commitment('perpparrot:research-schema:v1',request.response_format),userMessageHash:commitment('perpparrot:research-user:v1',request.messages[1].content),
+      requestBytes:new TextEncoder().encode(String(init?.body)).length,finalists:user.evidence.finalists.length,preparedOnly:values['prepare-only']};
+    modelCalls.push(entry);
+    if(values['prepare-only']){preparedRequests.push(request);return Response.json({error:{message:'prepare only; no provider contacted'}},{status:503});}
+    if(cacheMisses.length)throw new Error('incomplete offline evidence; refusing paid request');
+    const started=performance.now();
+    try{
+      const response=await realFetch(input,init);entry.httpStatus=response.status;
+      const result=await response.clone().json() as {model?:string;usage?:unknown;choices?:{finish_reason:string}[];error?:{code?:string;type?:string;message?:string}};
+      Object.assign(entry,{model:result.model,usage:result.usage,finishReason:result.choices?.[0]?.finish_reason,errorCode:result.error?.code,errorType:result.error?.type,errorMessage:result.error?.message?.slice(0,400)});
+      return response;
+    }catch(error){entry.transportError=error instanceof Error?error.name:'unknown';throw error;}
+    finally{entry.elapsedMs=Math.round(performance.now()-started);}
   }
+  const response=await realFetch(input,init);
   if(publicRead&&response.ok&&response.headers.get('content-type')?.includes('json')){
     reads[key]=await response.clone().json();
     if(values.reads){
@@ -70,7 +110,8 @@ class ReadCachedInfo extends PacedInfo {
   override async post<T>(body:Record<string,unknown>,weight=20,items?:(value:T)=>number):Promise<T>{
     const key=JSON.stringify(['https://api.hyperliquid.xyz/info',JSON.stringify(body)]);
     if(Object.hasOwn(reads,key))return structuredClone(reads[key]) as T;
-    return super.post(body,weight,items); // all cache misses remain rate limited
+    if(values.offline){cacheMisses.push(commitment('perpparrot:research-cache-key:v1',key));throw new Error('offline public-read cache miss');}
+    return super.post(body,weight,items); // all online cache misses remain rate limited
   }
 }
 const log = (m: string, d?: object) => console.log(new Date().toISOString().slice(11, 19), m, JSON.stringify(d ?? {}).slice(0, 300));
@@ -78,6 +119,7 @@ const now = values["as-of"] ? Date.parse(values["as-of"]) : Date.now();
 if(!Number.isSafeInteger(now))throw new Error("invalid --as-of");
 const cache = values.inputs ? Bun.file(values.inputs) : undefined;
 let inputs: (ScoreInput & {ordersPerDay?:number|null})[] = cache && (await cache.exists()) ? await cache.json() : [];
+if (inputs.length === 0 && values.offline)throw new Error('offline inputs cache is empty');
 if (inputs.length === 0) {
   const vaults = await pickVaults(now, log);
   const board = await getJson<{ leaderboardRows: LeaderboardRow[] }>("https://stats-data.hyperliquid.xyz/Mainnet/leaderboard");
@@ -107,14 +149,29 @@ if(cache)await Bun.write(cache,JSON.stringify(inputs));
 const selectedInputs=inputs.filter(input=>!isHighFrequency(input.ordersPerDay??null));
 const highFrequency=inputs.length-selectedInputs.length;
 log('no-HFT screen',{excluded:highFrequency,scored:selectedInputs.length});
-const result = scoreCandidates(selectedInputs, { finalists: 40 });
+const result = scoreCandidates(selectedInputs, { finalists });
 const pipeline = new Pipeline({
   sql,
   now:()=>now,
   info:perMinute=>new ReadCachedInfo(perMinute),
   account: "0x7269502c48c582768ee38e4e71e7572e6ebf70f7",
   policy: reviewPolicy(await Bun.file(new URL("../fixtures/review-policy.json", import.meta.url)).json()),
-  openAiKey: process.env.OPENAI_API_KEY,
+  openAiKey: apiKey??'prepare-only-no-key',
+  paperCommittee:(options,core)=>{
+    const deps=(values.provider==='kimi'?kimiPaperCommittee:openAIPaperCommittee)(options,{...core,agentTimeoutMs:timeoutMs});
+    let queue=Promise.resolve(),lastStart=0;
+    const wrap=<Args extends unknown[],Result>(stage:string,fn:(...args:Args)=>Promise<Result>)=>(...args:Args)=>{
+      const call=async()=>{
+        if(values.serial){const delay=Math.max(0,lastStart+spacingMs-Date.now());if(delay)await Bun.sleep(delay);lastStart=Date.now();}
+        try{return await fn(...args);}
+        catch(error){stageFailures.push({stage,error:error instanceof Error?error.name:'unknown',message:error instanceof Error?error.message.slice(0,500):'unknown'});throw error;}
+      };
+      if(!values.serial)return call();
+      const next=queue.then(call);queue=next.then(()=>{},()=>{});return next;
+    };
+    deps.role=wrap('role',deps.role);deps.risk=wrap('risk',deps.risk);deps.redTeam=wrap('redTeam',deps.redTeam);
+    return deps;
+  },
   model,
   gate: values.gate === "basic" ? "basic" : "strict",
   log,
@@ -160,11 +217,11 @@ const oldGateSameRatings=summary.filter(c=>{
     candidateGate(c.metrics,r.role as Row,r.risk as Row,{...policy,minConfidence:60}).reasons.length===0;
 }).length;
 const blockers:Record<string,number>={};for(const c of summary)for(const reason of c.gate?.reasons??['no-model-output'])blockers[reason]=(blockers[reason]??0)+1;
-const report={asOf:new Date(now).toISOString(),requestedModel:model,accounts:inputs.length,highFrequencyExcluded:highFrequency,scored:selectedInputs.length,finalists:summary.length,modelCalls,
+const report={provider:values.provider,preparedOnly:values['prepare-only'],offline:values.offline,cacheMisses,stageFailures,agentTimeoutMs:timeoutMs,serial:values.serial,stageSpacingMs:spacingMs,requestedFinalists:finalists,asOf:new Date(now).toISOString(),requestedModel:model,accounts:inputs.length,highFrequencyExcluded:highFrequency,scored:selectedInputs.length,finalists:summary.length,modelCalls,
   kinds:summary.reduce((n,c)=>(n[c.kind]=(n[c.kind]??0)+1,n),{} as Record<string,number>),
   candidatePass:passing.length,oldGateSameRatings,passingKinds:passing.reduce((n,c)=>(n[c.kind]=(n[c.kind]??0)+1,n),{} as Record<string,number>),
   blockers,outcome,freezeEligible:run.review?.freezeEligible??false,manifest:run.review?.manifest,
   proposalsNotApplied:proposals.map(overrides=>({overrides,candidatePass:compare(overrides),scope:'candidate checks only; not a portfolio approval'}))};
 console.log('CHECK',JSON.stringify(report));
-if(values.output)await Bun.write(values.output,JSON.stringify({report,run},null,2));
+if(values.output)await Bun.write(values.output,JSON.stringify({report,run,...(values['prepare-only']?{preparedRequests}:{})},null,2));
 await sql.close();
