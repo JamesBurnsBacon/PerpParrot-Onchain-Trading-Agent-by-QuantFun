@@ -31,11 +31,11 @@ describe.skipIf(!url)("Roster fresh start on Postgres", async () => {
   const at = (runAt: number) =>
     new Pipeline({ sql, account: configuration.account, policy: reviewPolicy(configuration), log: () => {}, now: () => runAt * 1000 + 6 * 60_000, info: (perMinute) => new PacedInfo(perMinute, info, async () => {}) });
   // A review of the picks: the wallets it reviewed (verdicts) and the ones it approved (bench).
-  const review = async (startedAt: number, reviewed: string[], approved: { address: string; fit: number }[]) => {
+  const review = async (startedAt: number, reviewed: string[], approved: { address: string; fit: number }[], manifest?: { status: string; reason: string }) => {
     const bench = approved.map((e) => ({ address: e.address, fit: e.fit, approvedAt: startedAt * 1000, copyableShare: 0.7, closedPositions: 12, turnoverPerDay: 0.5, tradedPerDayOverEquity: 0.1, passesHold: true, averageLeverage: 0.4 }));
     const verdicts = reviewed.map((address) => ({ address, approved: approved.some((a) => a.address === address), riskReject: false, fit: 50, liquidatedAt: null }));
     await sql`insert into selection_runs (started_at, finished_at, status, review)
-      values (${new Date(startedAt * 1000).toISOString()}, ${new Date(startedAt * 1000).toISOString()}, 'benched', ${JSON.stringify({ bench, verdicts, receiptHash: `0x${"cd".repeat(32)}` })}::text::jsonb)`;
+      values (${new Date(startedAt * 1000).toISOString()}, ${new Date(startedAt * 1000).toISOString()}, 'benched', ${JSON.stringify({ bench, verdicts, receiptHash: `0x${"cd".repeat(32)}`, ...(manifest ? { manifest } : {}) })}::text::jsonb)`;
   };
   const active = async () => (await sql`select configuration from configurations where status = 'active'`)[0].configuration as FrozenConfiguration;
   const paper = async () => ({
@@ -106,5 +106,23 @@ describe.skipIf(!url)("Roster fresh start on Postgres", async () => {
     const admitted = result.changes.filter((c) => c.startsWith("admitted")).map((c) => c.split(" ")[1]);
     expect(admitted).not.toContain(newcomer(7));
     expect(admitted.sort()).toEqual([newcomer(1), newcomer(2), newcomer(3), newcomer(4), newcomer(8)].sort());
+  });
+
+  test("after a fresh start the pace counts from the reset: 8 a day including its 5, 2 an hour; a review that decided nothing approves no one", async () => {
+    const reset = T0 + 3000; // the previous test's fresh start
+    await sql`update roster_seats set reviewed_at = now() where state in ('probation', 'seated')`;
+    // A strict review approves 5 more; an invalid one (POLICY_VIOLATION, recorded before #94) "approved" newcomer 15.
+    await review(reset + 100, [9, 10, 11, 12, 13].map((i) => newcomer(i)), [9, 10, 11, 12, 13].map((i) => ({ address: newcomer(i), fit: 60 - i })), { status: "VALID", reason: "OK" });
+    await review(reset + 200, [newcomer(15)], [{ address: newcomer(15), fit: 99 }], { status: "INVALID_BUCKET", reason: "POLICY_VIOLATION" });
+    const admittedAt = async (runAt: number) =>
+      (await at(runAt).roster()).changes.filter((c) => c.startsWith("admitted")).map((c) => c.split(" ")[1]);
+    // An hour after the reset: 2 (the hourly limit), best fit on the bench first; the earlier rosters'
+    // admissions don't count.
+    expect(await admittedAt(reset + 3700)).toHaveLength(2);
+    // An hour later: 1, the 8th since the reset (5 + 2 + 1); then none for the rest of the day.
+    expect(await admittedAt(reset + 7400)).toHaveLength(1);
+    expect(await admittedAt(reset + 11100)).toEqual([]);
+    const seated = (await sql`select address from roster_seats where state in ('probation', 'seated')`).map((r: { address: string }) => r.address);
+    expect(seated).not.toContain(newcomer(15));
   });
 });

@@ -123,6 +123,8 @@ update pipeline_controls set fresh_start_requested_at = now() where id = 1;
 - Then every seat admitted before the request is **released** (`release_reason = 'fresh start'`, no 24 h cooldown, so an approved old wallet can come straight back). The bench fills 5 seats at once; the rest follow at the usual pace (§4.1). The new roster is frozen and activated.
 - Once it stands, the **paper books restart** from their starting capital: `paper_state` and `paper_points` move to `paper_state_archive` and `paper_points_archive` (with `archived_at`). Nothing is deleted.
 - `pipeline_controls.fresh_start_done_at` records it. A new request (a later `fresh_start_requested_at`) starts another.
+- The **pace limits restart** at the fresh start: 8 a day and 2 an hour count admissions since it (its first 5 included), not the old roster's.
+- An invalid committee run (`POLICY_VIOLATION` and the like, #94) approves no one, even with a bench recorded before #94; its verdicts still revoke earlier approvals of the wallets it reviewed.
 
 The live equity chart needs no reset: `/api/executor/equity` plots live runs only, so it starts at go-live.
 
