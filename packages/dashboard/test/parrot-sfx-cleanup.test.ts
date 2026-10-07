@@ -12,7 +12,12 @@ test("audio disposal cancels queued cues, stops active voices and releases its c
   const gain = () => ({ gain: param(), connect: mock(() => {}), disconnect: mock(() => {}) });
   const voice = () => ({ frequency: param(), connect: mock(() => {}), disconnect: mock(() => {}), start: mock(() => {}), stop: mock((at?: number) => {}), onended: null });
   const gains: ReturnType<typeof gain>[] = [], voices: ReturnType<typeof voice>[] = [];
-  const context = { state: "running", currentTime: 0, destination: {}, resume: mock(async () => {}), close: mock(async () => {}),
+  const node = () => ({ connect: mock(() => {}), disconnect: mock(() => {}), start: mock(() => {}), stop: mock((at?: number) => {}), onended: null });
+  const context = { state: "running", currentTime: 0, sampleRate: 8000, destination: {}, resume: mock(async () => {}), close: mock(async () => {}),
+    createDynamicsCompressor: () => ({ ...node(), threshold: param(), knee: param(), ratio: param(), attack: param(), release: param() }),
+    createBuffer: (_c: number, length: number) => ({ getChannelData: () => new Float32Array(length) }),
+    createBufferSource: () => { const v = { ...node(), buffer: null as unknown }; voices.push(v as never); return v; },
+    createBiquadFilter: () => ({ ...node(), type: "lowpass", frequency: param() }),
     createGain: () => { const g = gain(); gains.push(g); return g; },
     createOscillator: () => { const v = voice(); voices.push(v); return v; },
   };
