@@ -3,6 +3,7 @@ import { useRef } from "react";
 import "./lp.css";
 import { ExposureBars, Panel, PaperTable, RunStrip, StatTile, TargetsVsHeld, Waiting } from "../components/Charts";
 import { LineChart } from "../components/LineChart";
+import { ExposureFlow } from "../components/ExposureFlow";
 import { DashHeader } from "../components/lp/DashHeader";
 import { Hero } from "../components/lp/Hero";
 import { Parrot, ParrotSymbols } from "../components/lp/ParrotSymbols";
@@ -80,6 +81,12 @@ export default function Page() {
               </Panel>
             )}
           </div>
+
+          {!!data?.exposures?.sources?.length && (
+            <div className="mb-4">
+              <ExposureFlow key={data.exposures.runAt} exposures={data.exposures} />
+            </div>
+          )}
 
           <div className="mb-4">
             <Panel id="pipeline" tone={4} title="Selection pipeline">

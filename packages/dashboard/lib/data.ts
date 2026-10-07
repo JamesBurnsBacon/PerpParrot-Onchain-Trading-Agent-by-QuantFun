@@ -53,7 +53,11 @@ export const ordersOf = (r: Run) => r.orders ?? r.plan?.orders.length ?? 0;
 
 export type Equity = { runs: number; points: [tMs: number, equityUsd: number][] };
 export type Status = { dryRun: boolean; account: string; controls: { paused: boolean }; lastRunAt: number | null };
-export type Exposures = { runAt: number; exposures: { asset: string; fraction: number }[] };
+export type Exposures = {
+  runAt: number;
+  exposures: { asset: string; fraction: number }[];
+  sources?: { address: string; weight: number; contributions: { asset: string; fraction: number }[] }[];
+};
 
 // Backend GET /pipeline (src/pipeline status()); timestamps are ISO strings.
 export type SelectionStatus = "running" | "activated" | "kept" | "benched" | "rejected" | "failed";
