@@ -14,10 +14,12 @@
   "license": "UNLICENSED",
   "dependencies": {
     "@vercel/functions": "^3.9.11",
-    "viem": "^2.57.3"
+    "viem": "^2.57.3",
+    "zod": "3.25.76"
   },
   "devDependencies": {
     "@types/bun": "^1.4.2",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "@electric-sql/pglite": "0.3.14"
   }
 }

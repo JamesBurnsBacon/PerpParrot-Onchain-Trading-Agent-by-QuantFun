@@ -9,7 +9,7 @@
       "installCommand": "bun install --frozen-lockfile --production --omit=peer",
       "devCommand": "bun run dev",
       "functions": {
-        "src/server.ts": { "includeFiles": "packages/backend/{fixtures,frozen,node_modules/**/@noble/hashes}/**" }
+        "src/server.ts": { "includeFiles": "packages/backend/{fixtures,frozen,node_modules/**/@noble/hashes}/**", "maxDuration": 600 }
       }
     },
     "executor": {
@@ -40,6 +40,10 @@
   "crons": [
     { "path": "/api/backend/cron/snapshot", "schedule": "9,19,29,39,49,59 * * * *" },
     { "path": "/api/executor/cron/run", "schedule": "0,10,20,30,40,50 * * * *" },
-    { "path": "/api/executor/cron/watchdog", "schedule": "*/5 * * * *" }
+    { "path": "/api/executor/cron/watchdog", "schedule": "*/5 * * * *" },
+    { "path": "/api/backend/cron/discover", "schedule": "15 */12 * * *" },
+    { "path": "/api/backend/cron/refresh", "schedule": "*/5 * * * *" },
+    { "path": "/api/backend/cron/priority", "schedule": "*/10 * * * *" },
+    { "path": "/api/backend/cron/agent", "schedule": "4-59/5 * * * *" }
   ]
 }

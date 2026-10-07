@@ -14,6 +14,11 @@ import type { PositionsSnapshot } from "../../shared/snapshot";
 import { keccakUtf8 } from "./snapshot";
 import { PostgresEligibilityStore, PostgresPaperStore, PostgresSnapshotStore, readPostgresArtifact } from "./pg-store";
 import { MemorySnapshotStore } from "./snapshot";
+import { PgIngestStore, bunDatabase } from "./ingest/store";
+import { IngestPipeline, ingestHandler } from "./ingest/pipeline";
+import { BudgetClient, SOURCES } from "./ingest/client";
+import { agentOptions } from "./ingest/strategy-agent";
+import { setInfoRequester } from "./hyperliquid";
 
 const env = process.env;
 const required = (name: string) => {
@@ -59,29 +64,40 @@ const paper = new PaperService({
   cfg: { minOrderUsd: 10, driftFraction: 0.1, marginCap: 0.95, slippageBps: envNumber("PAPER_SLIPPAGE_BPS", 5, 0, 100) },
 });
 
-const service = new SnapshotService({
-  // Relative to packages/backend, wherever the process starts (vercel.json bundles fixtures/ and frozen/).
-  configurations: new FileConfigurationSource(resolve(import.meta.dir, "..", required("CONFIGURATION_PATH")), required("FROZEN_CONFIGURATION_HASH")),
-  eligibility: new EligibilityTracker(sql ? new PostgresEligibilityStore(sql) : new MemoryEligibilityStore(), undefined, (m) =>
-    log("eligibility refused", { reason: m }),
-  ),
-  store,
-  nowMs: Date.now,
-  // Local end-to-end runs ask for the next :x0 ahead of time (scripts/e2e-mirror.sh): set 600 there.
-  maxLeadSeconds: leadSeconds(env.SNAPSHOT_MAX_LEAD_SECONDS),
-  onBuilt: (runAt, json) => {
-    const step = paper.step(runAt, json).then(
-      (points) => {
-        if (points.length) log("paper books stepped", { runAt, books: points.length });
-      },
-      (e) => log("paper books not stepped", { runAt, error: (e as Error).message }),
-    );
-    // The snapshot is served before the books step; on Vercel this keeps the function
-    // alive until they have (a no-op elsewhere).
-    waitUntil(step);
-    return step;
-  },
-});
+let service: SnapshotService | undefined;
+function snapshotService(): SnapshotService {
+  if (service) return service;
+  if (!env.CONFIGURATION_PATH || !env.FROZEN_CONFIGURATION_HASH) throw new SnapshotError(503, "Mirror configuration is not set");
+  service = new SnapshotService({
+    // Relative to packages/backend, wherever the process starts (vercel.json bundles fixtures/ and frozen/).
+    configurations: new FileConfigurationSource(resolve(import.meta.dir, "..", required("CONFIGURATION_PATH")), required("FROZEN_CONFIGURATION_HASH")),
+    eligibility: new EligibilityTracker(sql ? new PostgresEligibilityStore(sql) : new MemoryEligibilityStore(), undefined, (m) =>
+      log("eligibility refused", { reason: m }),
+    ),
+    store,
+    nowMs: Date.now,
+    // Local end-to-end runs ask for the next :x0 ahead of time (scripts/e2e-mirror.sh): set 600 there.
+    maxLeadSeconds: leadSeconds(env.SNAPSHOT_MAX_LEAD_SECONDS),
+    onBuilt: (runAt, json) => {
+      const step = paper.step(runAt, json).then(
+        (points) => {
+          if (points.length) log("paper books stepped", { runAt, books: points.length });
+        },
+        (e) => log("paper books not stepped", { runAt, error: (e as Error).message }),
+      );
+      // The snapshot is served before the books step; on Vercel this keeps the function
+      // alive until they have (a no-op elsewhere).
+      waitUntil(step);
+      return step;
+    },
+  });
+
+  return service;
+}
+const ingestStore = sql ? new PgIngestStore(bunDatabase(sql)) : undefined;
+if (ingestStore) setInfoRequester(body => new BudgetClient(ingestStore.budget("mirror"), AbortSignal.timeout(90_000))
+  .request(SOURCES.info, body, ["clearinghouseState", "spotClearinghouseState", "allMids", "l2Book", "orderStatus", "exchangeStatus"].includes(String(body.type)) ? 2 : 20));
+const ingest = ingestHandler(ingestStore ? new IngestPipeline(ingestStore, Date.now, undefined, agentOptions(env)) : undefined, env.CRON_SECRET);
 
 // Dashboard artifacts (shared/dashboard.ts): Supabase, or JSON files in ARTIFACTS_DIR locally.
 const readArtifact = sql
@@ -102,6 +118,8 @@ const server = Bun.serve({
     const { pathname: path, searchParams } = new URL(req.url);
     // Public under /api/backend on Vercel; the bare paths serve local runs.
     const pathname = path.replace(/^\/api\/backend(?=\/|$)/, "") || "/";
+    const ingestResponse = await ingest(req, pathname);
+    if (ingestResponse) return ingestResponse;
     // Pinned hash and store type, for the pre-deploy check (scripts/predeploy-check.ts).
     if (req.method === "GET" && pathname === "/health") {
       return Response.json({ ok: true, frozenConfigurationHash: env.FROZEN_CONFIGURATION_HASH, store: sql ? "postgres" : "memory" });
@@ -110,7 +128,7 @@ const server = Bun.serve({
     if (req.method === "GET" && pathname === "/cron/snapshot") {
       if (!cronAuthorized(req)) return Response.json({ error: "unauthorized" }, { status: 401 });
       try {
-        const runAt = await service.tick();
+        const runAt = await snapshotService().tick();
         if (runAt) log("snapshot ready", { runAt });
         return Response.json({ runAt: runAt ?? null });
       } catch (e) {
@@ -129,7 +147,7 @@ const server = Bun.serve({
       const { lastRunAt } = await paper.view(Number.MAX_SAFE_INTEGER);
       if (!lastRunAt) return Response.json({ error: "no run yet" }, { status: 404, headers: cors });
       if (exposuresCache?.runAt !== lastRunAt) {
-        const exposures = exposuresFromSnapshot(JSON.parse(await service.get(lastRunAt)));
+        const exposures = exposuresFromSnapshot(JSON.parse(await snapshotService().get(lastRunAt)));
         exposuresCache = { runAt: lastRunAt, exposures: [...exposures].map(([asset, fraction]) => ({ asset, fraction })) };
       }
       return Response.json(exposuresCache, { headers: cors });
@@ -149,7 +167,7 @@ const server = Bun.serve({
 
     const runAt = Number(m[2]);
     try {
-      const json = await service.get(runAt);
+      const json = await snapshotService().get(runAt);
       if (m[1] === "snapshots") {
         log("snapshot served", { runAt, bytes: json.length });
         return new Response(json, { headers: { "Content-Type": "application/json", ...cors } });
@@ -175,9 +193,9 @@ const server = Bun.serve({
 
 // Check every 15 s; tick() only builds inside the window before each :x0 run. Not on
 // Vercel, where instances stop between requests: /cron/snapshot runs it there.
-if (!env.VERCEL) {
+if (!env.VERCEL && env.CONFIGURATION_PATH && env.FROZEN_CONFIGURATION_HASH) {
   setInterval(() => {
-    service
+    snapshotService()
       .tick()
       .then((runAt) => runAt && log("snapshot ready", { runAt }))
       .catch((e) => log("scheduled snapshot failed", { error: (e as Error).message }));

@@ -2,7 +2,11 @@ import type { PerpState, PortfolioResponse } from "../../shared/account";
 
 const INFO_URL = "https://api.hyperliquid.xyz/info";
 
+let sharedRequester: ((body: Record<string, unknown>) => Promise<unknown>) | undefined;
+// The deployed backend shares one Postgres limit across ingest, mirror, eligibility and paper reads.
+export const setInfoRequester = (requester: typeof sharedRequester) => { sharedRequester = requester; };
 export const info = async <T>(body: Record<string, unknown>): Promise<T> => {
+  if (sharedRequester) return await sharedRequester(body) as T;
   const res = await fetch(INFO_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

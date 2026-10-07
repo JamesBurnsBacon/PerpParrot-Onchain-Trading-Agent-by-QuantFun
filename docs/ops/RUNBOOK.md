@@ -4,6 +4,10 @@ How to run, deploy, freeze and stop the live copy-trading path: every 10 minutes
 the frozen sources' positions and turns them into target exposures, and the executor trades toward
 them. Design: README §4.7, §4.8, §4.13, §4.14. There is no Chainlink CRE (removed 2026-10-07).
 
+Candidate discovery, the 12-hour rolling refresh, ten-minute 200-source refresh and 25-finalist
+strategy-analysis queue are covered in the [ingest runbook](../ingest/POSTGRES_RUNBOOK.md).
+Score and strategy-analysis results do not activate a mirror configuration.
+
 ## Pieces
 
 | Piece | Code | Runs on | Talks to |
