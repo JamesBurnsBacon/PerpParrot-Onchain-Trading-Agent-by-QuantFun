@@ -146,16 +146,78 @@ describe.skipIf(!url)("Pipeline on Postgres", async () => {
     expect(accounts.qualified).toBeGreaterThan(5);
   });
 
+  test("the overlap guard drops a candidate that holds the same book as a better one, and says so", async () => {
+    // Free the review slot the earlier tests left running.
+    await sql`update selection_runs set status = 'failed', started_at = now() - interval '2 hours'`;
+    const asked: string[] = [];
+    const logs: string[] = [];
+    // The first two candidates asked (rank order) hold the same book; every other one has its own market.
+    const positions = async (a: string) => {
+      asked.push(a);
+      const market = asked.indexOf(a) < 2 ? "BTC" : `M${a}`;
+      return [{ market, signedNotionalUsd: 1000, leverage: null, liquidationDistance: null }];
+    };
+    const make = (guard: boolean) =>
+      new Pipeline({
+        sql,
+        account: address(999),
+        policy: { maxExposureOverlap: 0.5 } as Policy,
+        log: (m, d) => void logs.push(`${m} ${JSON.stringify(d)}`),
+        now: () => NOW,
+        info: (perMinute) => new PacedInfo(perMinute, info, async () => {}),
+        overlapGuard: guard,
+        positions,
+        picks: 8, // of the 10 candidates the sample leaves
+
+      });
+    const picksOf = async (id: number) => {
+      const [run] = await sql`select finalists from selection_runs where id = ${id}`;
+      return run.finalists as { finalists: { address: string }[]; overlapGuard?: { excluded: number; reads: number; pool: number } };
+    };
+
+    const off = await make(false).select(true);
+    const baseline = await picksOf(off.id!);
+    expect(baseline.overlapGuard).toBeUndefined(); // off: the saved pick has no new field
+    expect(asked).toEqual([]); // and no reads
+
+    await sql`update selection_runs set status = 'failed', started_at = now() - interval '2 hours'`;
+    const on = await make(true).select(true);
+    const guarded = await picksOf(on.id!);
+    const [first, second] = asked;
+    expect(logs.filter((l) => l.startsWith("overlap guard"))).toEqual([expect.stringContaining('"excluded":1')]);
+    const names = baseline.finalists.map((f) => f.address);
+    expect(names).toContain(second!);
+    expect(guarded.finalists.map((f) => f.address)).not.toContain(second!);
+    expect(guarded.finalists.map((f) => f.address)).toContain(first!);
+    expect(guarded.overlapGuard).toMatchObject({ excluded: 1 });
+    expect(guarded.overlapGuard!.pool).toBeLessThanOrEqual(60);
+    expect(guarded.finalists).toHaveLength(8); // the count does not shrink
+    expect(baseline.finalists).toHaveLength(8);
+  });
+
+  test("a failed book read leaves the pick exactly as Score made it", async () => {
+    await sql`update selection_runs set status = 'failed', started_at = now() - interval '2 hours'`;
+    const make = (positions: (a: string) => Promise<never>) =>
+      new Pipeline({ sql, account: address(999), policy: { maxExposureOverlap: 0.5 } as Policy, log: () => {}, now: () => NOW, info: (perMinute) => new PacedInfo(perMinute, info, async () => {}), overlapGuard: true, positions, picks: 8 });
+    const run = await make(async () => Promise.reject(new Error("down"))).select(true);
+    const [row] = await sql`select finalists from selection_runs where id = ${run.id!}`;
+    expect(row.finalists.overlapGuard).toBeUndefined();
+    await sql`update selection_runs set status = 'failed', started_at = now() - interval '2 hours'`;
+    const plain = await new Pipeline({ sql, account: address(999), policy: { maxExposureOverlap: 0.5 } as Policy, log: () => {}, now: () => NOW, info: (perMinute) => new PacedInfo(perMinute, info, async () => {}), overlapGuard: false, picks: 8 }).select(true);
+    const [base] = await sql`select finalists from selection_runs where id = ${plain.id!}`;
+    expect(row.finalists.finalists).toEqual(base.finalists.finalists);
+  });
+
   test("recording the picks' overlap adds one field and leaves the saved pick untouched", async () => {
     const saved = { finalists: [{ address: "0xa", rank: 1 }], funnel: [{ stage: "scored", count: 3 }], highFrequency: 2 };
-    const [{ id }] = await sql`insert into selection_runs (started_at, status, finalists) values (now(), 'rejected', ${saved}::jsonb) returning id`;
+    const [{ id }] = await sql`insert into selection_runs (started_at, status, finalists) values (now(), 'rejected', ${JSON.stringify(saved)}::jsonb) returning id`;
     const overlap = { threshold: 0.5, pairs: 1, above: 0, max: 0.4, top: [], byAddress: { "0xa": 0.4 } };
-    await sql`update selection_runs set finalists = finalists || ${{ overlap }}::jsonb where id = ${id}`;
+    await sql`update selection_runs set finalists = coalesce(finalists, '{}'::jsonb) || ${JSON.stringify({ overlap })}::jsonb where id = ${id}`;
     const [run] = await sql`select finalists from selection_runs where id = ${id}`;
     expect(run.finalists).toEqual({ ...saved, overlap });
     // A run whose pick was never saved still records (coalesce) instead of silently staying null.
     const [{ id: bare }] = await sql`insert into selection_runs (started_at, status) values (now(), 'rejected') returning id`;
-    await sql`update selection_runs set finalists = coalesce(finalists, '{}'::jsonb) || ${{ overlap }}::jsonb where id = ${bare}`;
+    await sql`update selection_runs set finalists = coalesce(finalists, '{}'::jsonb) || ${JSON.stringify({ overlap })}::jsonb where id = ${bare}`;
     const [fresh] = await sql`select finalists from selection_runs where id = ${bare}`;
     expect(fresh.finalists).toEqual({ overlap });
     await sql`delete from selection_runs where id in ${sql([id, bare])}`;

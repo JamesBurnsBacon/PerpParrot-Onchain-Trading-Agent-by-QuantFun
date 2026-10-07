@@ -10,6 +10,7 @@ import type { SQL } from "bun";
 import { fillStats, isHighFrequency, pickLeaderboard, sameAddresses, scoringWindows, type Fill, type LeaderboardRow, type Tracked } from "./derive";
 import { PacedInfo, getJson } from "./hl";
 import { routingStats } from "./info-router";
+import { overlapGuard, readPositionsBulk, type GuardSummary, type PositionReader } from "./overlap-pick";
 import { pickVaults } from "./vaults";
 import { parsePortfolio, scoreCandidates, toFrameCandidates, type ScoreInput, type ScoreResult } from "../score";
 import { buildReviewInput, positionsFromStates, type LivePosition } from "../../review/input.ts";
@@ -29,6 +30,7 @@ const HOUR = 3_600_000;
 const LEADERBOARD = "https://stats-data.hyperliquid.xyz/Mainnet/leaderboard";
 const QUALIFIED = 250; // Score's top distinct accounts over the scan
 const PICKS = 25; // picked every 10 minutes from the qualified list, and reviewed
+const GUARD_POOL = 60; // candidates whose books the overlap guard reads (PICK_OVERLAP_GUARD=on)
 const CLAIMS = 200; // accounts one refresh claims; unprocessed ones are released
 const WORKERS = 3; // concurrent Hyperliquid reads in one refresh, sharing its weight budget
 // Qualifying waits for 95% of the scan, or this long after it with what is fresh (cold start).
@@ -43,6 +45,10 @@ export type PipelineOptions = {
   log: (msg: string, data?: Record<string, unknown>) => void;
   now?: () => number;
   info?: (perMinute: number) => PacedInfo; // Hyperliquid info client (tests)
+  // PICK_OVERLAP_GUARD=on (and NOWNODES_API_KEY): prefer picks whose books do not overlap (overlap-pick.ts).
+  overlapGuard?: boolean;
+  positions?: PositionReader; // book reader for the guard (tests)
+  picks?: number; // how many accounts a pick keeps (default PICKS; tests)
   // "strict": only the review core's VALID manifest activates. "basic" (default): when the core
   // rejects for missing measured evidence, keep the finalists the AI rated acceptable (below).
   gate?: "strict" | "basic";
@@ -202,7 +208,9 @@ export class Pipeline {
     if (!force && ready.length / rows.length < 0.9) return { status: "waiting", reason: `${ready.length}/${rows.length} qualified accounts have fresh fills` };
     const highFrequency = ready.filter((r) => isHighFrequency(r.orders_per_day)).length;
     const inputs = ready.filter((r) => !isHighFrequency(r.orders_per_day)).map(toInput);
-    const result = scoreCandidates(inputs, { finalists: PICKS });
+    let result = scoreCandidates(inputs, { finalists: this.o.picks ?? PICKS });
+    const guard = await this.guarded(inputs, result);
+    if (guard) result = guard.result;
 
     // The AI review runs only when the 25 change (a rejected set isn't reviewed again).
     const [last] = await sql`select finalists -> 'finalists' as finalists from selection_runs
@@ -216,12 +224,36 @@ export class Pipeline {
 
     const [{ id }] = await sql`insert into selection_runs (started_at, status, accounts) values (${new Date(this.now()).toISOString()}, 'running', ${inputs.length}) returning id`;
     try {
-      const outcome = await this.review(id as number, inputs, result, highFrequency);
+      const outcome = await this.review(id as number, inputs, result, highFrequency, guard?.summary);
       return { id, ...outcome };
     } catch (e) {
       log("selection failed", { id, error: (e as Error).message });
       await sql`update selection_runs set status = 'failed', error = ${(e as Error).message}, finished_at = now() where id = ${id}`;
       return { id, status: "failed", reason: (e as Error).message };
+    }
+  }
+
+  // The overlap guard (opt-in): the top GUARD_POOL candidates' books are read NOWNodes first and the pick
+  // prefers candidates that don't overlap one already chosen. Any failure leaves Score's own pick.
+  private async guarded(inputs: ScoreInput[], base: ScoreResult): Promise<{ result: ScoreResult; summary: GuardSummary } | undefined> {
+    const { log, policy } = this.o;
+    const on = this.o.overlapGuard ?? (process.env.PICK_OVERLAP_GUARD === "on" && !!process.env.NOWNODES_API_KEY);
+    const threshold = policy?.maxExposureOverlap;
+    if (!on || typeof threshold !== "number" || !Number.isFinite(threshold)) return undefined;
+    try {
+      const pool = scoreCandidates(inputs, { finalists: GUARD_POOL });
+      const g = await overlapGuard({ ranked: pool.finalists, want: this.o.picks ?? PICKS, threshold, read: this.o.positions ?? readPositionsBulk, now: this.now });
+      if (!g) {
+        log("overlap guard skipped", { reason: "a read failed or NOWNodes paused" });
+        return undefined;
+      }
+      const dropped = new Set(g.excluded);
+      const result = dropped.size ? scoreCandidates(inputs.filter((i) => !dropped.has(i.address)), { finalists: this.o.picks ?? PICKS }) : base;
+      log("overlap guard", { ...g.summary, changed: !sameAddresses(base.finalists, result.finalists) });
+      return { result, summary: g.summary };
+    } catch (e) {
+      log("overlap guard failed", { error: String((e as Error)?.message ?? e) });
+      return undefined;
     }
   }
 
@@ -250,13 +282,13 @@ export class Pipeline {
     return { accounts: fresh.length, qualified: result.finalists.length };
   }
 
-  private async review(id: number, inputs: ScoreInput[], result: ScoreResult, highFrequency: number): Promise<{ status: string; reason?: string }> {
+  private async review(id: number, inputs: ScoreInput[], result: ScoreResult, highFrequency: number, guard?: GuardSummary): Promise<{ status: string; reason?: string }> {
     const { sql, log, policy } = this.o;
     const score = toFrameCandidates(result);
     const byAddress = new Map(result.candidates.map((c) => [c.address, c]));
     const finalists = result.finalists.map((address) => ({ address, kind: byAddress.get(address)?.kind, score: byAddress.get(address)?.score, rank: byAddress.get(address)?.rank }));
     const funnel = result.funnel;
-    await sql`update selection_runs set finalists = ${JSON.stringify({ finalists, funnel, highFrequency })}::jsonb where id = ${id}`;
+    await sql`update selection_runs set finalists = ${JSON.stringify({ finalists, funnel, highFrequency, ...(guard ? { overlapGuard: guard } : {}) })}::jsonb where id = ${id}`;
     if (score.candidates.length === 0) throw new Error(`no frame candidates (${result.finalists.length} finalists)`);
 
     // Live positions and equity of each finalist (the review's evidence and the leverage check).
@@ -272,7 +304,7 @@ export class Pipeline {
     // Each pick's largest same-direction overlap with another pick. Evidence only: nothing here selects.
     try {
       const overlap = summarizeOverlap(score.addresses, positions, policy.maxExposureOverlap);
-      await sql`update selection_runs set finalists = coalesce(finalists, '{}'::jsonb) || ${{ overlap }}::jsonb where id = ${id}`;
+      await sql`update selection_runs set finalists = coalesce(finalists, '{}'::jsonb) || ${JSON.stringify({ overlap })}::jsonb where id = ${id}`;
     } catch (e) {
       log("overlap not recorded", { id, error: String((e as Error)?.message ?? e) });
     }
