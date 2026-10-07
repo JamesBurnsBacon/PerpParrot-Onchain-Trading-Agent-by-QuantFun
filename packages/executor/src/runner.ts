@@ -18,6 +18,8 @@ export type RunnerConfig = {
   runTtlSeconds: number;
   // A run still going after this is cancelled before its next order batch and alerted on.
   runTimeoutMs: number;
+  // Dry run only: size targets as if our equity were this (an unfunded account plans no orders).
+  dryRunEquityUsd?: number;
 };
 
 export type RunnerDeps = {
@@ -29,6 +31,8 @@ export type RunnerDeps = {
   config: RunnerConfig;
   // Where a run's targets come from: the backend (targets.ts).
   targets: TargetSource;
+  // The configuration the pipeline activated (Supabase); the pinned hash when there is none.
+  activeConfigurationHash?: () => Promise<string | undefined>;
   lock?: RunLock;
 };
 
@@ -109,13 +113,14 @@ export class Runner {
       const targets = await this.deps.targets(runAt);
       record.evidence = { snapshotHash: targets.snapshotHash, configurationHash: targets.configurationHash, exposures: targets.exposures };
       const { config } = this.deps;
-      if (targets.configurationHash !== config.frozenConfigurationHash.toLowerCase()) throw new Error(`configuration mismatch: targets from ${targets.configurationHash}`);
+      const pinned = ((await this.deps.activeConfigurationHash?.()) ?? config.frozenConfigurationHash).toLowerCase();
+      if (targets.configurationHash !== pinned) throw new Error(`configuration mismatch: targets from ${targets.configurationHash}`);
       if (targets.account !== config.account.toLowerCase()) throw new Error(`account mismatch: targets for ${targets.account}`);
       const exposures = targets.exposures.map((e) => ({ asset: e.asset, fraction: Number(e.exposureE9) / 1e9 }));
       const gross = exposures.reduce((sum, e) => sum + Math.abs(e.fraction), 0);
       if (gross > config.maxGrossLeverage) throw new Error(`gross exposure ${gross.toFixed(2)}× exceeds ${config.maxGrossLeverage}×`);
       // Targets = exposure × our equity now (account = truth).
-      const equity = Math.max(account.equityUsd, 0);
+      const equity = this.deps.exchange.dryRun && config.dryRunEquityUsd ? config.dryRunEquityUsd : Math.max(account.equityUsd, 0);
       return planOrders(new Map(exposures.map((e) => [e.asset, e.fraction * equity])), account, markets, config.plan);
     }, expiresAt));
   }

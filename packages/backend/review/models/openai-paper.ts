@@ -34,7 +34,7 @@ export function openAIPaperCommittee(options:PaperModelOptions,core:PaperModelCo
     const body={model,messages:[{role:'system',content:prompts[stage]},{role:'user',content:JSON.stringify(user)}],temperature:0,store:false,max_completion_tokens:8192,
       response_format:{type:'json_schema',json_schema:{name:`paper_${stage}`,strict:true,schema:{type:'object',additionalProperties:false,properties,required:Object.keys(properties)}}}};
     if(new TextEncoder().encode(JSON.stringify(body)).length>115000)throw new Error('paper model request exceeds budget');
-    const value=await postJson(endpoint,body,{Authorization:`Bearer ${apiKey}`},signal,fetcher);
+    const value=await postJson(endpoint,body,{Authorization:`Bearer ${apiKey}`},signal,fetcher,core.agentTimeoutMs);
     const envelope=z.object({model:z.literal(model),choices:z.array(z.object({finish_reason:z.literal('stop'),message:z.object({content:z.string().max(200000),refusal:z.string().nullable().optional()})})).length(1)}).parse(value);
     if(envelope.choices[0].message.refusal)throw new Error('model refusal');
     const output:unknown=JSON.parse(envelope.choices[0].message.content);
