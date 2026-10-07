@@ -87,6 +87,14 @@ describe.skipIf(!url)("Roster on Postgres", async () => {
     expect((await at(T0).roster()).status).toBe("activated");
   });
 
+  test("a seat without an average leverage takes it from the latest review that measured it", async () => {
+    await sql`update roster_seats set average_leverage = null where address = ${seeded[4]} and state in ('probation', 'seated')`;
+    await sql`insert into selection_runs (started_at, status, finalists) values (now() - interval '2 hours', 'benched', ${JSON.stringify({ measured: { [seeded[4]]: { averageLeverage: 0.7 } } })}::text::jsonb),
+      (now() - interval '1 hour', 'benched', ${JSON.stringify({ measured: { [seeded[4]]: { averageLeverage: 0.3 } } })}::text::jsonb)`;
+    await at(T0).roster();
+    expect((await seatLeverage(sql)).find((l) => l.address === seeded[4])).toEqual({ address: seeded[4], averageLeverage: 0.3 });
+  });
+
   test("a seated wallet flat for 3 runs releases its seat; the replacement waits for weight to free up, then fills it", async () => {
     await snapshot(T0 + 600, [seeded[0]], [newcomer(1)]);
     expect((await at(T0 + 600).roster()).changes).toEqual([]); // flat 2 runs

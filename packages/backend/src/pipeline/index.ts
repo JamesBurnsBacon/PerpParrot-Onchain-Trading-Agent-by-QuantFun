@@ -458,6 +458,13 @@ export class Pipeline {
       }
     }
 
+    // A seat without its 30-day average leverage (seeded, or admitted before it was kept) takes it
+    // from the latest review that measured the wallet, so the snapshot's normalization covers it.
+    await sql`update roster_seats s set average_leverage = (
+        select (r.finalists -> 'measured' -> s.address ->> 'averageLeverage')::double precision from selection_runs r
+        where r.finalists -> 'measured' -> s.address ->> 'averageLeverage' is not null order by r.started_at desc limit 1)
+      where s.average_leverage is null and s.state in ${sql([...ACTIVE])}`;
+
     // 1. Observe the latest stored snapshot (flat tracking; winding-down caps).
     let seats = await this.activeSeats();
     const [snap] = await sql`select run_at, body from run_snapshots order by run_at desc limit 1`;
