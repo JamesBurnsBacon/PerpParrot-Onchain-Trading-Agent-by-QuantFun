@@ -51,6 +51,29 @@ export type Equity = { runs: number; points: [tMs: number, equityUsd: number][] 
 export type Status = { dryRun: boolean; account: string; controls: { paused: boolean }; lastRunAt: number | null };
 export type Exposures = { runAt: number; exposures: { asset: string; fraction: number }[] };
 
+// Backend GET /pipeline (src/pipeline status()); timestamps are ISO strings.
+export type SelectionStatus = "running" | "activated" | "rejected" | "failed";
+export type PipelineView = {
+  accounts: { listed: number; fresh: number; errors: number; listed_at: string | null };
+  selections: {
+    id: number;
+    started_at: string;
+    finished_at: string | null;
+    status: SelectionStatus;
+    accounts: number | null;
+    configuration_hash: string | null;
+    error: string | null;
+    manifest: { status: string; reason: string; sources: { address: string; weight: number }[] } | null;
+  }[];
+  active: { hash: string; activated_at: string; sources: { candidate: number; sourceAddress: string; weightUnits: number; ceilingUnits: number }[] } | null;
+  // The latest run only (absent on older backends).
+  latest?: {
+    id: number;
+    finalists: { finalists: { address: string; kind?: string; score?: number; rank?: number }[]; funnel: { stage: string; count: number }[] } | null;
+    summary: { candidate: number; address?: string; aggressiveFit: number | null; reject: number | null; leverageRisk: number | null; evidenceRisk: number | null }[] | null;
+  } | null;
+};
+
 export type DashboardData = {
   paper: PaperView | null;
   runs: Run[] | null; // summaries of the last day's runs
@@ -60,6 +83,7 @@ export type DashboardData = {
   exposures: Exposures | null;
   backtest: BacktestArtifact | null;
   funnel: FunnelArtifact | null;
+  pipeline: PipelineView | null;
   loadedAt: number;
 };
 
@@ -73,7 +97,7 @@ const get = async <T,>(url: string): Promise<T | null> => {
 };
 
 export const load = async (): Promise<DashboardData> => {
-  const [paper, runs, equity, recent, status, exposures, backtest, funnel] = await Promise.all([
+  const [paper, runs, equity, recent, status, exposures, backtest, funnel, pipeline] = await Promise.all([
     get<PaperView>(`${BACKEND}/paper`),
     get<Run[]>(`${EXECUTOR}/runs?summary=1&limit=144`),
     get<Equity>(`${EXECUTOR}/equity`),
@@ -82,8 +106,9 @@ export const load = async (): Promise<DashboardData> => {
     get<Exposures>(`${BACKEND}/exposures`),
     get<BacktestArtifact>(`${BACKEND}/artifacts/backtest`),
     get<FunnelArtifact>(`${BACKEND}/artifacts/funnel`),
+    get<PipelineView>(`${BACKEND}/pipeline`),
   ]);
-  return { paper, runs, equity, recent, status, exposures, backtest, funnel, loadedAt: Date.now() };
+  return { paper, runs, equity, recent, status, exposures, backtest, funnel, pipeline, loadedAt: Date.now() };
 };
 
 // Refreshes every minute: mirror runs land every 10 min, so this is plenty live.
@@ -146,7 +171,7 @@ export const pct = (v: number, digits = 2) => `${v >= 0 ? "+" : ""}${v.toFixed(d
 export const usd = (v: number) =>
   v.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: v >= 1000 ? 0 : 2 });
 export const time = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-const dayTime = (ms: number) =>
+export const dayTime = (ms: number) =>
   new Date(ms).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 
 // Time labels for a chart: clock time within a day and a half, date and time beyond.
