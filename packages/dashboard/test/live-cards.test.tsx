@@ -49,9 +49,11 @@ test("an awaiting request card shows the dry-run sketch, says nothing is sent, a
   expect(out).not.toContain("PENDING ·");
 });
 
-test("a saved request card shows PENDING with the request id, no order wording and no Confirm button", () => {
+test("a saved request card shows the SAVED stamp (pending, awaiting a human) with the request id, no order wording and no Confirm button", () => {
   const out = renderToStaticMarkup(<LiveCards card={{ kind: "request", stage: "saved", plan: PLAN, previewHash: `0x${"ab".repeat(32)}`, requestId: "req-9", sources: 5 }} onClose={() => {}} onConfirm={() => {}} />);
-  expect(out).toContain("PENDING");
+  expect(out).toContain("PENDING"); // the accessible label keeps the plain status word
+  expect(out).toContain("SAVED");
+  expect(out).toContain("waiting for a human");
   expect(out).toContain("req-9");
   expect(out).toContain("No orders were placed");
   expect(out).not.toContain("Confirm (save pending request)");

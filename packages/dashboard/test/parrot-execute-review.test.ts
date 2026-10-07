@@ -23,6 +23,7 @@ test("review-10: cached demo consistently describes simulation and live still de
   }
   const live = render(false, preview);
   expect(live).toContain(`Request ${preview.requestId} saved. Awaiting operator freeze.`);
-  expect(live).toContain("PENDING");
+  expect(live).toContain("SAVED"); // the stamp word for a saved request awaiting a human
+  expect(live).toContain("waiting for a human");
   expect(live).not.toContain("Simulated request.");
 });

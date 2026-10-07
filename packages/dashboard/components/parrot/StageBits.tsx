@@ -42,7 +42,8 @@ export function StageCard({ label, children, onClose }: { label: string; childre
 export function SavedStamp({ id, hash, demo = false }: { id: string | null; hash: string; demo?: boolean }) {
   return <div className="saved-ticket" role="status">
     <span className="ticket-punch" aria-hidden="true"><Icon kind="check" /></span>
-    <strong className="pending-stamp">{demo ? "SIMULATED" : "PENDING"}</strong>
+    <strong className="pending-stamp">{demo ? "SIMULATED" : "SAVED"}</strong>
+    {!demo && <span className="ticket-wait">waiting for a human</span>}
     <span className="ticket-id" title={id ?? undefined}>{demo ? "Not saved" : id ?? "—"}</span>
     <code title={hash}>{hash.slice(0, 12)}…</code>
     <span className="sr-only">{demo ? "Simulated request. Nothing was saved; no operator will review it." : `Request ${id} saved. Awaiting operator freeze. No orders were placed.`}</span>

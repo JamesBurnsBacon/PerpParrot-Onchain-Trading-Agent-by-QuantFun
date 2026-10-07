@@ -321,3 +321,10 @@ html:has(.parrot-show), body:has(.parrot-show) { height: 100%; overflow: hidden;
 .parrot-show .voice-dock { gap: 14px; }
 .parrot-show .parrot-live { gap: 6px 14px; }
 .parrot-show .compact-receipt { margin-top: 0; max-width: 300px; }
+
+/* Listening rings stay inside the gap under the parrot and never paint over the controls. */
+@keyframes bird-listen { 0% { opacity: .45; transform: scale(.97); } 100% { opacity: 0; transform: scale(1.04); } }
+.parrot-show .parrot-halo i { inset: -8%; }
+.parrot-show .parrot-scene { z-index: 1; }
+.parrot-show .voice-dock { position: relative; z-index: 4; }
+.parrot-show .ticket-wait { font-size: 12px; font-weight: 850; color: #6f3d12; }

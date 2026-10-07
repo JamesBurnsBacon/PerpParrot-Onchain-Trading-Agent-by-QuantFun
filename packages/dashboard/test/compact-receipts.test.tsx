@@ -65,7 +65,7 @@ test("production uses the shared observer silently; scoped CSS keeps 44px/12px a
   expect(page.indexOf("<CompactReceipt")).toBeGreaterThan(page.indexOf("<LiveTalk"));
   expect(page.indexOf("<CompactReceipt")).toBeLessThan(page.indexOf("<StageFlock"));
   expect(page).not.toContain("parrot-privacy"); // the footer is intentionally gone for now (to be restored before publishing)
-  const css = source("app/parrot/parrot-show.css").split("/* A2:")[1];
+  const css = source("app/parrot/parrot-show.css").split("/* A2:")[1].split("/* One screen, nothing to page")[0]; // the original receipt + reduced-motion region, not the later layout additions
   for (const text of ["max-width: 320px", "min-height: 44px", "font-size: 12px", "text-overflow: ellipsis", "prefers-reduced-motion", "animation: none"]) expect(css).toContain(text);
   expect(css).not.toMatch(/@keyframes|animation:(?! none)/);
 });
