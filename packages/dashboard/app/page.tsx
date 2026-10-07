@@ -55,7 +55,7 @@ export default function Page() {
           </div>
 
           <div className="mb-4">
-            <Panel id="perf" tone={2} peek="right" title="Performance since start" meta={data?.paper?.lastRunAt ? time(data.paper.lastRunAt * 1000) : undefined}>
+            <Panel id="perf" tone={2} peek="right" title="Portfolio Performance" meta={data?.paper?.lastRunAt ? time(data.paper.lastRunAt * 1000) : undefined}>
               {series.length ? (
                 <LineChart series={series} format={(v) => pct(v)} xFormat={stamp(series)} height={320} />
               ) : (

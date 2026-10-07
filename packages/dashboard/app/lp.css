@@ -307,8 +307,9 @@
 .lp .lp-panel[data-tone="5"] { --chip: #fbd9b4; --chipdot: #d9822f; }
 .lp .lp-panel tbody tr { transition: background 0.15s; }
 .lp .lp-panel tbody tr:hover { background: #fbf3de; }
-.lp-peek { position: absolute; top: -40px; right: 34px; width: 58px; height: 62px; pointer-events: none; z-index: 3; animation: lp-peek 3.2s ease-in-out infinite; transform-origin: 50% 100%; }
-.lp-peek.left { right: auto; left: 34px; scale: -1 1; }
+/* The parrot faces right: mirrored at the right edge and as drawn at the left, so both look into the page. */
+.lp-peek { position: absolute; top: -40px; right: 34px; width: 58px; height: 62px; pointer-events: none; z-index: 3; animation: lp-peek 3.2s ease-in-out infinite; transform-origin: 50% 100%; scale: -1 1; }
+.lp-peek.left { right: auto; left: 34px; scale: 1 1; }
 .lp-peek svg { width: 100%; height: 100%; }
 @keyframes lp-peek {
   0%, 100% { transform: translateY(8px) rotate(-3deg); }
