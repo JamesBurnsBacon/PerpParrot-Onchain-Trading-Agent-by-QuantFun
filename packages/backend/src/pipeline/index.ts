@@ -18,6 +18,7 @@ import {
 import { ENTER_OI_USD, fetchOpenInterest } from "../eligibility";
 import { PacedInfo, getJson } from "./hl";
 import { routingStats } from "./info-router";
+import { verificationStats } from "../snapshot-verify";
 import { overlapGuard, readPositionsBulk, type GuardSummary, type PositionReader } from "./overlap-pick";
 import { pickVaults } from "./vaults";
 import { parsePortfolio, scoreCandidates, toFrameCandidates, type ScoreInput, type ScoreResult } from "../score";
@@ -201,7 +202,7 @@ export class Pipeline {
     // The latest review of Score's picks (not a seat review), with its bench of approvals.
     const [latest] = await sql`select id, finalists, review -> 'summary' as summary, review -> 'bench' as bench from selection_runs
       where (finalists ->> 'scope') is distinct from 'seats' order by started_at desc limit 1`;
-    return { accounts: counts, selections: runs, active: active ?? null, latest: latest ?? null, roster: await this.rosterStatus(), routing: routingStats() };
+    return { accounts: counts, selections: runs, active: active ?? null, latest: latest ?? null, roster: await this.rosterStatus(), routing: routingStats(), verification: verificationStats() };
   }
 
   // Every 10 minutes: qualify when due, then pick 25 and review them if they changed. `force`

@@ -2,6 +2,7 @@ import type { EligibilityTracker } from "./eligibility";
 import type { ConfigurationSource } from "./configuration-source";
 import type { HlReader } from "./hyperliquid";
 import { buildSnapshot, type SnapshotStore } from "./snapshot";
+import { blocks, verifySnapshot, type VerifyOptions } from "./snapshot-verify";
 import { CLOSE_CONFIRM_RUNS, leverageScaleE6, pendingCloses, targetsFromSnapshot } from "../../shared/copy";
 import type { PositionsSnapshot, WindDownSource } from "../../shared/snapshot";
 
@@ -25,6 +26,8 @@ export type SnapshotServiceDeps = {
   windDown?: () => Promise<WindDownSource[]>;
   // Each seated wallet's 30-day average leverage (roster_seats), for the snapshot's normalization.
   leverage?: () => Promise<{ address: string; averageLeverage: number | null }[]>;
+  // Cross-check each snapshot against NOWNodes before it is stored (absent: no check; see snapshot-verify.ts).
+  verify?: VerifyOptions;
   // Called once per run after its snapshot is stored (paper books step here).
   onBuilt?: (runAt: number, json: string) => Promise<void>;
 };
@@ -62,6 +65,17 @@ export class SnapshotService {
     const configuration = await this.deps.configurations.load(nowMs);
     const eligible = await this.deps.eligibility.current(nowMs);
     const snapshot: PositionsSnapshot = await buildSnapshot(configuration, eligible, runAt, this.deps.nowMs, this.deps.hl);
+    // SNAPSHOT_VERIFY: a second read of every source from NOWNodes. A confirmed mismatch stores nothing and fails
+    // the run (the executor alerts and the next run rebuilds); see snapshot-verify.ts.
+    if (this.deps.verify) {
+      const outcome = await verifySnapshot(snapshot, this.deps.verify);
+      if (blocks(outcome, this.deps.verify.mode)) {
+        const what = outcome.diffs.length
+          ? `${outcome.diffs.length} position(s) differ, e.g. ${outcome.diffs[0]!.address} ${outcome.diffs[0]!.asset}`
+          : `${outcome.unverified.length} source(s) could not be read from NOWNodes`;
+        throw new SnapshotError(503, `snapshot for run ${runAt} failed the NOWNodes cross-check (${outcome.verdict}): ${what}`);
+      }
+    }
     // Only sources in this configuration, and only perps it lists, sorted: the JSON stays canonical.
     const inConfiguration = new Set(configuration.sources.map((s) => s.sourceAddress.toLowerCase()));
     const windDown = (await this.deps.windDown?.() ?? [])

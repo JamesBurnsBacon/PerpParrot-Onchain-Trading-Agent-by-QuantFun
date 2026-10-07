@@ -16,7 +16,7 @@
 import { probeCapabilities, type CapabilityReport } from "./capability-probe";
 
 const OFFICIAL_URL = "https://api.hyperliquid.xyz/info";
-const NOWNODES_URL = "https://hype.nownodes.io/info";
+export const NOWNODES_URL ="https://hype.nownodes.io/info";
 
 export const NOWNODES_CAPABLE = new Set([
   "meta",
