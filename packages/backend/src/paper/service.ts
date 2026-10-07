@@ -37,10 +37,17 @@ export type BookSpec = { id: string; label: string; kind: PaperBook["kind"]; sta
 // README §4.10. Balanced = Aggressive × m, with m from the backtest (README §4.3 ❓);
 // until then PAPER_BALANCED_MULTIPLIER (default 0.5). Conservative and the shadow model
 // need their own frozen configurations from the review core.
-export const defaultBooks = (balancedMultiplier = 0.5): BookSpec[] => [
+// The buckets differ only by a fixed multiplier on Aggressive's targets (owner, 2026-10-07):
+// Aggressive × 1, Balanced × 0.5, Conservative × 0.25. Each at the live size and as a $10k twin.
+export const BUCKETS = { aggressive: 1, balanced: 0.5, conservative: 0.25 } as const;
+
+export const defaultBooks = (balancedMultiplier: number = BUCKETS.balanced, conservativeMultiplier: number = BUCKETS.conservative): BookSpec[] => [
   { id: "aggressive-470", label: "Aggressive · $470 (live size)", kind: "copy", startingEquityUsd: 470 },
   { id: "aggressive-10k", label: "Aggressive · $10k twin", kind: "copy", startingEquityUsd: 10_000 },
-  { id: "balanced-470", label: `Balanced · $470 (m=${balancedMultiplier})`, kind: "copy", startingEquityUsd: 470, multiplier: balancedMultiplier },
+  { id: "balanced-470", label: `Balanced · $470 (×${balancedMultiplier})`, kind: "copy", startingEquityUsd: 470, multiplier: balancedMultiplier },
+  { id: "balanced-10k", label: `Balanced · $10k (×${balancedMultiplier})`, kind: "copy", startingEquityUsd: 10_000, multiplier: balancedMultiplier },
+  { id: "conservative-470", label: `Conservative · $470 (×${conservativeMultiplier})`, kind: "copy", startingEquityUsd: 470, multiplier: conservativeMultiplier },
+  { id: "conservative-10k", label: `Conservative · $10k (×${conservativeMultiplier})`, kind: "copy", startingEquityUsd: 10_000, multiplier: conservativeMultiplier },
   { id: "btc-hold", label: "BTC buy & hold · $470", kind: "btc", startingEquityUsd: 470 },
 ];
 

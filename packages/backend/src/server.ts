@@ -7,7 +7,7 @@ import { SQL } from "bun";
 import { waitUntil } from "@vercel/functions";
 import { EligibilityTracker, MemoryEligibilityStore } from "./eligibility";
 import { ActiveConfigurationSource, FileConfigurationSource } from "./configuration-source";
-import { Pipeline, reviewPolicy, windDownCaps } from "./pipeline";
+import { MAX_GROSS_LEVERAGE, Pipeline, reviewPolicy, windDownCaps } from "./pipeline";
 import { SnapshotError, SnapshotService } from "./service";
 import { exposuresFromSnapshot, MemoryPaperStore, PaperService, defaultBooks } from "./paper/service";
 import { targetsFromSnapshot } from "../../shared/copy";
@@ -64,7 +64,7 @@ function envNumber(name: string, fallback: number, min: number, max: number): nu
 // Paper books (README §4.10), stepped once per run when its snapshot is built.
 const paper = new PaperService({
   store: sql ? new PostgresPaperStore(sql) : new MemoryPaperStore(),
-  specs: defaultBooks(envNumber("PAPER_BALANCED_MULTIPLIER", 0.5, 0.05, 1)),
+  specs: defaultBooks(envNumber("PAPER_BALANCED_MULTIPLIER", 0.5, 0.05, 1), envNumber("PAPER_CONSERVATIVE_MULTIPLIER", 0.25, 0.05, 1)),
   cfg: {
     minOrderUsd: 10, driftFraction: 0.1, marginCap: 0.95, slippageBps: envNumber("PAPER_SLIPPAGE_BPS", 5, 0, 100),
     // As the executor's EQUITY_BAND_FRACTION (0.5% of equity).
@@ -81,7 +81,8 @@ const pipeline = sql
   ? new Pipeline({
       sql,
       account: env.HL_ACCOUNT ?? "",
-      policy: reviewPolicy(await Bun.file(resolve(import.meta.dir, "..", "fixtures/frozen-configuration.json")).json()),
+      // The fixture's Aggressive policy, with the owner's gross cap (2026-10-07: 5× equity).
+      policy: { ...reviewPolicy(await Bun.file(resolve(import.meta.dir, "..", "fixtures/frozen-configuration.json")).json()), maxGrossLeverage: MAX_GROSS_LEVERAGE },
       openAiKey: env.OPENAI_API_KEY,
       model: env.REVIEW_MODEL,
       gate: env.REVIEW_GATE === "strict" ? "strict" : "basic",

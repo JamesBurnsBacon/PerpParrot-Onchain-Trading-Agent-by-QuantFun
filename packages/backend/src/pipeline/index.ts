@@ -34,6 +34,9 @@ import { ELIGIBLE_DEXES, type PositionsSnapshot, type WindDownSource } from "../
 import { keccakUtf8 } from "../snapshot";
 
 const HOUR = 3_600_000;
+// The live policy's cap on gross exposure, Σ |target| ÷ equity (owner, 2026-10-07). Applied to the
+// targets before any bucket multiplier, so Balanced (× 0.5) tops out at 2.5× and Conservative (× 0.25) at 1.25×.
+export const MAX_GROSS_LEVERAGE = 5;
 const LEADERBOARD = "https://stats-data.hyperliquid.xyz/Mainnet/leaderboard";
 const QUALIFIED = 250; // Score's top distinct accounts over the scan
 const PICKS = 25; // picked every 10 minutes from the qualified list, and reviewed
@@ -587,6 +590,7 @@ export class Pipeline {
       .map((s, candidate) => ({ candidate, ...s, ceilingUnits }));
     const configurationNow = await activeConfiguration(sql);
     const unchanged =
+      configurationNow?.policyHash === policyCommitment(policy) &&
       configurationNow?.sources.length === sources.length &&
       sources.every((s) => configurationNow.sources.some((c) => c.sourceAddress.toLowerCase() === s.sourceAddress && c.weightUnits === s.weightUnits));
     if (unchanged) {

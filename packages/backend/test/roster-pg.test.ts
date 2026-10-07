@@ -71,6 +71,20 @@ describe.skipIf(!url)("Roster on Postgres", async () => {
     expect((await at(T0).roster()).status).toBe("kept");
   });
 
+  test("a change of policy (the 5× gross cap) re-freezes the same seats under it", async () => {
+    const policy = { ...reviewPolicy(configuration), maxGrossLeverage: 5 };
+    const pipeline = new Pipeline({ sql, account: configuration.account, policy, log: () => {}, now: () => T0 * 1000 + 6 * 60_000, info: (perMinute) => new PacedInfo(perMinute, info, async () => {}) });
+    const before = await active();
+    const result = await pipeline.roster();
+    expect(result.status).toBe("activated");
+    const after = await active();
+    expect(after.policy.maxGrossLeverage).toBe(5);
+    expect(after.sources).toEqual(before.sources);
+    expect((await pipeline.roster()).status).toBe("kept");
+    // Back to the fixture's policy for the steps below.
+    expect((await at(T0).roster()).status).toBe("activated");
+  });
+
   test("a seated wallet flat for 3 runs releases its seat; the replacement waits for weight to free up, then fills it", async () => {
     await snapshot(T0 + 600, [seeded[0]], [newcomer(1)]);
     expect((await at(T0 + 600).roster()).changes).toEqual([]); // flat 2 runs
