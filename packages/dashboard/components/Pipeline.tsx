@@ -4,6 +4,8 @@ import { dayTime, type PipelineView, type SelectionStatus } from "../lib/data";
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 const ms = (iso: string | null | undefined) => (iso ? new Date(iso).getTime() : NaN);
 const when = (iso: string | null | undefined) => (iso ? dayTime(ms(iso)) : "—");
+const gateLabel = (gate: "strict" | "basic" | "none" | null | undefined) =>
+  gate === "strict" ? "strict review" : gate === "basic" ? "basic fallback" : gate === "none" ? "no approval" : "";
 const ago = (iso: string | null | undefined) => {
   const m = (Date.now() - ms(iso)) / 60_000;
   if (!Number.isFinite(m)) return "—";
@@ -185,7 +187,7 @@ export function Pipeline({ view }: { view: PipelineView }) {
       <details className="lp-details">
         <summary>Details</summary>
         <div className="flex flex-col gap-4">
-        <Tile label="Latest selection" note={run ? (run.error ?? run.manifest?.reason ?? `${run.accounts ?? "—"} accounts scored`) : "none yet · every 10 min"}>
+        <Tile label="Latest selection" note={run ? [gateLabel(run.gate), run.error ?? run.manifest?.reason ?? `${run.accounts ?? "—"} accounts scored`].filter(Boolean).join(" · ") : "none yet · every 10 min"}>
           {run ? (
             <div className="flex items-center gap-2">
               <Badge status={run.status} />
@@ -207,8 +209,8 @@ export function Pipeline({ view }: { view: PipelineView }) {
                     <td className="py-1.5 pr-2" style={{ color: "var(--ink)" }}>{when(r.started_at)}</td>
                     <td className="py-1.5 pr-2"><Badge status={r.status} /></td>
                     <td className="py-1.5 pr-2 text-right" style={{ color: "var(--ink-2)" }} title="Accounts scored">{r.accounts ?? "—"}</td>
-                    <td className="max-w-[12rem] truncate py-1.5" style={{ color: "var(--muted)" }} title={r.error ?? r.manifest?.reason ?? ""}>
-                      {r.error ?? (r.manifest ? `${r.manifest.sources.length} src · ${r.manifest.reason}` : "")}
+                    <td className="max-w-[12rem] truncate py-1.5" style={{ color: "var(--muted)" }} title={[gateLabel(r.gate), r.error ?? r.manifest?.reason].filter(Boolean).join(" · ")}>
+                      {r.error ?? (r.manifest ? [gateLabel(r.gate), `${r.manifest.sources.length} src`, r.manifest.reason].filter(Boolean).join(" · ") : "")}
                     </td>
                   </tr>
                 ))}
