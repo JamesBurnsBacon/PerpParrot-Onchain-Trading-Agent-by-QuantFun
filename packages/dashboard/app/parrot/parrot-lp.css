@@ -1,0 +1,119 @@
+/* The landing page's soft theme on the Parrot page (same tokens as app/lp.css).
+ * Presentation only, scoped under .parrot-page: layout, behaviour and the Calm / reduced-motion
+ * rules of parrot.css are untouched (those rules already silence every animation added here).
+ * Light only: the dark tokens of parrot.css are overridden below. */
+:root:has(.parrot-page) { --page: #efe3d0; color-scheme: light; }
+
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) .parrot-page.parrot-page {
+    --parrot-beige: #efe3d0; --parrot-stage: #e4eacf; --parrot-chip: #f3eedf; --parrot-warning: #ffe0a8; --parrot-warning-ink: #57310c;
+    --parrot-deep: #3f9a3a; --surface: #fffcf5; --ink: #24283c; --ink-2: #555449; --muted: #65665b; --ring: #4a49252b; --axis: #a7a68e; --grid: #dedfcf;
+    --parrot-shadow: 0 8px 0 #30291b0a, 0 18px 45px #30291b0c;
+  }
+}
+:root[data-theme="dark"] .parrot-page.parrot-page {
+  --parrot-beige: #efe3d0; --parrot-stage: #e4eacf; --parrot-chip: #f3eedf; --parrot-warning: #ffe0a8; --parrot-warning-ink: #57310c;
+  --parrot-deep: #3f9a3a; --surface: #fffcf5; --ink: #24283c; --ink-2: #555449; --muted: #65665b; --ring: #4a49252b; --axis: #a7a68e; --grid: #dedfcf;
+  --parrot-shadow: 0 8px 0 #30291b0a, 0 18px 45px #30291b0c;
+}
+
+.parrot-page {
+  color-scheme: light;
+  font-family: ui-rounded, "SF Pro Rounded", "Nunito", system-ui, sans-serif;
+  background-color: var(--parrot-beige);
+  background-image: radial-gradient(#e0d0b0 1.6px, transparent 1.8px);
+  background-size: 28px 28px;
+  padding-top: 34px;
+  overflow-x: clip;
+}
+
+/* the green awning along the top edge */
+.parrot-page .parrot-awning { position: fixed; left: 0; top: 0; width: 100%; height: 30px; z-index: 60; pointer-events: none; background: radial-gradient(circle at 28px 0, #6cc04a 27px, transparent 28px) 0 0 / 56px 30px repeat-x; }
+.parrot-page .parrot-awning::after { content: ""; position: absolute; inset: 0; height: 36px; background: radial-gradient(circle at 28px 0, transparent 27px, #3f9a3a 28px, #3f9a3a 31px, transparent 32px) 0 0 / 56px 36px repeat-x; opacity: .35; }
+
+/* header: back link, the product name, nothing on the right */
+.parrot-page .parrot-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.parrot-page .parrot-top-spacer { min-width: 72px; }
+.parrot-page .parrot-brand { display: flex; align-items: center; gap: 8px; font-size: 21px; font-weight: 950; letter-spacing: -.04em; }
+.parrot-page .parrot-brand svg { width: 28px; height: 30px; }
+
+/* stage: a cream card with the hill, drifting leaves and a ringed, sparkling mascot */
+.parrot-page .parrot-stage-card { position: relative; overflow: hidden; isolation: isolate; background: var(--surface); border: 3px solid #fff; border-radius: 34px; box-shadow: 0 10px 0 rgba(63, 154, 58, .14), 0 28px 60px rgba(48, 41, 27, .1); }
+.parrot-page .parrot-stage-card::before { content: ""; position: absolute; inset: 14px; z-index: -3; border-radius: 24px; background: radial-gradient(ellipse at 50% 35%, #fffcf5 0%, #fffcf580 28%, transparent 65%), var(--parrot-stage); }
+.parrot-page .parrot-stage-card > .parrot-stage { padding: 24px 24px 104px; }
+.parrot-page .parrot-scenery { position: absolute; inset: 0; z-index: -1; pointer-events: none; }
+.parrot-page .parrot-hill { position: absolute; left: -25%; width: 150%; height: 120px; bottom: -64px; border-radius: 50% 50% 0 0; background: #6cc04a; box-shadow: 0 -13px 0 #8bcd69, 0 -26px 0 #b4dc92; transform: rotate(-7deg); transform-origin: center bottom; }
+.parrot-page .parrot-hill.back { bottom: -58px; left: -55%; background: #3f9a3a; box-shadow: none; transform: rotate(12deg); }
+.parrot-page .parrot-leaf { position: absolute; top: 0; width: 38px; height: 14px; border-radius: 90% 10% 90% 10%; opacity: .9; animation: parrot-fall 9s linear infinite; }
+.parrot-page .parrot-leaf:nth-child(3n) { background: #f29a2e; }
+.parrot-page .parrot-leaf:nth-child(3n + 1) { background: #6cc04a; }
+.parrot-page .parrot-leaf:nth-child(3n + 2) { background: #3f9a3a; }
+@keyframes parrot-fall { from { transform: translateY(-50px) rotate(-30deg); } to { transform: translateY(640px) rotate(80deg); } }
+/* The rainbow ring and the four sparkles are pseudo-elements of the avatar, so its markup is untouched. */
+.parrot-page .parrot-avatar::before { content: ""; position: absolute; inset: -8%; z-index: -1; pointer-events: none; border: 9px solid transparent; border-top-color: #eac744; border-right-color: #9683bf; border-bottom-color: #f29a2e; border-left-color: #639ec4; border-radius: 50%; transform: rotate(-25deg); animation: parrot-spin 18s linear infinite; }
+@keyframes parrot-spin { to { transform: rotate(335deg); } }
+.parrot-page .parrot-avatar::after { content: ""; position: absolute; inset: -14%; pointer-events: none; animation: parrot-twinkle 2.6s ease-in-out infinite;
+  background: center / 100% 100% no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath fill='%23eac744' d='M8 10.8L8.77 13.23L11.2 14L8.77 14.77L8 17.2L7.23 14.77L4.8 14L7.23 13.23Z'/%3E%3Cpath fill='%239683bf' d='M93 33.9L93.5 35.5L95.1 36L93.5 36.5L93 38.1L92.5 36.5L90.9 36L92.5 35.5Z'/%3E%3Cpath fill='%23f29a2e' d='M6 81.3L6.65 83.35L8.7 84L6.65 84.65L6 86.7L5.35 84.65L3.3 84L5.35 83.35Z'/%3E%3Cpath fill='%23639ec4' d='M95 90.2L95.43 91.57L96.8 92L95.43 92.43L95 93.8L94.57 92.43L93.2 92L94.57 91.57Z'/%3E%3C/svg%3E"); }
+@keyframes parrot-twinkle { 0%, 100% { transform: scale(.94); opacity: .55; } 50% { transform: scale(1.04); opacity: 1; } }
+
+/* the talk button: the landing page's chunky green candy */
+.parrot-page .parrot-talk { border: 2px solid var(--parrot-navy); box-shadow: 0 7px 0 var(--parrot-deep); }
+.parrot-page .parrot-talk:not(:disabled):hover { transform: translateY(-2px); box-shadow: 0 9px 0 var(--parrot-deep); }
+.parrot-page .parrot-talk:not(:disabled):active { transform: translateY(4px); box-shadow: 0 3px 0 var(--parrot-deep); }
+.parrot-page .parrot-talk--active { border-color: var(--ring); box-shadow: 0 5px 0 #30291b14; }
+.parrot-page .parrot-mute { border: 2px solid #fff; box-shadow: 0 4px 0 #30291b14; }
+
+/* panels, stepper, chips: white border, big radius, chunky shadow */
+.parrot-page .parrot-rail section { position: relative; border: 3px solid #fff; border-radius: 30px; box-shadow: 0 9px 0 rgba(48, 41, 27, .06), 0 20px 44px rgba(48, 41, 27, .07); }
+.parrot-page .parrot-rail section > header h2 { display: inline-flex; align-items: center; gap: 8px; padding: 5px 16px 5px 12px; border-radius: 99px; background: #cfe9bd; font-size: 14px; font-weight: 950; letter-spacing: -.01em; }
+.parrot-page .parrot-rail section > header h2::before { content: ""; width: 12px; height: 12px; border-radius: 50% 10% 50% 10%; background: #3f9a3a; transform: rotate(-10deg); }
+.parrot-page .parrot-rail section[data-tone="2"] > header h2 { background: #f9e7a6; }
+.parrot-page .parrot-rail section[data-tone="2"] > header h2::before { background: #c99a12; }
+.parrot-page .parrot-rail section[data-tone="3"] > header h2 { background: #e0d8f3; }
+.parrot-page .parrot-rail section[data-tone="3"] > header h2::before { background: #7a6bb5; }
+.parrot-page .parrot-rail section[data-tone="4"] > header h2 { background: #cfe4f2; }
+.parrot-page .parrot-rail section[data-tone="4"] > header h2::before { background: #3f78b0; }
+.parrot-page .parrot-rail section[data-tone="5"] > header h2 { background: #fbd9b4; }
+.parrot-page .parrot-rail section[data-tone="5"] > header h2::before { background: #d9822f; }
+.parrot-page .parrot-rail .wallet-board { border: 0; } /* the board is not a panel: it keeps its own cards */
+.parrot-page .parrot-stepper { border: 3px solid #fff; border-radius: 999px; box-shadow: 0 6px 0 rgba(48, 41, 27, .06), 0 14px 36px rgba(48, 41, 27, .08); }
+.parrot-page .parrot-stepper button { border-radius: 999px; }
+.parrot-page .parrot-stepper button.is-current { box-shadow: 0 4px 0 #14182d; }
+.parrot-page .parrot-chip { border: 2px solid #fff; box-shadow: 0 3px 0 rgba(48, 41, 27, .06); font-weight: 750; }
+.parrot-page .parrot-button { border: 2px solid #fff; box-shadow: 0 4px 0 rgba(48, 41, 27, .08); border-radius: 999px; }
+.parrot-page .parrot-button--primary { border-color: var(--parrot-navy); box-shadow: 0 5px 0 var(--parrot-deep); }
+.parrot-page .lp-tile { border: 3px solid #fff !important; border-top: 12px solid var(--tab, var(--parrot-green)) !important; border-radius: 30px !important; box-shadow: 0 8px 0 rgba(48, 41, 27, .06), 0 18px 36px rgba(48, 41, 27, .07); }
+
+/* the flock: a colored tab on every bird card, candy-striped risk bars */
+.parrot-page .wallet-card { border: 3px solid #fff; border-top: 12px solid var(--tab, #6cc04a); border-radius: 30px; box-shadow: 0 8px 0 rgba(48, 41, 27, .06), 0 18px 36px rgba(48, 41, 27, .07); transition: transform .3s cubic-bezier(.34, 1.56, .64, 1); }
+.parrot-page .wallet-card:hover { transform: translateY(-4px) rotate(-1deg); }
+.parrot-page .wallet-position:nth-child(5n + 1) { --tab: #6cc04a; }
+.parrot-page .wallet-position:nth-child(5n + 2) { --tab: #eac744; }
+.parrot-page .wallet-position:nth-child(5n + 3) { --tab: #9683bf; }
+.parrot-page .wallet-position:nth-child(5n + 4) { --tab: #639ec4; }
+.parrot-page .wallet-position:nth-child(5n + 5) { --tab: #f29a2e; }
+.parrot-page .wallet-risk > i:first-child, .parrot-page .wallet-risk > i:nth-child(3) { background-image: repeating-linear-gradient(-45deg, rgba(255, 255, 255, .28) 0 8px, transparent 8px 16px); background-size: 22px 22px; animation: parrot-stripe 1.4s linear infinite; }
+@keyframes parrot-stripe { to { background-position: 22px 0; } }
+.parrot-page .wallet-change-chip { border: 2px solid #fff; background: #dff1d2; }
+.parrot-page .wallet-waiting { border-width: 3px; border-radius: 30px; background: rgba(255, 252, 245, .7); }
+
+/* a parrot peeks over the top edge of a panel */
+.parrot-page .parrot-rail .lp-peek { top: -40px; }
+
+@media (max-width: 899px) { .parrot-page .parrot-stage-card > .parrot-stage { padding: 12px 12px 96px; } }
+@media (max-width: 600px) {
+  .parrot-page .parrot-brand { font-size: 18px; }
+  .parrot-page .parrot-top-spacer { min-width: 40px; }
+  .parrot-page .parrot-rail .lp-peek { width: 44px; height: 48px; top: -32px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .parrot-page .parrot-leaf, .parrot-page .parrot-avatar::before, .parrot-page .parrot-avatar::after, .parrot-page .wallet-risk > i { animation: none !important; }
+  .parrot-page .wallet-card:hover, .parrot-page .parrot-talk:hover, .parrot-page .parrot-talk:active { transform: none; }
+}
+/* Calm mode (the page's own motion switch) holds the hover lift too. */
+.parrot-page[data-calm="true"] .wallet-card:hover, .parrot-page[data-calm="true"] .parrot-talk:hover, .parrot-page[data-calm="true"] .parrot-talk:active { transform: none; }
+
+/* The card the parrot's read-only Dashboard tools put on the page (run log, wallet drill-down, backtest). */
+.parrot-page .parrot-live-card { position: relative; margin-top: 18px; animation: parrot-reveal .45s ease-out both; }
+.parrot-page .parrot-live-card-close { position: absolute; top: -10px; right: -8px; z-index: 1; width: 26px; height: 26px; border: 1px solid var(--ring); border-radius: 50%; background: var(--surface); color: var(--muted); font-size: 16px; line-height: 1; cursor: pointer; }
+.parrot-page .parrot-live-card-close:hover { color: var(--ink); }

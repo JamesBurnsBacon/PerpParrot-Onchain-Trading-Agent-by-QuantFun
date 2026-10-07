@@ -1,0 +1,51 @@
+{
+  "model": "gpt-6-luna",
+  "answers": [
+    {
+      "type": "predicate",
+      "name": "supported_by_facts",
+      "probability": 1.0
+    },
+    {
+      "type": "choice",
+      "name": "relation",
+      "choice": "faithful",
+      "probabilities": [
+        {
+          "value": "faithful",
+          "probability": 0.97
+        },
+        {
+          "value": "contradicted",
+          "probability": 0.01
+        },
+        {
+          "value": "unestablished",
+          "probability": 0.02
+        },
+        {
+          "value": "ambiguous",
+          "probability": 0.0
+        }
+      ],
+      "confidence": 0.96
+    },
+    {
+      "type": "predicate",
+      "name": "states_a_fact",
+      "probability": 0.99
+    }
+  ],
+  "usage": {
+    "input_tokens": 487,
+    "input_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0
+    },
+    "output_tokens": 0,
+    "output_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "total_tokens": 487
+  }
+}

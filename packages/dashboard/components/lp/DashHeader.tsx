@@ -14,6 +14,7 @@ export function DashHeader({ alert }: { alert?: string }) {
         <a href="#perf">Performance</a>
         <a href="#pipeline">Pipeline</a>
         <a href="#roster">Roster</a>
+        <a href="/parrot">Talk to the Parrot</a>
       </nav>
       {alert && (
         <span className="lp-alert" role="status">

@@ -1,3 +1,5 @@
+import { handleReceipt, readDecisionsEnv } from "./live/decisions";
+import { MAX_INPUT_TOKENS, MAX_COMPLETION_TOKENS } from "./chat/budget";
 // Backend service (README §4.7): reads the frozen sources' positions from Hyperliquid once per
 // 10-minute run, turns them into the run's target exposures for the executor, steps the paper
 // books, and serves the dashboard's data. Runs on Vercel as the `backend` service under
@@ -18,6 +20,13 @@ import { hlReader } from "./hyperliquid";
 import { nownodesPerp, verifyMode } from "./snapshot-verify";
 import { PostgresEligibilityStore, PostgresPaperStore, PostgresSnapshotStore, readPostgresArtifact } from "./pg-store";
 import { MemorySnapshotStore } from "./snapshot";
+import { handleChat, handlePreview, MemoryRequestStore, PostgresRequestStore, type ChatDeps, type ChatEnv } from "./chat/handler";
+import { MemoryChatLimiter, PostgresChatLimiter } from "./chat/limits";
+import { callIntentModel } from "./chat/openai";
+import { createFinalistsSource, type TrackedAccountRow } from "./chat/finalists";
+import { readLiveEnv } from "./live/config";
+import { handleLiveSession, handleLiveStrategy } from "./live/handler";
+import { validateRuntimePolicy } from "../../shared/src/policy-runtime";
 
 const env = process.env;
 const required = (name: string) => {
@@ -65,8 +74,9 @@ function envNumber(name: string, fallback: number, min: number, max: number): nu
 }
 
 // Paper books (README §4.10), stepped once per run when its snapshot is built.
+const paperStore = sql ? new PostgresPaperStore(sql) : new MemoryPaperStore();
 const paper = new PaperService({
-  store: sql ? new PostgresPaperStore(sql) : new MemoryPaperStore(),
+  store: paperStore,
   specs: defaultBooks(envNumber("PAPER_BALANCED_MULTIPLIER", 0.5, 0.05, 1), envNumber("PAPER_CONSERVATIVE_MULTIPLIER", 0.25, 0.05, 1)),
   cfg: {
     minOrderUsd: 10, driftFraction: 0.1, marginCap: 0.95, slippageBps: envNumber("PAPER_SLIPPAGE_BPS", 5, 0, 100),
@@ -77,6 +87,8 @@ const paper = new PaperService({
 
 // The pinned file (the fixture) until the pipeline activates a configuration in Supabase.
 const fileConfiguration = new FileConfigurationSource(resolve(import.meta.dir, "..", required("CONFIGURATION_PATH")), required("FROZEN_CONFIGURATION_HASH"));
+
+const configurations = sql ? new ActiveConfigurationSource(sql, fileConfiguration) : fileConfiguration;
 
 // The selection pipeline (src/pipeline): needs Postgres. Reviews run under the fixture's
 // Aggressive policy, for our account (HL_ACCOUNT).
@@ -95,7 +107,7 @@ const pipeline = sql
 
 const service = new SnapshotService({
   // Relative to packages/backend, wherever the process starts (vercel.json bundles fixtures/ and frozen/).
-  configurations: sql ? new ActiveConfigurationSource(sql, fileConfiguration) : fileConfiguration,
+  configurations,
   ...(sql ? { windDown: () => windDownCaps(sql), leverage: () => seatLeverage(sql) } : {}),
   eligibility: new EligibilityTracker(sql ? new PostgresEligibilityStore(sql) : new MemoryEligibilityStore(), undefined, (m) =>
     log("eligibility refused", { reason: m }),
@@ -133,6 +145,67 @@ const service = new SnapshotService({
   },
 });
 
+// Chat variables are optional; invalid values fall back without changing the
+// strict parsing of the existing service's environment variables.
+const chatNumber = (name: string, fallback: number, max = Number.MAX_SAFE_INTEGER, integer = false): number => {
+  try {
+    const value = envNumber(name, fallback, 0, max);
+    return integer && !Number.isSafeInteger(value) ? fallback : value;
+  } catch {
+    return fallback;
+  }
+};
+const chatEnv: ChatEnv = {
+  enabled: env.CHAT_ENABLED === "true",
+  apiKey: env.OPENAI_API_KEY || undefined,
+  model: env.CHAT_MODEL || "gpt-5.4-mini",
+  limits: {
+    ipHourly: chatNumber("CHAT_IP_HOURLY_LIMIT", 10, Number.MAX_SAFE_INTEGER, true),
+    previewIpHourly: chatNumber("CHAT_PREVIEW_IP_HOURLY_LIMIT", 30, Number.MAX_SAFE_INTEGER, true),
+    globalDaily: chatNumber("CHAT_GLOBAL_DAILY_LIMIT", 100, Number.MAX_SAFE_INTEGER, true),
+    previewGlobalDaily: chatNumber("CHAT_PREVIEW_GLOBAL_DAILY_LIMIT", 500, Number.MAX_SAFE_INTEGER, true),
+    dailyBudgetMicroUsd: Math.round(chatNumber("CHAT_DAILY_BUDGET_USD", 5, 100) * 1_000_000),
+  },
+  // Conservative ESTIMATES, USD per million tokens. Keep worst-case arithmetic
+  // within safe integer micro-USD even with misconfigured optional prices.
+  priceInPerM: chatNumber("CHAT_PRICE_IN_PER_M_USD", 1, Number.MAX_SAFE_INTEGER / (MAX_INPUT_TOKENS + MAX_COMPLETION_TOKENS)),
+  priceOutPerM: chatNumber("CHAT_PRICE_OUT_PER_M_USD", 4, Number.MAX_SAFE_INTEGER / (MAX_INPUT_TOKENS + MAX_COMPLETION_TOKENS)),
+  ipSalt: env.CHAT_IP_SALT ?? "perpparrot-chat-v1",
+};
+const chatStores = {
+  limiter: sql ? new PostgresChatLimiter(sql) : new MemoryChatLimiter(),
+  requests: sql ? new PostgresRequestStore(sql) : new MemoryRequestStore(),
+};
+const liveEnv = readLiveEnv(env);
+const decisionsEnv = readDecisionsEnv(env);
+// Real finalists for the Parrot: Score over the accounts the selection pipeline refreshed (read-only);
+// without Postgres, or without enough fresh accounts, the labelled sample is used.
+const parrotFinalists = createFinalistsSource(sql ? () => sql`
+  select address, kind, account_value, closed, portfolio, trade_count, maker_share from pipeline_accounts
+  where listed_at >= (select max(listed_at) from pipeline_accounts) - interval '10 minutes'` as Promise<TrackedAccountRow[]> : undefined, { log });
+let chatDeps: Promise<ChatDeps> | undefined;
+const loadChatDeps = (): Promise<ChatDeps> => chatDeps ??= configurations.load(Date.now()).then(
+  ({ policy }): ChatDeps => {
+    // The snapshot source types only the mirror's subset; chat needs the full policy.
+    validateRuntimePolicy(policy);
+    return { env: chatEnv, ...chatStores, callModel: callIntentModel, finalists: parrotFinalists,
+      basePolicy: policy, now: Date.now, log, newId: () => crypto.randomUUID() };
+  },
+).catch((error: unknown) => {
+  // A temporary file failure disables this request; a later request may retry.
+  chatDeps = undefined;
+  throw error;
+});
+const chatCors = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "content-type",
+};
+const chatDisabled = () => Response.json(
+  { ok: false, code: "disabled", reply: "Squawk, chat is resting right now." },
+  { status: 503, headers: chatCors },
+);
+
 // Dashboard artifacts (shared/dashboard.ts): Supabase, or JSON files in ARTIFACTS_DIR locally.
 const readArtifact = sql
   ? readPostgresArtifact(sql)
@@ -146,12 +219,71 @@ const cronAuthorized = (req: Request) => !env.CRON_SECRET || req.headers.get("au
 
 let exposuresCache: { runAt: number; exposures: { asset: string; fraction: number }[]; sources?: ExposureSource[] } | undefined;
 
+// Small named reads reuse the existing store queries; no snapshot generation on this path.
+async function readActiveSources(): Promise<string[]> {
+  return (await configurations.load(Date.now())).sources.map(s => s.sourceAddress);
+}
+async function readPaperPoints() {
+  return paperStore.points(Math.floor(Date.now() / 1000) - 30 * 86_400);
+}
+async function readLiveBookExposures() {
+  const { lastRunAt } = await paper.view(Number.MAX_SAFE_INTEGER);
+  if (!lastRunAt) return null;
+  if (exposuresCache?.runAt !== lastRunAt) {
+    const snapshot = await store.get(lastRunAt);
+    if (!snapshot) throw new SnapshotError(404, `run ${lastRunAt} has no snapshot`);
+    const parsed = JSON.parse(snapshot) as PositionsSnapshot;
+    const exposures = exposuresFromSnapshot(parsed);
+    exposuresCache = { runAt: lastRunAt, exposures: [...exposures].map(([asset, fraction]) => ({ asset, fraction })) };
+    try {
+      exposuresCache.sources = exposureBreakdown(parsed);
+    } catch (error) {
+      console.error("exposure breakdown failed", { runAt: lastRunAt, error });
+    }
+  }
+  return exposuresCache;
+}
+async function readLiveExposures() {
+  return (await readLiveBookExposures())?.exposures ?? null;
+}
+
 const server = Bun.serve({
   port: Number(env.PORT ?? 8788),
   async fetch(req) {
     const { pathname: path, searchParams } = new URL(req.url);
     // Public under /api/backend on Vercel; the bare paths serve local runs.
     const pathname = path.replace(/^\/api\/backend(?=\/|$)/, "") || "/";
+    if (pathname === "/decide/receipt") {
+      if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: chatCors });
+      const response = await handleReceipt(req, { env: decisionsEnv, chatEnv, limiter: chatStores.limiter, fetchImpl: fetch, now: Date.now });
+      for (const [name, value] of Object.entries(chatCors)) response.headers.set(name, value);
+      response.headers.set("Cache-Control", "no-store");
+      return response;
+    }
+    if (pathname === "/live/session" || pathname === "/live/strategy") {
+      if (!liveEnv.enabled || (pathname === "/live/session" && !liveEnv.apiKey)) return chatDisabled();
+      if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: chatCors });
+      let chat: ChatDeps;
+      try { chat = await loadChatDeps(); }
+      catch { return chatDisabled(); }
+      const deps = { ...chat, env: liveEnv, chatEnv, fetchImpl: fetch,
+        context: { activeSources: readActiveSources, paperPoints: readPaperPoints, liveExposures: readLiveExposures } };
+      const response = await (pathname === "/live/session" ? handleLiveSession(req, deps) : handleLiveStrategy(req, deps));
+      for (const [name, value] of Object.entries(chatCors)) response.headers.set(name, value);
+      return response;
+    }
+    if (pathname === "/chat" || pathname === "/chat/preview") {
+      if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: chatCors });
+      if (req.method === "POST") {
+        if (!chatEnv.enabled || (pathname === "/chat" && !chatEnv.apiKey)) return chatDisabled();
+        let deps: ChatDeps;
+        try { deps = await loadChatDeps(); }
+        catch { return chatDisabled(); }
+        const response = await (pathname === "/chat" ? handleChat(req, deps) : handlePreview(req, deps));
+        for (const [name, value] of Object.entries(chatCors)) response.headers.set(name, value);
+        return response;
+      }
+    }
     // Pinned hash and store type, for the pre-deploy check (scripts/predeploy-check.ts).
     if (req.method === "GET" && pathname === "/health") {
       return Response.json({ ok: true, frozenConfigurationHash: env.FROZEN_CONFIGURATION_HASH, store: sql ? "postgres" : "memory" });
@@ -200,19 +332,9 @@ const server = Bun.serve({
     }
     // The target exposures of the last run the paper books stepped (once per run, not per request).
     if (req.method === "GET" && pathname === "/exposures") {
-      const { lastRunAt } = await paper.view(Number.MAX_SAFE_INTEGER);
-      if (!lastRunAt) return Response.json({ error: "no run yet" }, { status: 404, headers: cors });
-      if (exposuresCache?.runAt !== lastRunAt) {
-        const snapshot = JSON.parse(await service.get(lastRunAt)) as PositionsSnapshot;
-        const exposures = exposuresFromSnapshot(snapshot);
-        exposuresCache = { runAt: lastRunAt, exposures: [...exposures].map(([asset, fraction]) => ({ asset, fraction })) };
-        try {
-          exposuresCache.sources = exposureBreakdown(snapshot);
-        } catch (error) {
-          console.error("exposure breakdown failed", { runAt: lastRunAt, error });
-        }
-      }
-      return Response.json(exposuresCache, { headers: cors });
+      const exposures = await readLiveBookExposures();
+      if (!exposures) return Response.json({ error: "no run yet" }, { status: 404, headers: cors });
+      return Response.json(exposures, { headers: cors });
     }
     const artifact = /^\/artifacts\/(backtest|funnel)$/.exec(pathname);
     if (req.method === "GET" && artifact) {

@@ -1,0 +1,141 @@
+"use client";
+
+// Voice-first wallet exploration page over the existing selection pipeline.
+// Show checked facts and save pending requests only; never authorize execution.
+
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { Badge } from "../../components/parrot/Badge";
+import { ParrotAvatar, type AvatarState } from "../../components/parrot/ParrotAvatar";
+import { StepRail, type Step } from "../../components/parrot/StepRail";
+import { Parrot, ParrotSymbols } from "../../components/lp/ParrotSymbols";
+import { ScrollBuddy } from "../../components/lp/ScrollBuddy";
+import { LiveTalk } from "../../components/parrot/LiveTalk";
+import { LiveCards } from "../../components/parrot/LiveCards";
+import type { LiveCard } from "../../lib/parrot-reads";
+import { CompactReceipt } from "../../components/parrot/CompactReceipt";
+import { useSentenceReceipts } from "../../components/parrot/useSentenceReceipts";
+import { useLiveTalk } from "../../components/parrot/useLiveTalk";
+import { canDemo, post, type Failure } from "../../components/parrot/api";
+import { isPreviewResponse, type ChatResponse, type PreviewResponse } from "../../lib/parrot";
+import { PARROT_PRESETS, type ParrotPreset } from "../../lib/parrot-presets";
+import { ParrotEffectsProvider, useParrotEffects, FunControls, Fever } from "../../components/parrot/ParrotEffects";
+import { diffWallets } from "../../lib/wallet-board";
+import { WaitingFlock } from "../../components/parrot/WalletBoard";
+import "../lp.css"; // the landing theme's shared bits: progress bar, click feathers, peeking parrot
+import "./parrot.css";
+import "./parrot-lp.css"; // the landing page's soft theme on this page (light only)
+
+// Drifting leaves behind the stage (decorative; positions and timings are fixed so server and client agree).
+const LEAVES = Array.from({ length: 12 }, (_, i) => ({ left: (i * 37) % 92, delay: -((i * 1.3) % 9), duration: 8 + (i % 4) }));
+
+// Development-only: the whole module is behind a constant condition, so production builds contain neither the import nor its chunk.
+const EffectsLab = process.env.NODE_ENV !== "production"
+  ? lazy(() => import("../../components/parrot/EffectsLab").then(m => ({ default: m.EffectsLab })))
+  : null;
+
+export default function ParrotPage() { return <ParrotEffectsProvider><ParrotContent /></ParrotEffectsProvider>; }
+function ParrotContent() {
+  const fx = useParrotEffects();
+  const fxRef = useRef(fx); fxRef.current = fx;
+  const lastChat = useRef<ChatResponse | null>(null);
+  const [chat, setChat] = useState<ChatResponse | null>(null);
+  const [preview, setPreview] = useState<PreviewResponse | null>(null);
+  const [demo, setDemo] = useState<ParrotPreset | null>(null);
+  const [step, setStep] = useState<Step>(0);
+  const [previewError, setPreviewError] = useState<Failure | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [stale, setStale] = useState(false);
+  const [lab, setLab] = useState(false);
+  const [card, setCard] = useState<LiveCard | null>(null); // the latest read-only Dashboard card the parrot put up
+  // Development-only effects lab: open /parrot?fx=1 (never rendered in production builds).
+  useEffect(() => { if (process.env.NODE_ENV !== "production" && new URLSearchParams(location.search).get("fx") === "1") setLab(true); }, []);
+  const request = useRef<AbortController | null>(null);
+  const receipts = useSentenceReceipts();
+  const live = useLiveTalk(result => {
+    setStale(false); setChat(result); setDemo(null); setPreview(null); setPreviewError(null); setStep(0);
+  }, () => {
+    setChat(null); setPreview(null); setDemo(null); setPreviewError(null); setStep(0); setStale(true);
+  }, demo ? [] : chat?.shortlist.addresses ?? [], { gesture: () => {
+    receipts.begin();
+    // Cached preset identities are illustrations, not server finalist identities.
+    if (demo) { setChat(null); setDemo(null); setPreview(null); setStep(0); }
+    void fx.sfx.unlock().then(() => fx.sfx.play("start"));
+  }, input: () => fx.sfx.input() }, { ...receipts.observers, onCard: setCard });
+
+  useEffect(() => {
+    if (chat && chat !== lastChat.current) {
+      const diff = diffWallets(lastChat.current?.shortlist.addresses ?? [], chat.shortlist.addresses);
+      fxRef.current.trigger("strategy", chat.shortlist.addresses.length, diff.removed.length);
+    }
+    lastChat.current = chat;
+  }, [chat]);
+  useEffect(() => { if (preview) fxRef.current.trigger("lock"); }, [preview]);
+
+  useEffect(() => () => request.current?.abort(), []);
+
+  function playDemo() {
+    if (request.current || live.active || !canDemo(live.view.failure)) return;
+    void fx.sfx.unlock();
+    const preset = PARROT_PRESETS[0];
+    setStale(false); setDemo(preset); setChat(preset.chat); setPreview(null); setPreviewError(null); setStep(0);
+  }
+
+  async function confirm() {
+    if (!chat || preview || request.current || live.active || !chat.shortlist.addresses.length) return;
+    if (demo) { setPreview(demo.preview); return; }
+    const controller = new AbortController(); request.current = controller;
+    setBusy(true); setPreviewError(null);
+    const result = await post("/chat/preview", { intent: chat.intent }, isPreviewResponse, AbortSignal.any([controller.signal, AbortSignal.timeout(30_000)]));
+    if (controller.signal.aborted) return;
+    if ("data" in result) setPreview(result.data);
+    else setPreviewError(result.error);
+    request.current = null; setBusy(false);
+  }
+
+  const state: AvatarState = live.view.phase === "connecting" ? "thinking" : live.active ? live.view.avatar : busy ? "thinking" : "idle";
+
+  return <main data-calm={fx.quiet} className="parrot-page px-4 py-5 sm:px-7 sm:py-7">
+    <ParrotSymbols />
+    <ScrollBuddy />
+    <div className="parrot-awning" aria-hidden="true" />
+    <div className="parrot-shell mx-auto max-w-[1240px]">
+      <header className="parrot-top">
+        <a href="/" className="parrot-back">← Dashboard</a>
+        <h1 className="parrot-brand"><Parrot />PerpParrot<span className="sr-only"> · Talk with PerpParrot</span></h1>
+        <span className="parrot-top-spacer" aria-hidden="true" />
+      </header>
+      <div className="parrot-layout parrot-layout--result">
+        {/* The card and its scenery wrap the stage: the <section> itself stays byte-identical to the frozen
+            pre-integration markup that test/fixtures/parrot-off.fixture.tsx guards. */}
+        <div className="parrot-stage-card min-w-0">
+          <div className="parrot-scenery" aria-hidden="true">
+            {LEAVES.map((l, i) => <i key={i} className="parrot-leaf" style={{ left: `${l.left}%`, animationDelay: `${l.delay}s`, animationDuration: `${l.duration}s` }} />)}
+            <div className="parrot-hill back" /><div className="parrot-hill" />
+          </div>
+        <section className="parrot-stage min-w-0" aria-label="Talk with PerpParrot">
+          <div className="parrot-scene"><ParrotAvatar state={state} stream={live.remoteStream} live={live.view.phase === "live" && !live.view.playbackBlocked} /></div>
+          <LiveTalk live={live} disabled={busy} />
+          <CompactReceipt active={live.view.phase === "live"} {...receipts} />
+          <FunControls />
+          {stale && <p className="parrot-live-status" role="status">Our last change did not finish, so I cleared the plan. Talk live again to redo it.</p>}
+          {!live.active && !demo && canDemo(live.view.failure) && <button type="button" className="parrot-button mt-3" onClick={playDemo}>Play the cached demo</button>}
+          {demo && <div className="mt-4"><Badge kind="CACHED DEMO" /></div>}
+        </section>
+        </div>
+        {chat && <div className="parrot-result min-w-0" data-fever={fx.celebration?.animated || undefined}>
+          <div className="wallet-board-heading">{chat.shortlist.dataSource === "sample" && <Badge kind="SAMPLE DATA" />}<small>No orders are placed.</small></div>
+          <Fever />
+          <p className="sr-only" role="status">Strategy ready. Review Select, Verify, and Execute.</p>
+          <StepRail chat={chat} demo={!!demo} step={step} setStep={setStep} preview={preview} busy={busy} executionDisabled={live.active} failure={previewError} onConfirm={() => void confirm()} />
+        </div>}
+        {!chat && <WaitingFlock />}
+      </div>
+      <LiveCards card={card} onClose={() => setCard(null)} />
+      {lab && EffectsLab && <Suspense fallback={null}><EffectsLab onCard={setCard}
+        onPreset={preset => { setStale(false); setDemo(preset); setChat(preset.chat); setPreview(null); setPreviewError(null); setStep(0); }}
+        onLock={() => { const p = demo ?? PARROT_PRESETS[0]; if (!demo) { setDemo(p); setChat(p.chat); } setPreview(p.preview); }}
+        onReset={() => { setChat(null); setDemo(null); setPreview(null); setStep(0); lastChat.current = null; }} /></Suspense>}
+      <footer className="parrot-privacy">Parrot&apos;s opinion, not advice. Receipts check words, not markets. Voice is processed by OpenAI; when receipts are on, sentences and their turn facts are too. The parrot cannot trade.</footer>
+    </div>
+  </main>;
+}
