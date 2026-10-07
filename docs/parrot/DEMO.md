@@ -5,13 +5,40 @@
 ## Prerequisites and pre-flight
 
 - [ ] Operator confirms [migrations and configuration](INTEGRATION.md#migrations-and-local-setup); a build does not prove deployment.
-- [ ] Confirm server-side `OPENAI_API_KEY`, `LIVE_ENABLED=true`, `DECISIONS_ENABLED=true`, and `CHAT_ENABLED=true` for pending saves. Check remaining budget: rehearsals can exhaust the [default limits](INTEGRATION.md#environment-and-vercel-ownership).
+- [ ] Confirm server-side `OPENAI_API_KEY`, `LIVE_ENABLED=true` and `DECISIONS_ENABLED=true`. `CHAT_ENABLED=true` is needed only for the **Execute** step's hold-to-lock; the voice Confirm does not use it (checked on production, 2026-10-07).
+- [ ] Confirm the chat, live and decisions migrations are applied (`20261006140000_chat.sql`, `20261007000000_live_usage.sql`, `20261008000000_decisions_usage.sql`). Without them Talk live fails with a 503 at start (seen on production, 2026-10-07).
+- [ ] **Call limits.** Each call lasts up to 3 minutes. The default is 3 calls per IP per hour and 30 per day, and a venue shares one IP, so one rehearsal can block the room. Ask the operator to raise `LIVE_IP_HOURLY_LIMIT` and `LIVE_GLOBAL_DAILY_LIMIT` for the event and set them back afterwards. Spend stays capped by `CHAT_DAILY_BUDGET_USD` (about $0.30 per call). When the limit is hit, the status pill says **Wait N min**.
 - [ ] Rehearse `/parrot` on the presentation device. Allow microphone access; click **Enable audio** if blocked. Keep the page visible: hiding it ends the call. Check **End** and mute.
 - [ ] Inspect source badges and context. Say “sample” when labelled. A missing badge does not prove freshness; ask the developer to check `shortlist.dataSource`.
 - [ ] Prepare `/parrot/receipts` as fallback; read its sample receipt. End Live before switching tabs.
-- [ ] Historical Live tests used typed turns and a silent synthetic microphone. Real microphone/spoken audio are **not verified**; rehearse before claiming working voice.
+- [ ] Every Live test so far (including the production run on 2026-10-07) used typed turns and a silent synthetic microphone. Real microphone/spoken audio, including a spoken "yes", is **not verified**; rehearse it before claiming working voice. The on-screen **Confirm** button is the safe fallback.
 
-## Three-minute script
+## Quick card: what to say (live voice, about 2.5 minutes)
+
+Rules of the room:
+
+- The bird answers in English by default and in Japanese when you speak Japanese; it echoes your key words back, then gives one short sentence (about 20 words). If it talks too long, speak over it.
+- Keep the page visible and the call under 3 minutes. Say the whole plan in one call; the next call needs a fresh limit slot.
+- Numbers come from code, not the bird. Say "simulation preview", never "returns".
+- A spoken yes must be your own voice after the bird's summary. A typed or model-made yes does not count; press **Confirm** if the room is noisy.
+
+| # | You say (tested wording) | The bird does | On screen |
+| --- | --- | --- | --- |
+| 1 | "Show me a steady, low drawdown flock of wallets." | Echoes "Steady, low drawdown!", says it found 10 conservative wallets, simulation preview only | Ten wallet birds, each with a drawdown (▼) and a period return (▲) |
+| 2 | "Tell me about wallet number 2." (any number, or a bird name) | One sentence on rank, max drawdown, past data not a promise | Wallet card: rank, max drawdown, realized volatility |
+| 3 | "How is the executor doing right now?" | One sentence on recent runs and orders; says it cannot confirm dry run versus live while the executor status and its latest run disagree | A run card only when the latest run sent orders; with zero orders it is spoken only |
+| 4 | "Does this beat Bitcoin? Show me the backtest." | Says the BTC comparison is not published, so it will not guess | No card (an unavailable backtest is spoken only) |
+| 5 | "Lock this in." | Says the sketch in one line and asks for a yes | **THE SKETCH**: four hypothetical orders on a flat $470 account, "dry run - nothing is sent", and a **Confirm** button |
+| 6 | "Yes." (or press **Confirm**) | Says it saved a pending simulation request | The button reads **Saving…**, then the **SAVED** stamp ("waiting for a human") with the request id. Saving usually takes 1 to 10 seconds |
+| 7 | Press **End** | Call ends | The flock stays on screen |
+
+Japanese variant for step 2: "日本語で教えて。3番のウォレットはどんな感じ？" (the bird echoes "3番! 3番!" and answers in Japanese).
+
+If something goes wrong, use [If a service is unavailable](#if-a-service-is-unavailable). Two things are expected, not bugs: the backtest is not published yet, and the run answer may say it is unsure about the mode.
+
+Every **SAVED** request stays in the database as PENDING until an operator dismisses it, so rehearsal requests pile up. Tell the operator before a rehearsal day.
+
+## Extended script (receipts and Lens)
 
 Timing is a rehearsal plan. End before navigating away; skip saving unless prepared with the operator.
 
