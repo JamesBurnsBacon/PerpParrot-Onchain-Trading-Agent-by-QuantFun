@@ -99,6 +99,14 @@ describe("basicSources", () => {
     expect(sources[1].weight).toBeCloseTo(0.225); // 0.9 × 30/120
   });
 
+  test("keeps at most 15 sources, best fit first", () => {
+    const ids = Array.from({ length: 20 }, (_, i) => i);
+    const many = new Map(ids.map((c) => [c, `0x${(c + 1).toString(16).padStart(40, "0")}`]));
+    const sources = basicSources(ids, ids.map((c) => role(c, 40 + c)), ids.map((c) => risk(c)), policy, many, flat);
+    expect(sources).toHaveLength(15);
+    expect(sources.map((s) => s.candidate)).toEqual(ids.slice(5).reverse()); // fits 59 … 45
+  });
+
   test("scales to the policy's gross leverage", () => {
     const sources = basicSources([0, 1], [role(0, 50), role(1, 50)], [risk(0), risk(1)], policy, addresses, () => ({ executableTargets: 2, grossLeverage: 6, withinPolicy: false }));
     expect(sources[0].weight).toBeCloseTo(0.3 * (0.95 * 3) / 6);

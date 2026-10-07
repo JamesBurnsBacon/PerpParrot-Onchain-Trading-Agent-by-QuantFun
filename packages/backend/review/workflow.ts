@@ -6,6 +6,8 @@ import type {Binding, Frame, Policy, Row, Observation, Critique, Manifest, Sourc
 const ROLE = ['preserver','compounder','diversifier','directional','opportunistic','convexity','reject','conservativeFit','balancedFit','aggressiveFit','confidence'];
 const RISK = ['drawdownRisk','leverageRisk','concentrationRisk','pathRisk','executionRisk','evidenceRisk','confidence'];
 const DIMENSIONS = RISK.filter(k => k !== 'confidence').sort();
+/** Most sources a bucket keeps (owner: 5–15; the freeze itself needs at least 5). */
+export const MAX_SOURCES = 15;
 export interface Assessment {
   executableTargets: number;
   // Must include worst-case active-source renormalization and market eligibility.
@@ -72,7 +74,8 @@ function compile(frame: Frame, policy: Policy, role: Row[], risk: Row[], address
       // Unknown (null) correlation or overlap is never compatible: missing evidence is not safety.
       return pair && pair.correlation!==null && Math.abs(pair.correlation)<=policy.maxPairCorrelation && pair.currentExposureOverlap!==null && pair.currentExposureOverlap<=policy.maxExposureOverlap && !pair.linkedSource;
     });
-    if (compatible) selected.push(c);
+    // Best-scored first, so a crowded field keeps its top MAX_SOURCES rather than failing on capacity.
+    if (compatible && selected.length < MAX_SOURCES) selected.push(c);
   }
   const total = selected.reduce((sum,c)=>sum+c.score,0);
   return selected.map(c=>({candidate:c.candidate,sourceAddress:addresses.get(c.candidate)!,weight:Math.min((1-policy.cashBuffer)*c.score/total,c.ceiling),maxAllocation:c.ceiling}));
@@ -153,7 +156,7 @@ export async function runReview(inputFrame: Frame, inputPolicy: Policy, inputAdd
   try { assessment = deps.assess(structuredClone(sources),structuredClone(frame),structuredClone(policy)); }
   catch { return finish('INVALID_BUCKET','POLICY_VIOLATION',[],count); }
   if (assessment.withinPolicy!==true || !Number.isFinite(assessment.grossLeverage) || assessment.grossLeverage<0 || assessment.grossLeverage>policy.maxGrossLeverage) return finish('INVALID_BUCKET','POLICY_VIOLATION',[],count);
-  if (!Number.isInteger(assessment.executableTargets) || assessment.executableTargets<policy.minExecutableTargets || assessment.executableTargets>10) return finish('INVALID_BUCKET','CAPACITY',[],count);
+  if (!Number.isInteger(assessment.executableTargets) || assessment.executableTargets<policy.minExecutableTargets || assessment.executableTargets>MAX_SOURCES) return finish('INVALID_BUCKET','CAPACITY',[],count);
   if (!fresh()) return finish('INVALID_BUCKET','STALE_INPUT',[],count);
   return finish('VALID','OK',sources,count);
 }

@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {runReview, riskDecision} from '../packages/backend/review/workflow.ts';
+import {runReview, riskDecision, MAX_SOURCES} from '../packages/backend/review/workflow.ts';
 import type {Dependencies} from '../packages/backend/review/workflow.ts';
 import type {Frame, Policy, Row, Observation} from '../packages/shared/src/contracts.ts';
 import {validate} from '../packages/shared/src/validate.ts';
@@ -144,7 +144,7 @@ test('malformed deterministic assessment never passes through coercion',async()=
   for(const assessment of [
     {executableTargets:2,grossLeverage:1,withinPolicy:'false'},
     {executableTargets:2,grossLeverage:NaN,withinPolicy:true},
-    {executableTargets:11,grossLeverage:1,withinPolicy:true},
+    {executableTargets:16,grossLeverage:1,withinPolicy:true},
     {executableTargets:2.5,grossLeverage:1,withinPolicy:true},
   ]) {
     const f=fixture();f.deps.assess=()=>assessment as unknown as ReturnType<Dependencies['assess']>;
@@ -160,6 +160,18 @@ test('cash-only policy returns a valid invalid-bucket result rather than invokin
   const m=await review(f);assert.equal(m.status,'INVALID_BUCKET');
 });
 
+test('a crowded field keeps its best 15 sources (owner range 5–15), not a capacity failure',async()=>{
+  const f=fixture(),ids=Array.from({length:18},(_,i)=>i),base=f.frame.candidates[0];
+  f.frame.candidates=ids.map(candidate=>({...structuredClone(base),candidate}));
+  f.frame.pairs=ids.flatMap(a=>ids.filter(b=>b>a).map(b=>({a,b,correlation:0.2,currentExposureOverlap:0.1,linkedSource:false})));
+  f.addresses.clear();for(const id of ids)f.addresses.set(id,'0x'+(id+1).toString(16).padStart(40,'0'));
+  f.deps.assess=sources=>({executableTargets:sources.length,grossLeverage:1,withinPolicy:true});
+  const m=await review(f);
+  assert.equal(m.status,'VALID');assert.equal(MAX_SOURCES,15);
+  assert.deepEqual(m.sources.map(s=>s.candidate),ids.slice(0,15)); // equal scores: lowest candidate ids first
+  f.deps.assess=()=>({executableTargets:16,grossLeverage:1,withinPolicy:true});
+  assert.equal((await review(f)).reason,'CAPACITY');
+});
 function seal(f: ReturnType<typeof fixture>) {f.frame.policyHash=policyCommitment(f.policy);f.frame.snapshotHash=snapshotCommitment(f.frame,f.addresses);}
 function review(f: ReturnType<typeof fixture>) {seal(f);return runReview(f.frame,f.policy,f.addresses,NOW,f.deps);}
 test('even-node confidence medians round down rather than manufacture eligibility',async()=>{

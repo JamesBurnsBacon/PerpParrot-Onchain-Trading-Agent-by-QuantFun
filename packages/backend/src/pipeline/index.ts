@@ -19,7 +19,7 @@ import { buildReviewInput, positionsFromStates, type LivePosition } from "../../
 import { exposureOverlap, summarizeOverlap } from "../../review/overlap.ts";
 import { openAIPaperCommittee } from "../../review/models/openai-paper.ts";
 import { runCommitteeReview } from "../../review/committee/workflow.ts";
-import type { Assessment } from "../../review/workflow.ts";
+import { MAX_SOURCES, type Assessment } from "../../review/workflow.ts";
 import { commitment } from "../../../shared/src/commitments.ts";
 import { proposeFreeze } from "../../../shared/src/frozen.ts";
 import { validate } from "../../../shared/src/validate.ts";
@@ -450,7 +450,7 @@ const RISKS = ["drawdownRisk", "leverageRisk", "concentrationRisk", "pathRisk", 
 // compile step keeps no one. Until then: keep finalists the Role model doesn't reject and with no
 // Risk score above the policy's reject threshold, weight them by the Role model's fit
 // for the bucket, cap each at maxSourceWeight, keep the cash buffer, and scale down to the
-// policy's gross leverage. At most 10 sources.
+// policy's gross leverage. At most MAX_SOURCES (15) sources.
 export const basicSources = (
   candidates: number[],
   role: Row[],
@@ -470,7 +470,7 @@ export const basicSources = (
       return fit > 0 && addresses.has(candidate) ? [{ candidate, sourceAddress: addresses.get(candidate)!, fit }] : [];
     })
     .sort((a, b) => b.fit - a.fit || a.candidate - b.candidate)
-    .slice(0, 10);
+    .slice(0, MAX_SOURCES);
   const total = kept.reduce((sum, c) => sum + c.fit, 0);
   let sources = kept.map((c) => ({ ...c, weight: Math.min(((1 - policy.cashBuffer) * c.fit) / total, policy.maxSourceWeight) }));
   const { grossLeverage } = assess(sources);
