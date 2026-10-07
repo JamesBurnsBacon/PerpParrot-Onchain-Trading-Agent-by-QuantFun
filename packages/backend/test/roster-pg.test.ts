@@ -8,6 +8,7 @@ import { PacedInfo } from "../src/pipeline/hl";
 import { checkFrozenConfiguration, type FrozenConfiguration } from "../../shared/frozen";
 import { keccakUtf8 } from "../src/snapshot";
 import fixture from "../fixtures/frozen-configuration.json";
+import sample from "./fixtures/score/portfolio-sample.json";
 
 const url = process.env.TEST_DATABASE_URL;
 const HOUR = 3_600_000;
@@ -175,6 +176,25 @@ describe.skipIf(!url)("Roster on Postgres", async () => {
     const runs = await sql`select status from selection_runs where (finalists ->> 'scope') = 'seats'`;
     expect(runs.length).toBe(before + 1);
     expect(runs.every((r: { status: string }) => r.status === "failed")).toBe(true);
+  });
+
+  test("a policy-violating seat review does not become a lost-approval verdict", async () => {
+    const target = seeded[4];
+    const example = sample.find((entry) => entry.id === "addr-02")!;
+    await sql`insert into pipeline_accounts (address, source, kind, account_value, closed, listed_at, portfolio, trade_count)
+      values (${target}, 'leaderboard', 'trader', ${example.accountValue}, ${example.closed}, now(), ${JSON.stringify(example.portfolio)}::text::jsonb, ${example.tradeCount})
+      on conflict (address) do update set portfolio = excluded.portfolio, trade_count = excluded.trade_count`;
+    const pipeline = at(T0 + 7800);
+    (pipeline as unknown as { review: (id: number) => Promise<void> }).review = async (id) => {
+      await sql`update selection_runs set status = 'rejected', finished_at = now(),
+        review = ${JSON.stringify({ gate: "none", manifest: { status: "INVALID_BUCKET", reason: "POLICY_VIOLATION", sources: [] }, verdicts: [{ address: target, approved: false, riskReject: false, fit: 90, liquidatedAt: null }] })}::text::jsonb
+        where id = ${id}`;
+    };
+    const verdicts = await (pipeline as unknown as { reviewSeats: (addresses: string[]) => Promise<unknown> }).reviewSeats([target]);
+    expect(verdicts).toBeUndefined();
+    const [run] = await sql`select status, review -> 'manifest' as manifest from selection_runs where (finalists ->> 'scope') = 'seats' order by id desc limit 1`;
+    expect(run.status).toBe("failed");
+    expect(run.manifest.reason).toBe("POLICY_VIOLATION");
   });
 
   test("probation: briefly flat is kept, idle 6 h releases", async () => {

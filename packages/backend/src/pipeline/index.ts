@@ -799,7 +799,16 @@ export class Pipeline {
       const result = scoreCandidates(inputs, { finalists: inputs.length, allowUnknown: ["minTrades"] });
       if (result.finalists.length === 0) throw new Error("no seat passed Score's filters");
       await this.review(id as number, inputs, result, 0, undefined, "seats");
-      const [run] = await sql`select review -> 'verdicts' as verdicts, finalists -> 'holds' as holds, finalists -> 'measured' as measured from selection_runs where id = ${id}`;
+      const [run] = await sql`select review -> 'manifest' as manifest, review -> 'verdicts' as verdicts,
+        finalists -> 'holds' as holds, finalists -> 'measured' as measured from selection_runs where id = ${id}`;
+      // An invalid committee run is not a decision to wind down every existing seat.
+      // Keep the manifest for audit and use the existing 30-minute failed-review retry.
+      if (!run?.manifest || reviewGate(run.manifest as Pick<Manifest, "status" | "reason">, this.o.gate) === "none") {
+        const reason = run?.manifest?.reason ?? "missing manifest";
+        await sql`update selection_runs set status = 'failed', error = ${`seat review without decision: ${reason}`}, finished_at = now() where id = ${id}`;
+        log("seat review produced no admission decision", { id, reason });
+        return undefined;
+      }
       // Fresh 30-day average leverage for each seat (the snapshot's normalization).
       for (const [address, m] of Object.entries((run?.measured ?? {}) as Record<string, Measured>)) {
         if (m.averageLeverage === null) continue;
