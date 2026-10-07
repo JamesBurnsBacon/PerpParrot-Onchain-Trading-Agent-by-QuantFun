@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { describeError, type ChatResponse, type PreviewResponse } from "../../lib/parrot";
 import { setMicEnabled, functionResultMessages, hasUnfinishedLiveStrategy, initialLiveEvents, isLiveSession, isLiveStrategy, liveAsChat, pendingLiveCalls, reduceLiveEvent, type LiveEvents } from "../../lib/parrot-live";
-import { isReadTool, runReadTool, type LiveCard } from "../../lib/parrot-reads";
+import { isReadTool, runReadTool, showsCard, type LiveCard } from "../../lib/parrot-reads";
 import { isConfirmTool } from "../../lib/parrot-read-tools";
 import { confirmByButton, runConfirmTool, type ConfirmContext, type ConfirmOutcome, type Pending } from "../../lib/parrot-confirm";
 import type { StrategyIntent } from "../../../shared/strategy-intent";
@@ -157,7 +157,7 @@ export function useLiveTalk(onStrategy: (chat: ChatResponse) => void, onStale: (
               // Read-only Dashboard tools: public GETs, code-built facts, a card for the page. Never a mutation.
               const read = await runReadTool(call.name, call.args, { shown: shown.current, evidence: evidence.current }, signal());
               if (!current() || run.closing) return;
-              observersRef.current?.onCard?.(read.card);
+              if (showsCard(read.card)) observersRef.current?.onCard?.(read.card);
               observersRef.current?.onStrategyFacts?.(read.facts);
               output = read.facts;
             } else if (call.args) {

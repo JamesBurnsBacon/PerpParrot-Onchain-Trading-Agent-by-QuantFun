@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { initialLiveEvents, reduceLiveEvent } from "../lib/parrot-live";
-import { buildBacktest, buildRunStatus, buildWallet, isReadTool, resolveWallet, runReadTool } from "../lib/parrot-reads";
+import { buildBacktest, buildRunStatus, showsCard, buildWallet, isReadTool, resolveWallet, runReadTool } from "../lib/parrot-reads";
 import type { Run, Status } from "../lib/data";
 import type { BacktestArtifact, FunnelArtifact } from "../../shared/dashboard";
 import { walletNickname } from "../../shared/wallet-persona";
@@ -80,6 +80,11 @@ describe("get_backtest", () => {
     expect(facts).toContain("Agent picks +12.0% (+7.0 points vs BTC)");
     expect(facts).toContain("not a promise of returns");
     expect(card.kind === "backtest" && card.series.find(s => s.id === "btc")?.reference).toBe(true);
+  });
+  test("an unpublished backtest puts no card on screen, while other unavailable sources still do (positive control)", () => {
+    expect(showsCard(buildBacktest(null).card)).toBe(false);
+    expect(showsCard(buildRunStatus({ runs: null, status: null, exposures: null }).card)).toBe(true);
+    expect(showsCard(buildBacktest(artifact).card)).toBe(true);
   });
   test("an unpublished backtest is unavailable", () => {
     expect(buildBacktest(null).card.kind).toBe("unavailable");
