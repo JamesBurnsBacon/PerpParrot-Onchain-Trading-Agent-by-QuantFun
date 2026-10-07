@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { initialLiveEvents, reduceLiveEvent } from "../lib/parrot-live";
-import { buildBacktest, buildRunStatus, buildWallet, isReadTool, resolveWallet } from "../lib/parrot-reads";
+import { buildBacktest, buildRunStatus, buildWallet, isReadTool, resolveWallet, runReadTool } from "../lib/parrot-reads";
 import type { Run, Status } from "../lib/data";
 import type { BacktestArtifact, FunnelArtifact } from "../../shared/dashboard";
 import { walletNickname } from "../../shared/wallet-persona";
@@ -49,17 +49,25 @@ describe("explain_wallet", () => {
   });
   test("builds citable facts and a card from evidence, funnel and pipeline", () => {
     const pipeline = { latest: { id: 1, finalists: { finalists: [], funnel: [], overlap: { threshold: 0.5, pairs: 1, above: 0, max: 0.2, top: [], byAddress: { [A]: 0.15 } } },
-      summary: [{ candidate: 1, address: A, aggressiveFit: 1, reject: 0, leverageRisk: 0.4, evidenceRisk: 0.1 }], bench: [{ address: A, fit: 1, approvedAt: 1, copyableShare: 0.72, closedPositions: 3, turnoverPerDay: 1, passesHold: true }] } } as never;
+      summary: [{ candidate: 1, address: A, aggressiveFit: 1, reject: 0, leverageRisk: 40, evidenceRisk: 10 }], bench: [{ address: A, fit: 1, approvedAt: 1, copyableShare: 0.72, closedPositions: 3, turnoverPerDay: 1, passesHold: true }] } } as never;
     const { facts, card } = buildWallet({ ref: "1", shown: [A, B], evidence, funnel, pipeline });
-    for (const part of ["Score rank #2", "Max drawdown 3.1%", "Pipeline score 1.23", "Picked by the pipeline yes", "Leverage risk 0.40", "Copyable share 72%", "overlap with other picks 15%", "Steady, small drawdowns."]) expect(facts).toContain(part);
+    for (const part of ["Score rank #2", "Max drawdown 3.1%", "Pipeline score 1.23", "Picked by the pipeline yes", "Leverage risk 40 of 100", "Copyable share 72%", "overlap with other picks 15%", "Steady, small drawdowns."]) expect(facts).toContain(part);
     expect(card.kind === "wallet" && card.picked).toBe(true);
     expect(facts.length).toBeLessThanOrEqual(1200);
   });
   test("an unknown reference or a wallet without any record is stated as such, never guessed", () => {
     expect(buildWallet({ ref: "zzz", shown: [A], evidence: [], funnel: null, pipeline: null }).card.kind).toBe("unavailable");
-    const sample = buildWallet({ ref: "2", shown: [A, B], evidence: [], funnel, pipeline: null });
+    const sample = buildWallet({ ref: "2", shown: [A, B], evidence: [], funnel, pipeline: { latest: null } as never });
     expect(sample.facts).toContain("no record of this wallet");
     expect(sample.card.kind === "wallet" && sample.card.lines.length).toBe(0);
+    // A failed source is "could not read", never a claim that the wallet has no record.
+    const failed = buildWallet({ ref: "2", shown: [A, B], evidence: [], funnel, pipeline: null });
+    expect(failed.facts).toContain("could not be read");
+    expect(failed.facts).not.toContain("no record");
+    expect(failed.card.kind).toBe("unavailable");
+    // A shared prefix is ambiguous: no wallet is explained.
+    expect(resolveWallet("0x", [A, B])).toBeNull();
+    expect(buildWallet({ ref: "0xabab", shown: [A, `0xabab${"1".repeat(36)}`], evidence: [], funnel, pipeline: null }).card.kind).toBe("unavailable");
   });
 });
 
@@ -107,5 +115,46 @@ describe("the read tools stay read-only", () => {
     const source = readFileSync(join(import.meta.dir, "../lib/parrot-reads.ts"), "utf8");
     expect(source).toContain('method: "GET"');
     expect(FORBIDDEN.test(source)).toBe(false);
+  });
+});
+
+describe("runReadTool never ends the call", () => {
+  const stub = (body: unknown, ok = true) => {
+    const g = globalThis as unknown as { window?: unknown; fetch: unknown };
+    const saved = { window: g.window, fetch: g.fetch };
+    g.window = { location: { origin: "http://demo.test" } };
+    g.fetch = async () => ({ ok, json: async () => body });
+    return () => { g.window = saved.window; g.fetch = saved.fetch; };
+  };
+  test("a malformed endpoint response becomes an unavailable card (positive control: the same stub with sane data works)", async () => {
+    const restore = stub({});
+    try {
+      const bad = await runReadTool("get_run_status", {}, { shown: [], evidence: [] }, new AbortController().signal);
+      expect(bad.card.kind).toBe("unavailable");
+      expect(bad.facts).toContain("never guess");
+    } finally { restore(); }
+    // Positive control: the same stub shape with sane, URL-routed data goes through the builders instead of the catch.
+    const g = globalThis as unknown as { fetch: unknown; window?: unknown };
+    const saved = { fetch: g.fetch, window: g.window };
+    g.window = { location: { origin: "http://demo.test" } };
+    g.fetch = async (u: URL) => ({ ok: true, json: async () => (u.pathname.endsWith("/status") ? { dryRun: true, account: "0x", controls: { paused: false }, lastRunAt: 1 } : []) });
+    try {
+      const ok = await runReadTool("get_run_status", {}, { shown: [], evidence: [] }, new AbortController().signal);
+      expect(ok.facts).toContain("Dry run: no real orders are sent");
+      expect(ok.facts).not.toContain("never guess");
+    } finally { g.fetch = saved.fetch; g.window = saved.window; }
+  });
+  test("an HTTP error is unavailable too, and the request is a credential-less GET", async () => {
+    const g = globalThis as unknown as { fetch: unknown; window?: unknown };
+    const saved = { fetch: g.fetch, window: g.window };
+    let seen: RequestInit | undefined;
+    g.window = { location: { origin: "http://demo.test" } };
+    g.fetch = async (_u: unknown, init?: RequestInit) => { seen = init; return { ok: false, json: async () => ({}) }; };
+    try {
+      const out = await runReadTool("get_backtest", {}, { shown: [], evidence: [] }, new AbortController().signal);
+      expect(out.card.kind).toBe("unavailable");
+      expect(seen?.method).toBe("GET");
+      expect(seen?.credentials).toBe("omit");
+    } finally { g.fetch = saved.fetch; g.window = saved.window; }
   });
 });

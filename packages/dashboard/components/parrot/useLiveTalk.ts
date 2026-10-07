@@ -128,7 +128,7 @@ export function useLiveTalk(onStrategy: (chat: ChatResponse) => void, onStale: (
               const result = await post("/live/strategy", { intent: call.args, previous: shown.current }, isLiveStrategy, signal());
               if (!current() || run.closing) return;
               if ("data" in result) {
-                if (run.events.calls.at(-1)?.callId === call.callId) {
+                if (run.events.calls.findLast(c => c.name === "set_strategy")?.callId === call.callId) {
                   shown.current = result.data.shortlist.addresses;
                   evidence.current = result.data.evidence;
                   callback.current(liveAsChat(result.data));

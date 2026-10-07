@@ -32,6 +32,6 @@ test("a backtest card draws the chart with the BTC reference and the caveat; una
   expect(out).toContain("<svg");
   expect(out).toContain("History, not a promise of returns.");
   const none = html(buildBacktest(null).card);
-  expect(none).toContain("Backtest not published yet");
+  expect(none).toContain("Backtest not available");
   expect(none).not.toContain("<svg");
 });

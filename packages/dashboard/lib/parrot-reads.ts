@@ -44,7 +44,7 @@ export function buildRunStatus({ runs, status, exposures }: RunInputs, now = Dat
     parts.push(`of the last ${mirror.length} runs: ${counts("executed")} executed, ${counts("failed")} failed, ${counts("skipped_paused")} skipped while paused`);
     if (last.equityUsd !== undefined) parts.push(`account equity $${last.equityUsd.toFixed(2)}`);
     if (last.evidence) parts.push(`each run records the hash of the positions snapshot it traded toward (latest ${last.evidence.snapshotHash.slice(0, 10)}…)`);
-  } else parts.push("no run is recorded yet");
+  } else parts.push(runs === null ? "the run history could not be read just now" : "no run is recorded yet");
   const top = (exposures?.exposures ?? []).slice().sort((a, b) => Math.abs(b.fraction) - Math.abs(a.fraction)).slice(0, 3);
   if (top.length) parts.push(`latest target exposures: ${top.map(e => `${e.asset} ${fraction(e.fraction)}`).join(", ")}`);
   return {
@@ -55,28 +55,39 @@ export function buildRunStatus({ runs, status, exposures }: RunInputs, now = Dat
 
 // ---- explain_wallet -------------------------------------------------------------------------------------------
 // A wallet is named by its shortlist position ("3", "rank 3"), its bird nickname, or an address prefix.
-export function resolveWallet(ref: string, shown: string[], known: string[] = []): string | null {
+// Every candidate is returned: callers act only on a unique match, so a shared prefix never explains the wrong wallet.
+export function findWallets(ref: string, shown: string[], known: string[] = []): string[] {
   const r = ref.trim().toLowerCase().replace(/^#/, "");
-  if (!r) return null;
+  if (!r) return [];
   const position = /^(?:rank\s*|number\s*|no\.?\s*)?(\d{1,2})$/.exec(r);
-  if (position) return shown[Number(position[1]) - 1] ?? null;
-  const byName = shown.find(a => walletNickname(a).toLowerCase() === r) ?? (r.length >= 3 ? shown.find(a => walletNickname(a).toLowerCase().includes(r)) : undefined);
-  if (byName) return byName;
+  if (position) { const hit = shown[Number(position[1]) - 1]; return hit ? [hit] : []; }
+  const exact = shown.filter(a => walletNickname(a).toLowerCase() === r);
+  if (exact.length) return exact;
+  const byName = r.length >= 3 ? shown.filter(a => walletNickname(a).toLowerCase().includes(r)) : [];
+  if (byName.length) return byName;
   if (/^(0x)?[0-9a-f]{4,40}$/.test(r)) {
     const prefix = r.startsWith("0x") ? r : `0x${r}`;
-    return [...shown, ...known].find(a => a.toLowerCase().startsWith(prefix)) ?? null;
+    return [...new Set([...shown, ...known].filter(a => a.toLowerCase().startsWith(prefix)))];
   }
-  return null;
+  return [];
 }
+export const resolveWallet = (ref: string, shown: string[], known: string[] = []): string | null => {
+  const hits = findWallets(ref, shown, known);
+  return hits.length === 1 ? hits[0] : null;
+};
 
 export type WalletInputs = { ref: string; shown: string[]; evidence: WalletEvidence[]; funnel: FunnelArtifact | null; pipeline: PipelineView | null };
 
 export function buildWallet({ ref, shown, evidence, funnel, pipeline }: WalletInputs, now = Date.now()): ReadResult {
   const finalists = funnel?.finalists ?? [];
-  const address = resolveWallet(ref, shown, finalists.map(f => f.address));
-  if (!address) {
-    return unavailable("explain_wallet", "Wallet not found", `Wallet drill-down: I could not match "${ref.slice(0, 40)}" to a wallet on the current list. Ask the visitor for the list position or the bird name.`);
+  const hits = findWallets(ref, shown, finalists.map(f => f.address));
+  if (hits.length !== 1) {
+    // Model-supplied text is never echoed into the facts.
+    return unavailable("explain_wallet", hits.length ? "Which wallet?" : "Wallet not found", hits.length
+      ? "Wallet drill-down: more than one wallet matches that reference. Ask the visitor for the list position."
+      : "Wallet drill-down: that reference does not match a wallet on the current list. Ask the visitor for the list position or the bird name.");
   }
+  const address = hits[0];
   const nickname = walletNickname(address);
   const e = evidence.find(x => x.address.toLowerCase() === address.toLowerCase());
   const f = finalists.find(x => x.address.toLowerCase() === address.toLowerCase());
@@ -91,12 +102,15 @@ export function buildWallet({ ref, shown, evidence, funnel, pipeline }: WalletIn
     if (e.sharpe != null) lines.push({ label: "Sharpe", value: String(e.sharpe) });
   }
   if (f) lines.push({ label: "Pipeline score", value: f.score.toFixed(2) }, { label: "Picked by the pipeline", value: f.picked ? "yes" : "no" });
-  if (summary?.leverageRisk != null) lines.push({ label: "Leverage risk", value: summary.leverageRisk.toFixed(2) });
-  if (summary?.evidenceRisk != null) lines.push({ label: "Evidence risk", value: summary.evidenceRisk.toFixed(2) });
+  if (summary?.leverageRisk != null) lines.push({ label: "Leverage risk", value: `${Math.round(summary.leverageRisk)} of 100` });
+  if (summary?.evidenceRisk != null) lines.push({ label: "Evidence risk", value: `${Math.round(summary.evidenceRisk)} of 100` });
   if (bench?.copyableShare != null) lines.push({ label: "Copyable share", value: fraction(bench.copyableShare) });
   if (overlap !== undefined) lines.push({ label: "Position overlap with other picks", value: fraction(overlap) });
   const rationale = f?.rationale?.trim() ? f.rationale.trim().slice(0, 320) : null;
   const header = `Wallet drill-down for ${nickname} (${shortAddress(address)})`;
+  if (!lines.length && !rationale && (funnel === null || pipeline === null)) {
+    return unavailable("explain_wallet", "Could not check the sources", `${header}: the Dashboard sources could not be read just now, so I cannot say. Do not guess.`);
+  }
   if (!lines.length && !rationale) {
     return {
       facts: cap(`${header}: the Dashboard has no record of this wallet (it may be a sample or not in the latest pipeline run). Say so; never guess.`),
@@ -118,7 +132,7 @@ const shortLabel = (label: string, all: string[]) => {
 
 export function buildBacktest(artifact: BacktestArtifact | null): ReadResult {
   if (!artifact?.series?.length) {
-    return unavailable("get_backtest", "Backtest not published yet", "Backtest: not published yet, so there is nothing to compare. Say so; never guess.");
+    return unavailable("get_backtest", "Backtest not available", "Backtest: not available right now (not published yet, or it could not be read). Say so; never guess.");
   }
   const labels = artifact.series.map(s => s.label);
   const series: Series[] = artifact.series.map((s, i) => ({
@@ -138,29 +152,49 @@ export function buildBacktest(artifact: BacktestArtifact | null): ReadResult {
   };
 }
 
+// ---- response guards (a malformed 200 is treated like a failed fetch) ------------------------------------------
+const rec = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v);
+const num = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+const isStatus = (v: unknown): v is Status => rec(v) && typeof v.dryRun === "boolean" && rec(v.controls) && typeof v.controls.paused === "boolean";
+const RUN_STATES = ["executed", "skipped_paused", "failed"];
+const isRuns = (v: unknown): v is Run[] => Array.isArray(v) && v.every(r => rec(r) && typeof r.runId === "string" && (r.kind === "mirror" || r.kind === "flatten") && RUN_STATES.includes(r.status as string) && num(r.startedAt) && typeof r.dryRun === "boolean");
+const isExposures = (v: unknown): v is Exposures => rec(v) && Array.isArray(v.exposures) && v.exposures.every(e => rec(e) && typeof e.asset === "string" && num(e.fraction));
+const isBacktest = (v: unknown): v is BacktestArtifact => rec(v) && num(v.generatedAt) && typeof v.window === "string" && Array.isArray(v.series) &&
+  v.series.every(s => rec(s) && typeof s.id === "string" && typeof s.label === "string" && Array.isArray(s.points) && s.points.every(p => Array.isArray(p) && p.length === 2 && num(p[0]) && num(p[1])));
+const isFunnel = (v: unknown): v is FunnelArtifact => rec(v) && (v.finalists === undefined || (Array.isArray(v.finalists) && v.finalists.every(f => rec(f) && typeof f.address === "string" && num(f.score) && typeof f.picked === "boolean")));
+const isPipeline = (v: unknown): v is PipelineView => rec(v);
+
 // ---- fetching (same origin, public GETs, short deadline) -----------------------------------------------------------
-async function getJson<T>(base: string, path: string, signal: AbortSignal): Promise<T | null> {
+async function getJson<T>(base: string, path: string, signal: AbortSignal, guard: (v: unknown) => v is T): Promise<T | null> {
   try {
     const url = new URL(`${base.replace(/\/$/, "")}${path}`, window.location.origin);
     if (url.origin !== window.location.origin || url.username || url.password) return null;
     const res = await fetch(url, { method: "GET", credentials: "omit", cache: "no-store", redirect: "error", signal });
-    return res.ok ? ((await res.json()) as T) : null;
+    if (!res.ok) return null;
+    const body: unknown = await res.json();
+    return guard(body) ? body : null;
   } catch { return null; }
 }
 
 export type ReadContext = { shown: string[]; evidence: WalletEvidence[] };
+// Never throws: a malformed endpoint response becomes an "unavailable" card instead of ending the voice call.
 export async function runReadTool(name: ReadToolName, args: Record<string, unknown>, ctx: ReadContext, signal: AbortSignal): Promise<ReadResult> {
+  try { return await readTool(name, args, ctx, signal); }
+  catch { return unavailable(name, "Could not read that data", "The Dashboard data could not be read just now. Say you cannot see it; never guess."); }
+}
+
+async function readTool(name: ReadToolName, args: Record<string, unknown>, ctx: ReadContext, signal: AbortSignal): Promise<ReadResult> {
   const deadline = AbortSignal.any([signal, AbortSignal.timeout(8_000)]);
   if (name === "get_run_status") {
     const [runs, status, exposures] = await Promise.all([
-      getJson<Run[]>(EXECUTOR, "/runs?limit=8", deadline), getJson<Status>(EXECUTOR, "/status", deadline), getJson<Exposures>(BACKEND, "/exposures", deadline),
+      getJson(EXECUTOR, "/runs?limit=8", deadline, isRuns), getJson(EXECUTOR, "/status", deadline, isStatus), getJson(BACKEND, "/exposures", deadline, isExposures),
     ]);
     return buildRunStatus({ runs, status, exposures });
   }
-  if (name === "get_backtest") return buildBacktest(await getJson<BacktestArtifact>(BACKEND, "/artifacts/backtest", deadline));
-  const ref = typeof args.wallet === "string" ? args.wallet : "";
+  if (name === "get_backtest") return buildBacktest(await getJson(BACKEND, "/artifacts/backtest", deadline, isBacktest));
+  const ref = typeof args.wallet === "string" ? args.wallet.slice(0, 64) : "";
   const [funnel, pipeline] = await Promise.all([
-    getJson<FunnelArtifact>(BACKEND, "/artifacts/funnel", deadline), getJson<PipelineView>(BACKEND, "/pipeline", deadline),
+    getJson(BACKEND, "/artifacts/funnel", deadline, isFunnel), getJson(BACKEND, "/pipeline", deadline, isPipeline),
   ]);
   return buildWallet({ ref, shown: ctx.shown, evidence: ctx.evidence, funnel, pipeline });
 }
