@@ -23,7 +23,7 @@ if (!values.inputs) throw new Error("usage: review-input.ts --inputs <score-inpu
 const inputs = (await Bun.file(values.inputs).json()) as ScoreInput[];
 const policy: Policy = values.policy
   ? await Bun.file(values.policy).json()
-  : { ...(await Bun.file(new URL("../fixtures/frozen-configuration.json", import.meta.url)).json()).policy, mode: "SIMULATION" };
+  : { ...(await Bun.file(new URL("../fixtures/review-policy.json", import.meta.url)).json()).policy, mode: "SIMULATION" };
 validate("bucket-policy", policy);
 if (!values.policy) console.warn("policy: fixture configuration's policy, mode SIMULATION (pass --policy to choose)");
 
