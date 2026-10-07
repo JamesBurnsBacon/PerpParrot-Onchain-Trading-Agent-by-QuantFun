@@ -1,8 +1,10 @@
 # Strict review: measured evidence and local checks
 
 Builds on James's #50 and the owner decisions in #53. The frozen fixture, five-source
-minimum, trading-risk thresholds and Red-Team rules are unchanged. Scheduled review
-uses `packages/backend/fixtures/review-policy.json`; the basic gate remains the default fallback.
+minimum, trading-risk thresholds and Red-Team rules are unchanged. The local
+`strict-gate-check.ts` harness uses `packages/backend/fixtures/review-policy.json`
+for the 40-floor experiment. The deployed scheduled review follows James's pinned
+fixture policy (60 floor) plus his 5× gross cap; the basic gate remains the default fallback.
 
 ## What reaches the committee
 
