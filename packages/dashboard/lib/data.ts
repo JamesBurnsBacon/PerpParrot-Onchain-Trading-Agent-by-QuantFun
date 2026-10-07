@@ -52,7 +52,27 @@ export type Status = { dryRun: boolean; account: string; controls: { paused: boo
 export type Exposures = { runAt: number; exposures: { asset: string; fraction: number }[] };
 
 // Backend GET /pipeline (src/pipeline status()); timestamps are ISO strings.
-export type SelectionStatus = "running" | "activated" | "kept" | "rejected" | "failed";
+export type SelectionStatus = "running" | "activated" | "kept" | "benched" | "rejected" | "failed";
+
+// The per-wallet roster (docs/ingest/ROSTER.md); times in ms.
+export type SeatState = "probation" | "seated" | "winding_down" | "released" | "removed";
+export type RosterSeat = {
+  address: string;
+  state: SeatState;
+  weightUnits: number;
+  fit: number | null;
+  turnoverPerDay: number | null;
+  tradedPerDayOverEquity: number | null;
+  admittedAt: number;
+  minTenureUntil: number;
+  flatSince: number | null;
+  flatRuns: number;
+  windDownUntil: number | null;
+  caps: Record<string, number> | null;
+};
+export type RosterEvent = { at: string; address: string; kind: "seeded" | "admitted" | "seated" | "released" | "removed" | "winding_down" | "weight"; detail: Record<string, unknown> | null };
+export type RosterView = { seats: RosterSeat[]; events: RosterEvent[]; impliedTurnover: number | null };
+export type BenchRow = { address: string; fit: number; approvedAt: number; copyableShare: number | null; closedPositions: number; turnoverPerDay: number | null; passesHold: boolean };
 export type PipelineView = {
   // Hyperliquid read routing of the serving backend instance (absent on older backends).
   routing?: {
@@ -87,7 +107,11 @@ export type PipelineView = {
       overlapGuard?: { pool: number; reads: number; failed: number; excluded: number; toppedUp: number; threshold: number; ms: number; provider: { nownodes: number; official: number; fallbacks: number } };
     } | null;
     summary: { candidate: number; address?: string; aggressiveFit: number | null; reject: number | null; leverageRisk: number | null; evidenceRisk: number | null }[] | null;
+    // The wallets this review approved for the roster, with their hold measures (absent before the roster).
+    bench?: BenchRow[] | null;
   } | null;
+  // The per-wallet roster (absent before its migration).
+  roster?: RosterView | null;
 };
 
 export type DashboardData = {

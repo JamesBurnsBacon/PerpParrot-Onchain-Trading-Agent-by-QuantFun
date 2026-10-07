@@ -195,7 +195,9 @@ export class Pipeline {
       from selection_runs order by started_at desc limit 10`;
     const [active] = await sql`select hash, activated_at, configuration -> 'sources' as sources from configurations where status = 'active'`;
     // The latest run's finalists, funnel and per-candidate AI verdicts (dashboard).
-    const [latest] = await sql`select id, finalists, review -> 'summary' as summary from selection_runs order by started_at desc limit 1`;
+    // The latest review of Score's picks (not a seat review), with its bench of approvals.
+    const [latest] = await sql`select id, finalists, review -> 'summary' as summary, review -> 'bench' as bench from selection_runs
+      where (finalists ->> 'scope') is distinct from 'seats' order by started_at desc limit 1`;
     return { accounts: counts, selections: runs, active: active ?? null, latest: latest ?? null, roster: await this.rosterStatus(), routing: routingStats() };
   }
 

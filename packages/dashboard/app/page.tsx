@@ -4,6 +4,7 @@ import { ExposureBars, Funnel, Panel, PaperTable, RunStrip, StatTile, TargetsVsH
 import { Finalists } from "../components/Finalists";
 import { LineChart } from "../components/LineChart";
 import { Pipeline } from "../components/Pipeline";
+import { Roster } from "../components/Roster";
 import { RunLog } from "../components/RunLog";
 import { performanceSeries, pct, runTime, stamp, time, useDashboard, usd, type Series } from "../lib/data";
 
@@ -115,8 +116,14 @@ export default function Page() {
       </div>
 
       <div className="mb-4">
-        <Panel title="Selection pipeline" meta="scan 12 h → refresh 5 min → qualify ~250 → pick 25 every 10 min → AI review → activate">
+        <Panel title="Selection pipeline" meta="scan 12 h → refresh 5 min → qualify ~250 → pick 25 every 10 min → AI review → bench → roster">
           {data?.pipeline ? <Pipeline view={data.pipeline} /> : <Waiting what="Pipeline not running yet" source="backend /pipeline" />}
+        </Panel>
+      </div>
+
+      <div className="mb-4">
+        <Panel title="Roster" meta="per-wallet seats · tenure 12–72 h · exits free a seat · only a 50% trading loss removes">
+          {data?.pipeline?.roster ? <Roster roster={data.pipeline.roster} /> : <Waiting what="Roster not running yet" source="backend /pipeline · roster" />}
         </Panel>
       </div>
 
