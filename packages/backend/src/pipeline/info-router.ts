@@ -186,7 +186,10 @@ export const makeRoutedFetch = (o: RouterOptions = {}) => {
       void probeCapabilities({ url: NOWNODES_URL, key, allowlist: NOWNODES_CAPABLE, fetchImpl: base, now })
         .then((report) => {
           stats.capabilities = report;
-          denied = new Set(report.narrowed);
+          // A method stays denied until a probe sees NOWNodes serve it again: an inconclusive row (timeout, 429, 5xx)
+          // changes nothing.
+          const served = new Set(report.rows.filter((r) => r.verdict === "supported").map((r) => r.method));
+          denied = new Set([...[...denied].filter((m) => !served.has(m)), ...report.narrowed]);
           if (report.narrowed.length) log("info-router capability probe narrowed the allowlist", { narrowed: report.narrowed });
         })
         .catch(() => {})

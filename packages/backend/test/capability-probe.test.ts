@@ -118,6 +118,47 @@ describe("router with NOWNODES_PROBE", () => {
     expect(calls.filter((c) => c === "nn:webData2").length).toBe(before); // no retry on NOWNodes
   });
 
+  test("an inconclusive later probe does not lift an earlier denial", async () => {
+    // The official API answers 503 for webData2, so a read of it would fail over to NOWNodes unless it is denied.
+    let webData2: number | Error = 422;
+    let t = 0;
+    const calls: string[] = [];
+    const fetchImpl = (async (url: string, init?: RequestInit) => {
+      const type = JSON.parse(String(init?.body)).type as string;
+      if (url === NOW) {
+        calls.push(`nn:${type}`);
+        const s = type === "webData2" ? webData2 : likeToday(type);
+        if (s instanceof Error) throw s;
+        return new Response("{}", { status: s });
+      }
+      return new Response("x", { status: type === "webData2" ? 503 : 200 });
+    }) as unknown as NonNullable<RouterOptions["fetchImpl"]>;
+    const router = makeRoutedFetch({ env: () => env, fetchImpl, now: () => t, log: () => {} });
+    const post = (type: string) => router(OFFICIAL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type, user: "0xabc" }) });
+    const webData2Reads = () => calls.filter((c) => c === "nn:webData2").length;
+
+    await post("meta");
+    await settle();
+    expect(router.stats().capabilities?.narrowed).toEqual(["webData2"]);
+
+    t += 7 * 60 * 60_000; // past the probe's TTL; this probe cannot tell
+    webData2 = new Error("timeout");
+    await post("meta");
+    await settle();
+    expect(router.stats().capabilities?.narrowed).toEqual([]); // the report is honest about this probe
+    const afterProbes = webData2Reads();
+    expect((await post("webData2")).status).toBe(503); // still the official answer, no retry on NOWNodes
+    expect(webData2Reads()).toBe(afterProbes);
+
+    t += 7 * 60 * 60_000; // NOWNodes serves it again: the denial is lifted
+    webData2 = 200;
+    await post("meta");
+    await settle();
+    const beforeRead = webData2Reads();
+    expect((await post("webData2")).status).toBe(200); // failed over to NOWNodes
+    expect(webData2Reads()).toBe(beforeRead + 1);
+  });
+
   test("a failed probe changes nothing", async () => {
     const r = rig(() => new Error("down"), env);
     const res = await r.post("clearinghouseState");

@@ -34,8 +34,14 @@ export type VerifyOptions = {
 
 const abs = (n: bigint) => (n < 0n ? -n : n);
 const MAX_DIFFS_KEPT = 8;
+const MAX_TOLERANCE_PCT = 50;
 
-export const verifyMode = (value: string | undefined, key: string | undefined): VerifyMode => (key && (value === "on" || value === "strict") ? value : "off");
+// "on" without a key stays off (the feature is optional); "strict" without a key is a configuration error, not a
+// silently disabled gate.
+export const verifyMode = (value: string | undefined, key: string | undefined): VerifyMode => {
+  if (value === "strict" && !key) throw new Error("SNAPSHOT_VERIFY=strict requires NOWNODES_API_KEY");
+  return key && (value === "on" || value === "strict") ? value : "off";
+};
 
 // Reads one account's perp states from NOWNodes. The key is sent in a header and never follows a redirect.
 export const nownodesPerp = (key: string, fetchImpl: typeof fetch = fetch, timeoutMs = 10_000): PerpReader => async (user, dex) => {
@@ -95,8 +101,9 @@ export const resetVerificationStats = () => {
 export const verifySnapshot = async (snapshot: PositionsSnapshot, o: VerifyOptions): Promise<VerifyOutcome> => {
   const now = o.now ?? Date.now;
   const started = now();
-  // A bad SNAPSHOT_VERIFY_TOLERANCE_PCT (NaN, 0, negative) falls back to the default instead of breaking every build.
-  const pct = o.tolerancePct !== undefined && Number.isFinite(o.tolerancePct) && o.tolerancePct > 0 ? o.tolerancePct : 1;
+  // A bad SNAPSHOT_VERIFY_TOLERANCE_PCT (NaN, 0, negative, or so large that it would accept a missing position)
+  // falls back to the default instead of breaking every build or silently disabling the check.
+  const pct = o.tolerancePct !== undefined && Number.isFinite(o.tolerancePct) && o.tolerancePct > 0 && o.tolerancePct <= MAX_TOLERANCE_PCT ? o.tolerancePct : 1;
   const floor = o.toleranceFloorE6 ?? 5_000_000n;
   const eligible = new Set(snapshot.eligibleAssets);
   const diffs: Diff[] = [];
@@ -119,7 +126,12 @@ export const verifySnapshot = async (snapshot: PositionsSnapshot, o: VerifyOptio
       retried++;
       try {
         const [again, secondAgain] = await Promise.all([read(o.official, source.address, eligible), read(o.second, source.address, eligible)]);
-        for (const d of differing(again, secondAgain, pct, floor)) diffs.push({ address: source.address, asset: d.asset, snapshotE6: d.a.toString(), secondE6: d.b.toString() });
+        // Two fresh reads that agree with each other are not enough: they must also agree with what the snapshot
+        // recorded, or a stale first read would be approved. A snapshot both providers now contradict is refused
+        // (the executor retries and the rebuilt snapshot reads current positions).
+        const betweenProviders = differing(again, secondAgain, pct, floor);
+        const againstSnapshot = betweenProviders.length ? [] : differing(recorded, again, pct, floor);
+        for (const d of [...betweenProviders, ...againstSnapshot]) diffs.push({ address: source.address, asset: d.asset, snapshotE6: d.a.toString(), secondE6: d.b.toString() });
       } catch {
         unverified.push(source.address); // could not settle it: not a confirmed mismatch
       }

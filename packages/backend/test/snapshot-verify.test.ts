@@ -67,6 +67,26 @@ describe("verifySnapshot", () => {
     expect(out.retried).toBeGreaterThan(0);
   });
 
+  test("a stale snapshot that both providers now contradict is refused, not approved", async () => {
+    // The snapshot recorded $500k BTC; on the re-read both providers agree on $100k (the first official read was stale).
+    let reads = 0;
+    const second: PerpReader = async (_u, dex) => (dex ? { assetPositions: [] } : state(reads++ < configuration.sources.length ? "400000" : "100000", "100000"));
+    const nowOfficial: PerpReader = async (_u, dex) => (dex ? { assetPositions: [] } : state("100000", "100000"));
+    const out = await verifySnapshot(await snapshot(), { mode: "on", second, official: nowOfficial });
+    expect(out.verdict).toBe("mismatch");
+    expect(out.diffs[0]).toMatchObject({ asset: "BTC", snapshotE6: "500000000000", secondE6: "100000000000" });
+    expect(blocks(out, "on")).toBe(true);
+  });
+
+  test("the $5 floor applies to small positions; a bigger gap is still a mismatch", async () => {
+    const small: HlReader = { perp: async (_u, dex) => (dex ? { assetPositions: [] } : state("100")), portfolio: hl.portfolio };
+    const snap = await buildSnapshot(configuration, ASSETS, RUN_AT, () => NOW, small);
+    const within: PerpReader = async (_u, dex) => (dex ? { assetPositions: [] } : state("104")); // 4% but only $4
+    expect((await verifySnapshot(snap, { mode: "on", second: within, official: small.perp })).verdict).toBe("verified");
+    const beyond: PerpReader = async (_u, dex) => (dex ? { assetPositions: [] } : state("110")); // $10 and 10%
+    expect((await verifySnapshot(snap, { mode: "on", second: beyond, official: beyond })).verdict).toBe("mismatch");
+  });
+
   test("an asset only one side holds counts as a difference", async () => {
     const missing: PerpReader = async (_u, dex) => (dex ? { assetPositions: [] } : state("500000")); // no ETH short
     const out = await verifySnapshot(await snapshot(), { mode: "on", second: missing, official });
@@ -85,10 +105,11 @@ describe("verifySnapshot", () => {
     expect(blocks(out, "strict")).toBe(true);
   });
 
-  test("a bad tolerance setting falls back to the default instead of throwing", async () => {
-    for (const tolerancePct of [Number.NaN, 0, -3]) {
-      const out = await verifySnapshot(await snapshot(), { mode: "on", second: agreeing, official, tolerancePct });
-      expect(out.verdict).toBe("verified");
+  test("a bad tolerance setting falls back to the default instead of throwing or disabling the check", async () => {
+    const stale: PerpReader = async (_u, dex) => (dex ? { assetPositions: [] } : state("100000", "100000")); // 80% off
+    for (const tolerancePct of [Number.NaN, 0, -3, 1e308, 100, 51]) {
+      expect((await verifySnapshot(await snapshot(), { mode: "on", second: agreeing, official, tolerancePct })).verdict).toBe("verified");
+      expect((await verifySnapshot(await snapshot(), { mode: "on", second: stale, official: stale, tolerancePct })).verdict).toBe("mismatch");
     }
   });
 });
@@ -100,6 +121,11 @@ describe("verifyMode", () => {
     expect(verifyMode("on", "k")).toBe("on");
     expect(verifyMode("strict", "k")).toBe("strict");
     expect(verifyMode("yes", "k")).toBe("off");
+  });
+
+  test("strict without a key is an error, not a silently disabled gate", () => {
+    expect(() => verifyMode("strict", undefined)).toThrow("requires NOWNODES_API_KEY");
+    expect(() => verifyMode("strict", "")).toThrow("requires NOWNODES_API_KEY");
   });
 });
 
