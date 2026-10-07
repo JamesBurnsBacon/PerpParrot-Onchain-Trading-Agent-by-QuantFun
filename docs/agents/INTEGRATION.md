@@ -34,8 +34,8 @@ there is no permissive adapter implementation. Strict shape validation and commi
 | redTeam | Fresh context, numeric draft projection without source addresses; match draftHash |
 | assess | Deterministic eligible-position replay/netting/drift/minimum-order capacity and worst-case active-source exposure validation |
 
-The three model adapters must return observations from distinct configured nodes. A
-node is one independent model observation; the current adapter supplies one honest
+Within each stage, observations must have distinct configured node IDs. Role, Risk and Red Team may use the same configured provider node in separate calls. A
+node identifies a model observation; the current adapter supplies one honest
 provider node (quorum 1), and several observations would be aggregated by median. The
 core rejects duplicate/unknown node IDs and checks quorum against the configured
 roster. IDs are transport metadata, not model output; the adapter must ensure that
@@ -63,7 +63,7 @@ penalties and rebuilds all undergo the same final exposure/capacity assessment.
 
 `assess` must calculate executable targets from actual eligible source positions,
 capital, source equity, live account state, netting, $10 order floor and drift gates.
-It must validate active-source weight renormalization, gross exposure and all market/
+It must validate fixed-source exposure behavior (including flat sources), gross exposure and all market/
 bucket constraints. A synthetic pass callback is used only in unit tests and must
 never be used in a live adapter. Throws, invalid measurements or failed limits close
 the result to INVALID_BUCKET with no sources and cash=1. Valid results include a

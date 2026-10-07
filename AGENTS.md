@@ -9,19 +9,20 @@ for it (no consensus/WASM/HTTP-budget constraints, no report signing between our
 
 The product is one pipeline on our own infrastructure:
 
-1. **Read** Hyperliquid: leaderboard, vaults, portfolios, positions (`packages/backend`).
-2. **Process**: score (`packages/backend/src/score`), the frozen configuration, and every 10 minutes
-   a positions snapshot and its target exposures (`targetsFromSnapshot`, `packages/shared/copy.ts`).
-3. **AI review**: a Role/Risk/Red-Team committee picks and weights the sources
-   (`packages/backend/review`, `scripts/review-input.ts` and `scripts/review-run.ts`).
-4. **Trade**: the executor fetches each run's targets from the backend, checks the pinned
-   configuration hash and account, and trades (`packages/executor`; dry run on Vercel, live trading
-   only in one long-running process).
+1. **Read** Hyperliquid: leaderboard, vaults, portfolios and positions (`packages/backend`);
+   configured supported reads can use NOWNodes first with official fallback.
+2. **Select and review**: Score (`packages/backend/src/score`) feeds the Role/Risk/Red-Team
+   committee, then an approved bench and persistent roster (`packages/backend/src/pipeline`).
+   Operator review tools are `packages/backend/scripts/review-input.ts` and `review-run.ts`.
+3. **Snapshot**: roster changes activate a validated frozen configuration; every 10 minutes,
+   a positions snapshot produces target exposures (`targetsFromSnapshot`, `packages/shared/copy.ts`).
+4. **Trade**: the executor fetches targets, checks the active/pinned configuration hash and account,
+   and plans/trades (`packages/executor`; dry run on Vercel, live only in one long-running process).
 5. **Record**: runs, evidence (snapshot hash, targets), paper books in Supabase; the dashboard
    (`packages/dashboard`) shows them.
 
 Hosting: one Vercel project with three services (root `vercel.json`) and Vercel Cron for the
-schedule, ingest and AI reviews included. The ingest → qualify → pick → review → automatic
+backend schedule, ingest and AI reviews included. Executor runs are triggered by the long-running host; Vercel schedules its watchdog only. The ingest → qualify → pick → review → automatic
 go-live pipeline (12-hour scans, ~250 qualified, 25 picked every 10 minutes, all state in
 Supabase, no SQLite or local disk) is `docs/ingest/PIPELINE.md`; build to it. Older commits, issues, PR threads and branches
 that mention CRE, the DON, `cre-workflows`, `review-spike`, signed reports or `docs/cre/` describe

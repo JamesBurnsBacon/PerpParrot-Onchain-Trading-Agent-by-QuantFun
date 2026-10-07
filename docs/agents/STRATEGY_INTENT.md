@@ -71,5 +71,4 @@ The typed bridge is implemented in `packages/backend/src/strategy-intent-adapter
 It maps only actual ranked finalists, uses Score's native non-annualised
 `metrics.realizedVol`, and keeps clone status tri-state. If a visitor asks to avoid
 clones, only sources with explicit `false` evidence survive; unknown status is not
-treated as proof of independence. The current Score pipeline has no clone detector,
-so callers must supply verified clone evidence for this option to retain candidates.
+treated as proof of independence. Score already groups linked/correlated clones (`src/score/clones.ts`) and exposes `cloneOf`/`clones`. The bridge must carry that evidence; absent evidence remains unknown.

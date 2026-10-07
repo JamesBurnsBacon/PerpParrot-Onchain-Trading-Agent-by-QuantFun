@@ -1,6 +1,6 @@
 # Talk live
 
-GPT-Live voice endpoints: `config.ts` (server-owned session config, reservation), `handler.ts` (`/live/session`, `/live/strategy`).
+GPT-Live voice endpoints: `config.ts` (server-owned session config, reservation), `handler.ts` (`/live/session`, `/live/strategy`), plus `/live/plan` for a reviewable simulation and `/live/request` for explicit confirmation and pending storage. Confirmation does not authorize trades.
 Behaviour, environment variables, safety controls, residual risks and the verification record live in [docs/PARROT.md](../../../../docs/PARROT.md).
 `LIVE_ENABLED=true` turns the routes on; the default is off.
 

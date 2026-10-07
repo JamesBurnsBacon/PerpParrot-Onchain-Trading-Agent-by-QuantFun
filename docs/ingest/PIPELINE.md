@@ -21,12 +21,12 @@ mirror loop (README §4.7).
   **High-frequency traders are left out**: more than 100 distinct orders a day in the fills read.
   A 10-minute copy loop can't follow them.
 - **Review, bench and automatic go-live**: the AI committee (Role, Risk, Red-Team) reviews
-  changed picks and writes approved wallets to the bench. The separate roster job admits wallets
+  changed picks (or refreshes unchanged picks after 12 h when ready) and writes approved wallets to the bench. The separate roster job admits wallets
   into available seats, applies the seat lifecycle, and activates a validated frozen configuration
   when the seats change. Selection itself does not activate a configuration. Existing seats also
   receive scheduled reviews; see [ROSTER.md](ROSTER.md). Pause and revert stay with the operator.
 - **All on Vercel Cron**, state in Supabase through `DATABASE_URL`. No SQLite, local disk, raw
-  archives, receipts, proofs or CRE. Row claims (`for update skip locked`) stop two invocations
+  archives or CRE services. Review receipt hashes are stored as audit data in Supabase. Row claims (`for update skip locked`) stop two invocations
   doing the same work. If Hyperliquid rate-limits Vercel's IPs, only the refresh job moves to one
   long-running process (same code with a timer, on Railway).
 
@@ -39,7 +39,7 @@ All are backend routes protected by `CRON_SECRET`. Operators can call them with 
 |---|---|---|---|
 | `/cron/pipeline/scan` | 00:15, 12:15 UTC | Leaderboard file (~40 MB): ≥ $10k, positive month and all-time PnL. hyperliquidvaults.com's vault list (its TanStack server function), plus Hyperliquid's own vault list (open, not a child, ≥ $10k TVL, ≥ 39 days old). File reads only, no per-account calls. | `pipeline_accounts` (upsert, `listed_at`) |
 | `/cron/pipeline/refresh` | every 5 min, ≤ 240 s, 3 reads at a time | First, qualified accounts whose data is over 1 h old: `portfolio` + `userFillsByTime` (30 days, newest 2,000) → trade count, maker share, orders per day. Then the scan's accounts not refreshed for 11 h, primary sources first: `portfolio` only. Keeps only the `month` and `allTime` windows. Unfinished claims are released. | `pipeline_accounts` |
-| `/cron/pipeline/select` | every 10 min (`:x4`) | 1. **Qualify** when the qualified list is older than the scan, every primary source is fresh, and ≥ 95% of the scan is (or the scan is 3.5 h old): Score the population (trade count may be unknown here) and keep its top 250. 2. **Pick**: Score the qualified accounts with fresh fills, high-frequency traders left out, keep 25 (with the optional overlap guard, see below). 3. **Review** the 25 if they changed: the wallets the AI approves, with their hold measures (copyable share at 90 min, book turnover), become the **bench**. | `pipeline_accounts.qualified_at`, `selection_runs` (`review -> 'bench'`) |
+| `/cron/pipeline/select` | every 10 min (`:x4`) | 1. **Qualify** when the qualified list is older than the scan, every primary source is fresh, and ≥ 95% of the scan is (or the scan is 3.5 h old): Score the population (trade count may be unknown here) and keep its top 250. 2. **Pick**: Score the qualified accounts with fresh fills, high-frequency traders left out, keep 25 (with the optional overlap guard, see below). 3. **Review** the 25 if they changed, their review is at least 12 h old, or a forced run requests it: the wallets the AI approves, with their hold measures (copyable share at 90 min, book turnover), become the **bench**. | `pipeline_accounts.qualified_at`, `selection_runs` (`review -> 'bench'`) |
 | `/cron/pipeline/roster` | every 10 min (`:x6`) | The per-wallet roster ([ROSTER.md](ROSTER.md)). Observe the latest snapshot; remove a wallet only at a 50% trading loss; seats end probation, release on 6 h idle (probation) or an exit (flat 3 runs). Wind seats down (follow exits, ignore new entries, caps carried in each snapshot's `windDown`) on a warning sign: high-frequency (every step), or at the 12-hourly seat review a Risk reject, a liquidation, or (past tenure) lost approval or 2 reviews off the qualified list. Fill open seats from the fresh bench (≤ 2 an hour, 8 a day, 24 h cooldown) at fixed weights. Freeze and **activate** when the seats change. Seeds itself from the active configuration the first time. | `roster_seats`, `roster_events`, `configurations` |
 
 **Hyperliquid budget**: the limit is 1,200 weight per minute per IP. Most info calls cost 20;
@@ -59,7 +59,7 @@ its month history and its live positions. It fills the frame fields the review c
 gate requires:
 - median hold time, average leverage and time in market;
 - two trailing 7-day holdouts: out-of-sample Sharpe, Sortino, drawdown and stability (also inside
-  Score's lookback, so read them as recent performance);
+  Score's lookback, so read them as recent performance, not independent validation);
 - execution coverage (share of traded notional in ≥ $20M-OI markets) and execution fit (that
   share × the part of a hold a copy 10 minutes late catches × an order-rate discount);
 - concentration, liquidation distance, and the frame's current exposure overlap between finalists
@@ -67,11 +67,12 @@ gate requires:
 
 Measured on live data (2026-10-07, 220 accounts, 25 finalists), the model's evidence risk fell
 from 80 for everyone to 30–60. The strict gate still kept one candidate: the models' confidence
-is mostly under the policy's 60, and a freeze needs 5 sources. When the core rejects, the
-**basic gate** (`REVIEW_GATE`, default `basic`) applies: keep
-finalists the Role model doesn't reject and with no Risk score above the reject threshold
-(evidence risk aside), weight them by Aggressive fit within the per-source cap, cash buffer and
-gross leverage, and require ≥ 5 sources. `REVIEW_GATE=strict` turns it off.
+is mostly under the policy's 60, and a freeze needs 5 sources. Only when the core reports `INSUFFICIENT_EVIDENCE` can the
+**basic gate** (`REVIEW_GATE`, default `basic`) apply: keep candidates the Role model
+doesn't reject, with no disqualifying Risk score (evidence risk aside) and positive fit.
+Other invalid reasons approve nobody. These approvals form the bench; roster copyability,
+pacing, tenure and fixed-seat weights then determine activation (at least five seats).
+`REVIEW_GATE=strict` disables basic fallback. See [the gate incident](../agents/BASIC_GATE_FALLBACK.md).
 
 ## Exposure overlap
 
@@ -88,8 +89,9 @@ The overlap of two accounts is the same-direction share of their current books, 
 - **Evidence for the overlap guard**: whether leaving out overlapping candidates helps returns is
   not measured, and it can make the 25 (and so the AI reviews) change more often; a hysteresis
   (keep a current pick unless it overlaps above a looser threshold) is the next step if it does.
-- **Gradual exit** for sources that leave the set (README §4.5: reduce-only legs, then DCA out).
-  The first version switches targets directly.
+- **Exit behavior is implemented** in the roster: warning signs wind seats down with
+  ratcheted caps for at most 48 h, then normal close confirmation applies. Measure its
+  churn and tracking effects; there is no scheduled 24-hour/three-trade DCA exit path.
 - **Stored month history** per account (denser than `allTime` beyond 30 days; README §4.1).
 - **Advisory strategy analysis** of the picks (#38's `strategy-agent.ts`): it has no authority
   over configuration or orders.

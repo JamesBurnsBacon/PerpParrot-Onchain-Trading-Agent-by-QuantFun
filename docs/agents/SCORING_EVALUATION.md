@@ -2,9 +2,9 @@
 
 ## Current score
 
-`packages/backend/src/score/score.ts` applies eligibility filters, computes month-window
-metrics, and ranks eligible addresses by weighted percentiles of Sharpe, Sortino,
-Calmar, negative maximum drawdown and positive-PnL-day consistency (weights 1, 1, 1,
+`packages/backend/src/score/score.ts` applies eligibility filters, computes metrics over
+the configured stitched lookback (up to 90 days by default), and ranks eligible addresses by weighted percentiles of Sharpe, Sortino,
+Calmar, negative maximum drawdown and log-equity trend R² consistency (weights 1, 1, 1,
 1, 2). A known maker share below the configured threshold incurs the configured
 pure-taker penalty; unknown maker share is neutral. Integer ranking and deterministic
 tie-breaking are implemented in `score.ts`. This is a **relative shortlist**, not a

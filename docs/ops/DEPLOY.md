@@ -1,7 +1,9 @@
 # Deploy (dry run first)
 
-Deploys every piece in its production shape on the **fixture** configuration, then swaps in the
-real frozen set and our account. Nothing here sends an order: `DRY_RUN` stays unset throughout.
+This is a dry-run rehearsal for a new isolated deployment: start with the fixture bootstrap,
+then verify the intended account and active roster configuration. Keep `DRY_RUN` unset on every
+executor used here. Do not point the rehearsal at an existing production database or alter its
+active roster. Existing-production changes use the runbook's backup and recovery procedures.
 Reference for variables and failures: [RUNBOOK.md](RUNBOOK.md).
 
 | Phase | Needs | Proves |
@@ -15,11 +17,11 @@ Phase A runs on the **fixture** configuration (`packages/backend/fixtures/frozen
 7 real sources, AGGRESSIVE, hash `0x088fe80a…e1dd`). Its account `0x010461c1…703a` is a large public
 vault standing in for ours; the services only *read* it.
 
-1. **Supabase** (project `clheeepphmomkymawsfq`): in the SQL editor, run the files in
+1. **Supabase** (a separate rehearsal project/database): in the SQL editor, apply the files in
    `supabase/migrations/` in order (`20261006130000_review_audit.sql` and
    `20261006140000_paper_review.sql` only once). Don't `supabase db reset` or blindly `db push` this
-   project (RUNBOOK § Deploy). Copy the service-role connection string (Session pooler, not the
-   transaction pooler: Bun's driver prepares statements) for step 2.
+   database (RUNBOOK § Deploy). Use the session-pooler connection for the executor; the backend
+   can use its separate transaction-pooler connection with prepared statements disabled.
 2. **Vercel project**: import this repo, **Root Directory = repository root**. The root
    `vercel.json` defines the services `backend` (`/api/backend/*`), `executor` (`/api/executor/*`,
    bound to the backend) and `dashboard` (everything else) and the crons. Variables (one set, both
@@ -32,7 +34,7 @@ vault standing in for ours; the services only *read* it.
    CRON_SECRET=<openssl rand -hex 32>
    DATABASE_URL=<service-role connection string>
    BACKEND_DATABASE_URL=<transaction pooler connection string, port 6543>  # backend only; the
-   # session pooler (DATABASE_URL) allows 15 clients in all, and the executor's run lock needs it
+   # executor DATABASE_URL stays on the session pooler; check the project's current connection limit
    ```
    Don't set `BACKEND_URL` (the binding injects it), `DRY_RUN`, `HL_API_WALLET_KEY` or the
    `NEXT_PUBLIC_BACKEND_URL` / `NEXT_PUBLIC_EXECUTOR_URL` (the executor runs production rules on Vercel and refuses `DRY_RUN=false`
@@ -41,33 +43,37 @@ vault standing in for ours; the services only *read* it.
    Optional dashboard demo: `NEXT_PUBLIC_DEMO_VIDEO_URL` accepts an HTTPS YouTube, Vimeo, or
    direct `.mp4`/`.webm` URL. Unset or invalid hides the Demo button. It is baked in at build
    time; rebuild/redeploy after changing it. The video loads only when the modal opens.
-3. **Check** (exit 0 expected):
+3. **Start the run trigger in dry run.** Deploy one long-running executor as described in
+   [RUNBOOK.md](RUNBOOK.md), with the same database/account and `DRY_RUN` unset. The current
+   Vercel configuration schedules snapshots and watchdogs, not executor runs. For a single
+   rehearsal slot, authenticated `/admin/run` is also available.
+4. **Check** (exit 0 expected after a completed rehearsal run):
    ```sh
    DATABASE_URL=<…> bun scripts/predeploy-check.ts \
      --configuration packages/backend/fixtures/frozen-configuration.json \
      --backend https://<domain>/api/backend --executor https://<domain>/api/executor --dashboard https://<domain>
    ```
-4. **Watch a run**: after the next `:x0`, `GET https://<domain>/api/executor/runs?limit=1` shows a
+5. **Watch a run**: after the next `:x0`, `GET https://<domain>/api/executor/runs?limit=1` shows a
    `mirror` run, `executed`, `dryRun: true`, with a plan and `evidence.snapshotHash`; the dashboard's
    heartbeat gains a cell, the run log lists it, and the paper books step.
 
-## Phase B: go-live set (when the set is frozen)
+## Phase B: intended account and roster
 
-1. **Freeze** the review's configuration for our account (RUNBOOK § Freeze). This writes
-   `packages/backend/frozen/live.json`.
-2. **Reset rehearsal data** (it was computed on the stand-in account and the fixture set):
-   ```sql
-   truncate paper_state, paper_points, run_snapshots, eligibility_state;
-   ```
-3. **Vercel variables**: `CONFIGURATION_PATH=frozen/live.json`, the new
-   `FROZEN_CONFIGURATION_HASH` and `HL_ACCOUNT` = our account; redeploy.
-4. **Check**: `predeploy-check.ts` (without `--configuration`) must exit 0.
-5. **Watch** two or three cycles in the run log.
+1. Confirm `HL_ACCOUNT`, the bootstrap file/hash and the intended database before starting
+   selection. A file pin is only a fallback when no active database configuration exists.
+2. Apply the pipeline/roster migrations and variables described below. Selection produces
+   an approved bench; roster admission creates the active configuration.
+3. Check `/pipeline.active`, `/pipeline.roster` and the next run's account/configuration evidence.
+   When checking a file-managed bootstrap with `predeploy-check.ts`, supply that exact file;
+   an old file is not a valid reference for a newer active roster configuration.
+4. Watch repeated dry-run cycles. Preserve snapshots and run evidence. Do not truncate a
+   production database to remove rehearsal data; use a separate rehearsal database. The
+   operator roster fresh-start procedure archives paper history ([ROSTER.md](../ingest/ROSTER.md)).
 
 Going live (`DRY_RUN=false`, API wallet, funding, a long-running executor) is RUNBOOK § Deploy
 step 5 and is not part of this rehearsal.
 
-## NOWNodes failover (optional)
+## NOWNodes routing (optional)
 
 The backend can fail over its Hyperliquid info reads to NOWNodes' copy (`hype.nownodes.io/info`). It is off by default; with `INFO_ROUTING` unset or `official` the code path is a plain `fetch` to `api.hyperliquid.xyz`, as before.
 
@@ -96,7 +102,12 @@ The existing fallback, configuration validation and snapshot hashing still apply
 
 **Try the failover without touching anything.** `bun run packages/backend/scripts/chaos-read-demo.ts` runs the real router twice over a simulated network in which the official API answers 429 for part of the run, once with the default routing and once with `overflow`, and prints the failed reads, failovers and virtual latency of each. It uses no key and no network.
 
-`split` is slower (NOWNodes measured about 1.7x the official latency), so prefer `overflow` unless a benchmark says otherwise.
+Choose routing for the intended workload. `overflow` preserves official-first reads; `split`
+with `INFO_SPLIT_PERCENT=100` uses NOWNodes first for supported methods. Local October 7
+benchmarks found NOWNodes slower per request, not faster; this is a capacity/provider-diversity
+choice. Measure deployment latency separately (see README §5). Snapshot callers time out the
+first read after 15 s; pipeline callers use 20 s. Fallback has a separate 15 s timeout, subject
+to the caller signal. Fast HTTP errors can fall back sooner. These are timeout budgets, not an SLA.
 
 ## Turning the NOWNodes features on (checklist)
 
@@ -111,7 +122,7 @@ bun run packages/backend/scripts/verify-live-dryrun.ts    # prints OK when a liv
 unset NOWNODES_API_KEY
 ```
 
-**Setting a variable:** on the Vercel project the backend deploys from, `vercel env add <NAME> production` (it prompts for the value; use the prompt for the key), then redeploy: a variable takes effect with the next deployment. Check on `GET /api/backend/pipeline`. All of these need `NOWNODES_API_KEY`; step 2 also needs `INFO_ROUTING=overflow` from step 1 (the probe does not run in `official` mode).
+**Setting a variable:** on the Vercel project the backend deploys from, `vercel env add <NAME> production` (it prompts for the value; use the prompt for the key), then redeploy: a variable takes effect with the next deployment. Check on `GET /api/backend/pipeline`. All of these need `NOWNODES_API_KEY`; step 2 needs `INFO_ROUTING=overflow` or `split` (the probe does not run in `official` mode).
 
 | Step | Set | What it can do to trading | What to see afterwards |
 |---|---|---|---|
@@ -121,9 +132,14 @@ unset NOWNODES_API_KEY
 | 4 | `SNAPSHOT_VERIFY=on` | **Can stop a run**: a confirmed mismatch stores no snapshot and the executor records a failed run. With NOWNodes unreadable it still stores the snapshot (so use `on`; `strict` would refuse it, and refuses to start without a key). | `verification.verified` grows with each snapshot and `verification.unverified` stays 0 (a growing `unverified` means NOWNodes could not be read and nothing was compared); `verification.mismatches` stays 0. `verification.mode` reads `off` until the first check has run. |
 | 5 | `PICK_OVERLAP_GUARD=on` | **Can change the picks**, and so trigger more AI reviews. Not part of the default recommendation. | `latest.finalists.overlapGuard`. |
 
-Not recommended: `SNAPSHOT_VERIFY=strict` (a NOWNodes outage would stop trading) and `INFO_ROUTING=split` (NOWNodes measured slower per read).
+**NOWNodes-first profile:** set `INFO_ROUTING=split`, `INFO_SPLIT_PERCENT=100` and optionally
+`NOWNODES_PROBE=on`, with the key configured privately. Keep `SNAPSHOT_VERIFY` off; do not
+combine the official-first cross-check checklist with this profile. `SNAPSHOT_VERIFY=strict`
+can block snapshots during a provider outage. Choose that behavior explicitly, not as a default.
 
 **Undo:** remove a feature's own variable (`vercel env rm <NAME> production`) and redeploy; that changes only that feature. Remove the feature variables before `NOWNODES_API_KEY`. `routing.mode` returns to `official` only once `INFO_ROUTING` is removed; `verification` stops growing once `SNAPSHOT_VERIFY` is removed. Picks the overlap guard already changed are not reverted: the next scoring just stops using it.
+
+<a id="selection-pipeline"></a>
 
 ## Selection pipeline (2026-10-07; [docs/ingest/PIPELINE.md](../ingest/PIPELINE.md))
 
@@ -134,17 +150,18 @@ Hyperliquid's: open, not a child, ≥ $10k, ≥ 39 days old), about 14k accounts
 qualified accounts' portfolio and fills every hour, three reads at a time. Primary sources
 (hyperliquidvaults.com's vaults, the leaderboard's top 200) are read first. Once they are fresh
 and 95% of a scan is (or 3.5 hours after the scan), Score qualifies its top 250. Every 10 minutes Score picks 25 from the qualified list, leaving out
-high-frequency traders (> 100 orders a day). When the 25 change, the AI committee reviews them;
-the result is frozen for `HL_ACCOUNT` and activated if its sources differ from the active set's
-(otherwise the run is `kept`). The backend serves the active configuration and the executor
-checks targets against its hash.
+high-frequency traders (>100 orders a day). The AI committee reviews changed picks or refreshes
+approvals at least every 12 h. Its results populate the bench. The separate roster job admits and
+reviews seats, freezes a configuration for `HL_ACCOUNT`, and activates it when seats, weights or
+policy differ (otherwise `kept`). The backend and executor use that active hash.
 
 **Basic gate (default):** the AI review sees measured evidence for each finalist (hold time,
 leverage, trailing holdouts, execution fit, exposure overlap; docs/ingest/PIPELINE.md "Review
-gate"), but its strict rules rarely keep the 5 sources a freeze needs. When it rejects, the pipeline keeps finalists the
-Role model doesn't reject and that have no Risk score above the reject threshold (evidence risk
-aside). It weights them by Aggressive fit, within the per-source cap, cash buffer and gross
-leverage, and needs at least 5. `REVIEW_GATE=strict` turns this off.
+gate"). A VALID manifest uses strict approvals. Only `INSUFFICIENT_EVIDENCE` allows the basic
+fallback: candidates not rejected by Role, with no disqualifying Risk score (evidence risk aside)
+and positive fit. `POLICY_VIOLATION` and other invalid reasons approve nobody. The bench then
+passes through copyability, tenure, pacing and fixed-seat weighting in the roster. At least five
+seats are needed to activate a configuration. `REVIEW_GATE=strict` disables the basic fallback.
 
 1. **Supabase**: run `supabase/migrations/20261007120000_pipeline.sql`, then
    `20261007150000_pipeline_qualified.sql` and `20261007160000_pipeline_primary.sql`, **before**
@@ -159,21 +176,22 @@ leverage, and needs at least 5. `REVIEW_GATE=strict` turns this off.
 2. **Vercel variables**:
    - `HL_ACCOUNT` = our account (`0x7269502c48c582768ee38e4e71e7572e6ebf70f7`).
    - `DRY_RUN_EQUITY_USD=10000`.
-   - `OPENAI_API_KEY` (already set).
+   - `OPENAI_API_KEY` supplied privately; verify it in the intended deployment.
 3. **Merge** and wait for Ready. Watch `GET /api/backend/pipeline`:
-   - `accounts.qualified` appears once the latest scan is 95% refreshed: from a 200-account
-     list right away, from a full 14k scan after ~8 hours;
-   - the qualified accounts' fills are read within about an hour, then the next `:x4` run picks
-     25 and reviews them, and `active` shows the sources;
-   - the next `:x0` run trades toward them (dry run).
-4. **Operator**: `POST /api/backend/admin/pipeline/scan|refresh|select` with
+   - qualification waits for primary sources plus 95% of the scan, or the 3.5-hour cold-start
+     allowance; actual completion depends on API availability and budget;
+   - fresh qualified fills allow `:x4` selection/review; inspect the bench and gate;
+   - `:x6` roster admission/activation updates `active`; the long-running executor's next
+     `:x0` consumes it in dry run.
+4. **Operator**: `POST /api/backend/admin/pipeline/scan|refresh|select|roster` with
    `Authorization: Bearer $ADMIN_TOKEN`. An operator's `select` qualifies on partial data and
    reviews an unchanged pick.
 
 ## Upgrading a deployment from before 2026-10-07 (Chainlink CRE removed)
 
 The executor no longer receives signed reports: it runs the backend's targets itself, and some
-tables and columns were renamed. When the change reaches `main` (and production redeploys):
+tables and columns were renamed. This section applies only to a database still using that legacy schema;
+it is historical migration guidance, not the current runtime design:
 
 1. As soon as the new production deployment is Ready, run
    `supabase/migrations/20261007090000_rename_mirror_tables.sql` in the SQL editor (renames
@@ -184,11 +202,14 @@ tables and columns were renamed. When the change reaches `main` (and production 
 2. Remove the old variables if they are set: `WORKFLOW_OWNER`, `VERIFY_REPORTS`,
    `ETH_MAINNET_RPC_URL`, `WORKFLOW_NAME`, `DON_ID`, `MAX_REPORT_LEAD_SECONDS`,
    `MAX_REPORT_TTL_SECONDS`.
-3. Check Vercel → Settings → Cron Jobs lists `/api/executor/cron/run`, then run
-   `predeploy-check.ts` after the next `:x0`.
+3. Verify cron jobs match the current root `vercel.json` (no executor `/cron/run` job),
+   verify the long-running executor's timer, and inspect a subsequent run's evidence.
 
 ## Undo
 
-Vercel: remove the project. Supabase: the tables are only read by these services; `truncate` them
-or leave them. To stop trading without undeploying, pause the executor (`POST /admin/pause`): runs
-are still recorded but send nothing.
+Before a rollout, retain the prior deployment URL/revision and private environment backup.
+For read routing, set `INFO_ROUTING=official` and redeploy to restore official-first reads;
+disable independent optional features separately. To stop live trading, pause the long-running
+executor (`POST /admin/pause`); runs remain recorded. A Vercel rollback does not roll back the
+Railway executor or the active database configuration. Preserve tables and evidence; use the
+runbook for operator recovery instead of deleting the project or truncating production state.

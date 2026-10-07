@@ -31,13 +31,11 @@ of the same evidence reuses its persisted result. Conflicting freezes or review
 writes after freezing reject. Pause state is durable but is **paper-only** and does
 not replace the existing executor's controls.
 
-The production freeze tool is unchanged. A paper database freeze does not deploy
-or pin configuration to production. That remains a separately reviewed deployment
-step using `packages/backend/scripts/freeze.ts` and the [runbook](../ops/RUNBOOK.md).
+A paper database freeze does not deploy or pin production configuration. Production selection and roster jobs activate validated configurations in Supabase. `packages/backend/scripts/freeze.ts` supports the bootstrap/operator workflow; see the [runbook](../ops/RUNBOOK.md).
 
 Apply `supabase/migrations/20261006140000_paper_review.sql` after the existing review
 audit migration in staging. It adds service-only sessions/events and RPCs. Browser
-roles have no access. No migration was applied to a hosted project.
+roles have no access. The original validation described here did not apply this migration to a hosted project; check the target database migration history separately.
 
 ## Provider adapter
 

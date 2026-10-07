@@ -73,6 +73,8 @@ Local backend paths below are served under `/api/backend` on Vercel. Browser req
 | `POST /decide/receipt` | `{claim}` (sample) or `{claim, facts}` (turn receipt) → fact predicate, grounding, relation probabilities and exact JSON call | `DECISIONS_ENABLED=true` plus API key |
 | `POST /live/session` | `{sdp}` only → server-created session id, answer SDP, browser countdown; no client config forwarding | `LIVE_ENABLED=true` plus API key |
 | `POST /live/strategy` | `{intent, previous?}` → checked shortlist, evidence, changes, facts and optional context; no model call | `LIVE_ENABLED=true` |
+| `POST /live/plan` | Validated intent → reviewable simulation plan; does not save | `LIVE_ENABLED=true` |
+| `POST /live/request` | Explicit confirmation → saved pending simulation request; no trade authority | `LIVE_ENABLED=true` |
 | `POST /chat` | `{message, history?}` → strict model intent and selection, or clarification without selection | `CHAT_ENABLED=true` plus API key |
 | `POST /chat/preview` | `{intent}` → saved pending request id and simulation preview | `CHAT_ENABLED=true` |
 
@@ -132,7 +134,7 @@ With existing local dependencies (no installation/network required):
 
 ```sh
 (cd packages/backend && bunx --no-install tsc --noEmit && bun test)
-(cd packages/dashboard && bunx --no-install tsc --noEmit && bun test && NEXT_TELEMETRY_DISABLED=1 bun run build --webpack)
+(cd packages/dashboard && bunx --no-install tsc --noEmit && bun test && NEXT_TELEMETRY_DISABLED=1 bun run build)
 # Expected: no matches (rg exit status 1). Do not ignore an rg error.
 rg -l 'Copy my picks|Run scenario|parrot-sfx-catalog|PARROT_MATERIALS_RECIPES_DEV_ONLY_V1|lab-safe' \
   packages/dashboard/.next/static packages/dashboard/.next/server
@@ -224,4 +226,4 @@ The recorded protocol fixture is a replay with enum spelling adapted to the shar
 | Vibe calibration | Thresholds are calibrated to synthetic data, not a real Score distribution. |
 | Live data | Real Hyperliquid finalists/context have not been observed in this offline verification. Stored-data freshness and finite nickname collisions need live inspection. |
 | Browser acceptance | Real microphone, voice quality, sound, animation, layout, focus, screen-reader behavior and photosensitivity remain unverified. Mock audio/render tests cannot hear or see. |
-| Infrastructure | Postgres tests skip without `TEST_DATABASE_URL`; Linux, Vercel deployment and default Turbopack build were not verified here. |
+| Infrastructure | Postgres tests skip without `TEST_DATABASE_URL`. The historical rows above retain their original limits; current Linux build and CI results are recorded in the documentation audit. Neither proves real microphone/provider behavior or funded execution. |

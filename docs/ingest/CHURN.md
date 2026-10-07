@@ -1,6 +1,6 @@
 # Churn: what we changed, and how to measure it
 
-This is the record of the 2026-10-07 churn work. It started as a handoff (`churn_limit.md`) listing seven ways the copy loop overtraded. Each was fixed, designed into the roster ([ROSTER.md](ROSTER.md)), or deliberately not taken. Terminology: we trade **perps**, never "coins".
+This is the dated record of the 2026-10-07 churn work; “today” and replay counts below refer to that capture, not a continuously updated deployment measurement. It started as a handoff (`churn_limit.md`) listing seven ways the copy loop overtraded. Each was fixed, designed into the roster ([ROSTER.md](ROSTER.md)), or deliberately not taken. Terminology: we trade **perps**, never "coins".
 
 ## The issues and what happened to them
 

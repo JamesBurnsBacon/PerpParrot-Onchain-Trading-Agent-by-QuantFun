@@ -8,7 +8,7 @@ them. Design: README §4.7, §4.8, §4.13, §4.14. There is no Chainlink CRE (re
 
 | Piece | Code | Runs on | Talks to |
 |---|---|---|---|
-| Backend (snapshots, targets, paper books) | `packages/backend` (`src/server.ts`) | Vercel service `backend`, `/api/backend/*` | HL Info API, Supabase |
+| Backend (snapshots, targets, paper books) | `packages/backend` (`src/server.ts`) | Vercel service `backend`, `/api/backend/*` | HL Info API, NOWNodes (configured supported reads), Supabase |
 | Executor | `packages/executor` (`src/server.ts`) | Vercel service `executor`, `/api/executor/*` (dry run only); one long-running process for live | backend (service binding `BACKEND_URL`), HL Info + Exchange API, Supabase, Telegram |
 | Dashboard | `packages/dashboard` (Next.js) | Vercel service `dashboard`, every other path | backend, executor (browser fetches on the same origin, read-only) |
 | Tables | `supabase/migrations/` | Supabase | — |
@@ -16,14 +16,18 @@ them. Design: README §4.7, §4.8, §4.13, §4.14. There is no Chainlink CRE (re
 All three deploy as one Vercel project from the root `vercel.json` (one domain, one deployment).
 On Vercel the two Bun services run as functions that stop between requests, so the schedule is
 Vercel Cron: `/api/backend/cron/snapshot` at `:x9` builds the coming run's snapshot,
-`/api/executor/cron/run` at `:x0` runs it, and `/api/executor/cron/watchdog` every 5 minutes alerts
-on missed runs. A long-running executor (live trading) triggers its own runs with a timer. Both
+and `/api/executor/cron/watchdog` every 5 minutes alerts on missed runs. Selection and roster
+also run on Vercel Cron (see [PIPELINE.md](../ingest/PIPELINE.md)). Executor `/cron/run` is not
+scheduled in the root configuration. One long-running executor triggers `:x0` with its timer,
+including during a dry-run rehearsal; an authenticated operator can trigger a slot manually. Both
 services also answer on their bare paths (`/health`, `/targets/…`), which is what local runs,
 Docker and the e2e script use.
 
 ## Run it locally
 
-Needs Bun ≥ 1.2.21 and network access. Nothing here sends an order.
+Use Bun 1.4.2 (the CI version) and network access. The E2E script forces dry run.
+Use an isolated environment without production database, API-wallet or alert credentials;
+Bun can load local `.env` files. Any `DATABASE_URL` below must be a disposable test database.
 
 ```sh
 ./scripts/e2e-mirror.sh          # backend + executor, one run for the next :x0 (dry run), checks the result
@@ -47,8 +51,9 @@ is set (see `packages/executor/test/pg-store.test.ts`).
 | Variable | Required | Meaning |
 |---|---|---|
 | `CONFIGURATION_PATH` | yes | Frozen configuration JSON (the freeze output), relative to `packages/backend` |
-| `FROZEN_CONFIGURATION_HASH` | yes | Its `configurationHash`; the service refuses any other |
-| `DATABASE_URL` | prod | Supabase Postgres (service role). Without it snapshots and the eligibility list live in memory. Required on Vercel |
+| `FROZEN_CONFIGURATION_HASH` | yes | Hash of the bootstrap file; once present, a validated active Supabase configuration takes precedence |
+| `DATABASE_URL` | prod | Supabase Postgres session connection; snapshots/eligibility otherwise use memory. Required on Vercel unless `BACKEND_DATABASE_URL` supplies the backend connection |
+| `BACKEND_DATABASE_URL` | no | Backend-only transaction pooler (6543), with prepared statements disabled; takes precedence over `DATABASE_URL` |
 | `CRON_SECRET` | Vercel | Vercel Cron sends it to `/cron/snapshot`; required on Vercel (any random string, shared with the executor) |
 | `SNAPSHOT_MAX_LEAD_SECONDS` | no | How close to a run a snapshot may be built (default 120). `600` only for local end-to-end runs |
 | `PAPER_BALANCED_MULTIPLIER` | no | Balanced book = Aggressive weights × this (default 0.5) |
@@ -61,10 +66,10 @@ is set (see `packages/executor/test/pg-store.test.ts`).
 | Variable | Required | Default | Meaning |
 |---|---|---|---|
 | `HL_ACCOUNT` | yes | — | Our HL master account (must equal the configuration's `account`) |
-| `FROZEN_CONFIGURATION_HASH` | yes | — | Same as the backend's; targets from any other configuration are refused |
+| `FROZEN_CONFIGURATION_HASH` | yes | — | Bootstrap pin; the executor checks the active database configuration hash when available, otherwise this pin |
 | `BACKEND_URL` | prod | `http://localhost:8788` | The backend's base URL. On Vercel the service binding injects it (`vercel.json`); set it yourself on a long-running host |
 | `NODE_ENV` | prod | — | `production` requires `ADMIN_TOKEN`, `DATABASE_URL` and `BACKEND_URL`. Every Vercel deployment (previews too) counts as production |
-| `CRON_SECRET` | Vercel | — | Vercel Cron sends it to `/cron/run` and `/cron/watchdog`; required on Vercel |
+| `CRON_SECRET` | Vercel | — | Protects cron endpoints; root `vercel.json` schedules `/cron/watchdog` only for the executor |
 | `ADMIN_TOKEN` | prod | — | Bearer token for `/admin/*` |
 | `DRY_RUN` | no | `true` | Only the literal `false` sends orders; refused on Vercel |
 | `HL_API_WALLET_KEY` | live | — | API wallet (agent) key: trades, can't withdraw. Required when `DRY_RUN=false` |
@@ -116,9 +121,10 @@ configuration (e.g. the fixture before the go-live freeze). First-time setup, st
    don't use up the session pooler's 20 connections. Deploy to production (crons only run on
    production deployments). Vercel may run several executor instances; each run takes a Postgres
    advisory lock and a per-run claim, so a run never happens twice or overlaps another.
-3. **Check:** `GET https://<domain>/api/executor/status` (dry run, `store: postgres`), then after
-   the next `:x0` `GET https://<domain>/api/executor/runs?limit=3`: a `mirror` run with
-   `status: "executed"`, `dryRun: true`, a plan you agree with and `evidence.snapshotHash`.
+3. **Check:** `GET https://<domain>/api/executor/status` (dry run, `store: postgres`). Start the
+   long-running executor in dry run, or trigger a current slot through authenticated `/admin/run`.
+   Then inspect `/api/executor/runs?limit=3`: a `mirror` run with `status: "executed"`,
+   `dryRun: true`, a reviewed plan and `evidence.snapshotHash`. Vercel alone does not schedule runs.
 4. **Dashboard:** deployed with the other two at `https://<domain>/`; the header should read
    "Dry run · Copying" and the heartbeat gains a cell every 10 minutes.
 5. **Go live:**
@@ -130,15 +136,15 @@ configuration (e.g. the fixture before the go-live freeze). First-time setup, st
          (session pooler), `BACKEND_URL=https://<domain>/api/backend`, `HL_ACCOUNT`,
          `FROZEN_CONFIGURATION_HASH`, `ADMIN_TOKEN`, and `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID`
          for alerts. No `DRY_RUN` and no `DRY_RUN_EQUITY_USD` (it sizes dry runs only).
-         `MAX_GROSS_LEVERAGE` is a backstop that fails a run: gross can reach 7.5x (the 5x cap
-         plus up to 50% for the market-exposure offset), so set it just above, e.g. 8. Its pool
+         `MAX_GROSS_LEVERAGE` is the raw-gross backstop (default 10×). Under the 5× counted-gross
+         cap, equal long/short exposure can reach about 6.67× raw gross. Keep the reviewed
+         deployment setting; changing this threshold is a policy change. Its pool
          keeps 4 of the session pooler's 20 connections. `EXECUTOR_READ_DATABASE_URL` isn't needed
          there: the dashboard reads through the Vercel executor.
       2. Deploy it still in dry run; `GET /status` on Railway shows `dryRun: true`.
-      3. Merge the PR that removes `/api/executor/cron/run` from `vercel.json`. Until then both
-         trigger each `:x0` and whichever claims it first runs it (a Vercel dry run could take
-         the slot of a live one). Vercel keeps the executor's read endpoints for the dashboard and
-         the watchdog cron, which only alerts.
+      3. Verify deployed cron configuration still omits `/api/executor/cron/run`, as the current
+         root `vercel.json` does. A second scheduled executor could claim a live slot first.
+         Vercel keeps read endpoints for the dashboard and the alert-only watchdog.
       4. After the next `:x0`, `GET /api/executor/runs?limit=3` shows the run from Railway.
    2. Fund the account (README §4.8 Capital): USDC in the account, no other transfers needed in
       unified mode.
@@ -162,9 +168,12 @@ configuration (e.g. the fixture before the go-live freeze). First-time setup, st
       Telegram alert says what was reconciled. Nothing pauses; pausing and flattening are human
       actions. `POST /admin/reconcile-batch` is still there to close a batch by hand.
 
-## Freeze (go-live set)
+## Freeze (bootstrap or operator-managed set)
 
-The AI review produces a `FrozenConfiguration` (`proposeFreeze`, `packages/shared/src/frozen.ts`).
+The pipeline's roster normally creates and activates a validated `FrozenConfiguration` in
+Supabase. The file below is the bootstrap fallback or an explicit operator-managed configuration;
+changing it does not override an existing active database row. The core's `proposeFreeze`
+(`packages/shared/src/frozen.ts`) can produce such a configuration for the operator tool.
 Its `account` must be our HL account, and its `chainId` is part of its hash.
 
 ```sh
@@ -175,9 +184,9 @@ bun run scripts/freeze.ts path/to/frozen-configuration.json --account 0xOUR_ACCO
 
 `--write` saves it as `packages/backend/frozen/live.json`; the script prints the variables to set
 on Vercel (`CONFIGURATION_PATH=frozen/live.json`, `FROZEN_CONFIGURATION_HASH`, `HL_ACCOUNT`,
-`MAX_GROSS_LEVERAGE`). Commit, set them, redeploy. Until the backend and the executor pin the same
-hash, runs fail closed: the backend won't build from another configuration and the executor refuses
-targets from one.
+`MAX_GROSS_LEVERAGE`). Review the file and environment changes before deploying. Both services
+must agree on the effective configuration (active database row, otherwise file/hash). A mismatch
+fails closed. A file redeploy alone is not a rollback of a roster's active configuration.
 
 ## Stop
 
@@ -188,8 +197,8 @@ curl -X POST -H "Authorization: Bearer $ADMIN_TOKEN" -H "x-operator: $NAME" $EXE
 ```
 
 Flatten ignores the targets and stays paused afterwards. It queues behind a run in progress; if a
-run is stuck (alert "still running after …"), redeploy the executor (Vercel: Instant Rollback or a
-redeploy of the current deployment), then flatten. While paused, runs are still recorded
+run is stuck (alert "still running after …"), use the long-running executor's recovery procedure,
+then flatten through that executor. A Vercel dry-run instance cannot flatten live positions. While paused, runs are still recorded
 (`skipped_paused`) but send nothing.
 
 ## Data for the dashboard (README §4.11)
@@ -217,10 +226,11 @@ change policy or execution.
 | Supabase `run_targets` | target history: one row per perp per run (target exposure and USD, held, gap, the order or skip reason, the fill) | anon `select` |
 | Supabase `executor_controls` | kill-switch state | anon `select` |
 
-### Publishing the backtest, funnel and finalists
+### Publishing optional historical backtest and funnel artifacts
 
-The backtest and the score/ingest jobs publish one JSON document each to `dashboard_artifacts`
-(service role); the dashboard picks it up within a minute. Shapes: `packages/shared/dashboard.ts`.
+Historical jobs can publish documents to `dashboard_artifacts` (service role); the dashboard
+reads them separately from the current `/pipeline` finalists and roster. Publishing artifacts
+is not a required production selection step. Shapes: `packages/shared/dashboard.ts`.
 Publish with the checker, which refuses anything that would render wrong (seconds instead of
 milliseconds, a series not indexed to 1.0, no BTC benchmark, a funnel stage growing):
 
@@ -259,10 +269,10 @@ response bytes and compare it with the run's `evidence.snapshotHash`; `targetsFr
 
 | Symptom | Where to look | Usual cause |
 |---|---|---|
-| No runs in `/runs`, Telegram "no finished run for N min" | Vercel → Cron Jobs and the executor's logs | The `:x0` cron isn't running (not a production deployment, `CRON_SECRET` mismatch), or runs are failing |
+| No runs in `/runs`, Telegram "no finished run for N min" | Long-running executor health/logs, then backend snapshot cron | The executor process/timer stopped, a snapshot failed, or runs are failing; Vercel has no scheduled `/cron/run` |
 | Run `failed` with `backend targets for …` | Backend logs (`snapshot failed`, `targets served`) | Backend down, HL slow or unreachable, or the run asked too late (> 120 s after `:x0`) |
-| Run `failed` with `configuration mismatch` / `account mismatch` | `FROZEN_CONFIGURATION_HASH`, `HL_ACCOUNT` on both services | Freeze steps out of sync |
-| Run `failed` with `active-source concentration exceeds ceiling` / `ineligible asset` | The run's snapshot | The frozen weights can't be honored this run; the next run retries |
+| Run `failed` with `configuration mismatch` / `account mismatch` | Active `configurations` row, bootstrap hash and `HL_ACCOUNT` | Effective configuration/account differs between services |
+| Run `failed` with invalid configuration / `ineligible asset` | Active configuration and the run's snapshot | Configuration or snapshot validation failed; flat sources no longer cause active-weight renormalization |
 | Run `failed`, other `error` | `error` on the run | HL unreachable, or the gross-leverage bound |
 | Orders with `status: "error"` | `results` on the run | HL rejection (min size, margin); the next run retries |
 | `/cron/run` answers `duplicate` | — | Normal: another trigger (retry, a second instance) already ran that slot |

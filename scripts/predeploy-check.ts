@@ -102,7 +102,7 @@ if (executor) {
   const runs = await getJson(`${executor}/runs?summary=1&limit=5`);
   if (runs) {
     check(runs.status === 200 && Array.isArray(runs.body), `/runs?summary=1 ok (${runs.body?.length ?? 0} runs)`, `/runs HTTP ${runs.status}`);
-    // One run every 10 minutes (Vercel Cron, or the executor's own timer when long-running).
+    // One run every 10 minutes, triggered by the long-running executor timer.
     const last = (runs.body as { kind: string; startedAt: number; status: string }[] | undefined)?.find((r) => r.kind === "mirror");
     if (!last) warn("no scheduled run recorded yet (the first comes at the next :x0)");
     else if (Date.now() - last.startedAt > 25 * 60_000) warn(`last scheduled run started ${Math.round((Date.now() - last.startedAt) / 60_000)} min ago`);

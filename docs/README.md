@@ -26,11 +26,14 @@ proof of investment performance. Keep negative results and their limitations.
   a fresh clone without those captures.
 - [October 6 research screening](ingest/RESEARCH_SCREENING_V1.md) and its examples:
   reference snapshots, separate from the production pipeline.
+- [Historical API/provider observations](research/OBSERVATIONS_20261006.md): moved out of the root README; original counts and recommendations are dated research.
 - [Maker-share study](../scripts/research/maker-share/README.md): supporting research.
 - [Historical pressure test](agents/PRESSURE_TEST.md): original review-core findings;
   its test counts and open items describe that contribution, not today's deployment.
 - [Dated jury pitch](pitch/mirror-inspired/README.md): presentation assets with an
   explicit code baseline and screenshot times.
+
+See the [documentation audit](ops/DOCUMENTATION_AUDIT.md) for the traversal scope and verification record.
 
 ## Development-only tools
 

@@ -1,5 +1,7 @@
 # Public-data backtest: first screening evaluation
 
+Historical experiment from 2026-10-06. “Current” score/data below means that experiment's baseline, not the latest production formula. See [SCORING_EVALUATION.md](SCORING_EVALUATION.md) for the maintained scoring description.
+
 ## What ran
 
 On 2026-10-06, a read-only collector sampled 12 accounts from Hyperliquid's public

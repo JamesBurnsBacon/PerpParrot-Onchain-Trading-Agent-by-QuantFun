@@ -1,5 +1,7 @@
 # Public feature discovery: empirical review
 
+Historical experiment from 2026-10-06. “Current” score/data below means that experiment's baseline, not the latest production formula. See [SCORING_EVALUATION.md](SCORING_EVALUATION.md) for the maintained scoring description.
+
 ## Question and scope
 
 This study asks whether public Hyperliquid activity fields omitted from the current

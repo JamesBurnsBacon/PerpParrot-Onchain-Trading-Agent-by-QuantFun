@@ -1,5 +1,7 @@
 # PerpParrot — Mirror-inspired jury pitch
 
+Dated presentation; code baseline and screenshot times are in the [evidence boundary](README.md#evidence-boundary). Current operation is documented in the [root README](../../../README.md).
+
 Ten core slides. The spoken script contains 426 words. At about 130 words per minute, allow roughly 3¼ minutes plus pauses. This is a word-count estimate, not a timed rehearsal. Scenario and arithmetic are illustrative. Screens are authentic earlier paper captures; the speech does not describe funded availability.
 
 ## 1 · The hook

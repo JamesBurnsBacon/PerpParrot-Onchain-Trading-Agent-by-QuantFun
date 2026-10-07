@@ -63,10 +63,7 @@ cannot be relabeled as copyable HyperCore sources.
 production defaults. Weight caps, leverage, cash, correlation, overlap, confidence,
 rejection and rebuild thresholds are deterministic, versioned and policy-hashed.
 Each bucket is compiled under its own limits, not just an AI-chosen scalar.
-The existing slice formula, active-source renormalization, $10 / 10% drift gates,
-asset eligibility, reduce-only behavior, ledger reconciliation and IOC execution
-remain module responsibilities. The validator must stress active-source
-renormalization: flat sources can amplify the others beyond nominal weight caps.
+The slice formula, drift gates, asset eligibility, reduce-only behavior, ledger reconciliation and IOC execution remain deterministic module responsibilities. The production mirror preserves fixed source weights when wallets go flat; it does not redistribute them among active sources. Any normalization inside strict-core portfolio compilation is a separate boundary and must retain its policy caps.
 
 Execution-fit starting hypothesis: exclude median hold <60 minutes; strong penalty
 60–180, softer penalty 180–360, little/no latency penalty above 360. Missing holding
@@ -85,7 +82,7 @@ asset composition. Apply those ideas at the boundaries below:
 
 - Keep hard eligibility and comparative ranking distinct. PerpParrot's $10k account
   value, 30-day history, 10-trade and 25-point requirements are eligibility gates;
-  its weighted month-window Sharpe, Sortino, Calmar, drawdown and PnL-consistency
+  its weighted stitched-lookback (up to 90 days) Sharpe, Sortino, Calmar, drawdown and log-equity trend R² consistency
   percentiles, with the configured pure-taker penalty, order the surviving cohort. Review risk limits remain binding even when a source ranks well.
 - Treat the current score as cohort-relative. Adding or removing eligible candidates
   can change percentiles without changing a source's own record. Preserve raw metrics,
@@ -103,10 +100,10 @@ asset composition. Apply those ideas at the boundaries below:
   execution-fit evidence as risk/copyability checks, with missing evidence failing
   closed where policy requires it.
 - Keep address selection separate from portfolio construction. LockOn's address
-  breakdown idea has a direct analogue in `computeExposures`: source weights are
+  breakdown idea has a direct analogue in `targetsFromSnapshot` (`packages/shared/copy.ts`): source weights are
   multiplied by each source's signed per-asset notional/equity, then netted and capped.
   This is already the correct downstream shape for index replication. Correlation,
-  vault/leader links, overlap, active-source renormalization and per-source ceilings
+  vault/leader links, overlap, fixed roster weights and per-source ceilings
   must still constrain the portfolio; normalized score shares alone are not a safe
   weight policy.
 
@@ -124,15 +121,15 @@ change.
 |---|---|---|
 | ingest / score | Backend projects numeric metrics and trusted kind enums | snapshots / candidates |
 | backtest | Past-cut evidence and provenance feed preflight; evaluate selections separately | backtests per OOS window |
-| review | Frame → Role/Risk → diversification → compiler → Red Team → validator | reviews / buckets / freeze hash |
+| review | Frame → Role/Risk → diversification → compiler → Red Team → validator | review audit / manifest; production bench / roster / configuration hash |
 | positions | Uses resolved manifest source addresses and frozen weights | snapshot API |
 | mirror | Reads only VALID frozen configuration + fresh state; zero inference | run snapshot + target exposures |
 | execute | Existing configurationHash/account check, run claim, nonce, signing, IOC, reconciliation | orders / fills / ledger |
-| paper / dashboard | Render modes and Narrative separately | paper_books / read-only UI |
+| paper / dashboard | Render modes and Narrative separately | paper_state / read-only UI |
 
 Adapters must preserve existing table/API shapes once implementations exist. Do not
 rename `review` to `curate` externally. `CandidateCurationFrame` and consensus are
-internal review inputs. `BucketManifest` is the resolved downstream handoff.
+internal review inputs. `BucketManifest` is the strict core's result. Production converts approved candidates into a bench, then roster seats and a validated frozen configuration.
 `RebalanceReport` is the original contract's order-intent shape; the running mirror
 instead serves target exposures (`GET /targets/:runAt`) that the executor sizes and
 plans itself. Neither is a Hyperliquid exchange request.
@@ -165,8 +162,7 @@ Role/Risk or Red-Team timeout, malformed output or insufficient quorum → no ne
 portfolio. PASS still requires deterministic validation. REBUILD → one recompilation
 → validator; failure → INVALID_BUCKET with empty sources and cashWeight=1.
 No second AI loop or silent fallback. An invalid selected bucket cannot authorize
-new trades. After go-live review is commentary only; it cannot replace the frozen
-manifest. Failure does not automatically flatten existing positions: Pause/Flatten
+new trades. In the separate paper lifecycle, post-freeze review is commentary only. Production roster reviews can produce a new validated configuration version through the pipeline; model prose cannot replace one directly. Failure does not automatically flatten existing positions: Pause/Flatten
 remain explicit executor controls. Mirror stale/mismatched state → NO_TRADE.
 Uncertain execution → reconcile by cloid; never blind resend or switch transports.
 
