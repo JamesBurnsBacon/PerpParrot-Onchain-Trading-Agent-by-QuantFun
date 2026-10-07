@@ -117,8 +117,8 @@ export const createApp = (deps: AppDeps) => async (req: Request): Promise<Respon
         // leaves the controls as they were.
         result = await deps.runner.exclusive(async () => {
           if (!(await deps.store.unresolvedOrderBatches()).some((batch) => batch.id === id)) return { error: `order batch ${id} is not unresolved` };
+          // Controls are left as they are: runs reconcile on their own, and only a human pauses.
           await deps.store.reconcileOrderBatch(id, by, evidence, Date.now());
-          await deps.store.setControls({ paused: true, updatedAt: Date.now(), updatedBy: `reconciliation:${by}` });
           return { unresolved: (await deps.store.unresolvedOrderBatches()).length };
         });
       } catch (e) {
@@ -126,7 +126,7 @@ export const createApp = (deps: AppDeps) => async (req: Request): Promise<Respon
       }
       if ("error" in result) return json(result, 409);
       deps.log("order batch reconciled", { id, by, remaining: result.unresolved });
-      return json({ reconciled: id, ...result, paused: true });
+      return json({ reconciled: id, ...result });
     }
     switch (pathname) {
       case "/admin/pause":
@@ -141,26 +141,19 @@ export const createApp = (deps: AppDeps) => async (req: Request): Promise<Respon
           deps.log("controls changed", controls);
           return json(controls);
         }
-        let result: { blocked?: number; controls?: { paused: boolean; updatedAt: number; updatedBy: string } };
+        // Unresolved order actions don't block a resume: the next run reconciles them automatically.
+        let controls: { paused: boolean; updatedAt: number; updatedBy: string };
         try {
-          result = await deps.runner.exclusive(async () => {
-            const unresolved = await deps.store.unresolvedOrderBatches();
-            if (unresolved.length > 0) {
-              await deps.store.setControls({ paused: true, updatedAt: Date.now(), updatedBy: `unresolved-order-batch:${unresolved[0].id}` });
-              return { blocked: unresolved.length };
-            }
-            const controls = { paused: false, updatedAt: Date.now(), updatedBy: by };
-            await deps.store.setControls(controls);
-            return { controls };
+          controls = await deps.runner.exclusive(async () => {
+            const next = { paused: false, updatedAt: Date.now(), updatedBy: by };
+            await deps.store.setControls(next);
+            return next;
           });
         } catch (e) {
           return json({ error: `a run is in progress; retry: ${(e as Error).message}` }, 409);
         }
-        if (result.blocked !== undefined) {
-          return json({ error: "unresolved order actions must be reconciled before resume", unresolved: result.blocked, paused: true }, 409);
-        }
-        deps.log("controls changed", result.controls!);
-        return json(result.controls);
+        deps.log("controls changed", controls);
+        return json(controls);
       }
       case "/admin/flatten": {
         // Pause first so the next run doesn't reopen what we're closing.

@@ -53,11 +53,14 @@ HyperEVM freeze consumer and preview tables that were here were replaced by the 
 ## Remaining gates for funded execution
 
 The executor now has a durable write-ahead journal for leverage changes and IOC order
-batches. Startup and pre-run recovery detect unresolved journal rows and hold run
-execution; `GET /admin/order-batches` exposes the evidence needed for operator review.
-This is crash containment, not automatic exchange reconciliation or proof that an
-exchange request is idempotent. The operator must reconcile each unresolved action
-against Hyperliquid before resuming.
+batches. Each run first reconciles unresolved journal rows automatically
+(`packages/executor/src/reconcile.ts`), under the cross-process run lock. Every action is
+signed with `expiresAfter`, so past that time it has either landed or never will: the run
+records Hyperliquid's `orderStatus` per client order ID (`activeAssetData` for leverage) as
+evidence and trades against the live account. Before expiry, a row closes only when every
+order is final; otherwise that run leaves its perps alone and trades the rest. Nothing pauses
+automatically: only a human pauses or flattens. `GET /admin/order-batches` and
+`POST /admin/reconcile-batch` remain for manual review.
 
 Before any funded canary, require all of the following:
 
@@ -65,13 +68,12 @@ Before any funded canary, require all of the following:
    exercise the Postgres tests against that schema and confirm persistence across an
    executor restart.
 2. Run the recovery drill on paper: leave an order batch in `dispatching`, stop the
-   executor, restart it, verify the durable pause and operator listing, reconcile with
-   recorded evidence, and confirm it stays paused until explicit resume. Also test a
-   database outage before journal creation and after exchange dispatch.
-3. During reconciliation, stop/fence every executor instance first. The admin endpoint
-   records an operator attestation; it does not query Hyperliquid or prove the old
-   process has stopped. Never clear a dispatching record while its originating process
-   may still be executing.
+   executor, restart it, and verify that the next run reconciles it automatically (with
+   Hyperliquid's order status as evidence), alerts, and trades on without pausing. Also
+   test a database outage before journal creation and after exchange dispatch.
+3. Run exactly one live executor: the run lock fences runs across processes, and the
+   signed expiry bounds how long an old process's action can still land. A manual
+   `POST /admin/reconcile-batch` is an operator attestation; it doesn't query Hyperliquid.
 4. Run the long-running live executor process (e.g. Railway) against the deployed
    backend, then complete repeated dry-run/soak and injected failure tests with the
    deployed services.
