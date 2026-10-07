@@ -40,9 +40,13 @@ test("board retains sample provenance, hidden announcements and the short waitin
   expect(html.match(/class="wallet-position wallet-current"/g)).toHaveLength(5);
   const empty = renderToStaticMarkup(<ParrotEffectsProvider><WalletBoard chat={{ ...PARROT_PRESETS[0].chat, shortlist: { dataSource: "sample", addresses: [] } }} /></ParrotEffectsProvider>);
   expect(empty).toContain("Waiting for birds...");
+  // Live data carries no badge at all; only sample data is labelled.
+  const live = renderToStaticMarkup(<ParrotEffectsProvider><WalletBoard chat={{ ...PARROT_PRESETS[0].chat, shortlist: { ...PARROT_PRESETS[0].chat.shortlist, dataSource: "live" } }} /></ParrotEffectsProvider>);
+  expect(live).not.toContain("SAMPLE DATA");
+  expect(live).not.toContain("parrot-badge");
   const waiting = renderToStaticMarkup(<WaitingFlock />);
   expect(waiting).toContain("The Flock");
-  expect(waiting).toContain("SAMPLE DATA");
+  expect(waiting).not.toContain("SAMPLE DATA"); // nothing is shown yet, so nothing to label
   expect(waiting).toContain("Waiting for birds...");
 });
 

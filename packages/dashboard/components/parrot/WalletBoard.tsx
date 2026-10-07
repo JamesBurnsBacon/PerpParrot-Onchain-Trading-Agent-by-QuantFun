@@ -8,7 +8,7 @@ import { WalletBird } from "./WalletBird";
 
 export function WaitingFlock() {
   return <section className="wallet-board wallet-waiting" aria-label="The Flock">
-    <header className="wallet-board-heading"><h2>The Flock</h2><Badge kind="SAMPLE DATA" /></header>
+    <header className="wallet-board-heading"><h2>The Flock</h2></header>
     <p className="wallet-empty" role="status">Waiting for birds...</p>
   </section>;
 }
@@ -88,7 +88,7 @@ export function WalletBoard({ chat }: { chat: ChatResponse }) {
   const rows = [...chat.shortlist.addresses.map(address => ({ address, out: false, evidence: chat.evidence,
     reason: chat.changes?.added.find(e => e.address === address)?.reason })), ...state.ghosts.map(g => ({ ...g, out: true }))];
   return <section className={`wallet-board ${quiet ? "is-calm" : ""} ${celebration?.animated ? "has-fever" : ""}`} aria-label="The Flock">
-    <header className="wallet-board-heading"><h2>The Flock</h2><Badge kind={chat.shortlist.dataSource === "sample" ? "SAMPLE DATA" : "LIVE"} /></header>
+    <header className="wallet-board-heading"><h2>The Flock</h2>{chat.shortlist.dataSource === "sample" && <Badge kind="SAMPLE DATA" />}</header>
     <div key={state.epoch} className="wallet-change-chip">{summary.chip}</div>
     <p className="sr-only" aria-live="polite">{summary.announcement}</p>
     <div ref={board} className="wallet-grid">

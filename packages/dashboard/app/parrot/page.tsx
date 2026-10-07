@@ -95,7 +95,7 @@ function ParrotContent() {
           {demo && <div className="mt-4"><Badge kind="CACHED DEMO" /></div>}
         </section>
         {chat && <div className="parrot-result min-w-0" data-fever={fx.celebration?.animated || undefined}>
-          <div className="wallet-board-heading"><Badge kind={chat.shortlist.dataSource === "sample" ? "SAMPLE DATA" : "LIVE"} /><small>No orders are placed.</small></div>
+          <div className="wallet-board-heading">{chat.shortlist.dataSource === "sample" && <Badge kind="SAMPLE DATA" />}<small>No orders are placed.</small></div>
           <Fever />
           <p className="sr-only" role="status">Strategy ready. Review Select, Verify, and Execute.</p>
           <StepRail chat={chat} demo={!!demo} step={step} setStep={setStep} preview={preview} busy={busy} executionDisabled={live.active} failure={previewError} onConfirm={() => void confirm()} />
