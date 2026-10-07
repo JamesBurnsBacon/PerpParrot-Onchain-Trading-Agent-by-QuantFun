@@ -19,7 +19,7 @@ import { MemorySnapshotStore } from "./snapshot";
 import { handleChat, handlePreview, MemoryRequestStore, PostgresRequestStore, type ChatDeps, type ChatEnv } from "./chat/handler";
 import { MemoryChatLimiter, PostgresChatLimiter } from "./chat/limits";
 import { callIntentModel } from "./chat/openai";
-import { loadFinalists } from "./chat/finalists";
+import { createFinalistsSource, type TrackedAccountRow } from "./chat/finalists";
 import { readLiveEnv } from "./live/config";
 import { handleLiveSession, handleLiveStrategy } from "./live/handler";
 import { validateRuntimePolicy } from "../../shared/src/policy-runtime";
@@ -141,12 +141,17 @@ const chatStores = {
   requests: sql ? new PostgresRequestStore(sql) : new MemoryRequestStore(),
 };
 const liveEnv = readLiveEnv(env);
+// Real finalists for the Parrot: Score over the accounts the selection pipeline refreshed (read-only);
+// without Postgres, or without enough fresh accounts, the labelled sample is used.
+const parrotFinalists = createFinalistsSource(sql ? () => sql`
+  select address, kind, account_value, closed, portfolio, trade_count, maker_share from pipeline_accounts
+  where listed_at >= (select max(listed_at) from pipeline_accounts) - interval '10 minutes'` as Promise<TrackedAccountRow[]> : undefined, { log });
 let chatDeps: Promise<ChatDeps> | undefined;
 const loadChatDeps = (): Promise<ChatDeps> => chatDeps ??= fileConfiguration.load(Date.now()).then(
   ({ policy }): ChatDeps => {
     // The snapshot source types only the mirror's subset; chat needs the full policy.
     validateRuntimePolicy(policy);
-    return { env: chatEnv, ...chatStores, callModel: callIntentModel, finalists: loadFinalists,
+    return { env: chatEnv, ...chatStores, callModel: callIntentModel, finalists: parrotFinalists,
       basePolicy: policy, now: Date.now, log, newId: () => crypto.randomUUID() };
   },
 ).catch((error: unknown) => {

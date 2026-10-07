@@ -18,7 +18,7 @@ browser ── hold to confirm ──► POST /chat/preview ──► PENDING re
 - **Cannot:** place orders, hold keys, freeze or change a frozen configuration, call `/reports`, or read admin tokens. The code under `packages/backend/src/chat`
   and `src/live` references none of `ADMIN_TOKEN`, `HL_API_WALLET_KEY`, `CRE_API_KEY`.
 - **The model never allocates.** `intentToPreview` can only tighten the base policy (a request for 100x becomes the policy cap). Every style produces a **simulation preview**; an operator must review and freeze separately. Only code builds the facts the parrot speaks. Visitor text and model prose never enter state or the prompt as facts.
-- **Honest labels.** The finalists are currently **sample data** (`SAMPLE DATA` badge). Nothing on the page is a forecast or a signed report.
+- **Honest labels.** With Postgres and enough refreshed accounts the finalists are **live**: Score (unchanged) run over `pipeline_accounts`, the accounts the selection pipeline refreshed (read-only, cached 5 minutes, up to 25 finalists). Otherwise (no database, fewer than 30 refreshed accounts, fewer than 5 finalists, or any failure) the **sample data** is used and the page shows the `SAMPLE DATA` badge; `dataSource` in every response says which. Nothing on the page is a forecast.
 
 ## Strategy contract
 
@@ -108,3 +108,7 @@ Materials lab: `/parrot/lab`, development only. Unlock audio, audition sounds, a
 Copy picks as plain text; selections stay in component state only. Synthetic flock swaps reuse the real tiles, stickers and Fever effects.
 Calm / Sound controls apply here; reduced motion is respected. This page makes no backend or OpenAI calls.
 Production returns 404 and webpack excludes the lab client, fixtures and extra recipes. Sound quality and visual appearance still need human audition.
+
+## Live finalists (2026-10-07)
+
+`src/chat/finalists.ts` `createFinalistsSource` reads the pipeline's tracked accounts, runs `scoreCandidates` and maps the result with the team's `mapScoreFinalists`; clone status comes from Score itself. It never writes to the pipeline tables or touches the active configuration, and chat previews still use the pinned configuration's policy. Vibe thresholds (`VIBE_THRESHOLDS`) were calibrated to the sample data and have **not** been checked against a real Score distribution yet.
