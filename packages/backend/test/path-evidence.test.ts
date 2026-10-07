@@ -24,7 +24,7 @@ test('known return beta is two even with deposits; sparse or flat benchmark rema
     if(i){const dp=(equity+deposit)*2*ret;pnl+=dp;equity+=deposit+dp;btc*=1+ret;}
     points.push({t:(i+1)*DAY-HOUR/2,equity,pnl,btc});
   }
-  const input={month:{accountValueHistory:points.map(p=>[p.t,p.equity]),pnlHistory:points.map(p=>[p.t,p.pnl])}} as ScoreInput;
+  const input:ScoreInput={address:'0x'+'1'.repeat(40),kind:'trader',accountValue:equity,closed:false,history:null,allTime:null,tradeCount:30,month:{accountValueHistory:points.map(p=>[p.t,p.equity]),pnlHistory:points.map(p=>[p.t,p.pnl])}};
   const candles=points.map(p=>({t:p.t-HOUR,T:p.t-1,c:String(p.btc)}));
   expect(bitcoinBeta(input,candles,30*DAY).value).toBeCloseTo(2,8);
   expect(bitcoinBeta(input,candles.slice(0,8),30*DAY).value).toBeNull();
