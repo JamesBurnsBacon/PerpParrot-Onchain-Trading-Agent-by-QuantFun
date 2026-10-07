@@ -674,6 +674,20 @@ describe("app routes", () => {
     expect(runs[0].runId).toBe(`mirror-${AS_OF}`);
   });
 
+  test("dashboard reads go to the read store when there is one; runs and admin actions stay on the main store", async () => {
+    const reads: string[] = [];
+    const s = setup(fakeInfo({ equity: "400" }));
+    const readStore = Object.assign(Object.create(Object.getPrototypeOf(s.store)), s.store, {
+      getControls: async () => (reads.push("controls"), s.store.getControls()),
+      recentRuns: async (n: number) => (reads.push("runs"), s.store.recentRuns(n)),
+      recentRunSummaries: async (n: number) => (reads.push("summaries"), s.store.recentRunSummaries(n)),
+      equityCurve: async () => (reads.push("equity"), s.store.equityCurve()),
+    });
+    const app = createApp({ now: () => AS_OF * 1000 + 10_000, runner: s.runner, store: s.store, readStore, status: () => ({}), log: () => {} });
+    for (const path of ["/status", "/runs", "/runs?summary=1", "/equity"]) expect((await app(new Request(`http://x${path}`))).status).toBe(200);
+    expect(reads).toEqual(["controls", "runs", "summaries", "equity"]);
+  });
+
   test("GET /runs?summary=1 leaves out plans and evidence", async () => {
     const { app, runner } = make();
     await runner.executeRun(AS_OF);

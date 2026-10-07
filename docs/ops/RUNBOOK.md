@@ -68,7 +68,8 @@ is set (see `packages/executor/test/pg-store.test.ts`).
 | `ADMIN_TOKEN` | prod | — | Bearer token for `/admin/*` |
 | `DRY_RUN` | no | `true` | Only the literal `false` sends orders; refused on Vercel |
 | `HL_API_WALLET_KEY` | live | — | API wallet (agent) key: trades, can't withdraw. Required when `DRY_RUN=false` |
-| `DATABASE_URL` | prod | — | Supabase Postgres. Without it run claims, runs and the kill switch are in memory |
+| `DATABASE_URL` | prod | — | Supabase Postgres, **session pooler** (port 5432: the run lock needs a session). Without it run claims, runs and the kill switch are in memory |
+| `EXECUTOR_READ_DATABASE_URL` | no | — | Supabase's **transaction pooler** (port 6543) for the dashboard's reads (`/status`, `/runs`, `/equity`) and the watchdog, so they don't use up the session pooler's 20 connections. Unset: they share `DATABASE_URL` |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | no | — | Alerts; without them alerts are logged only |
 | `SLIPPAGE_BPS` | no | `50` | IOC limit = mark ± this |
 | `MIN_ORDER_USD` / `DRIFT_FRACTION` / `MARGIN_CAP` | no | `10` / `0.1` / `0.95` | README §4.4, §4.8 |
