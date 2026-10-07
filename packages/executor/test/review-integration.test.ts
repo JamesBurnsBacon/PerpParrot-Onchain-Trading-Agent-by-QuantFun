@@ -36,8 +36,8 @@ test('reviewed sources become a snapshot, targets and a dry-run executor run',as
    }
    return result as T;
  };
- const targets=async(at:number)=>({runId:`mirror-${at}`,runAt:at,snapshotHash:keccakUtf8(JSON.stringify(snapshot)) as Hex,configurationHash:configuration.configurationHash as Hex,account:configuration.account as Hex,exposures});
- const runner=new Runner({store,exchange,info,targets,alert:async()=>{},now:()=>runAt*1000,config:{account:f.account as Hex,frozenConfigurationHash:configuration.configurationHash,maxGrossLeverage:2,runTtlSeconds:300,runTimeoutMs:1000,plan:{minOrderUsd:10,driftFraction:0.1,marginCap:0.95,slippageBps:50}}});
+ const targets=async(at:number)=>({runId:`mirror-${at}`,runAt:at,snapshotHash:keccakUtf8(JSON.stringify(snapshot)) as Hex,configurationHash:configuration.configurationHash as Hex,account:configuration.account as Hex,exposures,pendingCloses:[]});
+ const runner=new Runner({store,exchange,info,targets,alert:async()=>{},now:()=>runAt*1000,config:{account:f.account as Hex,frozenConfigurationHash:configuration.configurationHash,maxGrossLeverage:2,runTtlSeconds:300,runTimeoutMs:1000,plan:{minOrderUsd:10,driftFraction:0.1,equityBandFraction:0,marginCap:0.95,slippageBps:50}}});
  expect(await store.claimRun(`mirror-${runAt}`)).toBe(true);
  const run=await runner.executeRun(runAt);
  expect(run).toMatchObject({kind:'mirror',dryRun:true,status:'executed'});

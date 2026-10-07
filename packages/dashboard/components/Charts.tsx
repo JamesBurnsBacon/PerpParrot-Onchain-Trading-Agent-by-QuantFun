@@ -2,11 +2,20 @@
 import { useState } from "react";
 import type { PaperView, Run, Series } from "../lib/data";
 import { ordersOf, pct, runTime, time, usd } from "../lib/data";
+import { CountUp } from "./lp/CountUp";
+import { Parrot } from "./lp/ParrotSymbols";
 import { useWidth } from "./useWidth";
 
-export function Panel({ title, meta, children }: { title: string; meta?: React.ReactNode; children: React.ReactNode }) {
+// `id` is an anchor target; `tone` picks the heading chip color and `peek` lets a parrot look over the edge
+// (both only show under the landing theme, see app/lp.css).
+export function Panel({ title, meta, children, id, tone = 1, peek }: { title: string; meta?: React.ReactNode; children: React.ReactNode; id?: string; tone?: 1 | 2 | 3 | 4 | 5; peek?: "left" | "right" }) {
   return (
-    <section className="min-w-0 rounded-xl p-4" style={{ background: "var(--surface)", border: "1px solid var(--ring)" }}>
+    <section id={id} data-tone={tone} className="lp-panel lp-reveal min-w-0 rounded-xl p-4" style={{ background: "var(--surface)", border: "1px solid var(--ring)" }}>
+      {peek && (
+        <div className={`lp-peek${peek === "left" ? " left" : ""}`} aria-hidden="true">
+          <Parrot />
+        </div>
+      )}
       <header className="mb-3 flex items-baseline justify-between gap-2">
         <h2 className="text-sm font-semibold">{title}</h2>
         {meta && <span className="text-xs" style={{ color: "var(--muted)" }}>{meta}</span>}
@@ -27,17 +36,26 @@ export function Waiting({ what, source }: { what: string; source: string }) {
 }
 
 // Hero number with an optional signed change (tone + arrow) and a neutral note.
-export function StatTile({ label, value, tone, note }: { label: string; value: string; tone?: "up" | "down"; note?: string }) {
+// color: the tile's line key in the performance chart (dashed for a reference line).
+// count: the number behind `value`, counted up once when the tile first scrolls into view.
+export function StatTile({ label, value, tone, note, color, reference, count }: { label: string; value: string; tone?: "up" | "down"; note?: string; color?: string; reference?: boolean; count?: { value: number; format: (n: number) => string } }) {
   return (
-    <div className="min-w-0 rounded-xl p-4" style={{ background: "var(--surface)", border: "1px solid var(--ring)" }}>
-      <div className="truncate text-xs" style={{ color: "var(--ink-2)" }}>{label}</div>
-      <div className="mt-1 flex items-baseline gap-1.5 text-2xl font-semibold">
+    <div className="lp-tile lp-reveal min-w-0 rounded-xl p-4" style={{ background: "var(--surface)", border: "1px solid var(--ring)", ["--tab" as string]: color ?? "var(--axis)" }}>
+      <div className="flex items-center gap-1.5 truncate text-xs" style={{ color: "var(--ink-2)" }}>
+        {color && (
+          <svg width="14" height="8" aria-hidden className="shrink-0">
+            <line x1="0" x2="14" y1="4" y2="4" stroke={color} strokeWidth="3" strokeLinecap="round" strokeDasharray={reference ? "4 3" : undefined} />
+          </svg>
+        )}
+        {label}
+      </div>
+      <div className="lp-tile-value mt-1 flex items-baseline gap-1.5 text-2xl font-semibold" data-tone={tone}>
         {tone && (
           <span className="text-sm" style={{ color: tone === "up" ? "var(--up)" : "var(--critical)" }} aria-label={tone === "up" ? "up" : "down"}>
             {tone === "up" ? "▲" : "▼"}
           </span>
         )}
-        {value}
+        {count ? <CountUp value={count.value} format={count.format} /> : value}
       </div>
       {note && <div className="mt-0.5 text-xs" style={{ color: "var(--muted)" }}>{note}</div>}
     </div>
@@ -105,7 +123,7 @@ export function RunStrip({ runs }: { runs: Run[] }) {
   const recent = [...runs].filter((r) => r.kind === "mirror").sort((a, b) => a.startedAt - b.startedAt).slice(-72);
   return (
     <div>
-      <div className="flex flex-wrap gap-[2px]">
+      <div className="lp-cells flex flex-wrap gap-[2px]">
         {recent.map((r) => (
           <button
             key={r.id}
@@ -161,7 +179,6 @@ export function Funnel({ steps }: { steps: { stage: string; label: string; count
           );
         })}
       </svg>
-      <div className="mt-1 text-xs" style={{ color: "var(--muted)" }}>Bar length ∝ √count</div>
     </div>
   );
 }
@@ -173,6 +190,8 @@ const SKIP_LABEL: Record<string, string> = {
   UNKNOWN_MARKET: "no market",
   SIZE_ROUNDS_TO_ZERO: "rounds to 0",
   LEVERAGE_FAILED: "leverage failed",
+  BELOW_EQUITY_BAND: "under 0.5% of equity",
+  CLOSE_PENDING: "close pending (3 runs)",
   IN_FLIGHT: "earlier order in flight",
 };
 
@@ -230,22 +249,26 @@ export function TargetsVsHeld({ run }: { run: Run }) {
       </svg>
       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs" style={{ color: "var(--ink-2)" }}>
         <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-sm opacity-45" style={{ background: "var(--long)" }} />Target</span>
-        <span className="inline-flex items-center gap-1.5"><span className="inline-block h-3 w-[3px] rounded-sm" style={{ background: "var(--ink)" }} />Held before the run</span>
+        <span className="inline-flex items-center gap-1.5"><span className="inline-block h-3 w-[3px] rounded-sm" style={{ background: "var(--ink)" }} />Held</span>
         <span style={{ color: "var(--muted)" }}>
           {hover
             ? (() => {
                 const r = rows.find((l) => l.asset === hover)!;
                 return `${r.asset}: target ${pct((r.target / equity) * 100, 1)}, held ${pct((r.held / equity) * 100, 1)}`;
               })()
-            : `% of equity${hidden > 0 ? ` · ${hidden} more legs` : ""}${run.plan?.marginScale !== undefined && run.plan.marginScale < 1 ? ` · margin rule scaled targets ×${run.plan.marginScale.toFixed(2)}` : ""}`}
+            : `${hidden > 0 ? `+${hidden}` : ""}${run.plan?.marginScale !== undefined && run.plan.marginScale < 1 ? ` margin ×${run.plan.marginScale.toFixed(2)}` : ""}`}
         </span>
       </div>
     </div>
   );
 }
 
-// The books behind the performance chart: same line key, with costs and activity.
+// The paper books behind the performance chart's lines: same line key, with costs and activity.
 export function PaperTable({ books, series }: { books: PaperView["books"]; series: Series[] }) {
+  const rows = series.flatMap((s) => {
+    const b = books.find((x) => x.id === s.bookId);
+    return b ? [{ s, b }] : [];
+  });
   const cost = (v: number, start: number) => `${usd(v)} (${((v / start) * 100).toFixed(2)}%)`;
   return (
     <div className="overflow-x-auto">
@@ -255,39 +278,60 @@ export function PaperTable({ books, series }: { books: PaperView["books"]; serie
             <th className="py-1 text-left font-normal">Book</th>
             <th className="py-1 pl-3 text-right font-normal">Equity</th>
             <th className="py-1 pl-3 text-right font-normal">Return</th>
-            <th className="py-1 pl-3 text-right font-normal">Fees</th>
-            <th className="py-1 pl-3 text-right font-normal">Funding</th>
-            <th className="py-1 pl-3 text-right font-normal">Trades</th>
             <th className="py-1 pl-3 text-right font-normal">Positions</th>
           </tr>
         </thead>
         <tbody>
-          {books.map((b) => {
-            const s = series.find((x) => x.id === b.id);
+          {rows.map(({ s, b }) => {
             return (
               <tr key={b.id} className="border-t" style={{ borderColor: "var(--grid)" }}>
                 <td className="py-1.5" style={{ color: "var(--ink)" }}>
                   <span className="inline-flex items-center gap-1.5">
                     <svg width="16" height="8" aria-hidden>
-                      <line x1="0" x2="16" y1="4" y2="4" stroke={s?.color ?? "var(--muted)"} strokeWidth="2" strokeDasharray={s?.reference ? "4 3" : undefined} />
+                      <line x1="0" x2="16" y1="4" y2="4" stroke={s.color} strokeWidth="2" strokeDasharray={s.reference ? "4 3" : undefined} />
                     </svg>
-                    {b.label.replace(" · ", " ")}
+                    {s.label}
                   </span>
                 </td>
                 <td className="py-1.5 pl-3 text-right" style={{ color: "var(--ink)" }}>{usd(b.equityUsd)}</td>
                 <td className="py-1.5 pl-3 text-right font-semibold" style={{ color: "var(--ink)" }}>{pct(b.returnPct)}</td>
-                <td className="py-1.5 pl-3 text-right" style={{ color: "var(--ink-2)" }}>{cost(b.feesUsd, b.startingEquityUsd)}</td>
-                <td className="py-1.5 pl-3 text-right" style={{ color: "var(--ink-2)" }}>{cost(b.fundingUsd ?? 0, b.startingEquityUsd)}</td>
-                <td className="py-1.5 pl-3 text-right" style={{ color: "var(--ink-2)" }}>{b.trades}</td>
                 <td className="py-1.5 pl-3 text-right" style={{ color: "var(--ink-2)" }}>{b.openPositions}</td>
               </tr>
             );
           })}
         </tbody>
       </table>
-      <div className="mt-2 text-xs" style={{ color: "var(--muted)" }}>
-        Paper fills at mark ± slippage with taker fees, the $10 minimum and the 10% drift rule; funding at HL&apos;s hourly rate. Costs in % of starting capital.
-      </div>
+      {/* The cost diagnostics stay one tap away. */}
+      <details className="lp-details mt-3">
+        <summary>Costs</summary>
+        <table className="tabular w-full whitespace-nowrap text-xs">
+          <thead style={{ color: "var(--muted)" }}>
+            <tr>
+              <th className="py-1 text-left font-normal">Book</th>
+              <th className="py-1 pl-3 text-right font-normal">Fees</th>
+              <th className="py-1 pl-3 text-right font-normal">Funding</th>
+              <th className="py-1 pl-3 text-right font-normal" title="Traded notional per day ÷ starting capital">Turnover / day</th>
+              <th className="py-1 pl-3 text-right font-normal">Trades</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(({ s, b }) => (
+              <tr key={b.id} className="border-t" style={{ borderColor: "var(--grid)" }}>
+                <td className="py-1.5" style={{ color: "var(--ink)" }}>{s.label}</td>
+                <td className="py-1.5 pl-3 text-right" style={{ color: "var(--ink-2)" }}>{cost(b.feesUsd, b.startingEquityUsd)}</td>
+                <td className="py-1.5 pl-3 text-right" style={{ color: "var(--ink-2)" }}>{cost(b.fundingUsd ?? 0, b.startingEquityUsd)}</td>
+                <td className="py-1.5 pl-3 text-right" style={{ color: "var(--ink-2)" }} title={b.tradedSince ? `since ${new Date(b.tradedSince * 1000).toLocaleString()}` : undefined}>
+                  {b.turnoverPerDay == null ? "—" : `${b.turnoverPerDay.toFixed(2)}×`}
+                </td>
+                <td className="py-1.5 pl-3 text-right" style={{ color: "var(--ink-2)" }}>{b.trades}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className="mt-2 text-xs" style={{ color: "var(--muted)" }}>
+          Paper fills at mark ± slippage with taker fees and the live trading rules; funding at HL&apos;s hourly rate. Relative to starting capital.
+        </div>
+      </details>
     </div>
   );
 }

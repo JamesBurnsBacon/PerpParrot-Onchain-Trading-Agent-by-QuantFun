@@ -19,6 +19,10 @@ export type PaperView = {
     feesUsd: number;
     fundingUsd?: number; // net paid; negative = received
     trades: number;
+    // Traded notional per day ÷ starting capital (absent on older backends; null until tracked).
+    turnoverPerDay?: number | null;
+    tradedSince?: number | null;
+    multiplier?: number;
     openPositions: number;
     curve: [number, number][];
   }[];
@@ -52,8 +56,39 @@ export type Status = { dryRun: boolean; account: string; controls: { paused: boo
 export type Exposures = { runAt: number; exposures: { asset: string; fraction: number }[] };
 
 // Backend GET /pipeline (src/pipeline status()); timestamps are ISO strings.
-export type SelectionStatus = "running" | "activated" | "kept" | "rejected" | "failed";
+export type SelectionStatus = "running" | "activated" | "kept" | "benched" | "rejected" | "failed";
+
+// The per-wallet roster (docs/ingest/ROSTER.md); times in ms.
+export type SeatState = "probation" | "seated" | "winding_down" | "released" | "removed";
+export type RosterSeat = {
+  address: string;
+  state: SeatState;
+  weightUnits: number;
+  fit: number | null;
+  turnoverPerDay: number | null;
+  tradedPerDayOverEquity: number | null;
+  admittedAt: number;
+  minTenureUntil: number;
+  flatSince: number | null;
+  flatRuns: number;
+  windDownUntil: number | null;
+  caps: Record<string, number> | null;
+  // 30-day average leverage: the seat is copied at 2× ÷ this (absent before the normalization).
+  averageLeverage?: number | null;
+};
+export type RosterEvent = { at: string; address: string; kind: "seeded" | "admitted" | "seated" | "released" | "removed" | "winding_down" | "weight"; detail: Record<string, unknown> | null };
+export type RosterView = { seats: RosterSeat[]; events: RosterEvent[]; impliedTurnover: number | null };
+export type BenchRow = { address: string; fit: number; approvedAt: number; copyableShare: number | null; closedPositions: number; turnoverPerDay: number | null; passesHold: boolean };
 export type PipelineView = {
+  // NOWNodes cross-check of each mirror snapshot (SNAPSHOT_VERIFY; absent on older backends, mode "off" when unset).
+  verification?: {
+    mode: "off" | "on" | "strict";
+    checks: number;
+    verified: number;
+    mismatches: number;
+    unverified: number;
+    last: { verdict: "verified" | "mismatch" | "unverified"; sources: number; retried: number; ms: number; at: number; diffs: { address: string; asset: string }[]; unverified: string[] } | null;
+  };
   // Hyperliquid read routing of the serving backend instance (absent on older backends).
   routing?: {
     mode: string;
@@ -62,6 +97,13 @@ export type PipelineView = {
     fallbacks: number;
     shadow: { compared: number; mismatches: number };
     breakerOpen: boolean;
+    // The last NOWNodes capability probe (absent or null when the probe is off).
+    capabilities?: {
+      probedAt: number;
+      rows: { method: string; status: number | null; verdict: "supported" | "unsupported" | "inconclusive"; allowlisted: boolean; drift: boolean; ms: number }[];
+      narrowed: string[];
+      newlySupported: string[];
+    } | null;
   };
   accounts: { listed: number; fresh: number; errors: number; listed_at: string | null; qualified?: number; high_frequency?: number; qualified_at?: string | null };
   selections: {
@@ -83,11 +125,17 @@ export type PipelineView = {
       funnel: { stage: string; count: number }[];
       // Same-direction position overlap among the picks (absent on older runs).
       overlap?: { threshold: number; pairs: number; above: number; max: number; top: { a: string; b: string; overlap: number }[]; byAddress: Record<string, number> };
+      // Which picks are contracts on HyperEVM, via NOWNodes' /evm (CONTRACT_CHECK=on; evidence only, absent otherwise).
+      contracts?: { provider: "nownodes"; checked: number; contracts: { address: string; bytes: number }[]; unread: string[]; ms: number };
       // Present only when the overlap guard picked this run (PICK_OVERLAP_GUARD=on).
       overlapGuard?: { pool: number; reads: number; failed: number; excluded: number; toppedUp: number; threshold: number; ms: number; provider: { nownodes: number; official: number; fallbacks: number } };
     } | null;
     summary: { candidate: number; address?: string; aggressiveFit: number | null; reject: number | null; leverageRisk: number | null; evidenceRisk: number | null }[] | null;
+    // The wallets this review approved for the roster, with their hold measures (absent before the roster).
+    bench?: BenchRow[] | null;
   } | null;
+  // The per-wallet roster (absent before its migration).
+  roster?: RosterView | null;
 };
 
 export type DashboardData = {
@@ -148,6 +196,7 @@ export type Series = {
   label: string;
   short: string; // direct label at the line end
   color: string;
+  bookId?: string; // the paper book behind the line, if any
   reference?: boolean; // benchmark: dashed, muted
   points: [tMs: number, value: number][];
 };
@@ -162,24 +211,32 @@ export const runTime = (r: Run) => {
   return m ? Number(m[1]) * 1000 : r.startedAt;
 };
 
-// Live account (from its first executed run) and paper books (from their starting capital), as % return.
-export const performanceSeries = (paper: PaperView | null, equity: Equity | null): Series[] => {
-  const series: Series[] = [];
-  const live = equity?.points ?? [];
-  if (live.length) series.push({ id: "live", label: "Live account", short: "Live", color: "var(--series-1)", points: toReturns(live) });
+// The three buckets, shown at the live size only (the backend's $10k twins stay unshown).
+// Aggressive is the live bucket: the account's own curve once it trades for real (not dry run),
+// until then its $470 paper model. Balanced and Conservative are modeled: paper books.
+export const BUCKETS = [
+  { id: "aggressive", book: "aggressive-470", label: "Aggressive", short: "Aggressive", color: "var(--aggressive)" },
+  { id: "balanced", book: "balanced-470", label: "Balanced ×0.5", short: "Balanced", color: "var(--balanced)" },
+  { id: "conservative", book: "conservative-470", label: "Conservative ×0.25", short: "Conservative", color: "var(--conservative)" },
+] as const;
 
-  const slots: Record<string, [color: string, short: string]> = {
-    "aggressive-470": ["var(--series-2)", "$470"],
-    "aggressive-10k": ["var(--series-3)", "$10k"],
-    "balanced-470": ["var(--series-4)", "Balanced"],
-  };
-  for (const b of paper?.books ?? []) {
-    // Paper books start from their capital, so the first fills' fees show.
-    const points = toReturns(b.curve.map(([t, v]) => [t * 1000, v]), b.startingEquityUsd);
-    if (!points.length) continue;
-    if (b.kind === "btc") series.push({ id: b.id, label: "BTC buy & hold", short: "BTC", color: "var(--muted)", reference: true, points });
-    else if (slots[b.id]) series.push({ id: b.id, label: b.label.replace(" · ", " "), short: slots[b.id][1], color: slots[b.id][0], points });
+// Whether the Aggressive line is the live account itself (else its paper model).
+export const liveIsReal = (status: Status | null, equity: Equity | null) => status?.dryRun === false && (equity?.points.length ?? 0) > 0;
+
+// Each bucket and BTC as % return: the live account from its first executed run, paper books from their starting capital.
+export const performanceSeries = (paper: PaperView | null, equity: Equity | null, status: Status | null): Series[] => {
+  const series: Series[] = [];
+  const book = (id: string) => paper?.books.find((b) => b.id === id);
+  // Paper books start from their capital, so the first fills' fees show.
+  const bookReturns = (b: PaperView["books"][number]) => toReturns(b.curve.map(([t, v]) => [t * 1000, v]), b.startingEquityUsd);
+  for (const k of BUCKETS) {
+    const b = k.id === "aggressive" && liveIsReal(status, equity) ? undefined : book(k.book);
+    const points = b ? bookReturns(b) : k.id === "aggressive" ? toReturns(equity?.points ?? []) : [];
+    if (points.length) series.push({ id: k.id, bookId: b?.id, label: k.label, short: k.short, color: k.color, points });
   }
+  const btc = paper?.books.find((b) => b.kind === "btc");
+  const points = btc ? bookReturns(btc) : [];
+  if (btc && points.length) series.push({ id: "btc", bookId: btc.id, label: "BTC", short: "BTC", color: "var(--muted)", reference: true, points });
   return series;
 };
 

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { FILLS_PAGE, fillStats, isHighFrequency, pickLeaderboard, sameAddresses, scoringWindows, type Fill, type LeaderboardRow } from "../src/pipeline/derive";
+import { FILLS_PAGE, fillStats, isHighFrequency, keepsActive, pickLeaderboard, sameAddresses, scoringWindows, type Fill, type LeaderboardRow } from "../src/pipeline/derive";
 import { decodeSeroval } from "../src/pipeline/vaults";
 import { basicSources } from "../src/pipeline";
 import { PacedInfo } from "../src/pipeline/hl";
@@ -62,6 +62,16 @@ describe("pickLeaderboard", () => {
 test("scoringWindows keeps only month and allTime", () => {
   const window = { accountValueHistory: [], pnlHistory: [] };
   expect(scoringWindows([["day", window], ["month", window], ["perpMonth", window], ["allTime", window]])).toEqual([["month", window], ["allTime", window]]);
+});
+
+test("keepsActive: same wallets within 5 points keep the configuration; a bigger move or another wallet replaces it", () => {
+  const s = (sourceAddress: string, weightUnits: number) => ({ sourceAddress, weightUnits });
+  const active = [s("0xaa", 300_000), s("0xbb", 200_000)];
+  expect(keepsActive(active, [s("0xBB", 240_000), s("0xAA", 260_000)])).toBe(true); // 4 points each
+  expect(keepsActive(active, [s("0xaa", 350_000), s("0xbb", 200_000)])).toBe(true); // exactly 5
+  expect(keepsActive(active, [s("0xaa", 350_001), s("0xbb", 200_000)])).toBe(false);
+  expect(keepsActive(active, [s("0xaa", 300_000), s("0xcc", 200_000)])).toBe(false);
+  expect(keepsActive(active, [s("0xaa", 300_000)])).toBe(false);
 });
 
 test("sameAddresses ignores order and case", () => {

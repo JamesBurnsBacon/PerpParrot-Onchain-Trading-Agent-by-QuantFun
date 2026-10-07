@@ -23,7 +23,7 @@ const snapshot = (runAt: number): string =>
   } satisfies PositionsSnapshot);
 
 const marketsAt = (btc: number) => async () => new Map<string, Market>([["BTC", { markPx: btc, maxLeverage: 40, feeBps: 0 }]]);
-const cfg = { minOrderUsd: 10, driftFraction: 0.1, marginCap: 0.95, slippageBps: 0 };
+const cfg = { minOrderUsd: 10, driftFraction: 0.1, equityBandFraction: 0, marginCap: 0.95, slippageBps: 0 };
 
 describe("exposuresFromSnapshot", () => {
   test("matches the copy math: weights 0.75 invested × 0.5× each = 0.375 BTC", () => {
@@ -38,10 +38,13 @@ describe("exposuresFromSnapshot: the mirror's checks", () => {
     expect(() => exposuresFromSnapshot(s)).toThrow("ineligible asset");
   });
 
-  test("refuses a run where one active source would exceed its ceiling", () => {
+  test("a run where every source but one has exited follows that one at its own weight", () => {
     const s = JSON.parse(snapshot(600)) as PositionsSnapshot;
     s.sources = s.sources.map((src, i) => (i === 0 ? src : { ...src, positions: [] }));
-    expect(() => exposuresFromSnapshot(s)).toThrow();
+    const full = exposuresFromSnapshot(JSON.parse(snapshot(600)) as PositionsSnapshot);
+    const one = exposuresFromSnapshot(s);
+    expect([...one.keys()].every((asset) => s.sources[0].positions.some((p) => p.asset === asset))).toBe(true);
+    for (const [asset, fraction] of one) expect(Math.abs(fraction)).toBeLessThanOrEqual(Math.abs(full.get(asset) ?? Infinity) + 1e-9);
   });
 });
 
@@ -67,6 +70,35 @@ describe("PaperService", () => {
     // $176.25 long (0.375 × 470) for 1/6 h at 0.06%/h.
     expect(book.fundingUsd).toBeCloseTo(176.25 * 0.0006 / 6, 9);
     expect(book.curve.at(-1)).toEqual([1200, expect.closeTo(470 - (176.25 * 0.0006) / 6, 9)]);
+  });
+
+  test("tracks turnover per book (traded notional per day ÷ starting capital), the buckets in proportion", async () => {
+    const store = new MemoryPaperStore();
+    const service = new PaperService({ store, specs: defaultBooks(0.5, 0.25), cfg, markets: marketsAt(100_000) });
+    await service.step(600, snapshot(600));
+    const books = (await service.view()).books;
+    const by = (id: string) => books.find((b) => b.id === id)!;
+    // Opened $176.25 of BTC (0.375 × 470) on the first run: counted over at least an hour.
+    expect(by("aggressive-470").turnoverPerDay).toBeCloseTo((176.25 / 470) * 24, 6);
+    expect(by("balanced-10k").turnoverPerDay).toBeCloseTo(by("aggressive-10k").turnoverPerDay! * 0.5, 6);
+    expect(by("conservative-10k").turnoverPerDay).toBeCloseTo(by("aggressive-10k").turnoverPerDay! * 0.25, 6);
+    expect(by("conservative-10k").multiplier).toBe(0.25);
+  });
+
+  test("a book saved before turnover was tracked starts counting at its next step", async () => {
+    const store = new MemoryPaperStore();
+    const service = new PaperService({ store, specs: defaultBooks(0.5), cfg, markets: marketsAt(100_000) });
+    await service.step(600, snapshot(600));
+    const state = (await store.load())!;
+    for (const b of state.books) {
+      delete b.tradedUsd;
+      delete b.tradedSince;
+    }
+    await store.save({ ...state, lastRunAt: 900 }, []); // the store keeps only newer runs
+    await service.step(1200, snapshot(1200));
+    const book = (await service.view()).books.find((b) => b.id === "aggressive-470")!;
+    expect(book.tradedSince).toBe(1200);
+    expect(book.turnoverPerDay).toBe(0); // nothing new to trade on an unchanged snapshot
   });
 
   test("steps every book once per run and records equity curves", async () => {

@@ -6,6 +6,7 @@ import configurationFixture from "../fixtures/frozen-configuration.json";
 import { applyHysteresis, EligibilityTracker, MemoryEligibilityStore, openInterestFromMeta } from "../src/eligibility";
 import type { ConfigurationSource } from "../src/configuration-source";
 import { nextRunAt, SnapshotError, SnapshotService } from "../src/service";
+import { CLOSE_CONFIRM_RUNS, pendingCloses, targetsFromSnapshot } from "../../shared/copy";
 import type { HlReader } from "../src/hyperliquid";
 import { buildSnapshot, keccakUtf8, MemorySnapshotStore } from "../src/snapshot";
 
@@ -182,6 +183,96 @@ describe("buildSnapshot", () => {
     expect(addresses).toEqual([...addresses].sort());
     expect(addresses).toHaveLength(configuration.sources.length);
     expect(snap.sources[0]).toEqual({ address: addresses[0], equityE6: "1000000000000", positions: [{ asset: "BTC", notionalE6: "500000000000" }] });
+  });
+});
+
+describe("SnapshotService: leverage normalization", () => {
+  test("records each seated wallet's scale (2 ÷ its average), only for configured wallets with a known average, sorted", async () => {
+    const runAt = nextRunAt(NOW / 1000);
+    const [first, second, third] = configuration.sources.map((s) => s.sourceAddress.toLowerCase());
+    const service = new SnapshotService({
+      configurations: { load: async () => configuration },
+      eligibility: new EligibilityTracker(new MemoryEligibilityStore(), async () => new Map([["BTC", 1e9]])),
+      store: new MemorySnapshotStore(),
+      nowMs: () => NOW,
+      hl,
+      leverage: async () => [
+        { address: third!, averageLeverage: null },
+        { address: second!, averageLeverage: 0.25 },
+        { address: "0x" + "e".repeat(40), averageLeverage: 1 },
+        { address: first!, averageLeverage: 1 },
+      ],
+    });
+    const snap = JSON.parse(await service.get(runAt)) as PositionsSnapshot;
+    expect(snap.leverage).toEqual([{ address: first, scaleE6: "2000000" }, { address: second, scaleE6: "8000000" }].sort((a, b) => (a.address! < b.address! ? -1 : 1)));
+    // Every source holds 0.5× BTC: normalized ones count for more, within the 3× fixture cap.
+    const plain = { ...snap, leverage: undefined };
+    expect(targetsFromSnapshot(snap)[0]!.exposureE9).toBeGreaterThan(targetsFromSnapshot(plain)[0]!.exposureE9);
+  });
+});
+
+describe("SnapshotService: winding-down caps", () => {
+  test("records the caps of sources in the configuration, sorted, and leaves the snapshot unchanged without any", async () => {
+    const runAt = nextRunAt(NOW / 1000);
+    const [first, second] = configuration.sources.map((s) => s.sourceAddress.toLowerCase());
+    const make = (windDown?: () => Promise<{ address: string; caps: { asset: string; leverageE9: string }[] }[]>) =>
+      new SnapshotService({
+        configurations: { load: async () => configuration },
+        eligibility: new EligibilityTracker(new MemoryEligibilityStore(), async () => new Map([["BTC", 1e9]])),
+        store: new MemorySnapshotStore(),
+        nowMs: () => NOW,
+        hl,
+        ...(windDown ? { windDown } : {}),
+      });
+    const plain = JSON.parse(await make().get(runAt)) as PositionsSnapshot;
+    expect(plain.windDown).toBeUndefined();
+    const capped = JSON.parse(await make(async () => [
+      { address: second!, caps: [{ asset: "ETH", leverageE9: "1" }, { asset: "BTC", leverageE9: "100000000" }] },
+      { address: "0x" + "f".repeat(40), caps: [{ asset: "BTC", leverageE9: "1" }] }, // not in the configuration
+      { address: first!, caps: [{ asset: "BTC", leverageE9: "200000000" }] },
+    ]).get(runAt)) as PositionsSnapshot;
+    expect(capped.windDown).toEqual([
+      { address: first, caps: [{ asset: "BTC", leverageE9: "200000000" }] },
+      { address: second, caps: [{ asset: "BTC", leverageE9: "100000000" }, { asset: "ETH", leverageE9: "1" }] },
+    ].sort((a, b) => (a.address! < b.address! ? -1 : 1)));
+    // The capped sources' BTC targets shrink: 0.5× held, capped at 0.2× and 0.1×.
+    const full = targetsFromSnapshot(plain).find((e) => e.asset === "BTC")!.exposureE9;
+    expect(targetsFromSnapshot(capped).find((e) => e.asset === "BTC")!.exposureE9).toBeLessThan(full);
+  });
+});
+
+describe("confirmed closes", () => {
+  const e = (asset: string, exposureE9 = 1n) => ({ asset, exposureE9 });
+
+  test("pendingCloses: perps targeted in either of the two previous runs and at 0 now", () => {
+    expect(CLOSE_CONFIRM_RUNS).toBe(3);
+    expect(pendingCloses([e("BTC")], [[e("BTC"), e("ETH")], [e("xyz:CL")]])).toEqual(["ETH", "xyz:CL"]);
+    // A run without a snapshot counts as a run at 0.
+    expect(pendingCloses([e("BTC")], [undefined, [e("ETH")]])).toEqual(["ETH"]);
+    expect(pendingCloses([e("BTC", 0n)], [[e("BTC")]])).toEqual(["BTC"]);
+    // At 0 for three runs: confirmed, no longer pending.
+    expect(pendingCloses([], [[], [], [e("BTC")]])).toEqual([]);
+  });
+
+  test("SnapshotService.pendingCloses reads the stored snapshots of the two previous runs and never builds", async () => {
+    const runAt = nextRunAt(NOW / 1000);
+    const store = new MemorySnapshotStore();
+    const flat: HlReader = { perp: async () => ({ assetPositions: [] }), portfolio: hl.portfolio };
+    await store.putIfAbsent(runAt - 1200, JSON.stringify(await buildSnapshot(configuration, ["BTC"], runAt - 1200, () => NOW, flat)));
+    await store.putIfAbsent(runAt - 600, JSON.stringify(await buildSnapshot(configuration, ["BTC"], runAt - 600, () => NOW, hl)));
+    const service = new SnapshotService({
+      configurations: { load: async () => configuration },
+      eligibility: new EligibilityTracker(new MemoryEligibilityStore(), async () => new Map([["BTC", 1e9]])),
+      store,
+      nowMs: () => NOW,
+      hl: { perp: async () => { throw new Error("must not build"); }, portfolio: async () => { throw new Error("must not build"); } },
+    });
+    expect(await service.pendingCloses(runAt, [])).toEqual(["BTC"]);
+    expect(await service.pendingCloses(runAt, [{ asset: "BTC", exposureE9: 5n }])).toEqual([]);
+    // Two runs on: BTC's last target was two runs back (one missing run between): still pending.
+    expect(await service.pendingCloses(runAt + 600, [])).toEqual(["BTC"]);
+    // Three runs on: confirmed.
+    expect(await service.pendingCloses(runAt + 1200, [])).toEqual([]);
   });
 });
 

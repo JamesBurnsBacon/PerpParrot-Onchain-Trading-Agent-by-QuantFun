@@ -139,16 +139,21 @@ The [research screening v1 methodology](docs/ingest/RESEARCH_SCREENING_V1.md) do
 | Bucket | Source universe | Exposure | Hackathon mode |
 |---|---|---|---|
 | **Aggressive** | Traders + vaults | Mirrored exactly, subject to the 95% margin rule (§4.8) | **Live** |
-| **Balanced** | Same set as Aggressive | Aggressive × `m < 1`. ❓ *`m` is tuned from the backtest to a target vol/drawdown.* | Backtest + paper |
-| **Conservative** | **Separate low-risk universe: vaults + lending only** | Copies the sources' perp **and lending/yield** positions. ❓ *How do we read lending positions, now and historically?* | Backtest + paper |
+| **Balanced** | Same set as Aggressive | Aggressive's targets **× 0.5** | Paper |
+| **Conservative** | Same set as Aggressive | Aggressive's targets **× 0.25** | Paper |
+
+The buckets differ **only by that fixed multiplier** (owner, 2026-10-07): same wallets, same perps, same direction, same moments. The 5× gross cap applies to Aggressive's targets first, so Balanced tops out at 2.5× and Conservative at 1.25×. Each book's equity band scales with its multiplier; only the exchange's $10 minimum order stays fixed, so a smaller multiplier needs proportionally more capital to place the same legs.
 
 ### 4.4 Copy model
-- **Slice:** `slice_i,c = wᵢ' × (nᵢ,c / Eᵢ) × E_ours`.
+- **Slice:** `slice_i,c = wᵢ × sᵢ × (nᵢ,c / Eᵢ) × E_ours`.
+  - `sᵢ = 2 ÷ max(Lᵢ, 0.05)` normalizes each wallet to **2× of its usual leverage** (owner, 2026-10-07), where `Lᵢ` is its 30-day average gross leverage (measured at review, kept on its roster seat, carried in each snapshot's `leverage`). A 0.1× vault and a 4× trader then count alike on a usual day; a wallet running above or below its own average (risk-on, de-risking, exiting) still moves our exposure. One wallet never counts past the 5× gross cap on its own; a wallet with no measured average is copied as it is (`sᵢ = 1`).
   - `nᵢ,c` is source *i*'s signed notional in asset `c`.
   - `Eᵢ` is the source's *current* equity, so its deposits and withdrawals don't distort our size.
-- **Flat is not a signal:** `wᵢ' = wᵢ / Σ_active wⱼ`, i.e. weights are renormalized over sources that currently hold positions.
+- **A wallet's exit is a signal:** each source contributes at its frozen weight `wᵢ`; a flat source contributes nothing, so our exposure shrinks with its exit. (Weights used to be renormalized over the sources holding positions, which rescaled every other perp on each exit and failed runs when it pushed a source past its ceiling.) An exit is also the natural moment to replace that wallet (design in progress).
 - **Position** in asset `c` = `Σᵢ slice_i,c`, netted at order time.
-- **Trade a leg only if** the gap is **≥ $10 and ≥ 10%** of the target.
+- **At most 15 positions** (owner, 2026-10-07: the book holds 5–15 perps): when the wallets' combined targets cover more perps, the 15 largest by |exposure| are kept and scaled up so the counted gross is unchanged (`limitPositions`); the rest go to 0, and their closes still wait 3 runs. Separately, the roster aims for **12–15 wallets** (at least 5).
+- **Trade a leg only if** the gap is **≥ $10, ≥ 10%** of the target **and ≥ 0.5% of equity** (`shared/rebalance.ts`, the executor and the paper books alike).
+- **Closes are confirmed:** a held perp whose target drops to 0 is closed only once its target has been 0 for **3 runs in a row** (~30 min; `shared/copy.ts` `pendingCloses`, served with `/targets`). Until then it is kept (`CLOSE_PENDING`). A perp whose market is no longer tradable, and a human flatten, close at once.
 - **Ledger = target, account = truth.** Every run diffs against the real account, so partial fills, skipped legs and partial liquidations self-correct. Per-source PnL attributes fills pro-rata.
 - **Eligible assets:**
   - validator perps + **USDC-collateral HIP-3** with **≥ $20M OI** (a line that just includes Microsoft)
@@ -161,7 +166,7 @@ The [research screening v1 methodology](docs/ingest/RESEARCH_SCREENING_V1.md) do
 ### 4.5 Source-set changes
 **Hackathon: the set is fully frozen at go-live.** The agent only monitors.
 
-**Production** (25 sources picked **every 10 minutes** from a qualified list rebuilt every 12 h; a reviewed set whose sources changed goes live automatically at the next `:x0` run: [docs/ingest/PIPELINE.md](docs/ingest/PIPELINE.md)):
+**Production** (25 sources picked **every 10 minutes** from a qualified list rebuilt every 12 h; a reviewed set whose wallets changed, or whose weights moved by more than 5 points, goes live automatically at the next `:x0` run: [docs/ingest/PIPELINE.md](docs/ingest/PIPELINE.md)):
 
 | Type | Trigger | Handling |
 |---|---|---|
@@ -203,8 +208,8 @@ One run per 10-minute slot (`mirror-<runAt>`). Code: `packages/backend` (snapsho
    - Contents: the **frozen configuration** (below), the eligible-asset list, and per frozen source its equity and eligible positions (signed USD notional). Amounts are decimal strings × 1e6.
    - **Equity = HL's live account value** from the `portfolio` request (last point of the `day` window, live), not Σ per-dex `accountValue`. Most leaderboard traders use unified or portfolio-margin accounts (23 + 5 of 40 sampled), where per-dex `accountValue` is only the margin set aside on that dex; summing it understated equity, and so overstated leverage, by 2–10×. The portfolio value is also what the backtest's returns use.
    - The backend only builds real run times (`:x0`) within 120 s of now, so nobody can pre-build a stale snapshot for a future run through the public endpoint.
-2. **Targets** (backend, `GET /api/backend/targets/:runAt`): `exposure_c = Σᵢ wᵢ' · nᵢ,c / Eᵢ` per asset in bigint math (`targetsFromSnapshot`, `packages/shared/copy.ts`), with the snapshot's hash, configuration hash and account. The paper books step from the same snapshot.
-   - Weights are the frozen `weightUnits`; cash stays cash. Flat sources' weight goes to active ones (`wᵢ' = wᵢ · W_all / W_active`), but **never past a source's frozen ceiling** (the run fails instead). Gross exposure is capped at the policy's `maxGrossLeverage`. Every source must be in the frozen configuration and hold only eligible assets.
+2. **Targets** (backend, `GET /api/backend/targets/:runAt`): `exposure_c = Σᵢ wᵢ · nᵢ,c / Eᵢ` per asset in bigint math (`targetsFromSnapshot`, `packages/shared/copy.ts`), with the snapshot's hash, configuration hash and account. The paper books step from the same snapshot.
+   - Weights are the frozen `weightUnits`; cash stays cash, and a flat source's weight stays uninvested (its exit is followed). Each listed wallet is normalized to 2× of its 30-day average leverage (`snapshot.leverage`, §4.4). Exposure is capped at the policy's `maxGrossLeverage`, **5×** (owner, 2026-10-07), by scaling every perp down pro-rata. What counts against it: longs and shorts are each summed over perps, and the side in the minority counts at **half** (`majority + ½ × minority`, `countedGross`), since offsetting longs and shorts are partly hedged: 3× long BTC and 2× short ETH count 4×, while 5× long across perps counts 5×. Positions in the same perp net out first. One normalized wallet never counts past the cap on its own, measured the same way. Every source must be in the frozen configuration and hold only eligible assets.
 3. **Execute** (executor): Vercel Cron calls `/api/executor/cron/run` at `:x0` (a long-running executor uses its own timer). The executor claims the run (a second trigger is a no-op), fetches the targets over the `BACKEND_URL` service binding, rejects them unless the configuration hash and account match its pinned `FROZEN_CONFIGURATION_HASH` and `HL_ACCOUNT`, then plans and trades (§4.8).
 - **Frozen configuration = execution authority.** The review turns a VALID/LIVE review into a `FrozenConfiguration`: sources with integer weight and ceiling units, cash units, **our account**, the policy, and a `configurationHash` (keccak over canonical JSON, domain `perpparrot:frozen:v1`). `packages/shared/frozen.ts` checks it without dependencies.
 - **Freeze commitment:** the `configurationHash` is pinned in both services' environment (`FROZEN_CONFIGURATION_HASH`); the backend refuses to build from another configuration and the executor refuses targets from one. **No onchain contract:** everything trades in our own HL account. Freezing = `packages/backend/scripts/freeze.ts --write` (saves `frozen/live.json`, prints the variables), set the variables, redeploy.
@@ -220,7 +225,7 @@ Code: `packages/executor`. A Bun service. Dry run deploys as the `executor` serv
   - **margin rule:** if `Σ |N_c| / maxLev_c` would exceed **95% of equity**, scale **all** targets down pro-rata
   - **drift rule:** trade a leg only if the gap is ≥ $10 and ≥ 10% of the target; full closes are always allowed (reduce-only)
   - reductions first; reduce-only whenever an order only shrinks a position
-  - **sanity bound:** reject the targets if gross exposure > 10× (the policy caps it at `maxGrossLeverage`, 3× in the fixture)
+  - **sanity bound:** reject a run's targets if their gross exposure (Σ |target notional| ÷ our equity) is over 10× (`MAX_GROSS_LEVERAGE`). Under the policy's 5× cap (minority side at half) raw gross can reach at most 6.67× (equal longs and shorts), so this only trips on a corrupted or misconfigured target; the run fails and the positions are held.
   - **own eligibility check:** never open, add to or flip a position in a market that isn't cross-margin with ≥ $15M OI by the executor's own reading, whatever the snapshot's list says (reductions still follow the sources)
   - the $10 minimum is checked at the IOC limit price
 - **Orders:** IOC limit at mark ± 50 bps, prices and sizes rounded to HL tick/lot rules, ≤ 20 orders per action, a deterministic `cloid` per run and asset. Remainders are retried on the next run.
@@ -255,7 +260,7 @@ Code: `packages/executor`. A Bun service. Dry run deploys as the `executor` serv
 
 ### 4.10 Paper books (backend only)
 
-Status: built (`packages/backend/src/paper/`), stepped from every run's snapshot and served at `GET /paper`. Running now: Aggressive at $470 (live size), its $10k twin, Balanced at $470 (Aggressive's weights × 0.5, `PAPER_BALANCED_MULTIPLIER`) and BTC buy & hold. Books hold on runs whose targets the executor would get none for, and pay funding between runs at HL's current hourly rate. Conservative, the shadow model and the $10k Balanced book wait for the review core to emit their configurations; adding one is a `BookSpec` in `defaultBooks`.
+Status: built (`packages/backend/src/paper/`), stepped from every run's snapshot and served at `GET /paper`. Running now: Aggressive, Balanced (× 0.5, `PAPER_BALANCED_MULTIPLIER`) and Conservative (× 0.25, `PAPER_CONSERVATIVE_MULTIPLIER`), each at $470 (live size) and as a $10k twin, and BTC buy & hold. Books hold on runs whose targets the executor would get none for, and pay funding between runs at HL's current hourly rate. The shadow model waits for the review core; adding a book is a `BookSpec` in `defaultBooks`.
 - **Books:** Balanced, Conservative, the shadow model, and a $10k twin of live Aggressive.
 - **Sizes:** each at **~$470 and $10k**, to show the strategy both with and without the minimum-order effect.
 - **Fills:** at HL mark price, plus the taker fee, plus the backtest slippage, with the $10 minimum applied.
@@ -292,7 +297,7 @@ Status: built (`packages/dashboard`): live account vs paper books vs BTC, target
 
 ### 4.14 Hosting and scheduling
 - **One Vercel project, three services** (root `vercel.json`): dashboard at `/`, backend at `/api/backend/*`, executor at `/api/executor/*`. The executor reaches the backend over a service binding (`BACKEND_URL`). Supabase Postgres holds all state. Deploy and operations: [docs/ops/DEPLOY.md](docs/ops/DEPLOY.md), [docs/ops/RUNBOOK.md](docs/ops/RUNBOOK.md).
-- **Vercel Cron** (production deployments only): `:x9` snapshot pre-build, `:x0` executor run, every 5 min the missed-run watchdog. Cron routes require `CRON_SECRET`.
+- **Vercel Cron** (production deployments only): `:x9` snapshot pre-build, every 5 min the missed-run watchdog, and the selection pipeline. The `:x0` run is triggered by the long-running executor itself (Railway). Cron routes require `CRON_SECRET`.
 - **Live trading** needs one long-running executor process (one HL nonce sequence, no function timeout): the `Dockerfile` + `railway.json` build it; it triggers its own runs at `:x0`. The executor refuses `DRY_RUN=false` on Vercel.
 - **Ingest, scoring and scheduled AI reviews**: Vercel Cron as well (decided 2026-10-07; [docs/ingest/PIPELINE.md](docs/ingest/PIPELINE.md)). If Hyperliquid rate-limits Vercel's IPs, only the refresh job moves to one long-running process (Railway, same code).
 - **CI:** `.github/workflows/service-checks.yml` (backend and executor against Postgres, dashboard build) and `.github/workflows/agent-review-checks.yaml` (AI review core). No secrets in CI.
@@ -340,8 +345,6 @@ Budget ~1 h of testing per 2 h of features. Integrate only tested modules.
 - [ ] ❓ Which two models (≥ 1 OpenAI)
 - [ ] ❓ Agent output format: weight grid, continuous weights, or ranking
 - [x] Maker share: **neither**. Zero or near-zero maker volume (< 5%) is a slight score penalty (§4.2); a high share earns nothing. Evidence: `scripts/research/maker-share/`
-- [ ] ❓ Balanced multiplier `m` (from the backtest)
-- [ ] ❓ How to read sources' lending positions for Conservative
 - [ ] ❓ Per-tier type-B threshold N (production)
 - [x] Backend → executor: **exposures** (§4.13); `rebalance-report.schema.json` (orders) is kept as a contract document only
 - [x] Live bucket: **Aggressive** (team decision 2026-10-06); enforced in the review core and the frozen-configuration checks
@@ -401,6 +404,10 @@ Budget ~1 h of testing per 2 h of features. Integrate only tested modules.
   - **Shadow check**: `INFO_SHADOW_PERCENT=N` compares N% of official `clearinghouseState` reads with NOWNodes in the background (account value, position count).
   - **First choice for bulk reads**: with `PICK_OVERLAP_GUARD=on`, the top 60 candidates' positions are read NOWNodes first (in a local benchmark on 2026-10-07, about 120 reads took ~2 s, all on NOWNodes, so none of the official API's 1,200 weight/min; a read that falls back to the official API does count against it) so the pick can leave out candidates that overlap one already chosen (`packages/backend/src/pipeline/overlap-pick.ts`).
   - **Dashboard**: the Pipeline panel shows reads, latency and failovers per provider when NOWNodes is in use, and the overlap guard's summary above the finalists table.
+  - **Snapshot cross-check** (`SNAPSHOT_VERIFY=on|strict`): before a mirror snapshot is stored, every source's positions are read again from NOWNodes and compared asset by asset; a confirmed difference stores nothing and fails the run, so the executor never sizes orders from it (`packages/backend/src/snapshot-verify.ts`). It guards against a provider-side fault, not against Hyperliquid's own errors, and it does not cover `portfolio` equity.
+  - **Contract check** (`CONTRACT_CHECK=on`): each pick's `eth_getCode` on NOWNodes' HyperEVM endpoint (`/evm`), recorded with the run and marked on the dashboard (`packages/backend/src/pipeline/contract-check.ts`). It shows which picks have code on HyperEVM; it does not show whether they trade. On 2026-10-07, 8 of the top 300 candidates by month PnL had code in the first run and 7 in a later run the same day, and NOWNodes and the public RPC agreed on contract-or-not for all 300 in the first run. At the later check, those 7 addresses had no open perp positions and no fills in the preceding 24 hours, so there were no current positions to copy. This is one day and a small sample, and why their leaderboard account value is large is not explained (issue #84). Evidence only; nothing is excluded.
+  - **Capability probe** (`NOWNODES_PROBE=on`): which of 16 info methods NOWNodes answers, next to the router's allowlist; it can only narrow the allowlist (`packages/backend/src/pipeline/capability-probe.ts`, `scripts/probe-nownodes.ts`).
+  - **Failure demo**: `packages/backend/scripts/chaos-read-demo.ts` injects an outage into the official API on a simulated network and compares the default routing with `overflow`.
   - **Limits, stated plainly**: NOWNodes is slower per read (below) and does not serve `portfolio` or fills, so the existing paths stay on Hyperliquid; the defaults are Hyperliquid only; the guard's effect on returns is not measured.
 - `hype.nownodes.io` has two parts (key in the `api-key` header; measured 2026-10-07):
   - **HyperEVM JSON-RPC** at `/evm` (`eth_blockNumber` answers; `/` is a 404).

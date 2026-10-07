@@ -45,6 +45,21 @@ export const sameAddresses = (a: readonly string[], b: readonly string[]): boole
   return set.size === new Set(b.map((x) => x.toLowerCase())).size && b.every((x) => set.has(x.toLowerCase()));
 };
 
+// A re-review that keeps the active wallets replaces the configuration only if some weight moved by
+// more than this (owner, 2026-10-07: 5 percentage points), so small re-weightings don't churn the book.
+export const WEIGHT_REFRESH_UNITS = 50_000; // of 1e6
+
+// The active configuration still stands: the same wallets, and no weight moved by more than the threshold.
+export const keepsActive = (
+  active: readonly { sourceAddress: string; weightUnits: number }[],
+  next: readonly { sourceAddress: string; weightUnits: number }[],
+  thresholdUnits = WEIGHT_REFRESH_UNITS,
+): boolean => {
+  if (!sameAddresses(active.map((s) => s.sourceAddress), next.map((s) => s.sourceAddress))) return false;
+  const weights = new Map(active.map((s) => [s.sourceAddress.toLowerCase(), s.weightUnits]));
+  return next.every((s) => Math.abs(s.weightUnits - (weights.get(s.sourceAddress.toLowerCase()) ?? 0)) <= thresholdUnits);
+};
+
 export type LeaderboardRow = {
   ethAddress: string;
   accountValue: string;

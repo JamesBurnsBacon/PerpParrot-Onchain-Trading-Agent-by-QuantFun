@@ -68,10 +68,12 @@ is set (see `packages/executor/test/pg-store.test.ts`).
 | `ADMIN_TOKEN` | prod | — | Bearer token for `/admin/*` |
 | `DRY_RUN` | no | `true` | Only the literal `false` sends orders; refused on Vercel |
 | `HL_API_WALLET_KEY` | live | — | API wallet (agent) key: trades, can't withdraw. Required when `DRY_RUN=false` |
-| `DATABASE_URL` | prod | — | Supabase Postgres. Without it run claims, runs and the kill switch are in memory |
+| `DATABASE_URL` | prod | — | Supabase Postgres, **session pooler** (port 5432: the run lock needs a session). Without it run claims, runs and the kill switch are in memory |
+| `EXECUTOR_READ_DATABASE_URL` | no | — | Supabase's **transaction pooler** (port 6543) for the dashboard's reads (`/status`, `/runs`, `/equity`) and the watchdog, so they don't use up the session pooler's 20 connections. Unset: they share `DATABASE_URL` |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | no | — | Alerts; without them alerts are logged only |
 | `SLIPPAGE_BPS` | no | `50` | IOC limit = mark ± this |
 | `MIN_ORDER_USD` / `DRIFT_FRACTION` / `MARGIN_CAP` | no | `10` / `0.1` / `0.95` | README §4.4, §4.8 |
+| `EQUITY_BAND_FRACTION` | no | `0.005` | A leg trades only if its gap is also ≥ this share of equity (README §4.4; the paper books use `PAPER_EQUITY_BAND_FRACTION`, same default) |
 | `MAX_GROSS_LEVERAGE` | no | `10` | Sanity bound: reject targets whose gross exposure exceeds this |
 | `RUN_TTL_SECONDS` | no | `300` | Orders for a run may go out until `runAt` + this |
 | `RUN_TIMEOUT_SECONDS` | no | `60` | A run still going after this is alerted on and stops before its next order batch; the next run waits for it to finish |
@@ -108,8 +110,10 @@ configuration (e.g. the fixture before the go-live freeze). First-time setup, st
    `vercel.json` defines the three services, their routes, the executor's binding to the backend
    and the crons). Set the variables above once for the project (`DATABASE_URL`, `CRON_SECRET`,
    `FROZEN_CONFIGURATION_HASH` and `HL_ACCOUNT` serve both services), with `DRY_RUN` unset. Use the
-   Supabase **Session pooler** connection string: Bun's driver prepares statements, which the
-   transaction pooler (port 6543) doesn't support. Deploy to production (crons only run on
+   Supabase **Session pooler** connection string for `DATABASE_URL`: the executor's run lock is a
+   session-level advisory lock. Set `BACKEND_DATABASE_URL` to the **Transaction pooler** string
+   (port 6543): the backend then uses it with `prepare: false`, so its crons and dashboard reads
+   don't use up the session pooler's 20 connections. Deploy to production (crons only run on
    production deployments). Vercel may run several executor instances; each run takes a Postgres
    advisory lock and a per-run claim, so a run never happens twice or overlaps another.
 3. **Check:** `GET https://<domain>/api/executor/status` (dry run, `store: postgres`), then after
@@ -121,9 +125,21 @@ configuration (e.g. the fixture before the go-live freeze). First-time setup, st
    1. Move the executor to one long-running process. It refuses `DRY_RUN=false` on Vercel:
       Vercel may run several instances at once and stops them between requests, while live
       trading needs one HL nonce sequence and one run queue (README §4.8). The Dockerfile and
-      `packages/executor/railway.json` build that process; set `BACKEND_URL` to
-      `https://<domain>/api/backend`, and remove the `/api/executor/cron/run` cron (or point the
-      dashboard elsewhere) so only that process trades.
+      `packages/executor/railway.json` build that process (one replica, `/health`):
+      1. Create a Railway service from this repo with those files. Variables: `DATABASE_URL`
+         (session pooler), `BACKEND_URL=https://<domain>/api/backend`, `HL_ACCOUNT`,
+         `FROZEN_CONFIGURATION_HASH`, `ADMIN_TOKEN`, and `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID`
+         for alerts. No `DRY_RUN` and no `DRY_RUN_EQUITY_USD` (it sizes dry runs only).
+         `MAX_GROSS_LEVERAGE` is a backstop that fails a run: gross can reach 7.5x (the 5x cap
+         plus up to 50% for the market-exposure offset), so set it just above, e.g. 8. Its pool
+         keeps 4 of the session pooler's 20 connections. `EXECUTOR_READ_DATABASE_URL` isn't needed
+         there: the dashboard reads through the Vercel executor.
+      2. Deploy it still in dry run; `GET /status` on Railway shows `dryRun: true`.
+      3. Merge the PR that removes `/api/executor/cron/run` from `vercel.json`. Until then both
+         trigger each `:x0` and whichever claims it first runs it (a Vercel dry run could take
+         the slot of a live one). Vercel keeps the executor's read endpoints for the dashboard and
+         the watchdog cron, which only alerts.
+      4. After the next `:x0`, `GET /api/executor/runs?limit=3` shows the run from Railway.
    2. Fund the account (README §4.8 Capital): USDC in the account, no other transfers needed in
       unified mode.
    3. Create the executor's API wallet key (a fresh key; its address is `GET /status` → `apiWallet`

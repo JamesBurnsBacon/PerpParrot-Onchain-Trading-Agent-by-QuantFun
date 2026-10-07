@@ -32,7 +32,17 @@ export type PositionsSnapshot = {
   eligibleAssets: string[];
   // One entry per frozen source, sorted by address.
   sources: SnapshotSource[];
+  // Sources winding down (docs/ingest/ROSTER.md §4.4), sorted by address: we follow their exits but
+  // not their new entries, so each perp's slice is capped at this signed leverage (notional ÷
+  // equity) × 1e9, and a perp without a cap isn't followed. Absent when no source is winding down.
+  windDown?: WindDownSource[];
+  // Leverage normalization (owner, 2026-10-07), sorted by address: each listed source's positions are
+  // multiplied by scaleE6 ÷ 1e6 = the target wallet leverage ÷ its own 30-day average leverage
+  // (shared/copy.ts leverageScaleE6). Unlisted sources are copied as they are.
+  leverage?: { address: string; scaleE6: string }[];
 };
+
+export type WindDownSource = { address: string; caps: { asset: string; leverageE9: string }[] };
 
 // Perp dexes with eligible markets: core ("") and the xyz HIP-3 dex.
 export const ELIGIBLE_DEXES = ["", "xyz"] as const;

@@ -13,6 +13,8 @@ export type Targets = {
   account: Hex;
   // Signed target notional as a fraction of our equity × 1e9 (−0.5 = short half our equity).
   exposures: { asset: string; exposureE9: bigint }[];
+  // Perps at 0 whose close isn't confirmed yet (shared/copy.ts pendingCloses): held as they are.
+  pendingCloses: string[];
 };
 
 export type TargetSource = (runAt: number) => Promise<Targets>;
@@ -38,7 +40,13 @@ export const parseTargets = (value: unknown, runAt: number): Targets => {
     seen.add(e.asset);
     return { asset: e.asset, exposureE9: BigInt(e.exposureE9) };
   });
-  return { runId: t.runId as string, runAt, snapshotHash: t.snapshotHash as Hex, configurationHash: t.configurationHash as Hex, account: t.account as Hex, exposures };
+  // Absent from a backend that predates confirmed closes: nothing pending.
+  const pending = t.pendingCloses ?? [];
+  if (!Array.isArray(pending) || pending.some((a) => typeof a !== "string" || !/^[A-Za-z0-9:_-]{1,64}$/.test(a)) || new Set(pending).size !== pending.length) {
+    throw new Error("targets: invalid pendingCloses");
+  }
+  if (pending.some((a) => seen.has(a))) throw new Error("targets: a pending close is also targeted");
+  return { runId: t.runId as string, runAt, snapshotHash: t.snapshotHash as Hex, configurationHash: t.configurationHash as Hex, account: t.account as Hex, exposures, pendingCloses: pending as string[] };
 };
 
 export const backendTargets = (backendUrl: string, fetchImpl: typeof fetch = fetch): TargetSource => async (runAt) => {

@@ -8,7 +8,7 @@ import { useVerification } from "./useVerification";
 
 export function VerifyPanel({ demo, previewHash, onExecute, canExecute }: { demo: boolean; previewHash?: string; onExecute: () => void; canExecute: boolean }) {
   const data = useVerification(!demo);
-  const series = performanceSeries(data.paper, null);
+  const series = performanceSeries(data.paper, null, null);
   return <div className="space-y-4">
     <Panel title="Selection funnel" meta={demo ? <Badge kind="CACHED DEMO" /> : undefined}>
       <p className="mb-4 text-xs" style={{ color: "var(--ink-2)" }}>Published selection artifact; not a verification of this conversation.</p>

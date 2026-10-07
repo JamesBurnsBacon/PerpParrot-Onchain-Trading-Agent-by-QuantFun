@@ -22,6 +22,8 @@ describe.skipIf(!url)("Pipeline on Postgres", async () => {
   await sql.unsafe(await migration("20261007150000_pipeline_qualified.sql")); // safe to run twice
   await sql.unsafe(await migration("20261007160000_pipeline_primary.sql"));
   await sql.unsafe(await migration("20261007160000_pipeline_primary.sql"));
+  await sql.unsafe("drop table if exists pipeline_controls");
+  await sql.unsafe(await migration("20261008050000_fresh_start.sql"));
 
   // Leaderboard: every sample account (≥ $10k ones pass the scan). No vaults from either list.
   const leaderboardRows = sample.map((s, i) => ({
@@ -140,9 +142,20 @@ describe.skipIf(!url)("Pipeline on Postgres", async () => {
     expect(picked.length).toBeGreaterThan(0);
     expect(picked).not.toContain([...highFrequency][0]);
     expect(run.finalists.highFrequency).toBe(1);
-    // A failed run is retried; a rejected one with the same 25 isn't reviewed again.
+    // A failed run is retried; a rejected one with the same 25 isn't reviewed again within 12 h...
     await sql`update selection_runs set status = 'rejected' where id = ${first.id!}`;
     expect(await pipeline.select()).toEqual({ status: "unchanged" });
+    // A fresh start's request reviews the unchanged 25 once more (ROSTER.md §4.6), then not again.
+    await sql`update pipeline_controls set fresh_start_requested_at = ${new Date(NOW - 60_000).toISOString()} where id = 1`;
+    expect((await pipeline.select()).status).toBe("failed"); // reviewed (no OpenAI key here)
+    const [control] = await sql`select fresh_start_review_at from pipeline_controls where id = 1`;
+    expect(new Date(control.fresh_start_review_at).getTime()).toBe(NOW);
+    expect(await pipeline.select()).toEqual({ status: "unchanged" });
+    await sql`update pipeline_controls set fresh_start_requested_at = null, fresh_start_review_at = null where id = 1`;
+    await sql`delete from selection_runs where id > ${first.id!}`;
+    // ...but is after, so the roster's bench of approvals stays fresh.
+    expect((await pipelineAt(NOW + 12 * 3_600_000).select()).status).toBe("failed"); // reviewed again (no OpenAI key here)
+    await sql`delete from selection_runs where id > ${first.id!}`;
     // A different pick waits while a review runs.
     await sql`update selection_runs set finalists = '{"finalists": []}'::jsonb, status = 'running', started_at = now() where id = ${first.id!}`;
     expect(await pipeline.select()).toEqual({ status: "waiting", reason: "a review is running" });
@@ -214,6 +227,45 @@ describe.skipIf(!url)("Pipeline on Postgres", async () => {
     const plain = await new Pipeline({ sql, account: address(999), policy: { maxExposureOverlap: 0.5 } as Policy, log: () => {}, now: () => NOW, info: (perMinute) => new PacedInfo(perMinute, info, async () => {}), overlapGuard: false, picks: 8 }).select(true);
     const [base] = await sql`select finalists from selection_runs where id = ${plain.id!}`;
     expect(row.finalists.finalists).toEqual(base.finalists.finalists);
+  });
+
+  test("the contract check records the contracts among the picks and leaves the pick as Score made it", async () => {
+    const free = () => sql`update selection_runs set status = 'failed', started_at = now() - interval '2 hours'`;
+    const ambient = process.env.CONTRACT_CHECK;
+    delete process.env.CONTRACT_CHECK; // the "off" run below must not depend on the environment this runs in
+    afterAll(() => {
+      if (ambient !== undefined) process.env.CONTRACT_CHECK = ambient;
+    });
+    const make = (contractCode?: (address: string) => Promise<number | null>) =>
+      new Pipeline({ sql, account: address(999), policy: { maxExposureOverlap: 0.5 } as Policy, log: () => {}, now: () => NOW, info: (perMinute) => new PacedInfo(perMinute, info, async () => {}), ...(contractCode ? { contractCode } : {}), picks: 8 });
+    await free();
+    const plain = await make().select(true);
+    const [base] = await sql`select finalists from selection_runs where id = ${plain.id!}`;
+    expect(base.finalists.contracts).toBeUndefined(); // off: the saved pick has no new field
+    const picks = base.finalists.finalists as { address: string }[];
+
+    await free();
+    const asked: string[] = [];
+    const checked = await make(async (a) => {
+      asked.push(a);
+      return a === picks[0]!.address.toLowerCase() ? 793 : a === picks[1]!.address.toLowerCase() ? null : 0;
+    }).select(true);
+    const [row] = await sql`select finalists from selection_runs where id = ${checked.id!}`;
+    expect(asked).toHaveLength(8);
+    expect(row.finalists.contracts).toMatchObject({
+      provider: "nownodes",
+      checked: 8,
+      contracts: [{ address: picks[0]!.address.toLowerCase(), bytes: 793 }],
+      unread: [picks[1]!.address.toLowerCase()],
+    });
+    expect(row.finalists.finalists).toEqual(base.finalists.finalists); // evidence only: the same picks
+
+    await free();
+    const failing = await make(async () => Promise.reject(new Error("down")) as Promise<never>).select(true);
+    const [failed] = await sql`select finalists from selection_runs where id = ${failing.id!}`;
+    expect(failed.finalists.contracts).toMatchObject({ checked: 8, contracts: [] }); // every read failed: all unread, none called contracts
+    expect(failed.finalists.contracts.unread).toHaveLength(8);
+    expect(failed.finalists.finalists).toEqual(base.finalists.finalists);
   });
 
   test("recording the picks' overlap adds one field and leaves the saved pick untouched", async () => {

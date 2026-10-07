@@ -37,10 +37,17 @@ export type BookSpec = { id: string; label: string; kind: PaperBook["kind"]; sta
 // README §4.10. Balanced = Aggressive × m, with m from the backtest (README §4.3 ❓);
 // until then PAPER_BALANCED_MULTIPLIER (default 0.5). Conservative and the shadow model
 // need their own frozen configurations from the review core.
-export const defaultBooks = (balancedMultiplier = 0.5): BookSpec[] => [
+// The buckets differ only by a fixed multiplier on Aggressive's targets (owner, 2026-10-07):
+// Aggressive × 1, Balanced × 0.5, Conservative × 0.25. Each at the live size and as a $10k twin.
+export const BUCKETS = { aggressive: 1, balanced: 0.5, conservative: 0.25 } as const;
+
+export const defaultBooks = (balancedMultiplier: number = BUCKETS.balanced, conservativeMultiplier: number = BUCKETS.conservative): BookSpec[] => [
   { id: "aggressive-470", label: "Aggressive · $470 (live size)", kind: "copy", startingEquityUsd: 470 },
   { id: "aggressive-10k", label: "Aggressive · $10k twin", kind: "copy", startingEquityUsd: 10_000 },
-  { id: "balanced-470", label: `Balanced · $470 (m=${balancedMultiplier})`, kind: "copy", startingEquityUsd: 470, multiplier: balancedMultiplier },
+  { id: "balanced-470", label: `Balanced · $470 (×${balancedMultiplier})`, kind: "copy", startingEquityUsd: 470, multiplier: balancedMultiplier },
+  { id: "balanced-10k", label: `Balanced · $10k (×${balancedMultiplier})`, kind: "copy", startingEquityUsd: 10_000, multiplier: balancedMultiplier },
+  { id: "conservative-470", label: `Conservative · $470 (×${conservativeMultiplier})`, kind: "copy", startingEquityUsd: 470, multiplier: conservativeMultiplier },
+  { id: "conservative-10k", label: `Conservative · $10k (×${conservativeMultiplier})`, kind: "copy", startingEquityUsd: 10_000, multiplier: conservativeMultiplier },
   { id: "btc-hold", label: "BTC buy & hold · $470", kind: "btc", startingEquityUsd: 470 },
 ];
 
@@ -99,7 +106,8 @@ export class PaperService {
   ) {}
 
   // Steps every book once per mirror run; repeated or older runs are ignored.
-  async step(runAt: number, snapshotJson: string): Promise<PaperPoint[]> {
+  // pendingCloses: perps at 0 whose close isn't confirmed yet (shared/copy.ts), kept like the executor keeps them.
+  async step(runAt: number, snapshotJson: string, pendingCloses: readonly string[] = []): Promise<PaperPoint[]> {
     const state = (await this.deps.store.load()) ?? { books: [], lastRunAt: 0 };
     if (runAt <= state.lastRunAt) {
       this.invalidate(); // another instance stepped it: our view may predate that
@@ -115,9 +123,14 @@ export class PaperService {
     // Funding for the interval just held; a gap longer than a day counts as a day.
     const hours = state.lastRunAt ? Math.min(runAt - state.lastRunAt, 86_400) / 3600 : 0;
     for (const book of state.books) {
+      // A book saved before turnover was tracked starts counting now.
+      if (book.tradedUsd === undefined) {
+        book.tradedUsd = 0;
+        book.tradedSince = runAt;
+      }
       accrueFunding(book, markets, hours);
       if (book.kind === "btc") stepBtcBook(book, markets, this.deps.cfg);
-      else stepCopyBook(book, exposures, markets, this.deps.cfg);
+      else stepCopyBook(book, exposures, markets, this.deps.cfg, new Set(pendingCloses));
       recordMarks(book, markets);
     }
     const points = state.books.map((b) => ({ bookId: b.id, t: runAt, equityUsd: equityOf(b, markets) }));
@@ -162,6 +175,12 @@ export class PaperService {
           feesUsd: b.feesUsd,
           fundingUsd: b.fundingUsd ?? 0,
           trades: b.trades,
+          // Traded notional per day ÷ starting capital, since turnover was tracked (at least an hour).
+          turnoverPerDay: b.tradedUsd === undefined || b.tradedSince === undefined || !state?.lastRunAt
+            ? null
+            : b.tradedUsd / b.startingEquityUsd / Math.max((state.lastRunAt - b.tradedSince) / 86_400, 1 / 24),
+          tradedSince: b.tradedSince ?? null,
+          multiplier: b.multiplier,
           openPositions: Object.keys(b.positions).length,
           curve,
         };

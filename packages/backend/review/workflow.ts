@@ -10,7 +10,7 @@ const DIMENSIONS = RISK.filter(k => k !== 'confidence').sort();
 export const MAX_SOURCES = 15;
 export interface Assessment {
   executableTargets: number;
-  // Must include worst-case active-source renormalization and market eligibility.
+  // Must include market eligibility (each source counts at its frozen weight; flat sources add nothing).
   grossLeverage: number;
   withinPolicy: boolean;
 }

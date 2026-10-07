@@ -7,7 +7,7 @@ const markets = new Map<string, Market>([
   ["xyz:MSFT", { name: "xyz:MSFT", assetId: 110_005, szDecimals: 3, maxLeverage: 10, markPx: 500, tradable: true }],
 ]);
 
-const cfg: PlanConfig = { minOrderUsd: 10, driftFraction: 0.1, marginCap: 0.95, slippageBps: 50 };
+const cfg: PlanConfig = { minOrderUsd: 10, driftFraction: 0.1, equityBandFraction: 0, marginCap: 0.95, slippageBps: 50 };
 
 const account = (equityUsd: number, positions: Record<string, number> = {}): LiveAccount => ({
   equityUsd,
@@ -97,6 +97,46 @@ describe("planOrders", () => {
   test("reports assets without market data", () => {
     const plan = planOrders(targets({ DOGE: 50 }), account(470), markets, cfg);
     expect(plan.skipped).toEqual([expect.objectContaining({ asset: "DOGE", reason: "UNKNOWN_MARKET" })]);
+  });
+});
+
+describe("confirmed closes and the equity band (shared/rebalance.ts)", () => {
+  test("keeps a held perp at target 0 while its close is pending; closes it once confirmed", () => {
+    const held = account(470, { BTC: 0.002, ETH: -0.025 });
+    const pending = planOrders(targets({ ETH: -100 }), held, markets, cfg, new Set(["BTC"]));
+    expect(pending.orders).toEqual([]);
+    expect(pending.skipped).toEqual([{ asset: "BTC", reason: "CLOSE_PENDING", targetUsd: 0, currentUsd: 200 }]);
+    const confirmed = planOrders(targets({ ETH: -100 }), held, markets, cfg);
+    expect(confirmed.orders).toEqual([expect.objectContaining({ asset: "BTC", isBuy: false, size: "0.002", reduceOnly: true })]);
+  });
+
+  test("a pending close in a market that is no longer tradable closes at once", () => {
+    const untradable = new Map(markets);
+    untradable.set("BTC", { ...markets.get("BTC")!, tradable: false });
+    const plan = planOrders(targets({}), account(470, { BTC: 0.002 }), untradable, cfg, new Set(["BTC"]));
+    expect(plan.orders).toEqual([expect.objectContaining({ asset: "BTC", reduceOnly: true })]);
+  });
+
+  test("a kept position's margin counts against the 95% cap", () => {
+    // $1,000 equity: BTC $20,000 kept at 40× = $500 margin, leaving $450 for ETH's $25,000 at 25× ($1,000).
+    const plan = planOrders(targets({ ETH: 25_000 }), account(1_000, { BTC: 0.2 }), markets, cfg, new Set(["BTC"]));
+    expect(plan.marginScale).toBeCloseTo(0.45);
+    expect(plan.initialMarginUsd).toBeCloseTo(950);
+    expect(plan.orders.map((o) => o.asset)).toEqual(["ETH"]);
+  });
+
+  test("a gap under the equity share is skipped, above it traded", () => {
+    // $10,000 equity, 0.5% band = $50: ETH $200 → $240 is 17% of target and over $10, but under $50.
+    const band = { ...cfg, equityBandFraction: 0.005 };
+    const small = planOrders(targets({ ETH: 240 }), account(10_000, { ETH: 0.05 }), markets, band);
+    expect(small.skipped).toEqual([{ asset: "ETH", reason: "BELOW_EQUITY_BAND", targetUsd: 240, currentUsd: 200 }]);
+    const large = planOrders(targets({ ETH: 260 }), account(10_000, { ETH: 0.05 }), markets, band);
+    expect(large.orders.map((o) => o.asset)).toEqual(["ETH"]);
+  });
+
+  test("flatten closes pending perps too", () => {
+    const plan = planFlatten(account(470, { BTC: 0.002 }), markets, 50);
+    expect(plan.orders).toEqual([expect.objectContaining({ asset: "BTC", reduceOnly: true })]);
   });
 });
 

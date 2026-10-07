@@ -1,6 +1,7 @@
 // Targets + live account → orders (README §4.4 drift rule, §4.8 margin rule).
 // Pure: no I/O, so every rule here is unit-tested.
 import { formatPrice, formatSize } from "@nktkas/hyperliquid/utils";
+import { legSkip, type BandConfig, type LegSkip } from "../../shared/rebalance";
 
 export type Market = {
   name: string;
@@ -23,10 +24,8 @@ export type LiveAccount = {
   positions: Map<string, LivePosition>;
 };
 
-export type PlanConfig = {
-  minOrderUsd: number;
-  // Trade a leg only if |gap| ≥ this fraction of |target| (0.1 = 10%).
-  driftFraction: number;
+// The leg rule (shared/rebalance.ts, also the paper books'): $10 minimum, 10% drift, 0.5% of equity.
+export type PlanConfig = BandConfig & {
   // Initial margin may use at most this fraction of equity (0.95).
   marginCap: number;
   // IOC limit = mark ± this many bps.
@@ -50,7 +49,8 @@ export type PlannedOrder = {
 export type SkippedLeg = {
   asset: string;
   // IN_FLIGHT: an earlier order action for this perp may still land (runner.ts, reconcile.ts).
-  reason: "BELOW_DRIFT" | "BELOW_MIN_ORDER" | "UNKNOWN_MARKET" | "SIZE_ROUNDS_TO_ZERO" | "NOT_TRADABLE" | "LEVERAGE_FAILED" | "IN_FLIGHT";
+  // CLOSE_PENDING: target 0, but not for CLOSE_CONFIRM_RUNS runs yet (shared/copy.ts pendingCloses).
+  reason: LegSkip | "UNKNOWN_MARKET" | "SIZE_ROUNDS_TO_ZERO" | "NOT_TRADABLE" | "LEVERAGE_FAILED" | "IN_FLIGHT";
   targetUsd: number;
   currentUsd: number;
 };
@@ -64,21 +64,23 @@ export type Plan = {
 };
 
 // §4.8: if Σ |N_c| / maxLev_c would exceed marginCap × equity, scale all targets down pro-rata.
+// `reservedUsd`: margin of positions kept as they are (pending closes), which isn't scaled.
 export const marginScale = (
   targets: Map<string, number>,
   markets: Map<string, Market>,
   equityUsd: number,
   marginCap: number,
+  reservedUsd = 0,
 ): { scale: number; initialMarginUsd: number } => {
   let margin = 0;
   for (const [asset, usd] of targets) {
     const m = markets.get(asset);
     if (m) margin += Math.abs(usd) / m.maxLeverage;
   }
-  const limit = marginCap * Math.max(equityUsd, 0);
-  if (margin <= limit) return { scale: 1, initialMarginUsd: margin };
+  const limit = Math.max(marginCap * Math.max(equityUsd, 0) - reservedUsd, 0);
+  if (margin <= limit) return { scale: 1, initialMarginUsd: margin + reservedUsd };
   const scale = margin > 0 ? limit / margin : 0;
-  return { scale, initialMarginUsd: margin * scale };
+  return { scale, initialMarginUsd: margin * scale + reservedUsd };
 };
 
 export const planOrders = (
@@ -86,6 +88,8 @@ export const planOrders = (
   account: LiveAccount,
   markets: Map<string, Market>,
   cfg: PlanConfig,
+  // Perps at 0 whose close isn't confirmed yet (the backend's pendingCloses): kept as they are.
+  pendingCloses: ReadonlySet<string> = new Set(),
 ): Plan => {
   const orders: PlannedOrder[] = [];
   const skipped: SkippedLeg[] = [];
@@ -104,7 +108,14 @@ export const planOrders = (
     if (capped !== targetUsd && targetUsd !== 0) skipped.push({ asset, reason: "NOT_TRADABLE", targetUsd, currentUsd });
     targets.set(asset, capped);
   }
-  const { scale, initialMarginUsd } = marginScale(targets, markets, account.equityUsd, cfg.marginCap);
+  // A pending close keeps its position only while its market is tradable; otherwise it closes now.
+  const keeps = (asset: string) => pendingCloses.has(asset) && markets.get(asset)?.tradable === true && !targets.get(asset);
+  let reservedUsd = 0;
+  for (const [asset, p] of account.positions) {
+    const m = markets.get(asset);
+    if (m && keeps(asset)) reservedUsd += Math.abs(p.szi * m.markPx) / m.maxLeverage;
+  }
+  const { scale, initialMarginUsd } = marginScale(targets, markets, account.equityUsd, cfg.marginCap, reservedUsd);
 
   // Every asset we target or hold; held assets missing from the targets go to 0.
   const assets = [...new Set([...targets.keys(), ...account.positions.keys()])].sort();
@@ -121,17 +132,12 @@ export const planOrders = (
     const leg = { asset, targetUsd, currentUsd };
     if (gapUsd === 0) continue;
 
-    // Closing out completely is always allowed (reduce-only, any size).
+    // A confirmed close is any size (reduce-only); other legs must clear the bands.
     const fullClose = targetUsd === 0 && szi !== 0;
-    if (!fullClose) {
-      if (Math.abs(gapUsd) < cfg.driftFraction * Math.abs(targetUsd)) {
-        skipped.push({ ...leg, reason: "BELOW_DRIFT" });
-        continue;
-      }
-      if (Math.abs(gapUsd) < cfg.minOrderUsd) {
-        skipped.push({ ...leg, reason: "BELOW_MIN_ORDER" });
-        continue;
-      }
+    const skip = legSkip({ targetUsd, currentUsd, equityUsd: account.equityUsd, closePending: keeps(asset) }, cfg);
+    if (skip) {
+      skipped.push({ ...leg, reason: skip });
+      continue;
     }
 
     const isBuy = gapUsd > 0;
@@ -165,4 +171,4 @@ export const planOrders = (
 
 // Flatten (README §4.8 kill switch): close every position, reduce-only.
 export const planFlatten = (account: LiveAccount, markets: Map<string, Market>, slippageBps: number): Plan =>
-  planOrders(new Map(), account, markets, { minOrderUsd: 0, driftFraction: 0, marginCap: Number.POSITIVE_INFINITY, slippageBps });
+  planOrders(new Map(), account, markets, { minOrderUsd: 0, driftFraction: 0, equityBandFraction: 0, marginCap: Number.POSITIVE_INFINITY, slippageBps });

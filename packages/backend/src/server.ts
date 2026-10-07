@@ -9,12 +9,14 @@ import { SQL } from "bun";
 import { waitUntil } from "@vercel/functions";
 import { EligibilityTracker, MemoryEligibilityStore } from "./eligibility";
 import { ActiveConfigurationSource, FileConfigurationSource } from "./configuration-source";
-import { Pipeline, reviewPolicy } from "./pipeline";
+import { MAX_GROSS_LEVERAGE, Pipeline, reviewPolicy, seatLeverage, windDownCaps } from "./pipeline";
 import { SnapshotError, SnapshotService } from "./service";
 import { exposuresFromSnapshot, MemoryPaperStore, PaperService, defaultBooks } from "./paper/service";
 import { targetsFromSnapshot } from "../../shared/copy";
 import type { PositionsSnapshot } from "../../shared/snapshot";
 import { keccakUtf8 } from "./snapshot";
+import { hlReader } from "./hyperliquid";
+import { nownodesPerp, verifyMode } from "./snapshot-verify";
 import { PostgresEligibilityStore, PostgresPaperStore, PostgresSnapshotStore, readPostgresArtifact } from "./pg-store";
 import { MemorySnapshotStore } from "./snapshot";
 import { handleChat, handlePreview, MemoryRequestStore, PostgresRequestStore, type ChatDeps, type ChatEnv } from "./chat/handler";
@@ -74,8 +76,12 @@ function envNumber(name: string, fallback: number, min: number, max: number): nu
 const paperStore = sql ? new PostgresPaperStore(sql) : new MemoryPaperStore();
 const paper = new PaperService({
   store: paperStore,
-  specs: defaultBooks(envNumber("PAPER_BALANCED_MULTIPLIER", 0.5, 0.05, 1)),
-  cfg: { minOrderUsd: 10, driftFraction: 0.1, marginCap: 0.95, slippageBps: envNumber("PAPER_SLIPPAGE_BPS", 5, 0, 100) },
+  specs: defaultBooks(envNumber("PAPER_BALANCED_MULTIPLIER", 0.5, 0.05, 1), envNumber("PAPER_CONSERVATIVE_MULTIPLIER", 0.25, 0.05, 1)),
+  cfg: {
+    minOrderUsd: 10, driftFraction: 0.1, marginCap: 0.95, slippageBps: envNumber("PAPER_SLIPPAGE_BPS", 5, 0, 100),
+    // As the executor's EQUITY_BAND_FRACTION (0.5% of equity).
+    equityBandFraction: envNumber("PAPER_EQUITY_BAND_FRACTION", 0.005, 0, 0.1),
+  },
 });
 
 // The pinned file (the fixture) until the pipeline activates a configuration in Supabase.
@@ -89,7 +95,8 @@ const pipeline = sql
   ? new Pipeline({
       sql,
       account: env.HL_ACCOUNT ?? "",
-      policy: reviewPolicy(await Bun.file(resolve(import.meta.dir, "..", "fixtures/frozen-configuration.json")).json()),
+      // The fixture's Aggressive policy, with the owner's gross cap (2026-10-07: 5× equity).
+      policy: { ...reviewPolicy(await Bun.file(resolve(import.meta.dir, "..", "fixtures/frozen-configuration.json")).json()), maxGrossLeverage: MAX_GROSS_LEVERAGE },
       openAiKey: env.OPENAI_API_KEY,
       model: env.REVIEW_MODEL,
       gate: env.REVIEW_GATE === "strict" ? "strict" : "basic",
@@ -100,15 +107,31 @@ const pipeline = sql
 const service = new SnapshotService({
   // Relative to packages/backend, wherever the process starts (vercel.json bundles fixtures/ and frozen/).
   configurations,
+  ...(sql ? { windDown: () => windDownCaps(sql), leverage: () => seatLeverage(sql) } : {}),
   eligibility: new EligibilityTracker(sql ? new PostgresEligibilityStore(sql) : new MemoryEligibilityStore(), undefined, (m) =>
     log("eligibility refused", { reason: m }),
   ),
   store,
   nowMs: Date.now,
+  // SNAPSHOT_VERIFY=on|strict (needs NOWNODES_API_KEY; off by default): cross-check every snapshot against NOWNodes.
+  ...(verifyMode(env.SNAPSHOT_VERIFY, env.NOWNODES_API_KEY) !== "off"
+    ? {
+        verify: {
+          mode: verifyMode(env.SNAPSHOT_VERIFY, env.NOWNODES_API_KEY) as "on" | "strict",
+          second: nownodesPerp(env.NOWNODES_API_KEY!),
+          official: hlReader.perp,
+          ...(env.SNAPSHOT_VERIFY_TOLERANCE_PCT ? { tolerancePct: Number(env.SNAPSHOT_VERIFY_TOLERANCE_PCT) } : {}),
+          log,
+        },
+      }
+    : {}),
   // Local end-to-end runs ask for the next :x0 ahead of time (scripts/e2e-mirror.sh): set 600 there.
   maxLeadSeconds: leadSeconds(env.SNAPSHOT_MAX_LEAD_SECONDS),
   onBuilt: (runAt, json) => {
-    const step = paper.step(runAt, json).then(
+    const step = service
+      .pendingCloses(runAt, targetsFromSnapshot(JSON.parse(json) as PositionsSnapshot))
+      .then((pending) => paper.step(runAt, json, pending))
+      .then(
       (points) => {
         if (points.length) log("paper books stepped", { runAt, books: points.length });
       },
@@ -271,9 +294,9 @@ const server = Bun.serve({
       }
     }
     // The selection pipeline: Vercel Cron (vercel.json), or an operator with ADMIN_TOKEN
-    // (POST /admin/pipeline/scan|refresh|select; an operator's select qualifies on partial data and
-    // reviews an unchanged pick).
-    const step = /^\/(?:cron|admin)\/pipeline\/(scan|refresh|select)$/.exec(pathname);
+    // (POST /admin/pipeline/scan|refresh|select|roster; an operator's select qualifies on partial data
+    // and reviews an unchanged pick).
+    const step = /^\/(?:cron|admin)\/pipeline\/(scan|refresh|select|roster)$/.exec(pathname);
     if (step && pipeline) {
       const admin = req.method === "POST" && pathname.startsWith("/admin/");
       if (admin ? !env.ADMIN_TOKEN || req.headers.get("authorization") !== `Bearer ${env.ADMIN_TOKEN}` : req.method !== "GET" || !cronAuthorized(req))
@@ -283,6 +306,7 @@ const server = Bun.serve({
         const result =
           step[1] === "scan" ? await pipeline.scan()
           : step[1] === "refresh" ? await pipeline.refresh(started + 240_000)
+          : step[1] === "roster" ? await pipeline.roster()
           : await pipeline.select(admin);
         return Response.json(result);
       } catch (e) {
@@ -326,13 +350,16 @@ const server = Bun.serve({
         return new Response(json, { headers: { "Content-Type": "application/json", ...cors } });
       }
       const snapshot = JSON.parse(json) as PositionsSnapshot;
+      const exposures = targetsFromSnapshot(snapshot);
       const targets = {
         runId: `mirror-${runAt}`,
         runAt,
         snapshotHash: keccakUtf8(json),
         configurationHash: snapshot.configuration.configurationHash,
         account: snapshot.configuration.account,
-        exposures: targetsFromSnapshot(snapshot).map((e) => ({ asset: e.asset, exposureE9: e.exposureE9.toString() })),
+        exposures: exposures.map((e) => ({ asset: e.asset, exposureE9: e.exposureE9.toString() })),
+        // Held perps at 0 here that the executor keeps until their close is confirmed (3 runs at 0).
+        pendingCloses: await service.pendingCloses(runAt, exposures),
       };
       log("targets served", { runAt, exposures: targets.exposures.length });
       return Response.json(targets, { headers: cors });

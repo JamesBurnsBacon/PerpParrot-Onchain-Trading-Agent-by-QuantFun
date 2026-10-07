@@ -168,6 +168,10 @@ export function LineChart({ series: input, height = 300, format, xFormat, zeroLi
               strokeLinejoin="round"
               strokeLinecap="round"
               strokeDasharray={s.reference ? "5 4" : undefined}
+              // The landing theme draws solid lines on scroll (pathLength 1 normalizes the dash); a dashed
+              // reference line keeps its own dash pattern and fades in instead.
+              pathLength={s.reference ? undefined : 1}
+              className={s.reference ? "lp-line-ref" : "lp-line"}
               points={s.points.map(([t, v]) => `${x(t)},${y(v)}`).join(" ")}
             />
           ))}

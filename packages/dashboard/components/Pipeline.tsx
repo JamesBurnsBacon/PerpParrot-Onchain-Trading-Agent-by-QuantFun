@@ -14,6 +14,7 @@ export const SELECTION_STATUS: Record<SelectionStatus, { color: string; icon: st
   running: { color: "var(--series-1)", icon: "◌", label: "Running" },
   activated: { color: "var(--good)", icon: "●", label: "Activated" },
   kept: { color: "var(--good)", icon: "○", label: "Kept" },
+  benched: { color: "var(--series-1)", icon: "◑", label: "Benched" },
   rejected: { color: "var(--warning)", icon: "◐", label: "Rejected" },
   failed: { color: "var(--critical)", icon: "✕", label: "Failed" },
 };
@@ -37,7 +38,7 @@ const Explorer = ({ address }: { address: string }) => (
 function Bar({ value, color = "var(--series-1)" }: { value: number; color?: string }) {
   return (
     <span className="block h-2 w-full rounded-full" style={{ background: "var(--grid)" }}>
-      <span className="block h-2 rounded-full" style={{ width: `${Math.max(0, Math.min(1, value)) * 100}%`, background: color }} />
+      <span className="lp-grow block h-2 rounded-full" style={{ width: `${Math.max(0, Math.min(1, value)) * 100}%`, background: color }} />
     </span>
   );
 }
@@ -70,7 +71,7 @@ function Tile({ label, children, note }: { label: string; children: React.ReactN
 // scan ~14k accounts every 12 h → refresh every 5 min → Score qualifies ~250 → every 10 min pick 25
 // (no high-frequency traders) → AI review when they change → freeze → activate when the sources change.
 export function Pipeline({ view }: { view: PipelineView }) {
-  const { accounts, selections, active, latest, routing } = view;
+  const { accounts, selections, active, latest, routing, verification } = view;
   const run = selections[0];
   const freshShare = accounts.listed ? accounts.fresh / accounts.listed : 0;
   const sources = [...(active?.sources ?? [])].sort((a, b) => b.weightUnits - a.weightUnits);
@@ -78,17 +79,21 @@ export function Pipeline({ view }: { view: PipelineView }) {
 
   // Latest run's finalists joined with the AI verdicts; picked = in that run's manifest.
   const picked = new Map((run?.manifest?.sources ?? []).map((s) => [s.address.toLowerCase(), s.weight]));
+  // The roster's bench: approved wallets and whether a 10-minute loop can follow them.
+  const bench = new Map((latest?.bench ?? []).map((b) => [b.address.toLowerCase(), b]));
   const verdicts = new Map((latest?.summary ?? []).filter((s) => s.address).map((s) => [s.address!.toLowerCase(), s]));
   const finalists = [...(latest?.finalists?.finalists ?? [])].sort((a, b) => (a.rank ?? 1e9) - (b.rank ?? 1e9));
   const funnel = latest?.finalists?.funnel ?? [];
   const overlap = latest?.finalists?.overlap;
   const guard = latest?.finalists?.overlapGuard;
+  const contractCheck = latest?.finalists?.contracts;
+  const contractSet = new Set((contractCheck?.contracts ?? []).map((c) => c.address.toLowerCase()));
   const funnelMax = Math.max(...funnel.map((f) => f.count), 1);
 
   return (
     <div className="flex flex-col gap-4">
       <div className="grid gap-3 md:grid-cols-3">
-        <Tile label="Accounts refreshed" note={`${accounts.errors ? `${accounts.errors} errors · ` : ""}${accounts.qualified ? `${accounts.qualified} qualified${accounts.high_frequency ? ` (${accounts.high_frequency} high-frequency)` : ""} · ` : ""}scanned ${when(accounts.listed_at)}`}>
+        <Tile label="Accounts refreshed" note={[accounts.errors ? `${accounts.errors} errors` : "", accounts.qualified ? `${accounts.qualified} qualified` : ""].filter(Boolean).join(" · ") || undefined}>
           <div className="mb-1.5 flex items-baseline gap-1 text-lg font-semibold tabular">
             {accounts.fresh}
             <span className="text-sm font-normal" style={{ color: "var(--muted)" }}>/ {accounts.listed}</span>
@@ -96,18 +101,7 @@ export function Pipeline({ view }: { view: PipelineView }) {
           </div>
           <Bar value={freshShare} color={freshShare >= 0.95 ? "var(--good)" : "var(--series-1)"} />
         </Tile>
-        <Tile label="Latest selection" note={run ? (run.error ?? run.manifest?.reason ?? `${run.accounts ?? "—"} accounts scored`) : "none yet · every 10 min"}>
-          {run ? (
-            <div className="flex items-center gap-2">
-              <Badge status={run.status} />
-              <span className="text-xs" style={{ color: "var(--ink-2)" }}>{when(run.started_at)}</span>
-              <span className="ml-auto text-xs" style={{ color: "var(--muted)" }}>{ago(run.started_at)}</span>
-            </div>
-          ) : (
-            <div className="text-lg font-semibold" style={{ color: "var(--muted)" }}>—</div>
-          )}
-        </Tile>
-        <Tile label="Active configuration" note={active ? `activated ${when(active.activated_at)} · ${ago(active.activated_at)}` : "copy loop runs the pinned fixture"}>
+        <Tile label="Active configuration" note={active ? undefined : "pinned fixture"}>
           {active ? (
             <div className="flex items-baseline gap-2">
               <span className="text-lg font-semibold tabular">{active.sources.length}</span>
@@ -118,6 +112,25 @@ export function Pipeline({ view }: { view: PipelineView }) {
             <div className="text-lg font-semibold" style={{ color: "var(--muted)" }}>none</div>
           )}
         </Tile>
+        <div className="min-w-0 rounded-lg p-3" style={{ border: "1px solid var(--grid)" }}>
+          <h3 className="mb-1 text-xs font-semibold" style={{ color: "var(--ink-2)" }}>Active sources</h3>
+          {sources.length ? (
+            <table className="tabular w-full whitespace-nowrap text-xs">
+              <tbody>
+                {sources.map((s) => (
+                  <tr key={s.sourceAddress} className="border-t first:border-t-0" style={{ borderColor: "var(--grid)" }}>
+                    <td className="w-28 py-1.5"><Explorer address={s.sourceAddress} /></td>
+                    <td className="w-full px-2"><Bar value={s.weightUnits / maxWeight} /></td>
+                    <td className="py-1.5 text-right font-semibold">{(s.weightUnits / 1e4).toFixed(1)}%</td>
+                    <td className="py-1.5 pl-2 text-right" style={{ color: "var(--muted)" }} title="Ceiling">≤{(s.ceilingUnits / 1e4).toFixed(0)}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="py-4 text-xs" style={{ color: "var(--muted)" }}>No configuration activated yet</div>
+          )}
+        </div>
       </div>
 
       {routing && (routing.mode !== "official" || routing.nownodes.requests > 0) && (
@@ -136,29 +149,54 @@ export function Pipeline({ view }: { view: PipelineView }) {
             ))}
             <span style={{ color: "var(--ink-2)" }}>{routing.fallbacks} failovers</span>
           </div>
+          {routing.capabilities && (
+            <div className="mt-2 text-xs" style={{ color: "var(--ink-2)" }}>
+              Probed {routing.capabilities.rows.length} info methods on NOWNodes {ago(new Date(routing.capabilities.probedAt).toISOString())}:{" "}
+              {routing.capabilities.rows.filter((r) => r.verdict === "supported").length} served, {routing.capabilities.rows.filter((r) => r.verdict === "unsupported").length} refused (422)
+              {routing.capabilities.rows.some((r) => r.verdict === "inconclusive") ? `, ${routing.capabilities.rows.filter((r) => r.verdict === "inconclusive").length} inconclusive` : ""}.
+              {routing.capabilities.narrowed.length ? ` Not used any more: ${routing.capabilities.narrowed.join(", ")}.` : " The allowlist matches."}
+              {routing.capabilities.newlySupported.length ? ` Served but unused: ${routing.capabilities.newlySupported.join(", ")}.` : ""}
+            </div>
+          )}
         </Tile>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="min-w-0">
-          <h3 className="mb-1 text-xs font-semibold" style={{ color: "var(--ink-2)" }}>Active sources · weight</h3>
-          {sources.length ? (
-            <table className="tabular w-full whitespace-nowrap text-xs">
-              <tbody>
-                {sources.map((s) => (
-                  <tr key={s.sourceAddress} className="border-t first:border-t-0" style={{ borderColor: "var(--grid)" }}>
-                    <td className="w-28 py-1.5"><Explorer address={s.sourceAddress} /></td>
-                    <td className="w-full px-2"><Bar value={s.weightUnits / maxWeight} /></td>
-                    <td className="py-1.5 text-right font-semibold">{(s.weightUnits / 1e4).toFixed(1)}%</td>
-                    <td className="py-1.5 pl-2 text-right" style={{ color: "var(--muted)" }} title="Ceiling">≤{(s.ceilingUnits / 1e4).toFixed(0)}%</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <div className="py-4 text-xs" style={{ color: "var(--muted)" }}>No configuration activated yet</div>
+      {verification && verification.mode !== "off" && (
+        <Tile
+          label="Snapshot cross-check (NOWNodes)"
+          note={`mode ${verification.mode}`}
+        >
+          <div className="tabular flex flex-wrap items-baseline gap-x-6 gap-y-1 text-sm">
+            <span><span className="font-semibold">{verification.verified}</span> verified</span>
+            <span style={{ color: verification.mismatches ? "var(--critical)" : "var(--ink-2)" }}>{verification.mismatches} blocked on a mismatch</span>
+            <span style={{ color: "var(--ink-2)" }}>{verification.unverified} unverified</span>
+            <span style={{ color: "var(--ink-2)" }}>{verification.checks} checks since this instance started</span>
+          </div>
+          {verification.last && (
+            <div className="mt-2 text-xs" style={{ color: "var(--ink-2)" }}>
+              Last: {verification.last.verdict} across {verification.last.sources} sources in {verification.last.ms} ms
+              {verification.last.retried ? `, ${verification.last.retried} re-read` : ""}
+              {verification.last.diffs.length ? `, differing: ${verification.last.diffs.map((d) => `${short(d.address)} ${d.asset}`).join(", ")}` : ""}.
+            </div>
           )}
-        </div>
+        </Tile>
+      )}
+
+      <details className="lp-details">
+        <summary>Details</summary>
+        <div className="flex flex-col gap-4">
+        <Tile label="Latest selection" note={run ? (run.error ?? run.manifest?.reason ?? `${run.accounts ?? "—"} accounts scored`) : "none yet · every 10 min"}>
+          {run ? (
+            <div className="flex items-center gap-2">
+              <Badge status={run.status} />
+              <span className="text-xs" style={{ color: "var(--ink-2)" }}>{when(run.started_at)}</span>
+              <span className="ml-auto text-xs" style={{ color: "var(--muted)" }}>{ago(run.started_at)}</span>
+            </div>
+          ) : (
+            <div className="text-lg font-semibold" style={{ color: "var(--muted)" }}>—</div>
+          )}
+        </Tile>
+      <div className="grid gap-4 md:grid-cols-1">
         <div className="min-w-0">
           <h3 className="mb-1 text-xs font-semibold" style={{ color: "var(--ink-2)" }}>Recent selections</h3>
           {selections.length ? (
@@ -206,6 +244,12 @@ export function Pipeline({ view }: { view: PipelineView }) {
                 {guard.failed ? ` · ${guard.failed} reads failed` : ""}
               </p>
             )}
+            {contractCheck && (
+              <p className="mb-1 text-xs" style={{ color: "var(--ink-2)" }}>
+                Contract check (HyperEVM eth_getCode via NOWNodes): {contractCheck.contracts.length} of {contractCheck.checked} picks {contractCheck.contracts.length === 1 ? "is a contract" : "are contracts"} in {(contractCheck.ms / 1000).toFixed(1)} s
+                {contractCheck.unread.length ? ` · ${contractCheck.unread.length} could not be read` : ""} · evidence only, the pick is unchanged
+              </p>
+            )}
             <table className="tabular w-full whitespace-nowrap text-xs">
               <thead style={{ color: "var(--muted)" }}>
                 <tr>
@@ -218,6 +262,7 @@ export function Pipeline({ view }: { view: PipelineView }) {
                   <th className="py-1 pl-2 text-right font-normal" title="Risk: leverage">Lev</th>
                   <th className="py-1 pl-2 text-right font-normal" title="Risk: evidence">Evid</th>
                   {overlap && <th className="py-1 pl-2 text-right font-normal" title="Largest same-direction position overlap with another pick (0–1)">Overlap</th>}
+                  {bench.size > 0 && <th className="py-1 pl-2 text-right font-normal" title="Approved for the roster's bench · share of notional held ≥ 90 min (≥ 50% to be seated)">Bench · copyable</th>}
                   <th className="py-1 pl-2 text-right font-normal">Weight</th>
                 </tr>
               </thead>
@@ -229,7 +274,7 @@ export function Pipeline({ view }: { view: PipelineView }) {
                     <tr key={f.address} className="border-t" style={{ borderColor: "var(--grid)" }}>
                       <td className="py-1" style={{ color: "var(--muted)" }}>{f.rank ?? i + 1}</td>
                       <td className="py-1"><Explorer address={f.address} /></td>
-                      <td className="py-1 pl-2" style={{ color: "var(--ink-2)" }}>{f.kind ?? "—"}</td>
+                      <td className="py-1 pl-2" style={{ color: contractSet.has(f.address.toLowerCase()) ? "var(--warning)" : "var(--ink-2)" }} title={contractSet.has(f.address.toLowerCase()) ? "Has code on HyperEVM (eth_getCode via NOWNodes): a contract, not a person's wallet" : undefined}>{f.kind ?? "—"}{contractSet.has(f.address.toLowerCase()) ? " · contract" : ""}</td>
                       <td className="py-1 pl-2 text-right">{f.score === undefined ? "—" : f.score.toLocaleString(undefined, { maximumSignificantDigits: 3 })}</td>
                       <Heat v={v?.aggressiveFit ?? null} bad="low" />
                       <Heat v={v?.reject ?? null} bad="high" />
@@ -240,6 +285,12 @@ export function Pipeline({ view }: { view: PipelineView }) {
                           {overlap.byAddress[f.address.toLowerCase()] === undefined ? "—" : overlap.byAddress[f.address.toLowerCase()]!.toFixed(2)}
                         </td>
                       )}
+                      {bench.size > 0 && (() => {
+                        const b = bench.get(f.address.toLowerCase());
+                        if (!b) return <td className="py-1 pl-2 text-right" style={{ color: "var(--muted)" }}>—</td>;
+                        const share = b.copyableShare === null ? (b.turnoverPerDay === null ? "?" : `turnover ${b.turnoverPerDay.toFixed(1)}/d`) : `${Math.round(b.copyableShare * 100)}%`;
+                        return <td className="py-1 pl-2 text-right" style={{ color: b.passesHold ? "var(--good)" : "var(--warning)" }}>{b.passesHold ? "✓" : "✗"} {share}</td>;
+                      })()}
                       <td className="py-1 pl-2 text-right font-semibold" style={{ color: w ? "var(--series-1)" : "var(--muted)" }}>
                         {w ? `${(w * 100).toFixed(1)}%` : "—"}
                       </td>
@@ -251,6 +302,8 @@ export function Pipeline({ view }: { view: PipelineView }) {
           </div>
         </div>
       )}
+        </div>
+      </details>
     </div>
   );
 }
