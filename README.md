@@ -143,10 +143,10 @@ The [research screening v1 methodology](docs/ingest/RESEARCH_SCREENING_V1.md) do
 | **Conservative** | **Separate low-risk universe: vaults + lending only** | Copies the sources' perp **and lending/yield** positions. ❓ *How do we read lending positions, now and historically?* | Backtest + paper |
 
 ### 4.4 Copy model
-- **Slice:** `slice_i,c = wᵢ' × (nᵢ,c / Eᵢ) × E_ours`.
+- **Slice:** `slice_i,c = wᵢ × (nᵢ,c / Eᵢ) × E_ours`.
   - `nᵢ,c` is source *i*'s signed notional in asset `c`.
   - `Eᵢ` is the source's *current* equity, so its deposits and withdrawals don't distort our size.
-- **Flat is not a signal:** `wᵢ' = wᵢ / Σ_active wⱼ`, i.e. weights are renormalized over sources that currently hold positions.
+- **A wallet's exit is a signal:** each source contributes at its frozen weight `wᵢ`; a flat source contributes nothing, so our exposure shrinks with its exit. (Weights used to be renormalized over the sources holding positions, which rescaled every other perp on each exit and failed runs when it pushed a source past its ceiling.) An exit is also the natural moment to replace that wallet (design in progress).
 - **Position** in asset `c` = `Σᵢ slice_i,c`, netted at order time.
 - **Trade a leg only if** the gap is **≥ $10 and ≥ 10%** of the target.
 - **Ledger = target, account = truth.** Every run diffs against the real account, so partial fills, skipped legs and partial liquidations self-correct. Per-source PnL attributes fills pro-rata.
@@ -203,8 +203,8 @@ One run per 10-minute slot (`mirror-<runAt>`). Code: `packages/backend` (snapsho
    - Contents: the **frozen configuration** (below), the eligible-asset list, and per frozen source its equity and eligible positions (signed USD notional). Amounts are decimal strings × 1e6.
    - **Equity = HL's live account value** from the `portfolio` request (last point of the `day` window, live), not Σ per-dex `accountValue`. Most leaderboard traders use unified or portfolio-margin accounts (23 + 5 of 40 sampled), where per-dex `accountValue` is only the margin set aside on that dex; summing it understated equity, and so overstated leverage, by 2–10×. The portfolio value is also what the backtest's returns use.
    - The backend only builds real run times (`:x0`) within 120 s of now, so nobody can pre-build a stale snapshot for a future run through the public endpoint.
-2. **Targets** (backend, `GET /api/backend/targets/:runAt`): `exposure_c = Σᵢ wᵢ' · nᵢ,c / Eᵢ` per asset in bigint math (`targetsFromSnapshot`, `packages/shared/copy.ts`), with the snapshot's hash, configuration hash and account. The paper books step from the same snapshot.
-   - Weights are the frozen `weightUnits`; cash stays cash. Flat sources' weight goes to active ones (`wᵢ' = wᵢ · W_all / W_active`), but **never past a source's frozen ceiling** (the run fails instead). Gross exposure is capped at the policy's `maxGrossLeverage`. Every source must be in the frozen configuration and hold only eligible assets.
+2. **Targets** (backend, `GET /api/backend/targets/:runAt`): `exposure_c = Σᵢ wᵢ · nᵢ,c / Eᵢ` per asset in bigint math (`targetsFromSnapshot`, `packages/shared/copy.ts`), with the snapshot's hash, configuration hash and account. The paper books step from the same snapshot.
+   - Weights are the frozen `weightUnits`; cash stays cash, and a flat source's weight stays uninvested (its exit is followed). Gross exposure is capped at the policy's `maxGrossLeverage`. Every source must be in the frozen configuration and hold only eligible assets.
 3. **Execute** (executor): Vercel Cron calls `/api/executor/cron/run` at `:x0` (a long-running executor uses its own timer). The executor claims the run (a second trigger is a no-op), fetches the targets over the `BACKEND_URL` service binding, rejects them unless the configuration hash and account match its pinned `FROZEN_CONFIGURATION_HASH` and `HL_ACCOUNT`, then plans and trades (§4.8).
 - **Frozen configuration = execution authority.** The review turns a VALID/LIVE review into a `FrozenConfiguration`: sources with integer weight and ceiling units, cash units, **our account**, the policy, and a `configurationHash` (keccak over canonical JSON, domain `perpparrot:frozen:v1`). `packages/shared/frozen.ts` checks it without dependencies.
 - **Freeze commitment:** the `configurationHash` is pinned in both services' environment (`FROZEN_CONFIGURATION_HASH`); the backend refuses to build from another configuration and the executor refuses targets from one. **No onchain contract:** everything trades in our own HL account. Freezing = `packages/backend/scripts/freeze.ts --write` (saves `frozen/live.json`, prints the variables), set the variables, redeploy.
