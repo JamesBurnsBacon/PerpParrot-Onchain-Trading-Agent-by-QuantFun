@@ -2,6 +2,8 @@ import type { EligibilityTracker } from "./eligibility";
 import type { ConfigurationSource } from "./configuration-source";
 import type { HlReader } from "./hyperliquid";
 import { buildSnapshot, type SnapshotStore } from "./snapshot";
+import { CLOSE_CONFIRM_RUNS, pendingCloses, targetsFromSnapshot } from "../../shared/copy";
+import type { PositionsSnapshot } from "../../shared/snapshot";
 
 export const RUN_INTERVAL_SECONDS = 600;
 
@@ -60,6 +62,22 @@ export class SnapshotService {
     // After serving starts, so a slow hook never delays the executor's run.
     if (this.deps.onBuilt) queueMicrotask(() => void this.deps.onBuilt!(runAt, json).catch(() => undefined));
     return json;
+  }
+
+  // The perps whose close is still pending at runAt (shared/copy.ts pendingCloses), from the stored
+  // snapshots of the previous runs: read only, never built. One that can't be read counts as a run at 0.
+  async pendingCloses(runAt: number, current: { asset: string; exposureE9: bigint }[]): Promise<string[]> {
+    const previous = await Promise.all(
+      Array.from({ length: CLOSE_CONFIRM_RUNS - 1 }, async (_, i) => {
+        try {
+          const json = await this.deps.store.get(runAt - (i + 1) * RUN_INTERVAL_SECONDS);
+          return json ? targetsFromSnapshot(JSON.parse(json) as PositionsSnapshot) : undefined;
+        } catch {
+          return undefined;
+        }
+      }),
+    );
+    return pendingCloses(current, previous);
   }
 
   // Scheduler tick: at :x9 build the snapshot for the coming :x0 run (README §4.7).

@@ -19,6 +19,7 @@ export const targets = (overrides: Partial<Targets> = {}): Targets => {
       { asset: "BTC", exposureE9: 3_000_000_000n },
       { asset: "ETH", exposureE9: -875_000_000n },
     ],
+    pendingCloses: [],
     ...overrides,
   };
 };

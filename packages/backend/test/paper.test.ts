@@ -1,12 +1,33 @@
 import { describe, expect, test } from "bun:test";
 import { accrueFunding, equityOf, newBook, recordMarks, stepBtcBook, stepCopyBook, type Market, type PaperConfig } from "../src/paper/book";
 
-const cfg: PaperConfig = { minOrderUsd: 10, driftFraction: 0.1, marginCap: 0.95, slippageBps: 0 };
+const cfg: PaperConfig = { minOrderUsd: 10, driftFraction: 0.1, equityBandFraction: 0, marginCap: 0.95, slippageBps: 0 };
 const markets = (btc = 100_000, eth = 4_000) =>
   new Map<string, Market>([
     ["BTC", { markPx: btc, maxLeverage: 40, feeBps: 0 }],
     ["ETH", { markPx: eth, maxLeverage: 25, feeBps: 0 }],
   ]);
+
+describe("stepCopyBook: confirmed closes and the equity band", () => {
+  test("keeps a position while its close is pending, closes it once confirmed", () => {
+    const book = newBook("a", "A", "copy", 1_000, 0);
+    stepCopyBook(book, new Map([["BTC", 1]]), markets(), cfg);
+    stepCopyBook(book, new Map(), markets(), cfg, new Set(["BTC"]));
+    expect(book.positions.BTC.szi).toBeCloseTo(0.01, 9);
+    stepCopyBook(book, new Map(), markets(), cfg);
+    expect(book.positions.BTC).toBeUndefined();
+  });
+
+  test("skips gaps under the equity share", () => {
+    const book = newBook("a", "A", "copy", 1_000, 0);
+    stepCopyBook(book, new Map([["ETH", 0.1]]), markets(), cfg);
+    // $100 → $140: over 10% and $10, but under 5% of $1,000.
+    stepCopyBook(book, new Map([["ETH", 0.14]]), markets(), { ...cfg, equityBandFraction: 0.05 });
+    expect(book.positions.ETH.szi).toBeCloseTo(0.025, 9);
+    stepCopyBook(book, new Map([["ETH", 0.14]]), markets(), cfg);
+    expect(book.positions.ETH.szi).toBeCloseTo(0.035, 9);
+  });
+});
 
 describe("stepCopyBook", () => {
   test("opens targets as fractions of equity", () => {

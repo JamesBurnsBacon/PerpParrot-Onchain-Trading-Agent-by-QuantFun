@@ -148,7 +148,8 @@ The [research screening v1 methodology](docs/ingest/RESEARCH_SCREENING_V1.md) do
   - `Eᵢ` is the source's *current* equity, so its deposits and withdrawals don't distort our size.
 - **Flat is not a signal:** `wᵢ' = wᵢ / Σ_active wⱼ`, i.e. weights are renormalized over sources that currently hold positions.
 - **Position** in asset `c` = `Σᵢ slice_i,c`, netted at order time.
-- **Trade a leg only if** the gap is **≥ $10 and ≥ 10%** of the target.
+- **Trade a leg only if** the gap is **≥ $10, ≥ 10%** of the target **and ≥ 0.5% of equity** (`shared/rebalance.ts`, the executor and the paper books alike).
+- **Closes are confirmed:** a held perp whose target drops to 0 is closed only once its target has been 0 for **3 runs in a row** (~30 min; `shared/copy.ts` `pendingCloses`, served with `/targets`). Until then it is kept (`CLOSE_PENDING`). A perp whose market is no longer tradable, and a human flatten, close at once.
 - **Ledger = target, account = truth.** Every run diffs against the real account, so partial fills, skipped legs and partial liquidations self-correct. Per-source PnL attributes fills pro-rata.
 - **Eligible assets:**
   - validator perps + **USDC-collateral HIP-3** with **≥ $20M OI** (a line that just includes Microsoft)

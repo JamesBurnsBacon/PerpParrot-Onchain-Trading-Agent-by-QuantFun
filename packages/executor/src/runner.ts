@@ -116,7 +116,7 @@ export class Runner {
       // Re-checked here: the run may have waited in the queue.
       if (this.deps.now() > expiresAt) throw new Error("run expired before execution");
       const targets = await this.deps.targets(runAt);
-      record.evidence = { snapshotHash: targets.snapshotHash, configurationHash: targets.configurationHash, exposures: targets.exposures };
+      record.evidence = { snapshotHash: targets.snapshotHash, configurationHash: targets.configurationHash, exposures: targets.exposures, pendingCloses: targets.pendingCloses };
       const { config } = this.deps;
       const pinned = ((await this.deps.activeConfigurationHash?.()) ?? config.frozenConfigurationHash).toLowerCase();
       if (targets.configurationHash !== pinned) throw new Error(`configuration mismatch: targets from ${targets.configurationHash}`);
@@ -127,7 +127,7 @@ export class Runner {
       // Targets = exposure × our equity now (account = truth).
       const equity = this.deps.exchange.dryRun && config.dryRunEquityUsd ? config.dryRunEquityUsd : Math.max(account.equityUsd, 0);
       // A dry run sized on dryRunEquityUsd plans its margin on that equity too.
-      const plan = planOrders(new Map(exposures.map((e) => [e.asset, e.fraction * equity])), { ...account, equityUsd: equity }, markets, config.plan);
+      const plan = planOrders(new Map(exposures.map((e) => [e.asset, e.fraction * equity])), { ...account, equityUsd: equity }, markets, config.plan, new Set(targets.pendingCloses));
       return {
         plan, runAt: runAt * 1000, sizingEquityUsd: equity, exposures: new Map(exposures.map((e) => [e.asset, e.fraction])),
         configurationHash: targets.configurationHash, snapshotHash: targets.snapshotHash,

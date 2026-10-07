@@ -72,6 +72,7 @@ is set (see `packages/executor/test/pg-store.test.ts`).
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | no | — | Alerts; without them alerts are logged only |
 | `SLIPPAGE_BPS` | no | `50` | IOC limit = mark ± this |
 | `MIN_ORDER_USD` / `DRIFT_FRACTION` / `MARGIN_CAP` | no | `10` / `0.1` / `0.95` | README §4.4, §4.8 |
+| `EQUITY_BAND_FRACTION` | no | `0.005` | A leg trades only if its gap is also ≥ this share of equity (README §4.4; the paper books use `PAPER_EQUITY_BAND_FRACTION`, same default) |
 | `MAX_GROSS_LEVERAGE` | no | `10` | Sanity bound: reject targets whose gross exposure exceeds this |
 | `RUN_TTL_SECONDS` | no | `300` | Orders for a run may go out until `runAt` + this |
 | `RUN_TIMEOUT_SECONDS` | no | `60` | A run still going after this is alerted on and stops before its next order batch; the next run waits for it to finish |

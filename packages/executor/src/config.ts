@@ -13,6 +13,7 @@ export type ExecutorConfig = {
   slippageBps: number;
   minOrderUsd: number;
   driftFraction: number;
+  equityBandFraction: number;
   marginCap: number;
   maxGrossLeverage: number;
   adminToken?: string;
@@ -71,6 +72,8 @@ export const loadConfig = (env: Record<string, string | undefined>): ExecutorCon
     slippageBps: num(env, "SLIPPAGE_BPS", 50),
     minOrderUsd: num(env, "MIN_ORDER_USD", 10),
     driftFraction: num(env, "DRIFT_FRACTION", 0.1),
+    // A leg trades only if its gap is also ≥ this share of equity (shared/rebalance.ts).
+    equityBandFraction: num(env, "EQUITY_BAND_FRACTION", 0.005),
     marginCap: num(env, "MARGIN_CAP", 0.95),
     maxGrossLeverage: num(env, "MAX_GROSS_LEVERAGE", 10),
     adminToken: env.ADMIN_TOKEN || undefined,

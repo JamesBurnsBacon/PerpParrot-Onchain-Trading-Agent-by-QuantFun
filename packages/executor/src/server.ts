@@ -69,6 +69,7 @@ const runner = new Runner({
     plan: {
       minOrderUsd: config.minOrderUsd,
       driftFraction: config.driftFraction,
+      equityBandFraction: config.equityBandFraction,
       marginCap: config.marginCap,
       slippageBps: config.slippageBps,
     },
