@@ -10,6 +10,8 @@ export interface LocalReviewSql {
 export async function localReviewDb(directory:string):Promise<LocalReviewSql> {
   const db=new PGlite(directory);
   await db.exec(await readFile(new URL('../../../supabase/migrations/20261007120000_pipeline.sql',import.meta.url),'utf8'));
+  // The review now writes "benched"; mirror the status constraint in the roster migration.
+  await db.exec("alter table selection_runs drop constraint if exists selection_runs_status_check; alter table selection_runs add constraint selection_runs_status_check check (status in ('running', 'activated', 'kept', 'benched', 'rejected', 'failed'));");
   const tag=(client:Pick<PGlite,'query'>):LocalReviewSql=>Object.assign(async(strings:TemplateStringsArray,...values:unknown[])=>{
     const query=strings.reduce((s,p,i)=>s+(i?`$${i}`:'')+p,'');
     return (await client.query<Record<string,any>>(query,values.map(v=>v instanceof Date?v.toISOString():v!==null&&typeof v==='object'?JSON.stringify(v):v))).rows;
