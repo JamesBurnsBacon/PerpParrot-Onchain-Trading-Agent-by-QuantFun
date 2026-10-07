@@ -63,6 +63,9 @@ describe.skipIf(!url)("Roster on Postgres", async () => {
     expect(result.changes.filter((c) => c.startsWith("admitted"))).toEqual([`admitted ${newcomer(1)} (open seat)`]);
     const rows = await seats();
     expect(rows.find((r) => r.address === newcomer(1))).toMatchObject({ state: "probation", weight_units: 133_333 });
+    // The bench approval counts as its review: no seat review of it for 12 h (none 10 minutes after admission).
+    const [admitted] = await sql`select reviewed_at from roster_seats where address = ${newcomer(1)} and state = 'probation'`;
+    expect(new Date(admitted.reviewed_at).getTime()).toBe(T0 * 1000);
     // Its 30-day average leverage is kept for the snapshot's normalization; seeded seats get theirs at the seat review.
     expect((await seatLeverage(sql)).find((l) => l.address === newcomer(1))).toEqual({ address: newcomer(1), averageLeverage: 0.4 });
     const config = await active();

@@ -577,9 +577,10 @@ export class Pipeline {
         // The baseline is taken on the next roster step.
       }
       await sql`insert into roster_seats (address, state, weight_units, fit, turnover_per_day, traded_per_day_over_equity, admitted_at,
-          min_tenure_until, admitted_by, equity_at_admission, pnl_at_admission, average_leverage)
+          min_tenure_until, admitted_by, equity_at_admission, pnl_at_admission, average_leverage, reviewed_at)
         values (${a.entry.address}, 'probation', ${a.weightUnits}, ${a.entry.fit}, ${a.entry.turnoverPerDay}, ${a.entry.tradedPerDayOverEquity}, ${at},
-          ${new Date(a.minTenureUntil).toISOString()}, ${latest.id}, ${reading?.equity ?? null}, ${reading?.pnl ?? null}, ${a.entry.averageLeverage ?? null})`;
+          ${new Date(a.minTenureUntil).toISOString()}, ${latest.id}, ${reading?.equity ?? null}, ${reading?.pnl ?? null}, ${a.entry.averageLeverage ?? null},
+          ${new Date(a.entry.approvedAt).toISOString()})`; // its bench approval is its review: the next seat review is 12 h after it
       await event(a.entry.address, "admitted", { reason: "open seat", weightUnits: a.weightUnits, fit: a.entry.fit, copyableShare: a.entry.copyableShare,
         turnoverPerDay: a.entry.turnoverPerDay, tenureUntil: new Date(a.minTenureUntil).toISOString() });
     }
