@@ -1,9 +1,10 @@
 import type { PerpState, PortfolioResponse } from "../../shared/account";
+import { routedFetch } from "./pipeline/info-router";
 
 const INFO_URL = "https://api.hyperliquid.xyz/info";
 
 export const info = async <T>(body: Record<string, unknown>): Promise<T> => {
-  const res = await fetch(INFO_URL, {
+  const res = await routedFetch(INFO_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
