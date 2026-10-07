@@ -156,33 +156,6 @@ export function RunStrip({ runs }: { runs: Run[] }) {
   );
 }
 
-// Funnel: one bar per stage, ordinal blue ramp, counts labeled.
-export function Funnel({ steps }: { steps: { stage: string; label: string; count: number }[] }) {
-  const [ref, width] = useWidth<HTMLDivElement>(480);
-  const max = Math.max(...steps.map((s) => s.count), 1);
-  const ramp = ["var(--funnel-1)", "var(--funnel-2)", "var(--funnel-3)", "var(--funnel-4)", "var(--funnel-5)"];
-  const labelW = 120;
-  return (
-    <div ref={ref} className="min-w-0 overflow-hidden">
-      <svg width={width} height={steps.length * 26} role="img" aria-label="Selection funnel">
-        {steps.map((s, i) => {
-          // Square-root scale so the last stages (25, then 5–25) stay visible next to ~47k.
-          const w = Math.max(3, (Math.sqrt(s.count) / Math.sqrt(max)) * (width - labelW - 64));
-          return (
-            <g key={s.stage}>
-              <text x={labelW - 8} y={i * 26 + 10} dy="0.32em" textAnchor="end" fontSize="11" fill="var(--ink-2)">{s.label}</text>
-              <rect x={labelW} y={i * 26 + 2} width={w} height={16} rx={4} fill={ramp[Math.min(i, ramp.length - 1)]} />
-              <text x={labelW + w + 6} y={i * 26 + 10} dy="0.32em" fontSize="11" fill="var(--ink)" className="tabular">
-                {s.count.toLocaleString()}
-              </text>
-            </g>
-          );
-        })}
-      </svg>
-    </div>
-  );
-}
-
 const SKIP_LABEL: Record<string, string> = {
   BELOW_DRIFT: "within drift",
   BELOW_MIN_ORDER: "under $10",
