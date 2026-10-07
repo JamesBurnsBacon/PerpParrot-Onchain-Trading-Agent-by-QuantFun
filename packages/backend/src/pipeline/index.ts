@@ -327,7 +327,7 @@ export class Pipeline {
       measured.set(address, measure({ input: byInput.get(address)!, fills, positions: positions.get(address) ?? [], eligible, nowMs: this.now() }));
     }
     const pairOverlap = (a: string, b: string) => exposureOverlap(positions.get(a) ?? [], positions.get(b) ?? []);
-    await sql`update selection_runs set finalists = coalesce(finalists, '{}'::jsonb) || ${JSON.stringify({ measured: Object.fromEntries(measured) })}::jsonb where id = ${id}`;
+    await sql`update selection_runs set finalists = coalesce(finalists, '{}'::jsonb) || ${JSON.stringify({ measured: Object.fromEntries(measured) })}::text::jsonb where id = ${id}`;
     const built = buildReviewInput({ score, inputs, positions, policy, asOfMs: this.now(), ttlMs: policy.maxFrameAgeMs, measured, overlap: pairOverlap });
 
     // Gross leverage if every chosen source keeps today's book (README §4.6 policy check).
