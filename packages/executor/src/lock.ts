@@ -38,9 +38,13 @@ export const postgresRunLock = (sql: SQL, key = RUN_LOCK_KEY, keepAliveMs = 2000
       clearInterval(keepAlive);
       try {
         await conn`select pg_advisory_unlock(${key})`;
-      } finally {
-        conn.release();
+      } catch {
+        // A connection back in the pool would keep holding the lock, and every later run would
+        // time out on it. Closing ends the session, so Postgres releases the lock.
+        await conn.close().catch(() => undefined);
+        return;
       }
+      conn.release();
     };
   },
 });
