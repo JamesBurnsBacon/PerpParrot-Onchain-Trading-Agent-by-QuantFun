@@ -14,7 +14,8 @@ export function ExposureFlow({ exposures }: { exposures: Exposures }) {
   const [ref, width] = useWidth<HTMLDivElement>(240);
   const compact = width < 600;
   const left = compact ? 100 : 178;
-  const right = width - (compact ? 104 : 196);
+  // The label column is as wide as its widest line ("Short 42.6%", about 90px), so the chart runs to the panel edge.
+  const right = width - 104;
   const height = Math.max(140, model.wallets.length * 66, model.assets.length * 76);
   const rowY = (index: number, count: number) => count < 2 ? height / 2 : 38 + index * (height - 76) / (count - 1);
   const walletRows = new Map(model.wallets.map((wallet, i) => [wallet.id, rowY(i, model.wallets.length)]));
@@ -58,11 +59,10 @@ export function ExposureFlow({ exposures }: { exposures: Exposures }) {
               <span className="exposure-flow-weight">{wallet.weightPct.toFixed(1)}%{compact ? "" : " weight"}{muted.has(wallet.id) ? " · muted" : ""}</span>
             </button>
           ))}
-          {targets.map(({ asset, net, delta }) => (
+          {targets.map(({ asset, net }) => (
             <div key={asset} className="exposure-flow-target tabular" aria-hidden="true" style={{ top: assetRows.get(asset), left: right + 12, width: width - right - 12 }}>
               <span className="exposure-flow-asset" title={asset}>{asset}</span>
               <strong style={{ color: net === 0 ? "var(--ink)" : net > 0 ? "var(--long)" : "var(--short)" }}>{sideLabel(net)}</strong>
-              {hasMutes && shiftLabel(delta) !== "no change" && <span className="exposure-flow-delta">{shiftLabel(delta)}</span>}
             </div>
           ))}
         </div>

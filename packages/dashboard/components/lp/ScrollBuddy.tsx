@@ -1,14 +1,12 @@
 "use client";
-// A rainbow scroll-progress bar with a parrot riding its end, and a small feather burst on every click.
+// A rainbow scroll-progress bar, and a small feather burst on every click.
 import { useEffect, useRef } from "react";
 import { gsap } from "gsap";
-import { Parrot } from "./ParrotSymbols";
 
 const COLORS = ["#6cc04a", "#eac744", "#f29a2e", "#9683bf", "#639ec4"];
 
 export function ScrollBuddy() {
   const fill = useRef<HTMLDivElement>(null);
-  const rider = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let frame = 0;
@@ -19,7 +17,6 @@ export function ScrollBuddy() {
       const room = document.documentElement.scrollHeight - window.innerHeight;
       const p = room > 0 ? Math.min(1, Math.max(0, window.scrollY / room)) : 0;
       if (fill.current) fill.current.style.width = `${p * 100}%`;
-      if (rider.current) rider.current.style.left = `${Math.max(2, p * 100)}%`;
     };
     const onScroll = () => {
       if (!frame) frame = requestAnimationFrame(update);
@@ -72,9 +69,6 @@ export function ScrollBuddy() {
   return (
     <div className="lp-pbar" aria-hidden="true">
       <div className="lp-pbar-fill" ref={fill} />
-      <div className="lp-pbar-rider" ref={rider}>
-        <Parrot />
-      </div>
     </div>
   );
 }

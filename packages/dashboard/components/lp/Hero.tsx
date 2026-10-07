@@ -277,7 +277,7 @@ export function Hero() {
         gsap
           .timeline({
             defaults: { ease: "none" },
-            scrollTrigger: { trigger: el, pin: stage, start: "top top", end: "bottom bottom", pinSpacing: false, scrub: 0.7, invalidateOnRefresh: true },
+            scrollTrigger: { trigger: el, pin: stage, start: () => `top ${document.querySelector(".lp-dh")?.getBoundingClientRect().height ?? 0}`, end: "bottom bottom", pinSpacing: false, scrub: 0.7, invalidateOnRefresh: true },
             onUpdate: () => {
               showCopy(state.progress);
               if (!running) paint();
@@ -324,10 +324,6 @@ export function Hero() {
         {/* The animated headlines come and go; this heading is always in the document (and in the static frame). */}
         <h1 className="sr-only">PerpParrot</h1>
         <div className="lp-surface">
-          <div className="lp-wordmark">
-            <Parrot />
-            PerpParrot
-          </div>
           <div className="lp-field">
             <div className="lp-hill back" aria-hidden="true" />
             <div className="lp-hill front" aria-hidden="true" />
