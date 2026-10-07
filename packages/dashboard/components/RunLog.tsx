@@ -28,7 +28,6 @@ export function RunLog({ runs }: { runs: Run[] }) {
             <th className="py-1 text-left font-normal">Run</th>
             <th className="py-1 text-left font-normal">Status</th>
             <th className="py-1 pl-3 text-right font-normal">Orders</th>
-            <th className="py-1 pl-4 text-left font-normal">Snapshot</th>
             <th className="py-1 pl-3 text-right font-normal" title="Target exposures the run traded toward">Targets</th>
             <th className="py-1" />
           </tr>
@@ -43,18 +42,18 @@ export function RunLog({ runs }: { runs: Run[] }) {
                   <span style={{ color: s.color }}>{s.icon}</span> {s.label}{r.dryRun ? " · dry" : ""}
                 </td>
                 <td className="py-1.5 text-right">{ordersOf(r)}</td>
-                <td className="py-1.5 pl-4 font-mono">
-                  {r.evidence ? (
-                    <button className="hover:underline" title="Copy" onClick={() => copy(r.evidence!.snapshotHash)}>{short(r.evidence.snapshotHash)}</button>
-                  ) : "—"}
-                  {copied === r.evidence?.snapshotHash && <span className="ml-2" style={{ color: "var(--muted)" }}>copied</span>}
-                </td>
                 <td className="py-1.5 text-right">{r.evidence?.exposures.length ?? "—"}</td>
                 <td className="py-1.5 pl-3 text-right">
                   {r.evidence && (
-                    <button className="underline underline-offset-2" style={{ color: "var(--muted)" }} onClick={() => download(r)}>
-                      evidence.json
-                    </button>
+                    // The snapshot hash stays one tap away: copy it, or download the whole evidence record.
+                    <span className="inline-flex items-center gap-2">
+                      <button aria-label={`Copy snapshot hash ${short(r.evidence.snapshotHash)}`} title={copied === r.evidence.snapshotHash ? "Copied" : `Copy snapshot hash ${short(r.evidence.snapshotHash)}`} style={{ color: "var(--muted)" }} onClick={() => copy(r.evidence!.snapshotHash)}>
+                        {copied === r.evidence.snapshotHash ? "✓" : "⧉"}
+                      </button>
+                      <button aria-label={`Download ${r.runId} evidence`} title="Download evidence.json" style={{ color: "var(--muted)" }} onClick={() => download(r)}>
+                        ↓
+                      </button>
+                    </span>
                   )}
                 </td>
               </tr>
@@ -62,9 +61,6 @@ export function RunLog({ runs }: { runs: Run[] }) {
           })}
         </tbody>
       </table>
-      <div className="mt-2 text-xs" style={{ color: "var(--muted)" }}>
-        Check a run: the snapshot is <code className="font-mono">/api/backend/snapshots/&lt;runAt&gt;</code>; its keccak256 is the hash above
-      </div>
     </div>
   );
 }

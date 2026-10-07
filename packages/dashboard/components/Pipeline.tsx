@@ -38,7 +38,7 @@ const Explorer = ({ address }: { address: string }) => (
 function Bar({ value, color = "var(--series-1)" }: { value: number; color?: string }) {
   return (
     <span className="block h-2 w-full rounded-full" style={{ background: "var(--grid)" }}>
-      <span className="block h-2 rounded-full" style={{ width: `${Math.max(0, Math.min(1, value)) * 100}%`, background: color }} />
+      <span className="lp-grow block h-2 rounded-full" style={{ width: `${Math.max(0, Math.min(1, value)) * 100}%`, background: color }} />
     </span>
   );
 }
@@ -93,7 +93,7 @@ export function Pipeline({ view }: { view: PipelineView }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="grid gap-3 md:grid-cols-3">
-        <Tile label="Accounts refreshed" note={`${accounts.errors ? `${accounts.errors} errors · ` : ""}${accounts.qualified ? `${accounts.qualified} qualified${accounts.high_frequency ? ` (${accounts.high_frequency} high-frequency)` : ""} · ` : ""}scanned ${when(accounts.listed_at)}`}>
+        <Tile label="Accounts refreshed" note={[accounts.errors ? `${accounts.errors} errors` : "", accounts.qualified ? `${accounts.qualified} qualified` : ""].filter(Boolean).join(" · ") || undefined}>
           <div className="mb-1.5 flex items-baseline gap-1 text-lg font-semibold tabular">
             {accounts.fresh}
             <span className="text-sm font-normal" style={{ color: "var(--muted)" }}>/ {accounts.listed}</span>
@@ -101,18 +101,7 @@ export function Pipeline({ view }: { view: PipelineView }) {
           </div>
           <Bar value={freshShare} color={freshShare >= 0.95 ? "var(--good)" : "var(--series-1)"} />
         </Tile>
-        <Tile label="Latest selection" note={run ? (run.error ?? run.manifest?.reason ?? `${run.accounts ?? "—"} accounts scored`) : "none yet · every 10 min"}>
-          {run ? (
-            <div className="flex items-center gap-2">
-              <Badge status={run.status} />
-              <span className="text-xs" style={{ color: "var(--ink-2)" }}>{when(run.started_at)}</span>
-              <span className="ml-auto text-xs" style={{ color: "var(--muted)" }}>{ago(run.started_at)}</span>
-            </div>
-          ) : (
-            <div className="text-lg font-semibold" style={{ color: "var(--muted)" }}>—</div>
-          )}
-        </Tile>
-        <Tile label="Active configuration" note={active ? `activated ${when(active.activated_at)} · ${ago(active.activated_at)}` : "copy loop runs the pinned fixture"}>
+        <Tile label="Active configuration" note={active ? undefined : "pinned fixture"}>
           {active ? (
             <div className="flex items-baseline gap-2">
               <span className="text-lg font-semibold tabular">{active.sources.length}</span>
@@ -123,6 +112,25 @@ export function Pipeline({ view }: { view: PipelineView }) {
             <div className="text-lg font-semibold" style={{ color: "var(--muted)" }}>none</div>
           )}
         </Tile>
+        <div className="min-w-0 rounded-lg p-3" style={{ border: "1px solid var(--grid)" }}>
+          <h3 className="mb-1 text-xs font-semibold" style={{ color: "var(--ink-2)" }}>Active sources</h3>
+          {sources.length ? (
+            <table className="tabular w-full whitespace-nowrap text-xs">
+              <tbody>
+                {sources.map((s) => (
+                  <tr key={s.sourceAddress} className="border-t first:border-t-0" style={{ borderColor: "var(--grid)" }}>
+                    <td className="w-28 py-1.5"><Explorer address={s.sourceAddress} /></td>
+                    <td className="w-full px-2"><Bar value={s.weightUnits / maxWeight} /></td>
+                    <td className="py-1.5 text-right font-semibold">{(s.weightUnits / 1e4).toFixed(1)}%</td>
+                    <td className="py-1.5 pl-2 text-right" style={{ color: "var(--muted)" }} title="Ceiling">≤{(s.ceilingUnits / 1e4).toFixed(0)}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="py-4 text-xs" style={{ color: "var(--muted)" }}>No configuration activated yet</div>
+          )}
+        </div>
       </div>
 
       {routing && (routing.mode !== "official" || routing.nownodes.requests > 0) && (
@@ -156,7 +164,7 @@ export function Pipeline({ view }: { view: PipelineView }) {
       {verification && verification.mode !== "off" && (
         <Tile
           label="Snapshot cross-check (NOWNodes)"
-          note={`mode ${verification.mode} · each mirror snapshot's positions are read again from NOWNodes before the executor sees them`}
+          note={`mode ${verification.mode}`}
         >
           <div className="tabular flex flex-wrap items-baseline gap-x-6 gap-y-1 text-sm">
             <span><span className="font-semibold">{verification.verified}</span> verified</span>
@@ -174,26 +182,21 @@ export function Pipeline({ view }: { view: PipelineView }) {
         </Tile>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="min-w-0">
-          <h3 className="mb-1 text-xs font-semibold" style={{ color: "var(--ink-2)" }}>Active sources · weight</h3>
-          {sources.length ? (
-            <table className="tabular w-full whitespace-nowrap text-xs">
-              <tbody>
-                {sources.map((s) => (
-                  <tr key={s.sourceAddress} className="border-t first:border-t-0" style={{ borderColor: "var(--grid)" }}>
-                    <td className="w-28 py-1.5"><Explorer address={s.sourceAddress} /></td>
-                    <td className="w-full px-2"><Bar value={s.weightUnits / maxWeight} /></td>
-                    <td className="py-1.5 text-right font-semibold">{(s.weightUnits / 1e4).toFixed(1)}%</td>
-                    <td className="py-1.5 pl-2 text-right" style={{ color: "var(--muted)" }} title="Ceiling">≤{(s.ceilingUnits / 1e4).toFixed(0)}%</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      <details className="lp-details">
+        <summary>Details</summary>
+        <div className="flex flex-col gap-4">
+        <Tile label="Latest selection" note={run ? (run.error ?? run.manifest?.reason ?? `${run.accounts ?? "—"} accounts scored`) : "none yet · every 10 min"}>
+          {run ? (
+            <div className="flex items-center gap-2">
+              <Badge status={run.status} />
+              <span className="text-xs" style={{ color: "var(--ink-2)" }}>{when(run.started_at)}</span>
+              <span className="ml-auto text-xs" style={{ color: "var(--muted)" }}>{ago(run.started_at)}</span>
+            </div>
           ) : (
-            <div className="py-4 text-xs" style={{ color: "var(--muted)" }}>No configuration activated yet</div>
+            <div className="text-lg font-semibold" style={{ color: "var(--muted)" }}>—</div>
           )}
-        </div>
+        </Tile>
+      <div className="grid gap-4 md:grid-cols-1">
         <div className="min-w-0">
           <h3 className="mb-1 text-xs font-semibold" style={{ color: "var(--ink-2)" }}>Recent selections</h3>
           {selections.length ? (
@@ -299,6 +302,8 @@ export function Pipeline({ view }: { view: PipelineView }) {
           </div>
         </div>
       )}
+        </div>
+      </details>
     </div>
   );
 }

@@ -37,7 +37,7 @@ function Pill({ color, children }: { color: string; children: React.ReactNode })
 function Track({ value, color }: { value: number; color: string }) {
   return (
     <span className="block h-2 w-full rounded-full" style={{ background: "var(--grid)" }}>
-      <span className="block h-2 rounded-full" style={{ width: `${Math.max(0, Math.min(1, value)) * 100}%`, background: color }} />
+      <span className="lp-grow block h-2 rounded-full" style={{ width: `${Math.max(0, Math.min(1, value)) * 100}%`, background: color }} />
     </span>
   );
 }
@@ -64,17 +64,6 @@ function Clock({ seat, now }: { seat: RosterSeat; now: number }) {
   );
 }
 
-function Activity({ seat, now }: { seat: RosterSeat; now: number }) {
-  if (seat.state === "winding_down") {
-    const n = Object.keys(seat.caps ?? {}).length;
-    return <span style={{ color: "var(--warning)" }}>following exits · {n} perp{n === 1 ? "" : "s"}</span>;
-  }
-  if (seat.flatSince === null) return <span style={{ color: "var(--good)" }}>holding</span>;
-  // Probation releases at 6 h idle; after it, at 3 flat runs.
-  const due = seat.state === "probation" ? `idle ${hours(now - seat.flatSince)} / 6h` : `flat ${seat.flatRuns}/3 runs`;
-  return <span style={{ color: "var(--warning)" }}>{due}</span>;
-}
-
 const describe = (e: RosterEvent): string => {
   const d = e.detail ?? {};
   const parts: string[] = [];
@@ -90,7 +79,6 @@ export function Roster({ roster, now = Date.now() }: { roster: RosterView; now?:
   const seats = [...roster.seats].sort((a, b) => b.weightUnits - a.weightUnits);
   const invested = seats.reduce((sum, s) => sum + s.weightUnits, 0) / 1e6;
   const maxWeight = Math.max(...seats.map((s) => s.weightUnits), 1);
-  const count = (state: SeatState) => seats.filter((s) => s.state === state).length;
 
   return (
     <div className="flex flex-col gap-4">
@@ -98,29 +86,23 @@ export function Roster({ roster, now = Date.now() }: { roster: RosterView; now?:
         <div className="min-w-0 rounded-lg p-3" style={{ border: "1px solid var(--grid)" }}>
           <div className="mb-1 text-xs" style={{ color: "var(--ink-2)" }}>Seats</div>
           <div className="text-lg font-semibold tabular">{seats.length} <span className="text-sm font-normal" style={{ color: "var(--muted)" }}>of 5–15</span></div>
-          <div className="mt-1 text-xs" style={{ color: "var(--muted)" }}>
-            {count("probation")} in probation · {count("seated")} seated · {count("winding_down")} winding down
-          </div>
         </div>
         <div className="min-w-0 rounded-lg p-3" style={{ border: "1px solid var(--grid)" }}>
           <div className="mb-1 flex items-baseline text-xs" style={{ color: "var(--ink-2)" }}>
             Invested weight <span className="ml-auto tabular" style={{ color: "var(--ink)" }}>{(invested * 100).toFixed(1)}% / 90%</span>
           </div>
           <Track value={invested / 0.9} color={invested >= 0.85 ? "var(--good)" : "var(--series-1)"} />
-          <div className="mt-1 text-xs" style={{ color: "var(--muted)" }}>empty seats and flat wallets sit in cash</div>
         </div>
         <div className="min-w-0 rounded-lg p-3" style={{ border: "1px solid var(--grid)" }}>
           <div className="mb-1 text-xs" style={{ color: "var(--ink-2)" }}>Implied copy turnover</div>
           <div className="text-lg font-semibold tabular">
             {roster.impliedTurnover === null ? <span style={{ color: "var(--muted)" }}>measuring</span> : <>{roster.impliedTurnover.toFixed(2)}× <span className="text-sm font-normal" style={{ color: "var(--muted)" }}>equity / day</span></>}
           </div>
-          <div className="mt-1 text-xs" style={{ color: "var(--muted)" }}>Σ weight × traded ÷ equity · monitored only</div>
         </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-[3fr_2fr]">
         <div className="min-w-0 overflow-x-auto">
-          <h3 className="mb-1 text-xs font-semibold" style={{ color: "var(--ink-2)" }}>Seats</h3>
           {seats.length ? (
             <table className="tabular w-full whitespace-nowrap text-xs">
               <thead style={{ color: "var(--muted)" }}>
@@ -128,9 +110,7 @@ export function Roster({ roster, now = Date.now() }: { roster: RosterView; now?:
                   <th className="py-1 text-left font-normal">Wallet</th>
                   <th className="py-1 pl-2 text-left font-normal">State</th>
                   <th className="w-1/4 py-1 pl-2 text-left font-normal">Weight</th>
-                  <th className="py-1 pl-2 text-right font-normal" title="The wallet's 30-day average leverage → the scale that copies it at 2× (×1: not measured yet)">Usual lev</th>
                   <th className="w-1/4 py-1 pl-2 text-left font-normal">Tenure</th>
-                  <th className="py-1 pl-2 text-left font-normal">Activity</th>
                 </tr>
               </thead>
               <tbody>
@@ -148,17 +128,13 @@ export function Roster({ roster, now = Date.now() }: { roster: RosterView; now?:
                         <span className="w-12 text-right font-semibold">{(s.weightUnits / 1e4).toFixed(1)}%</span>
                       </span>
                     </td>
-                    <td className="py-1.5 pl-2 text-right" style={{ color: "var(--ink-2)" }}>
-                      {s.averageLeverage == null ? "—" : `${s.averageLeverage.toFixed(2)}× → ×${(2 / Math.max(s.averageLeverage, 0.05)).toFixed(1)}`}
-                    </td>
                     <td className="py-1.5 pl-2"><Clock seat={s} now={now} /></td>
-                    <td className="py-1.5 pl-2"><Activity seat={s} now={now} /></td>
                   </tr>
                 ))}
               </tbody>
             </table>
           ) : (
-            <div className="py-4 text-xs" style={{ color: "var(--muted)" }}>No seats yet: the roster seeds from the active configuration on its first step</div>
+            <div className="py-4 text-xs" style={{ color: "var(--muted)" }}>No seats yet</div>
           )}
         </div>
         <div className="min-w-0">
@@ -166,11 +142,13 @@ export function Roster({ roster, now = Date.now() }: { roster: RosterView; now?:
           {roster.events.length ? (
             <ul className="text-xs">
               {roster.events.slice(0, 14).map((e, i) => (
-                <li key={`${e.at}-${e.address}-${i}`} className="grid grid-cols-[3.5rem_6.5rem_5.5rem_1fr] items-center gap-2 border-t py-1" style={{ borderColor: "var(--grid)" }}>
+                <li key={`${e.at}-${e.address}-${i}`} className="grid grid-cols-[3.5rem_6.5rem_1fr] items-center gap-2 border-t py-1" style={{ borderColor: "var(--grid)" }} title={describe(e)}>
                   <span className="tabular" style={{ color: "var(--muted)" }}>{new Date(e.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
                   <span style={{ color: EVENT[e.kind]?.color ?? "var(--ink-2)" }}>{EVENT[e.kind]?.label ?? e.kind}</span>
-                  <span className="font-mono" style={{ color: "var(--ink)" }} title={e.address}>{short(e.address)}</span>
-                  <span className="truncate" style={{ color: "var(--ink-2)" }} title={describe(e)}>{describe(e)}</span>
+                  <span className="font-mono" style={{ color: "var(--ink)" }} title={e.address}>
+                    {short(e.address)}
+                    <span className="sr-only"> {describe(e)}</span>
+                  </span>
                 </li>
               ))}
             </ul>

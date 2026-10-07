@@ -17,7 +17,6 @@ export function Finalists({ finalists }: { finalists: Finalist[] }) {
       <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs" style={{ color: "var(--ink-2)" }}>
         <span className="inline-flex items-center gap-1.5 whitespace-nowrap"><span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: "var(--series-1)" }} />Picked {picked}</span>
         <span className="inline-flex items-center gap-1.5 whitespace-nowrap"><span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: "var(--axis)" }} />Not picked {rows.length - picked}</span>
-        <span style={{ color: "var(--muted)" }}>bar = score · click a row for why</span>
       </div>
       <ul className="max-h-[26rem] overflow-auto">
         {rows.map((r, i) => {
@@ -25,16 +24,15 @@ export function Finalists({ finalists }: { finalists: Finalist[] }) {
           return (
             <li key={r.address} className="border-t first:border-t-0" style={{ borderColor: "var(--grid)" }}>
               <button
-                className="grid w-full grid-cols-[1.5rem_6.5rem_4.5rem_1fr_3.5rem_1rem] items-center gap-2 py-1.5 text-left text-xs"
+                className="grid w-full grid-cols-[1.5rem_6.5rem_1fr_3.5rem_1rem] items-center gap-2 py-1.5 text-left text-xs"
                 aria-expanded={expanded}
                 onClick={() => setOpen(expanded ? null : r.address)}
               >
                 <span className="tabular" style={{ color: "var(--muted)" }}>{i + 1}</span>
                 <span className="font-mono" style={{ color: "var(--ink)" }}>{short(r.address)}</span>
-                <span className="truncate" style={{ color: "var(--ink-2)" }}>{r.kind}</span>
                 <span className="h-3">
                   <span
-                    className="block h-3 rounded-[4px]"
+                    className="lp-grow block h-3 rounded-[4px]"
                     style={{ width: `${Math.max(2, (Math.abs(r.score) / max) * 100)}%`, background: r.picked ? "var(--series-1)" : "var(--axis)" }}
                   />
                 </span>
