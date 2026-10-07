@@ -31,9 +31,6 @@ html:has(.parrot-show), body:has(.parrot-show) { height: 100%; overflow: hidden;
 .parrot-show .parrot-avatar--speaking { animation: bird-speak .45s ease-in-out infinite alternate; }
 .parrot-show .parrot-avatar--speaking[data-reactive="true"] .parrot-portrait { transform: scale(calc(1 + var(--level, 0) * .1)) rotate(calc(var(--bass, 0) * 5deg)); }
 .parrot-show .parrot-avatar--thinking { animation: bird-think .9s ease-in-out infinite alternate; }
-.parrot-show .thinking-seeds { position: absolute; bottom: -25px; left: 20%; display: flex; gap: 10px; }
-.parrot-show .thinking-seeds i { width: 13px; height: 8px; background: #3f9a3a; border-radius: 90% 10%; animation: seed-hop .7s infinite alternate; }
-.parrot-show .thinking-seeds i:nth-child(even) { animation-delay: .35s; background: #f29a2e; }
 .parrot-show .voice-dock { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .parrot-show .parrot-live { display: grid; grid-template-columns: auto auto; align-items: center; justify-content: center; gap: 4px 12px; }
 .parrot-show .parrot-talk-row { grid-row: 1 / 4; display: flex; gap: 10px; align-items: center; }
@@ -116,11 +113,6 @@ html:has(.parrot-show), body:has(.parrot-show) { height: 100%; overflow: hidden;
 .parrot-show .wire-bird { position: relative; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 3px; }
 .parrot-show .wire-bird svg { width: 100%; max-width: 110px; }
 .parrot-show .wire-bird b { font-size: 11px; max-width: 100%; line-height: 1.1; overflow-wrap: anywhere; }
-.parrot-show .bird-meter { display: flex; gap: 3px; }
-.parrot-show .bird-meter i { width: 12px; height: 5px; border: 1px solid #526046; border-radius: 80% 10%; background: #d8ddca; }
-.parrot-show .wire-bird[data-vibe="calm"] .bird-meter i:first-child { background: #27722f; }
-.parrot-show .wire-bird[data-vibe="steady"] .bird-meter i:not(:last-child) { background: #8c7512; }
-.parrot-show .wire-bird[data-vibe="wild"] .bird-meter i { background: #a14c11; }
 .parrot-show .bird-joins { animation: bird-join .65s cubic-bezier(.2,.8,.3,1) both; }
 .parrot-show .bird-joins:nth-child(even) { animation-delay: .12s; }
 .parrot-show .bird-joins .wallet-wing, .parrot-show .bird-leaves .wallet-wing { transform-origin: 40px 65px; animation: wing-flap .18s 5 alternate; }
@@ -275,7 +267,6 @@ html:has(.parrot-show), body:has(.parrot-show) { height: 100%; overflow: hidden;
 .parrot-show .bird-wire[data-rows="1"] .wire-bird b { font-size: 13px; }
 .parrot-show .bird-wire[data-rows="2"] .wire-bird b { font-size: 11px; }
 .parrot-show .bird-wire:is([data-rows="3"], [data-rows="4"]) .wire-bird b { font-size: 9.5px; }
-.parrot-show .bird-wire:is([data-rows="3"], [data-rows="4"]) .bird-meter i { width: 8px; height: 4px; }
 .parrot-show .bird-ghosts { position: absolute; inset: 0; pointer-events: none; }
 .parrot-show .stage-pager { display: none; }
 .parrot-show .order-sketch { width: 100%; max-width: 580px; grid-template-columns: repeat(var(--ocols, 1), minmax(0, 1fr)); gap: 4px 20px; }
@@ -328,3 +319,9 @@ html:has(.parrot-show), body:has(.parrot-show) { height: 100%; overflow: hidden;
 .parrot-show .parrot-scene { z-index: 1; }
 .parrot-show .voice-dock { position: relative; z-index: 4; }
 .parrot-show .ticket-wait { font-size: 12px; font-weight: 850; color: #6f3d12; }
+
+/* Thinking: a classic speech bubble with three bouncing dots, instead of the little leaves under the parrot. */
+.parrot-show .thinking-bubble { position: absolute; z-index: 3; top: 2%; right: -12%; display: flex; gap: 5px; align-items: center; padding: 9px 13px; background: #fffcf5; border: 3px solid #26312b; border-radius: 20px 20px 20px 4px; box-shadow: 3px 4px 0 #26312b25; }
+.parrot-show .thinking-bubble i { width: 8px; height: 8px; border-radius: 50%; background: #26312b; animation: seed-hop .5s ease-in-out infinite alternate; }
+.parrot-show .thinking-bubble i:nth-child(2) { animation-delay: .17s; }
+.parrot-show .thinking-bubble i:nth-child(3) { animation-delay: .34s; }

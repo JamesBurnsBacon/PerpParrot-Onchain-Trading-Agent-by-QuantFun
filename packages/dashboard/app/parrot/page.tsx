@@ -108,7 +108,7 @@ function ParrotContent() {
             <span className="show-shout" aria-hidden="true">SQUAWK!</span>
             <div className="show-rosette" aria-hidden="true">ALL<br />BEAK</div>
             <ParrotAvatar state={state} stream={live.remoteStream} live={live.view.phase === "live" && !live.view.playbackBlocked} />
-            {state === "thinking" && <div className="thinking-seeds" aria-hidden="true"><i /><i /><i /><i /><i /></div>}
+            {state === "thinking" && <div className="thinking-bubble" role="status" aria-label="Thinking"><i /><i /><i /></div>}
           </div>
           <div className="voice-dock">
             <LiveTalk live={live} disabled={busy} />
