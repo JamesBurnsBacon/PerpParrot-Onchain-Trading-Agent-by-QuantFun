@@ -64,7 +64,7 @@ test("production uses the shared observer silently; scoped CSS keeps 44px/12px a
   expect(page).toContain("receipts.begin()"); expect(page).toContain("receipts.observers");
   expect(page.indexOf("<CompactReceipt")).toBeGreaterThan(page.indexOf("<LiveTalk"));
   expect(page.indexOf("<CompactReceipt")).toBeLessThan(page.indexOf("<StageFlock"));
-  expect(page).toContain("not advice · the parrot cannot trade");
+  expect(page).not.toContain("parrot-privacy"); // the footer is intentionally gone for now (to be restored before publishing)
   const css = source("app/parrot/parrot-show.css").split("/* A2:")[1];
   for (const text of ["max-width: 320px", "min-height: 44px", "font-size: 12px", "text-overflow: ellipsis", "prefers-reduced-motion", "animation: none"]) expect(css).toContain(text);
   expect(css).not.toMatch(/@keyframes|animation:(?! none)/);

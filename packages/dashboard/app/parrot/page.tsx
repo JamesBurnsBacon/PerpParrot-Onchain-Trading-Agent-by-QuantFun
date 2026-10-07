@@ -145,7 +145,6 @@ function ParrotContent() {
         onPreset={preset => { setStale(false); setDemo(preset); setChat(preset.chat); setPreview(null); setPreviewError(null); setStep(0); }}
         onLock={() => { const p = demo ?? PARROT_PRESETS[0]; if (!demo) { setDemo(p); setChat(p.chat); } setPreview(p.preview); setStep(2); }}
         onReset={() => { setChat(null); setDemo(null); setPreview(null); setStep(0); lastChat.current = null; }} /></Suspense>}
-      <footer className="parrot-privacy">not advice · the parrot cannot trade</footer>
     </div>
   </main>;
 }
