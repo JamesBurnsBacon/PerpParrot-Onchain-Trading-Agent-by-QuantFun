@@ -41,7 +41,7 @@ export function DashHeader({ alert }: { alert?: string }) {
       <div className="lp-dh-actions">
         <a className="lp-dh-action lp-dh-pro" href="/parrot">
           <ProCrown />
-          Pro
+          Pro Chat
         </a>
         {DEMO_VIDEO && <DemoModal video={DEMO_VIDEO} />}
       </div>
