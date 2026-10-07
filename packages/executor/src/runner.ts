@@ -121,7 +121,8 @@ export class Runner {
       if (gross > config.maxGrossLeverage) throw new Error(`gross exposure ${gross.toFixed(2)}× exceeds ${config.maxGrossLeverage}×`);
       // Targets = exposure × our equity now (account = truth).
       const equity = this.deps.exchange.dryRun && config.dryRunEquityUsd ? config.dryRunEquityUsd : Math.max(account.equityUsd, 0);
-      return planOrders(new Map(exposures.map((e) => [e.asset, e.fraction * equity])), account, markets, config.plan);
+      // A dry run sized on dryRunEquityUsd plans its margin on that equity too.
+      return planOrders(new Map(exposures.map((e) => [e.asset, e.fraction * equity])), { ...account, equityUsd: equity }, markets, config.plan);
     }, expiresAt));
   }
 

@@ -638,3 +638,25 @@ describe("loadConfig", () => {
     expect(() => loadConfig({ ...base, BACKEND_URL: "ftp://x" })).toThrow("BACKEND_URL must be");
   });
 });
+
+describe("Runner: pipeline configuration and dry-run sizing", () => {
+  test("checks targets against the active configuration when the pipeline has one", async () => {
+    const { runnerDeps, overrides } = setup(fakeInfo({ equity: "400" }));
+    const active = `0x${"ef".repeat(32)}` as const;
+    overrides.set(AS_OF, { configurationHash: active });
+    const followed = await new Runner({ ...runnerDeps, activeConfigurationHash: async () => active }).executeRun(AS_OF);
+    expect(followed.status).toBe("executed");
+    const pinned = await new Runner({ ...runnerDeps, activeConfigurationHash: async () => undefined }).executeRun(AS_OF);
+    expect(pinned.status).toBe("failed");
+    expect(pinned.error).toContain("configuration mismatch");
+  });
+
+  test("a dry run sizes as if our equity were dryRunEquityUsd", async () => {
+    const { runnerDeps } = setup(fakeInfo({ equity: "0" }));
+    const unfunded = await new Runner(runnerDeps).executeRun(AS_OF);
+    expect(unfunded.plan?.orders ?? []).toHaveLength(0);
+    const sized = await new Runner({ ...runnerDeps, config: { ...runnerDeps.config, dryRunEquityUsd: 400 } }).executeRun(AS_OF);
+    expect(sized.status).toBe("executed");
+    expect(sized.plan!.orders.length).toBeGreaterThan(0);
+  });
+});

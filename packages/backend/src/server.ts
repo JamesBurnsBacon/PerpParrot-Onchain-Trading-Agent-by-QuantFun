@@ -72,6 +72,7 @@ const pipeline = sql
       policy: reviewPolicy(await Bun.file(resolve(import.meta.dir, "..", "fixtures/frozen-configuration.json")).json()),
       openAiKey: env.OPENAI_API_KEY,
       model: env.REVIEW_MODEL,
+      gate: env.REVIEW_GATE === "strict" ? "strict" : "basic",
       log,
     })
   : undefined;

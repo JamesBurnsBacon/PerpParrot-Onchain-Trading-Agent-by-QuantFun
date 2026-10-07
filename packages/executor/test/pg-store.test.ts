@@ -111,4 +111,19 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)("postgresRunLock", () => {
     await sqlA.close();
     await sqlB.close();
   });
+
+  // Production pools close idle connections (server.ts: idleTimeout 5 on Vercel); Bun closes a
+  // reserved one too, which would drop the lock mid-run.
+  test("stays held past the pool's idle timeout", async () => {
+    const sqlA = new SQL(process.env.TEST_DATABASE_URL!, { max: 3, idleTimeout: 1 });
+    const sqlB = new SQL(process.env.TEST_DATABASE_URL!);
+    const key = 901_000 + Math.floor(Math.random() * 1000);
+    const releaseA = await postgresRunLock(sqlA, key, 300).acquire(1000);
+    await Bun.sleep(2500);
+    await expect(postgresRunLock(sqlB, key).acquire(300)).rejects.toThrow("held the run lock");
+    await releaseA();
+    await (await postgresRunLock(sqlB, key).acquire(1000))();
+    await sqlA.close();
+    await sqlB.close();
+  });
 });
