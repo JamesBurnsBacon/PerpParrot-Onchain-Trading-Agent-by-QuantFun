@@ -44,18 +44,22 @@ const { values } = parseArgs({
     offline: {type:"boolean",default:false},
     "prepare-only": {type:"boolean",default:false},
     "timeout-ms": {type:"string",default:"180000"},
+    "risk-reject-threshold": {type:"string"},
   },
 });
 const url=process.env.DATABASE_URL;
 if(!values['local-dir']&&(!url||!['localhost','127.0.0.1','[::1]'].includes(new URL(url).hostname)))
   throw new Error('Use --local-dir or a loopback DATABASE_URL; remote databases are forbidden');
 if(!['openai','kimi'].includes(values.provider!))throw new Error('unknown provider');
-const localResearch=values['replay-run']||values.provider==='kimi'||values.offline||values['prepare-only']||values['timeout-ms']!=='180000'||values.finalists!=='40'||values.serial||values['stage-spacing-ms']!=='0';
+const localResearch=values['replay-run']||values.provider==='kimi'||values.offline||values['prepare-only']||values['timeout-ms']!=='180000'||values.finalists!=='40'||values.serial||values['stage-spacing-ms']!=='0'||values['risk-reject-threshold']!==undefined;
 if(localResearch&&!values['local-dir'])throw new Error('Research flags require --local-dir; no external database allowed');
 if(values.offline&&(!values.reads||!values.inputs||!values['as-of']))throw new Error('--offline requires reads, inputs and as-of');
 const apiKey=values.provider==='kimi'?process.env.MOONSHOT_API_KEY:process.env.OPENAI_API_KEY;
 if(!apiKey&&!values['prepare-only'])throw new Error('provider API key is required');
 const model=values.model??(values.provider==='kimi'?'kimi-k3':process.env.REVIEW_MODEL??'gpt-6-sol');
+const threshold=values['risk-reject-threshold']===undefined?null:Number(values['risk-reject-threshold']);
+if(threshold!==null&&(!Number.isInteger(threshold)||threshold<1||threshold>100))throw new Error('risk reject threshold must be an integer from 1 to 100');
+const policy={...reviewPolicy(await Bun.file(new URL('../fixtures/review-policy.json',import.meta.url)).json()),...(threshold===null?{}:{riskRejectThreshold:threshold})};
 const timeoutMs=Number(values['timeout-ms']);
 const finalists=Number(values.finalists),spacingMs=Number(values['stage-spacing-ms']);
 if(!Number.isSafeInteger(finalists)||finalists<5||finalists>MAX_RESEARCH_FINALISTS)throw new Error('unsupported finalist count; an expanded count requires the isolated research runtime');
@@ -173,7 +177,7 @@ const pipeline = new Pipeline({
   now:()=>now,
   info:perMinute=>new ReadCachedInfo(perMinute),
   account: "0x7269502c48c582768ee38e4e71e7572e6ebf70f7",
-  policy: reviewPolicy(await Bun.file(new URL("../fixtures/review-policy.json", import.meta.url)).json()),
+  policy,
   openAiKey: apiKey??'prepare-only-no-key',
   paperCommittee:(options,core)=>{
     const deps=(values.provider==='kimi'?kimiPaperCommittee:openAIPaperCommittee)(options,{...core,agentTimeoutMs:timeoutMs});
@@ -233,7 +237,6 @@ for (const s of (run.review?.summary ?? []) as { candidate: number; address: str
 }
 console.log("\nmanifest", JSON.stringify({ status: run.review?.manifest?.status, reason: run.review?.manifest?.reason, sources: run.review?.manifest?.sources?.length }));
 const summary=(run.review?.summary??[]) as {candidate:number;kind:string;metrics:Frame['candidates'][number]['metrics'];gate:{reasons:string[]}|null}[];
-const policy=reviewPolicy(await Bun.file(new URL('../fixtures/review-policy.json',import.meta.url)).json());
 const compare=(overrides:Partial<Policy>)=>summary.filter(c=>{
   const r=rows.get(c.candidate);return r?.role&&r.risk&&candidateGate(c.metrics,r.role as Row,r.risk as Row,{...policy,...overrides}).reasons.length===0;
 }).length;
@@ -249,7 +252,7 @@ const oldGateSameRatings=summary.filter(c=>{
     candidateGate(c.metrics,r.role as Row,r.risk as Row,{...policy,minConfidence:60}).reasons.length===0;
 }).length;
 const blockers:Record<string,number>={};for(const c of summary)for(const reason of c.gate?.reasons??['no-model-output'])blockers[reason]=(blockers[reason]??0)+1;
-const report={provider:values.provider,preparedOnly:values['prepare-only'],offline:values.offline,replayedStages,replayRunHash:replayHash??null,cacheMisses,stageFailures,agentTimeoutMs:timeoutMs,serial:values.serial,stageSpacingMs:spacingMs,requestedFinalists:finalists,asOf:new Date(now).toISOString(),requestedModel:model,accounts:inputs.length,highFrequencyExcluded:highFrequency,scored:selectedInputs.length,finalists:summary.length,modelCalls,
+const report={provider:values.provider,preparedOnly:values['prepare-only'],offline:values.offline,replayedStages,replayRunHash:replayHash??null,cacheMisses,stageFailures,agentTimeoutMs:timeoutMs,serial:values.serial,stageSpacingMs:spacingMs,requestedFinalists:finalists,riskRejectThreshold:policy.riskRejectThreshold,asOf:new Date(now).toISOString(),requestedModel:model,accounts:inputs.length,highFrequencyExcluded:highFrequency,scored:selectedInputs.length,finalists:summary.length,modelCalls,
   kinds:summary.reduce((n,c)=>(n[c.kind]=(n[c.kind]??0)+1,n),{} as Record<string,number>),
   candidatePass:passing.length,oldGateSameRatings,passingKinds:passing.reduce((n,c)=>(n[c.kind]=(n[c.kind]??0)+1,n),{} as Record<string,number>),
   blockers,outcome,freezeEligible:run.review?.freezeEligible??false,manifest:run.review?.manifest,
