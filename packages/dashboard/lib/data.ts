@@ -78,7 +78,12 @@ export type PipelineView = {
   // The latest run only (absent on older backends).
   latest?: {
     id: number;
-    finalists: { finalists: { address: string; kind?: string; score?: number; rank?: number }[]; funnel: { stage: string; count: number }[] } | null;
+    finalists: {
+      finalists: { address: string; kind?: string; score?: number; rank?: number }[];
+      funnel: { stage: string; count: number }[];
+      // Same-direction position overlap among the picks (absent on older runs).
+      overlap?: { threshold: number; pairs: number; above: number; max: number; top: { a: string; b: string; overlap: number }[]; byAddress: Record<string, number> };
+    } | null;
     summary: { candidate: number; address?: string; aggressiveFit: number | null; reject: number | null; leverageRisk: number | null; evidenceRisk: number | null }[] | null;
   } | null;
 };

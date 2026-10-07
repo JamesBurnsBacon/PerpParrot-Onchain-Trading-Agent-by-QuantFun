@@ -145,4 +145,14 @@ describe.skipIf(!url)("Pipeline on Postgres", async () => {
     expect(accounts.listed).toBe(passing);
     expect(accounts.qualified).toBeGreaterThan(5);
   });
+
+  test("recording the picks' overlap adds one field and leaves the saved pick untouched", async () => {
+    const saved = { finalists: [{ address: "0xa", rank: 1 }], funnel: [{ stage: "scored", count: 3 }], highFrequency: 2 };
+    const [{ id }] = await sql`insert into selection_runs (started_at, status, finalists) values (now(), 'rejected', ${saved}::jsonb) returning id`;
+    const overlap = { threshold: 0.5, pairs: 1, above: 0, max: 0.4, top: [], byAddress: { "0xa": 0.4 } };
+    await sql`update selection_runs set finalists = finalists || ${{ overlap }}::jsonb where id = ${id}`;
+    const [run] = await sql`select finalists from selection_runs where id = ${id}`;
+    expect(run.finalists).toEqual({ ...saved, overlap });
+    await sql`delete from selection_runs where id = ${id}`;
+  });
 });
