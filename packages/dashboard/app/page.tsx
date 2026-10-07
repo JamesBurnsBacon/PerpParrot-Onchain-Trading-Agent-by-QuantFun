@@ -11,7 +11,7 @@ import { useDashMotion } from "../components/lp/useDashMotion";
 import { Pipeline } from "../components/Pipeline";
 import { Roster } from "../components/Roster";
 import { RunLog } from "../components/RunLog";
-import { BUCKETS, liveIsReal, performanceSeries, pct, runTime, stamp, time, useDashboard, usd, type Series } from "../lib/data";
+import { BUCKETS, liveBookRow, liveIsReal, performanceSeries, pct, runTime, stamp, time, useDashboard, usd, type Series } from "../lib/data";
 
 const lastReturn = (series: Series[], id: string) => series.find((s) => s.id === id)?.points.at(-1)?.[1];
 
@@ -24,6 +24,7 @@ export default function Page() {
   const lastPlanned = data?.recent?.find((r) => r.kind === "mirror" && r.status === "executed" && r.plan);
   const btc = lastReturn(series, "btc");
   const live = liveIsReal(data?.recent ?? null, data?.equity ?? null);
+  const liveRow = live ? liveBookRow(data?.equity ?? null, data?.recent ?? null) : null;
   const executed = data?.equity?.points.length ?? 0; // live runs (the equity curve is live runs only)
   // The heartbeat starts one run window (10 min) before the paper books' current start.
   const booksStart = Math.min(...(data?.paper?.books ?? []).map((b) => b.startedAt ?? Infinity));
@@ -63,9 +64,9 @@ export default function Page() {
               ) : (
                 <Waiting what="No runs yet" source="Curves start with the first mirror run" />
               )}
-              {series.some((s) => s.bookId) && data?.paper ? (
+              {(series.some((s) => s.bookId) && data?.paper) || liveRow ? (
                 <div className="mt-4">
-                  <PaperTable books={data.paper.books} series={series} />
+                  <PaperTable books={data?.paper?.books ?? []} series={series} live={liveRow} />
                 </div>
               ) : null}
             </Panel>
