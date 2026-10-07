@@ -14,8 +14,11 @@ type Runtime = {
 export type LiveView = { phase: Phase; user: string; parrot: string; avatar: "listening" | "speaking" | "thinking"; remaining: number; status: string; failure: Failure | null; playbackBlocked: boolean; muted: boolean };
 const idle: LiveView = { phase: "idle", user: "", parrot: "", avatar: "listening", remaining: 0, status: "", failure: null, playbackBlocked: false, muted: false };
 
-export function useLiveTalk(onStrategy: (chat: ChatResponse) => void, onStale: () => void, previousIds: string[] = [], activity?: { gesture: () => void; input: () => void }) {
+export type LiveObservers = { onParrotDelta?: (delta: string) => void; onStrategyFacts?: (facts: string) => void; onEnd?: () => void };
+
+export function useLiveTalk(onStrategy: (chat: ChatResponse) => void, onStale: () => void, previousIds: string[] = [], activity?: { gesture: () => void; input: () => void }, observers?: LiveObservers) {
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+  const observersRef = useRef(observers); observersRef.current = observers;
   const shown = useRef(previousIds);
   const activityRef = useRef(activity);
   useEffect(() => { shown.current = previousIds; activityRef.current = activity; }, [previousIds, activity]);
@@ -36,6 +39,7 @@ export function useLiveTalk(onStrategy: (chat: ChatResponse) => void, onStale: (
   const cleanup = useCallback((run: Runtime, status?: string, failure: Failure | null = null) => {
     if (active.current !== run) return;
     active.current = null;
+    observersRef.current?.onEnd?.();
     setRemoteStream(null);
     run.controller.abort();
     for (const timer of run.timers) clearTimeout(timer);
@@ -53,6 +57,7 @@ export function useLiveTalk(onStrategy: (chat: ChatResponse) => void, onStale: (
     if (!run || run.closing) return;
     if (!run.events.started || run.channel?.readyState !== "open") { cleanup(run, "Conversation canceled."); return; }
     run.closing = true;
+    observersRef.current?.onEnd?.();
     setRemoteStream(null);
     run.mic?.getTracks().forEach(track => track.stop());
     notifyStale(run);
@@ -117,6 +122,7 @@ export function useLiveTalk(onStrategy: (chat: ChatResponse) => void, onStale: (
                   shown.current = result.data.shortlist.addresses;
                   callback.current(liveAsChat(result.data));
                 }
+                observersRef.current?.onStrategyFacts?.(result.data.facts);
                 output = result.data.facts;
               }
             }
@@ -165,6 +171,8 @@ export function useLiveTalk(onStrategy: (chat: ChatResponse) => void, onStale: (
           setView(v => ({ ...v, phase: "live", avatar: "listening", status: "I'm listening. What strategy is on your mind?" }));
         }
         if (previous.transcripts !== run.events.transcripts && run.events.transcripts.at(-1)?.speaker === "user") activityRef.current?.input();
+        if (!run.closing && previous.transcripts !== run.events.transcripts && run.events.transcripts.at(-1)?.speaker === "parrot")
+          observersRef.current?.onParrotDelta?.(run.events.transcripts.at(-1)!.delta);
         const speaking = previous.parrot !== run.events.parrot;
         const thinking = run.events.delegations.some(d => d.running) || run.draining ||
           run.events.calls.some(c => !run.processedCalls.has(c.callId));

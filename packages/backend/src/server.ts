@@ -1,3 +1,4 @@
+import { handleReceipt, readDecisionsEnv } from "./live/decisions";
 import { MAX_INPUT_TOKENS, MAX_COMPLETION_TOKENS } from "./chat/budget";
 // Backend service (README §4.7): reads the frozen sources' positions from Hyperliquid once per
 // 10-minute run, turns them into the run's target exposures for the executor, steps the paper
@@ -144,6 +145,7 @@ const chatStores = {
   requests: sql ? new PostgresRequestStore(sql) : new MemoryRequestStore(),
 };
 const liveEnv = readLiveEnv(env);
+const decisionsEnv = readDecisionsEnv(env);
 // Real finalists for the Parrot: Score over the accounts the selection pipeline refreshed (read-only);
 // without Postgres, or without enough fresh accounts, the labelled sample is used.
 const parrotFinalists = createFinalistsSource(sql ? () => sql`
@@ -213,6 +215,13 @@ const server = Bun.serve({
     const { pathname: path, searchParams } = new URL(req.url);
     // Public under /api/backend on Vercel; the bare paths serve local runs.
     const pathname = path.replace(/^\/api\/backend(?=\/|$)/, "") || "/";
+    if (pathname === "/decide/receipt") {
+      if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: chatCors });
+      const response = await handleReceipt(req, { env: decisionsEnv, chatEnv, limiter: chatStores.limiter, fetchImpl: fetch, now: Date.now });
+      for (const [name, value] of Object.entries(chatCors)) response.headers.set(name, value);
+      response.headers.set("Cache-Control", "no-store");
+      return response;
+    }
     if (pathname === "/live/session" || pathname === "/live/strategy") {
       if (!liveEnv.enabled || (pathname === "/live/session" && !liveEnv.apiKey)) return chatDisabled();
       if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: chatCors });

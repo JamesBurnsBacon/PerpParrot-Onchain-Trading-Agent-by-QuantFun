@@ -244,3 +244,35 @@
 .fx-lab button { padding: 6px 10px; border-radius: 999px; border: 1px solid var(--ring); background: var(--surface); color: var(--ink); cursor: pointer; font-size: 12px; }
 .fx-lab button:hover { background: var(--parrot-green); color: #142514; }
 .fx-lab button:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+
+/* A2: one silent sentence below Live status; all detail is on demand. */
+.compact-receipt { width: 100%; max-width: 320px; min-width: 0; margin: 10px auto 0; background: var(--surface); border: 1px solid var(--axis); border-radius: 12px; }
+.compact-receipt-header, .compact-receipt-row { width: 100%; min-height: 44px; padding: 6px 8px; color: var(--ink); font-size: 12px; line-height: 1.3; border: 0; }
+.compact-receipt-header { background: var(--parrot-chip); border-bottom: 1px solid var(--grid); border-radius: 11px 11px 0 0; font-weight: 750; text-align: left; }
+.compact-receipt-row { display: flex; align-items: center; gap: 6px; background: transparent; border-radius: 0 0 11px 11px; text-align: left; }
+.compact-receipt-row:hover { background: var(--parrot-chip); }
+.compact-receipt-sentence { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 650; }
+.compact-receipt-stamp { flex: none; white-space: nowrap; padding: 2px 3px; border: 3px double currentColor; border-radius: 5px; letter-spacing: -.025em; line-height: 1.2; color: var(--parrot-deep); }
+.compact-receipt-stamp[data-relation="contradicted"] { color: var(--short, #b6453a); }
+.compact-receipt-stamp:is([data-relation="ambiguous"], [data-relation="unestablished"]) { color: var(--parrot-warning-ink); background: var(--parrot-warning); }
+.compact-receipt-state, .compact-receipt-grounding { flex: none; color: var(--ink-2); }
+.compact-receipt-grounding { min-width: 28px; text-align: right; font-variant-numeric: tabular-nums; }
+.compact-receipt-meter { display: block; height: 2px; margin-top: 3px; background: var(--grid); overflow: hidden; }
+.compact-receipt-meter i { display: block; height: 100%; background: var(--parrot-deep); }
+.decisions-drawer { box-sizing: border-box; margin: 0 0 0 auto; width: min(510px, 100%); max-width: 100%; height: 100dvh; max-height: 100dvh; padding: 24px; background: var(--surface); color: var(--ink); border: 0; border-left: 1px solid var(--axis); overflow-y: auto; overflow-wrap: anywhere; font-size: 14px; }
+.decisions-drawer::backdrop { background: #0d141177; }
+.decisions-drawer header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.decisions-drawer h2 { font-size: 24px; font-weight: 750; }
+.decisions-drawer h3, .decisions-drawer p, .decisions-drawer label, .decisions-drawer details { display: block; margin-top: 16px; }
+.decisions-drawer button, .decisions-drawer select, .decisions-drawer summary { min-height: 44px; font-size: 12px; }
+.decisions-drawer button, .decisions-drawer select { padding: 8px; background: var(--parrot-chip); border: 1px solid var(--axis); border-radius: 8px; color: inherit; }
+.decisions-drawer select { display: block; width: 100%; min-width: 0; }
+.decisions-drawer select:focus-visible { outline: 3px solid var(--parrot-deep); }
+.decisions-drawer pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; margin-top: 8px; }
+.decisions-drawer .decisions-lens > h2 { display: none; }
+.decisions-drawer .receipt-bar { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; margin-top: 12px; font-size: 12px; }
+.decisions-drawer meter { grid-column: 1 / -1; width: 100%; height: 6px; }
+.decisions-sentence { font-weight: 700; }
+@media (prefers-reduced-motion: reduce) {
+  .compact-receipt *, .decisions-drawer, .decisions-drawer * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
