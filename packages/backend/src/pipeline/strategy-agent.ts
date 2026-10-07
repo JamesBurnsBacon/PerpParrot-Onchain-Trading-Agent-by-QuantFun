@@ -44,6 +44,9 @@ export function pickHash(addresses:string[]) {
 }
 type Candidate={candidate:number;[key:string]:unknown};
 export type AgentInput={selectedAt:string;candidates:Candidate[]};
+class ProviderFailure extends Error {
+  constructor(message:string,readonly audit:Record<string,unknown>){super(message);}
+}
 export function validateAnalysis(value:unknown,input:AgentInput) {
   const result=output.parse(value),ids=input.candidates.map(c=>c.candidate).sort((a,b)=>a-b);
   if(ids.length!==25||new Set(ids).size!==25||JSON.stringify(result.candidates.map(c=>c.candidate).sort((a,b)=>a-b))!==JSON.stringify(ids))throw new Error('Agent candidate mismatch');
@@ -66,16 +69,19 @@ export async function analyseStrategies(input:AgentInput,options:AgentOptions,si
   const chunks:Uint8Array[]=[];let size=0;
   try{for(;;){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>2_000_000)throw new Error('Agent response too large');chunks.push(value);}}
   finally{await reader.cancel().catch(()=>{});reader.releaseLock();}
-  const envelope=z.object({id:z.string(),model:z.string(),status:z.literal('completed'),
+  const envelope=z.object({id:z.string(),model:z.string(),status:z.enum(['completed','incomplete','failed','cancelled']),
     output:z.array(z.object({type:z.string(),content:z.array(z.object({type:z.string(),text:z.string().optional()})).optional()})),
     usage:z.object({input_tokens:z.number().int().nonnegative(),output_tokens:z.number().int().nonnegative(),total_tokens:z.number().int().nonnegative()})
   }).parse(JSON.parse(Buffer.concat(chunks).toString('utf8')));
-  const blocks=envelope.output.filter(b=>b.type==='message').flatMap(b=>b.content??[]);
-  if(blocks.some(b=>b.type==='refusal'))throw new Error('Agent refusal');
-  const text=blocks.filter(b=>b.type==='output_text').map(b=>b.text??'').join('');
-  return {economicAuthority:false,provider:'openai',model:envelope.model,requestedModel:options.model,promptVersion:PROMPT_VERSION,promptHash:hash(PROMPT),
+  const audit={economicAuthority:false,provider:'openai',model:envelope.model,requestedModel:options.model,promptVersion:PROMPT_VERSION,promptHash:hash(PROMPT),
     inputHash:hash(input),responseId:envelope.id,requestId:res.headers.get('x-request-id'),usage:envelope.usage,
-    elapsedMs:Math.round(performance.now()-started),analysis:validateAnalysis(JSON.parse(text),input)};
+    elapsedMs:Math.round(performance.now()-started)};
+  if(envelope.status!=='completed')throw new ProviderFailure(`Agent response ${envelope.status}`,audit);
+  const blocks=envelope.output.filter(b=>b.type==='message').flatMap(b=>b.content??[]);
+  if(blocks.some(b=>b.type==='refusal'))throw new ProviderFailure('Agent refusal',audit);
+  const text=blocks.filter(b=>b.type==='output_text').map(b=>b.text??'').join('');
+  try{return {...audit,analysis:validateAnalysis(JSON.parse(text),input)};}
+  catch{throw new ProviderFailure('Agent output or evidence validation failed',audit);}
 }
 const iso=(v:unknown)=>v==null?null:new Date(v as string|Date).toISOString();
 const thin=<T>(p:T[])=>p.length<=48?p:Array.from({length:48},(_,i)=>p[Math.round(i*(p.length-1)/47)]);
@@ -158,8 +164,8 @@ export class StrategyAgent {
     }catch(e){
       const error=e instanceof z.ZodError?'Agent response validation failed':e instanceof SyntaxError?'Agent returned invalid JSON':
         e instanceof Error?e.message.slice(0,180):'Strategy analysis failed';
-      await this.query(`update strategy_analyses set status='failed',error=$3,claim_token=null,claim_until=null
-        where id=$1 and claim_token=$2 and status='running'`,[job.id,token,error]);
+      await this.query(`update strategy_analyses set status='failed',error=$3,result=$4::jsonb,claim_token=null,claim_until=null
+        where id=$1 and claim_token=$2 and status='running'`,[job.id,token,error,e instanceof ProviderFailure?JSON.stringify(e.audit):null]);
       return {status:'failed',id:job.id,error,enqueueErrors};
     }
   }

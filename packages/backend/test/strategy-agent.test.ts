@@ -88,6 +88,9 @@ test('PGlite queue: invalid model evidence fails once; missing config and expire
     const calls:AgentInput[]=[],agent=new StrategyAgent(f.query,model(calls,undefined,true),positions([]));
     await agent.enqueue(await f.pick());expect((await agent.run()).status).toBe('failed');
     expect((await agent.run()).status).toBe('idle');expect(calls.length).toBe(1);
+    const [failed]=await f.query('select result from strategy_analyses');
+    expect(failed.result.usage.total_tokens).toBe(300);expect(failed.result.responseId).toBe('response-test');
+    expect(failed.result).not.toHaveProperty('analysis'); // retain billing provenance, never unvalidated notes
     await agent.enqueue(await f.pick(Array.from({length:25},(_,i)=>i+2)));
     await f.query("update strategy_analyses set status='running',claim_token='old',claim_until=now()-interval '1 second' where status='queued'");
     expect((await agent.run()).status).toBe('idle');expect(calls.length).toBe(1);
