@@ -54,7 +54,14 @@ export function bandWidth(fraction: number, maxContribution: number, maxWidth = 
   return Math.max(1.4, Math.min(1, Math.abs(fraction) / maxContribution) * maxWidth);
 }
 
-export function signedExposure(fraction: number): string {
-  const magnitude = (Math.abs(fraction) * 100).toFixed(1);
-  return `${magnitude === "0.0" ? "" : fraction < 0 ? "−" : "+"}${magnitude}`;
+// Targets read as a side and a size ("Short 42.7%"), not as a signed number. A size that rounds to 0.0 is "Flat".
+export function sideLabel(fraction: number): string {
+  const size = (Math.abs(fraction) * 100).toFixed(1);
+  return size === "0.0" ? "Flat" : `${fraction > 0 ? "Long" : "Short"} ${size}%`;
+}
+
+// What muting changed, as a move toward long or short.
+export function shiftLabel(delta: number): string {
+  const size = (Math.abs(delta) * 100).toFixed(1);
+  return size === "0.0" ? "no change" : `${size} pp more ${delta > 0 ? "long" : "short"}`;
 }

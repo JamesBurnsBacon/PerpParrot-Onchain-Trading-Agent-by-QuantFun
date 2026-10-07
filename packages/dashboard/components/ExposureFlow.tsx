@@ -2,7 +2,7 @@
 import { useMemo, useState } from "react";
 import type { Exposures } from "../lib/data";
 import { time } from "../lib/data";
-import { bandWidth, buildExposureFlow, signedExposure, targetsWithMutes, walletLabel } from "../lib/exposure-flow";
+import { bandWidth, buildExposureFlow, shiftLabel, sideLabel, targetsWithMutes, walletLabel } from "../lib/exposure-flow";
 import { Panel } from "./Charts";
 import { useWidth } from "./useWidth";
 
@@ -14,7 +14,7 @@ export function ExposureFlow({ exposures }: { exposures: Exposures }) {
   const [ref, width] = useWidth<HTMLDivElement>(240);
   const compact = width < 600;
   const left = compact ? 100 : 178;
-  const right = width - (compact ? 96 : 218);
+  const right = width - (compact ? 104 : 196);
   const height = Math.max(140, model.wallets.length * 66, model.assets.length * 76);
   const rowY = (index: number, count: number) => count < 2 ? height / 2 : 38 + index * (height - 76) / (count - 1);
   const walletRows = new Map(model.wallets.map((wallet, i) => [wallet.id, rowY(i, model.wallets.length)]));
@@ -41,7 +41,7 @@ export function ExposureFlow({ exposures }: { exposures: Exposures }) {
                 strokeWidth={bandWidth(band.fraction, model.maxContribution)}
                 strokeDasharray={band.fraction < 0 ? "8 6" : undefined} opacity={0.5}
               >
-                <title>{`${band.wallet} → ${band.asset}: ${signedExposure(band.fraction)}%`}</title>
+                <title>{`${band.wallet} → ${band.asset}: ${sideLabel(band.fraction)}`}</title>
               </path>
             ))}
             {model.wallets.map((wallet, i) => (
@@ -61,8 +61,8 @@ export function ExposureFlow({ exposures }: { exposures: Exposures }) {
           {targets.map(({ asset, net, delta }) => (
             <div key={asset} className="exposure-flow-target tabular" aria-hidden="true" style={{ top: assetRows.get(asset), left: right + 12, width: width - right - 12 }}>
               <span className="exposure-flow-asset" title={asset}>{asset}</span>
-              <strong style={{ color: net === 0 ? "var(--ink)" : net > 0 ? "var(--long)" : "var(--short)" }}>{signedExposure(net)}%</strong>
-              {hasMutes && <span className="exposure-flow-delta">Δ {signedExposure(delta)} pp</span>}
+              <strong style={{ color: net === 0 ? "var(--ink)" : net > 0 ? "var(--long)" : "var(--short)" }}>{sideLabel(net)}</strong>
+              {hasMutes && shiftLabel(delta) !== "no change" && <span className="exposure-flow-delta">{shiftLabel(delta)}</span>}
             </div>
           ))}
         </div>
@@ -75,12 +75,12 @@ export function ExposureFlow({ exposures }: { exposures: Exposures }) {
           <table>
             <caption>Net targets as a percentage of equity{hasMutes ? ", excluding muted wallets" : ""}</caption>
             <thead><tr><th scope="col">Asset</th><th scope="col">Net target</th><th scope="col">Change from all wallets</th></tr></thead>
-            <tbody>{targets.map(({ asset, net, delta }) => <tr key={asset}><th scope="row">{asset}</th><td>{signedExposure(net)}%</td><td>{signedExposure(delta)} percentage points</td></tr>)}</tbody>
+            <tbody>{targets.map(({ asset, net, delta }) => <tr key={asset}><th scope="row">{asset}</th><td>{sideLabel(net)}</td><td>{shiftLabel(delta)}</td></tr>)}</tbody>
           </table>
           <table>
             <caption>Contribution of each wallet to each net target, as a percentage of equity</caption>
             <thead><tr><th scope="col">Wallet</th><th scope="col">Asset</th><th scope="col">Contribution</th><th scope="col">Status</th></tr></thead>
-            <tbody>{model.bands.map((band) => <tr key={`${band.wallet}:${band.asset}`}><th scope="row">{band.wallet}</th><td>{band.asset}</td><td>{signedExposure(band.fraction)}%</td><td>{muted.has(band.wallet) ? "muted" : "counted"}</td></tr>)}</tbody>
+            <tbody>{model.bands.map((band) => <tr key={`${band.wallet}:${band.asset}`}><th scope="row">{band.wallet}</th><td>{band.asset}</td><td>{sideLabel(band.fraction)}</td><td>{muted.has(band.wallet) ? "muted" : "counted"}</td></tr>)}</tbody>
           </table>
           {!targets.length && <p>No nonzero targets in this run.</p>}
         </div>
