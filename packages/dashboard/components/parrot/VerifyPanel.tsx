@@ -8,11 +8,11 @@ export function VerifyPanel({ demo, previewHash, onExecute, canExecute }: { demo
   const data = useVerification(!demo);
   const series = performanceSeries(data.paper, null);
   return <div className="space-y-4">
-    <Panel title="Selection funnel" meta={<Badge kind={demo ? "CACHED DEMO" : "PRECOMPUTED"} />}>
+    <Panel title="Selection funnel" meta={demo ? <Badge kind="CACHED DEMO" /> : undefined}>
       <p className="mb-4 text-xs" style={{ color: "var(--ink-2)" }}>Published selection artifact; not a verification of this conversation.</p>
       {data.funnel?.steps.length ? <Funnel steps={data.funnel.steps} /> : <Waiting what="Funnel not published yet" source={demo ? "Cached demo includes no verification evidence" : "dashboard_artifacts · funnel"} />}
     </Panel>
-    <Panel title="Paper-book performance" meta={<Badge kind={demo ? "CACHED DEMO" : "REPLAY"} />}>
+    <Panel title="Paper-book performance" meta={demo ? <Badge kind="CACHED DEMO" /> : undefined}>
       <p className="mb-4 text-xs" style={{ color: "var(--ink-2)" }}>Existing simulated books, not a forecast for your strategy.</p>
       {series.length ? <LineChart series={series} format={v => pct(v)} xFormat={stamp(series)} height={230} /> : <Waiting what="Paper curves not published yet" source={demo ? "Cached demo includes no performance evidence" : "backend /paper"} />}
     </Panel>
