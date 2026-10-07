@@ -92,4 +92,19 @@ describe.skipIf(!url)("Roster fresh start on Postgres", async () => {
     expect((await paper()).points).toBe(1);
     expect((await active()).sources.map((s) => s.sourceAddress)).toContain(seeded[0]);
   });
+
+  test("a later fresh start seats only approvals from reviews of the current qualified list", async () => {
+    // The qualified list was rebuilt at T0 + 2500; a review before it approved newcomer 7 (high fit).
+    await sql`insert into pipeline_accounts (address, source, kind, account_value, listed_at, qualified_at)
+      values (${newcomer(9)}, 'leaderboard', 'trader', 50000, now(), ${new Date((T0 + 2500) * 1000).toISOString()})`;
+    await review(T0 + 2450, [newcomer(7)], [{ address: newcomer(7), fit: 99 }]);
+    await review(T0 + 2600, [newcomer(1), newcomer(2), newcomer(3), newcomer(4), newcomer(8)], [
+      { address: newcomer(1), fit: 70 }, { address: newcomer(2), fit: 65 }, { address: newcomer(3), fit: 60 }, { address: newcomer(4), fit: 55 }, { address: newcomer(8), fit: 52 },
+    ]);
+    await sql`update pipeline_controls set fresh_start_requested_at = ${new Date((T0 + 2700) * 1000).toISOString()} where id = 1`;
+    const result = await at(T0 + 3000).roster();
+    const admitted = result.changes.filter((c) => c.startsWith("admitted")).map((c) => c.split(" ")[1]);
+    expect(admitted).not.toContain(newcomer(7));
+    expect(admitted.sort()).toEqual([newcomer(1), newcomer(2), newcomer(3), newcomer(4), newcomer(8)].sort());
+  });
 });
