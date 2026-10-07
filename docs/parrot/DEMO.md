@@ -44,7 +44,7 @@ The model cannot confirm by itself: the browser saves only if the visitor's own 
 | --- | --- | --- |
 | Backend cannot supply enough stored finalists | **SAMPLE DATA** | Continue as a labelled synthetic wallet example. This badge is about wallet data; provider calls may still be real |
 | `/parrot` Live is disabled, model unavailable or network fails | Failure message; **Play the cached demo** when eligible | Click it; say “hand-authored illustration.” **CACHED DEMO** has no server save; simulated confirmation is not a pending request |
-| A Dashboard card says **not available / not published** | The bird said it cannot see that data; no number is invented | Say so (“that source has not published yet”) and move on; check the executor or artifact publisher afterwards |
+| A Dashboard card says **not available**, or the bird says it cannot see the backtest (an unavailable backtest puts no card on screen) | The bird said it cannot see that data; no number is invented | Say so (“that source has not published yet”) and move on; check the executor or artifact publisher afterwards |
 | `/parrot` receipts never succeed in this call | Compact receipt stays hidden | Explain that judging is unavailable; voice may continue. Do not imply a hidden successful audit |
 | `/parrot` receipt call fails after a success | **Receipts paused**, without a stamp or percentage | Continue voice or End; a new Talk call retries. Never substitute a fake live verdict |
 | `/parrot/receipts/live` returns 503 or 429 from judging | **Receipts paused** for that voice call | End and retry after recovery; other failures mark individual sentences unavailable |
