@@ -228,6 +228,16 @@ export const BUCKETS = [
 export const liveIsReal = (recent: Run[] | null, equity: Equity | null) =>
   recent?.find((r) => r.kind === "mirror" && r.status === "executed")?.dryRun === false && (equity?.points.length ?? 0) > 0;
 
+// The live account's row for the table under the chart (the paper books come from /paper, the live account does not):
+// its latest equity, and how many positions the last executed live run traded toward (null when that run has no record).
+export const liveBookRow = (equity: Equity | null, recent: Run[] | null): { equityUsd: number; positions: number | null } | null => {
+  const equityUsd = equity?.points.at(-1)?.[1];
+  if (equityUsd === undefined) return null;
+  const run = recent?.find((r) => r.kind === "mirror" && r.status === "executed" && r.dryRun === false);
+  const targets = run?.evidence?.exposures;
+  return { equityUsd, positions: targets ? targets.filter((e) => !/^-?0+$/.test(e.exposureE9)).length : null };
+};
+
 // Each bucket and BTC as % return: the live account from its first executed run, paper books from their starting capital.
 export const performanceSeries = (paper: PaperView | null, equity: Equity | null, recent: Run[] | null): Series[] => {
   const series: Series[] = [];

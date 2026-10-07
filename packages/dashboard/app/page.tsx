@@ -11,7 +11,7 @@ import { useDashMotion } from "../components/lp/useDashMotion";
 import { Pipeline } from "../components/Pipeline";
 import { Roster } from "../components/Roster";
 import { RunLog } from "../components/RunLog";
-import { BUCKETS, liveIsReal, performanceSeries, pct, runTime, stamp, time, useDashboard, usd, type Series } from "../lib/data";
+import { BUCKETS, liveBookRow, liveIsReal, performanceSeries, pct, runTime, stamp, time, useDashboard, usd, type Series } from "../lib/data";
 
 const lastReturn = (series: Series[], id: string) => series.find((s) => s.id === id)?.points.at(-1)?.[1];
 
@@ -65,7 +65,7 @@ export default function Page() {
               )}
               {series.some((s) => s.bookId) && data?.paper ? (
                 <div className="mt-4">
-                  <PaperTable books={data.paper.books} series={series} />
+                  <PaperTable books={data.paper.books} series={series} live={live ? liveBookRow(data.equity ?? null, data.recent ?? null) : null} />
                 </div>
               ) : null}
             </Panel>
