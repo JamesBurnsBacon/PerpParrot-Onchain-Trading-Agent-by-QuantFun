@@ -21,11 +21,16 @@ Timing is a rehearsal plan. End before navigating away; skip saving unless prepa
 | 0:20–0:55 | “Show a conservative preview with five wallets, avoid clones, low leverage comfort, high diversification and a short horizon.” | **Talk live**, then speak the prepared request | A code-selected flock and available evidence. If labelled SAMPLE DATA, say so immediately |
 | 0:55–1:20 | “Now try aggressive, keeping five wallets and clone filtering.” Then: “The preferences change the shortlist, not the frozen trading policy.” | Speak the change; stay on the visible page | Updated selection and membership changes when the selected sets differ |
 | 1:20–1:55 | “The judge compares completed sentences with the facts supplied for that turn. This is a model opinion about the receipt.” | After a successful judgment, open **Audited by OpenAI Decisions**; expand **Show the call** | Full sentence, pinned facts, probabilities, measured timing, tokens and estimated cost. Banter has no verdict stamp |
-| 1:55–2:20 | “A disagreement can produce UNCLEAR. None of these stamps changes a wallet weight.” | Inspect a judged sentence in the Lens, then close it | Actual returned judgment; do not promise a particular stamp |
-| 2:20–2:45 | “Even the Execute step only saves a pending simulation request for separate review.” | **End**; open **Verify**, then **Execute**. Optionally hold the confirmation control | Existing evidence if available; preview boundary. A successful save says PENDING, never an order confirmation |
-| 2:45–3:00 | “Receipts check words, not markets. We have typed-turn provider evidence; real voice, sustained use and deployment need their own checks.” | Point to the footer and finish | Clear boundary between this demo and the execution pipeline |
+| 1:55–2:20 | “Ask it about the live system, not just the list: how is it running, why this wallet, does it beat BTC?” | Speak each question; keep the page visible; point at the card that appears under the stage | **Run log** (mode, recent runs, snapshot hashes, target exposures), a **wallet drill-down** (Score evidence, pipeline score, review note) and **Backtest vs BTC**, each from the Dashboard's own data. A source that has no data shows a labelled empty card and the bird says so |
+| 2:20–2:30 | “A disagreement can produce UNCLEAR. None of these stamps changes a wallet weight.” | Inspect a judged sentence in the Lens, then close it | Actual returned judgment; do not promise a particular stamp |
+| 2:30–2:50 | “Even the Execute step only saves a pending simulation request for separate review.” | **End**; open **Verify**, then **Execute**. Optionally hold the confirmation control | Existing evidence if available; preview boundary. A successful save says PENDING, never an order confirmation |
+| 2:50–3:00 | “Receipts check words, not markets. We have typed-turn provider evidence; real voice, sustained use and deployment need their own checks.” | Point to the footer and finish | Clear boundary between this demo and the execution pipeline |
 
 Use `/parrot/receipts/live` for a longer sentence-feed walkthrough. Keep the local `/parrot/lab` workshop outside the production demo.
+
+### Dashboard cards (read-only tools)
+
+The bird has three read-only tools besides `set_strategy`: `get_run_status`, `explain_wallet` (by list position, bird name or address prefix) and `get_backtest`. The browser fetches the same public Dashboard endpoints (`/api/executor/runs`, `/status`, `/api/backend/exposures`, `/artifacts/funnel`, `/artifacts/backtest`, `/pipeline`) with GET only; code builds the facts (capped at 1200 characters) that the bird reads aloud and that the receipt judge checks. They cannot pause, resume, flatten, trade or freeze anything. Rehearse them on the presentation device: a card appears only when its endpoint returns data. In development, `/parrot?fx=1` has buttons that show each card from synthetic inputs.
 
 ## If a service is unavailable
 
@@ -33,6 +38,7 @@ Use `/parrot/receipts/live` for a longer sentence-feed walkthrough. Keep the loc
 | --- | --- | --- |
 | Backend cannot supply enough stored finalists | **SAMPLE DATA** | Continue as a labelled synthetic wallet example. This badge is about wallet data; provider calls may still be real |
 | `/parrot` Live is disabled, model unavailable or network fails | Failure message; **Play the cached demo** when eligible | Click it; say “hand-authored illustration.” **CACHED DEMO** has no server save; simulated confirmation is not a pending request |
+| A Dashboard card says **not available / not published** | The bird said it cannot see that data; no number is invented | Say so (“that source has not published yet”) and move on; check the executor or artifact publisher afterwards |
 | `/parrot` receipts never succeed in this call | Compact receipt stays hidden | Explain that judging is unavailable; voice may continue. Do not imply a hidden successful audit |
 | `/parrot` receipt call fails after a success | **Receipts paused**, without a stamp or percentage | Continue voice or End; a new Talk call retries. Never substitute a fake live verdict |
 | `/parrot/receipts/live` returns 503 or 429 from judging | **Receipts paused** for that voice call | End and retry after recovery; other failures mark individual sentences unavailable |

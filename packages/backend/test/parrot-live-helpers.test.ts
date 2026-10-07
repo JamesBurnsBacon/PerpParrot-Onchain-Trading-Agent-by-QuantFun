@@ -31,7 +31,7 @@ test("live reducer associates delegation, response ID and completed function ite
   state = event(state, envelope({ type: "response.function_call_arguments.done", arguments: "{}" }));
   expect(state.calls).toEqual([]);
   state = event(state, tool('{"maxSources":10}'));
-  expect(state.calls).toEqual([{ callId: "call_1", responseId: "response_1", delegationId: "delegation_1", args: { maxSources: 10 } }]);
+  expect(state.calls).toEqual([{ callId: "call_1", responseId: "response_1", delegationId: "delegation_1", name: "set_strategy", args: { maxSources: 10 } }]);
   expect(state.readyResponses).toEqual([]);
   state = event(state, envelope({ type: "response.completed", response: { id: "response_1", output: [] } }));
   expect(state.calls).toHaveLength(1);

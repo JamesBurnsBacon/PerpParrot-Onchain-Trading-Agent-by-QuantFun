@@ -10,6 +10,8 @@ import { StepRail, type Step } from "../../components/parrot/StepRail";
 import { Parrot, ParrotSymbols } from "../../components/lp/ParrotSymbols";
 import { ScrollBuddy } from "../../components/lp/ScrollBuddy";
 import { LiveTalk } from "../../components/parrot/LiveTalk";
+import { LiveCards } from "../../components/parrot/LiveCards";
+import type { LiveCard } from "../../lib/parrot-reads";
 import { CompactReceipt } from "../../components/parrot/CompactReceipt";
 import { useSentenceReceipts } from "../../components/parrot/useSentenceReceipts";
 import { useLiveTalk } from "../../components/parrot/useLiveTalk";
@@ -44,6 +46,7 @@ function ParrotContent() {
   const [busy, setBusy] = useState(false);
   const [stale, setStale] = useState(false);
   const [lab, setLab] = useState(false);
+  const [card, setCard] = useState<LiveCard | null>(null); // the latest read-only Dashboard card the parrot put up
   // Development-only effects lab: open /parrot?fx=1 (never rendered in production builds).
   useEffect(() => { if (process.env.NODE_ENV !== "production" && new URLSearchParams(location.search).get("fx") === "1") setLab(true); }, []);
   const request = useRef<AbortController | null>(null);
@@ -57,7 +60,7 @@ function ParrotContent() {
     // Cached preset identities are illustrations, not server finalist identities.
     if (demo) { setChat(null); setDemo(null); setPreview(null); setStep(0); }
     void fx.sfx.unlock().then(() => fx.sfx.play("start"));
-  }, input: () => fx.sfx.input() }, receipts.observers);
+  }, input: () => fx.sfx.input() }, { ...receipts.observers, onCard: setCard });
 
   useEffect(() => {
     if (chat && chat !== lastChat.current) {
@@ -127,7 +130,8 @@ function ParrotContent() {
         </div>}
         {!chat && <WaitingFlock />}
       </div>
-      {lab && EffectsLab && <Suspense fallback={null}><EffectsLab
+      <LiveCards card={card} onClose={() => setCard(null)} />
+      {lab && EffectsLab && <Suspense fallback={null}><EffectsLab onCard={setCard}
         onPreset={preset => { setStale(false); setDemo(preset); setChat(preset.chat); setPreview(null); setPreviewError(null); setStep(0); }}
         onLock={() => { const p = demo ?? PARROT_PRESETS[0]; if (!demo) { setDemo(p); setChat(p.chat); } setPreview(p.preview); }}
         onReset={() => { setChat(null); setDemo(null); setPreview(null); setStep(0); lastChat.current = null; }} /></Suspense>}

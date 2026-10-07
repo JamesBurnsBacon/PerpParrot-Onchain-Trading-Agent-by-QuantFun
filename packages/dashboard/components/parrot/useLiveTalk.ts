@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { describeError, type ChatResponse } from "../../lib/parrot";
 import { setMicEnabled, functionResultMessages, hasUnfinishedLiveStrategy, initialLiveEvents, isLiveSession, isLiveStrategy, liveAsChat, pendingLiveCalls, reduceLiveEvent, type LiveEvents } from "../../lib/parrot-live";
+import { isReadTool, runReadTool, type LiveCard } from "../../lib/parrot-reads";
+import type { WalletEvidence } from "../../../shared/wallet-evidence";
 import { post, type Failure } from "./api";
 
 type Phase = "idle" | "connecting" | "live" | "closing";
@@ -14,12 +16,13 @@ type Runtime = {
 export type LiveView = { phase: Phase; user: string; parrot: string; avatar: "listening" | "speaking" | "thinking"; remaining: number; status: string; failure: Failure | null; playbackBlocked: boolean; muted: boolean };
 const idle: LiveView = { phase: "idle", user: "", parrot: "", avatar: "listening", remaining: 0, status: "", failure: null, playbackBlocked: false, muted: false };
 
-export type LiveObservers = { onParrotDelta?: (delta: string) => void; onStrategyFacts?: (facts: string) => void; onEnd?: () => void };
+export type LiveObservers = { onParrotDelta?: (delta: string) => void; onStrategyFacts?: (facts: string) => void; onCard?: (card: LiveCard) => void; onEnd?: () => void };
 
 export function useLiveTalk(onStrategy: (chat: ChatResponse) => void, onStale: () => void, previousIds: string[] = [], activity?: { gesture: () => void; input: () => void }, observers?: LiveObservers) {
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const observersRef = useRef(observers); observersRef.current = observers;
   const shown = useRef(previousIds);
+  const evidence = useRef<WalletEvidence[]>([]); // the latest checked shortlist's evidence, for the wallet drill-down
   const activityRef = useRef(activity);
   useEffect(() => { shown.current = previousIds; activityRef.current = activity; }, [previousIds, activity]);
   const [view, setView] = useState<LiveView>(idle);
@@ -114,12 +117,20 @@ export function useLiveTalk(onStrategy: (chat: ChatResponse) => void, onStale: (
           for (const call of calls) {
             if (!current() || run.closing) return;
             let output = call.error ?? "Strategy could not be checked. Please try again.";
-            if (call.args) {
+            if (call.args && call.name && isReadTool(call.name)) {
+              // Read-only Dashboard tools: public GETs, code-built facts, a card for the page. Never a mutation.
+              const read = await runReadTool(call.name, call.args, { shown: shown.current, evidence: evidence.current }, signal());
+              if (!current() || run.closing) return;
+              observersRef.current?.onCard?.(read.card);
+              observersRef.current?.onStrategyFacts?.(read.facts);
+              output = read.facts;
+            } else if (call.args) {
               const result = await post("/live/strategy", { intent: call.args, previous: shown.current }, isLiveStrategy, signal());
               if (!current() || run.closing) return;
               if ("data" in result) {
                 if (run.events.calls.at(-1)?.callId === call.callId) {
                   shown.current = result.data.shortlist.addresses;
+                  evidence.current = result.data.evidence;
                   callback.current(liveAsChat(result.data));
                 }
                 observersRef.current?.onStrategyFacts?.(result.data.facts);
