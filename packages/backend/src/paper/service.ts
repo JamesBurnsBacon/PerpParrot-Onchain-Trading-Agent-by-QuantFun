@@ -170,6 +170,7 @@ export class PaperService {
           label: b.label,
           kind: b.kind,
           startingEquityUsd: b.startingEquityUsd,
+          startedAt: b.startedAt, // the run that created it (unix seconds): its curve's origin
           equityUsd: equity,
           returnPct: (equity / b.startingEquityUsd - 1) * 100,
           feesUsd: b.feesUsd,

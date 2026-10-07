@@ -13,6 +13,7 @@ export type PaperView = {
     label: string;
     kind: "copy" | "btc";
     startingEquityUsd: number;
+    startedAt?: number; // the run that created the book (unix seconds; absent on older backends)
     equityUsd: number;
     returnPct: number;
     feesUsd: number;
@@ -222,8 +223,12 @@ export const liveIsReal = (status: Status | null, equity: Equity | null) => stat
 export const performanceSeries = (paper: PaperView | null, equity: Equity | null, status: Status | null): Series[] => {
   const series: Series[] = [];
   const book = (id: string) => paper?.books.find((b) => b.id === id);
-  // Paper books start from their capital, so the first fills' fees show.
-  const bookReturns = (b: PaperView["books"][number]) => toReturns(b.curve.map(([t, v]) => [t * 1000, v]), b.startingEquityUsd);
+  // Paper books start from their capital, so the first fills' fees show. A curve that begins at its
+  // book's first run gets a 0% origin a minute before it: capital set, no orders yet.
+  const bookReturns = (b: PaperView["books"][number]) => {
+    const points = toReturns(b.curve.map(([t, v]) => [t * 1000, v]), b.startingEquityUsd);
+    return b.startedAt !== undefined && b.curve[0]?.[0] === b.startedAt ? [[b.startedAt * 1000 - 60_000, 0] as [number, number], ...points] : points;
+  };
   for (const k of BUCKETS) {
     const b = k.id === "aggressive" && liveIsReal(status, equity) ? undefined : book(k.book);
     const points = b ? bookReturns(b) : k.id === "aggressive" ? toReturns(equity?.points ?? []) : [];
