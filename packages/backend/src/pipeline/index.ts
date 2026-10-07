@@ -111,7 +111,9 @@ export class Pipeline {
 
   // Refreshes until `deadlineMs`, three reads at a time: first the qualified accounts whose fills
   // are an hour old (portfolio + fills), then the scan's accounts not refreshed for 11 h
-  // (portfolio only), primary sources first. Scans first when the latest scan is over 12 h old.
+  // (portfolio only), primary sources first, then the largest accounts (account value or TVL), so a
+  // qualified list built before the scan is fully refreshed leaves out the smallest. Scans first
+  // when the latest scan is over 12 h old.
   async refresh(deadlineMs: number): Promise<{ scanned: boolean; refreshed: number; failed: number }> {
     const { sql, log } = this.o;
     const [{ listed }] = await sql`select max(listed_at) as listed from pipeline_accounts`;
@@ -129,9 +131,9 @@ export class Pipeline {
           and ((qualified_at is not null and (fills_at is null or fills_at < now() - interval '1 hour'))
             or (listed_at >= (select max(listed_at) from pipeline_accounts) - interval '10 minutes'
               and (refreshed_at is null or refreshed_at < now() - interval '11 hours')))
-        order by qualified_at is null, not primary_source, refreshed_at nulls first limit ${CLAIMS} for update skip locked)
-      returning address, qualified_at is not null as qualified, primary_source, refreshed_at`) as { address: string; qualified: boolean; primary_source: boolean; refreshed_at: Date | null }[];
-    claimed.sort((a, b) => Number(b.qualified) - Number(a.qualified) || Number(b.primary_source) - Number(a.primary_source) || (a.refreshed_at?.getTime() ?? 0) - (b.refreshed_at?.getTime() ?? 0));
+        order by qualified_at is null, not primary_source, refreshed_at nulls first, account_value desc limit ${CLAIMS} for update skip locked)
+      returning address, qualified_at is not null as qualified, primary_source, refreshed_at, account_value`) as { address: string; qualified: boolean; primary_source: boolean; refreshed_at: Date | null; account_value: number }[];
+    claimed.sort((a, b) => Number(b.qualified) - Number(a.qualified) || Number(b.primary_source) - Number(a.primary_source) || (a.refreshed_at?.getTime() ?? 0) - (b.refreshed_at?.getTime() ?? 0) || b.account_value - a.account_value);
     const hl = this.info(900);
     let refreshed = 0;
     let failed = 0;

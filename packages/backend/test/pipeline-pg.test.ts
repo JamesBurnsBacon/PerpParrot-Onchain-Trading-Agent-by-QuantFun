@@ -43,11 +43,13 @@ describe.skipIf(!url)("Pipeline on Postgres", async () => {
 
   // Hyperliquid info: the sample's portfolios; fills of `ordersPerDay(i)` orders a day.
   const calls: string[] = [];
+  const users: string[] = []; // portfolio reads, in order
   const highFrequency = new Set<string>(); // chosen from the qualified list below
   const ordersPerDay = (i: number) => (highFrequency.has(address(i)) ? 500 : 2);
   const info = (async (_: string, init: RequestInit) => {
     const body = JSON.parse(String(init.body)) as { type: string; user: string };
     calls.push(body.type);
+    if (body.type === "portfolio") users.push(body.user);
     const i = Number.parseInt(body.user.slice(2), 16) - 1;
     if (body.type === "portfolio") return Response.json(sample[i].portfolio);
     const n = Math.min(ordersPerDay(i) * 30, 2_000);
@@ -227,5 +229,18 @@ describe.skipIf(!url)("Pipeline on Postgres", async () => {
     const [fresh] = await sql`select finalists from selection_runs where id = ${bare}`;
     expect(fresh.finalists).toEqual({ overlap });
     await sql`delete from selection_runs where id in ${sql([id, bare])}`;
+  });
+
+  test("after the qualified list and primary sources, the largest accounts are read first", async () => {
+    await sql`update pipeline_accounts set qualified_at = null, primary_source = false, refreshed_at = null, attempted_at = null`;
+    const [{ address: smallest }] = await sql`select address from pipeline_accounts order by account_value limit 1`;
+    await sql`update pipeline_accounts set primary_source = true where address = ${smallest}`;
+    users.length = 0;
+    await pipeline.refresh(Date.now() + 240_000);
+    const value = new Map((await sql`select address, account_value from pipeline_accounts`).map((r: { address: string; account_value: number }) => [r.address, r.account_value]));
+    expect(users[0]).toBe(smallest); // the primary source, though the smallest
+    const rest = users.slice(1).map((u) => value.get(u)!);
+    expect(rest).toEqual([...rest].sort((x, y) => y - x)); // then by account value, largest first
+    expect(users.length).toBe(value.size);
   });
 });
