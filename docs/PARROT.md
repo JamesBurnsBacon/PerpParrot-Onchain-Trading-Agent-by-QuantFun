@@ -166,6 +166,7 @@ Paths below are relative to the repository root; wildcard entries group files wi
 | Shared context | `packages/shared/live-context.ts` | Read-only context wire shape |
 | Shared sample | `packages/shared/sample-wallet-ids.ts` | Generated synthetic nickname collision registry |
 | Dashboard page | `packages/dashboard/app/parrot/{page.tsx,parrot.css}` | Conversation, selection state, demo fallback and page styling |
+| Paint PoC | `packages/dashboard/app/parrot/paint/{page.tsx,PaintClient.tsx,paint.css}`, `packages/dashboard/lib/parrot-paint.ts` | Offline sample flock painting, validated strokes and replay |
 | Dashboard interaction | `packages/dashboard/components/parrot/{useLiveTalk,LiveTalk,ParrotAvatar,api}.tsx` or `.ts` | Voice lifecycle, checked same-origin requests and call UI |
 | Dashboard review | `packages/dashboard/components/parrot/{StepRail,SelectPanel,VerifyPanel,ExecutePanel,HoldButton,useVerification}.*` | Selection, existing evidence and pending-request confirmation |
 | Dashboard presentation | `packages/dashboard/components/parrot/{WalletBoard,WalletBird,ParrotEffects,Badge,ThemeToggle}.tsx` | Tiles, ghosts, sound/motion controls, two fallback badges and theme |
@@ -181,6 +182,11 @@ Paths below are relative to the repository root; wildcard entries group files wi
 | Provider evaluation (networked) | `packages/backend/scripts/eval-chat-prompt.ts` | Real-model extraction checks; not part of offline verification |
 
 ## Development-only labs
+
+### Paint PoC
+`/parrot/paint` is a standalone PoC using sample IDs only; it is not wired to the live shortlist.
+Deterministic code paints validated strokes; no model, backend calls or sound. Unlike the labs below, this page is included in production builds.
+Inspired by Stillwet by Alice (stillwet.art, MIT); no code or paintings reused. Bird colours are decorative (chosen from the nickname), not the calm/steady/wild vibe, because sample ids carry no risk metrics.
 
 - **Materials:** open `/parrot/lab` under `bun run dev`. Unlock audio, audition catalog entries, choose sounds for a mock scenario, copy picks as text and swap synthetic flocks. Picks live only in component state; there are no backend or OpenAI calls.
 - **Effects:** open `/parrot?fx=1` in development for preset swaps, banners and individual sound auditions in the product layout. The boundary cue/banner is retained for lab use; it does not mean product policy is adjusted.

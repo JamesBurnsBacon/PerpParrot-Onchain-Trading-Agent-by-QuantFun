@@ -1,0 +1,14 @@
+.paint-page { max-width: 880px; margin: 0 auto; padding: 28px 16px; color: var(--ink); }
+.paint-page header { margin-bottom: 22px; }
+.paint-page h1 { font-family: Georgia, serif; font-size: clamp(2rem, 6vw, 3.5rem); line-height: 1.2; margin: 10px 0; }
+.paint-page .parrot-badge { display: inline-block; padding: 5px 9px; border: 1px solid var(--ink-2); border-radius: 5px; font-size: 11px; letter-spacing: .08em; }
+.paint-kicker, .paint-note, .paint-page footer { color: var(--ink-2); font-size: 13px; line-height: 1.6; }
+.paint-kicker { margin-top: 16px; }
+.paint-page canvas { display: block; width: 100%; height: auto; background: #f5eddb; border: 8px solid #e7dcc7; border-radius: 5px; box-shadow: 0 8px 20px var(--ring); }
+.paint-page progress { display: block; width: 100%; height: 8px; margin-top: 20px; accent-color: var(--series-1); }
+.paint-caption { min-height: 3em; padding-top: 14px; font-family: Georgia, serif; }
+.paint-controls { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 20px; }
+.paint-controls button { min-width: 44px; min-height: 44px; padding: 8px 12px; border: 1px solid var(--axis); border-radius: 8px; background: var(--surface); color: var(--ink); cursor: pointer; }
+.paint-controls button[aria-pressed="true"] { border: 2px solid var(--ink); font-weight: 700; }
+.paint-controls button:focus-visible { outline: 3px solid var(--series-1); outline-offset: 3px; }
+.paint-page footer { margin-top: 24px; border-top: 1px solid var(--grid); padding-top: 16px; }
