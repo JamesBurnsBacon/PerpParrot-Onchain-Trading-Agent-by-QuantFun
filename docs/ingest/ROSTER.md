@@ -119,7 +119,7 @@ update pipeline_controls set fresh_start_requested_at = now() where id = 1;
 ```
 
 - The next select step reviews the current 25 once more, even if they haven't changed, so the bench gains approvals.
-- The old seats stay and **nobody is admitted** until at least **5** approved wallets are on the bench (fresh, passing the hold gate, not cooling down).
+- The old seats stay and **nobody is admitted** until at least **5** approved wallets are on the bench (fresh, passing the hold gate, not cooling down). Only approvals from reviews of the **current qualified list** count (reviews after its latest `qualified_at`), so wallets approved from an earlier, smaller list aren't seated.
 - Then every seat admitted before the request is **released** (`release_reason = 'fresh start'`, no 24 h cooldown, so an approved old wallet can come straight back). The bench fills 5 seats at once; the rest follow at the usual pace (§4.1). The new roster is frozen and activated.
 - Once it stands, the **paper books restart** from their starting capital: `paper_state` and `paper_points` move to `paper_state_archive` and `paper_points_archive` (with `archived_at`). Nothing is deleted.
 - `pipeline_controls.fresh_start_done_at` records it. A new request (a later `fresh_start_requested_at`) starts another.

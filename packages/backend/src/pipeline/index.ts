@@ -479,9 +479,15 @@ export class Pipeline {
       }
     }
 
+    // A requested fresh start (ROSTER.md §4.6) seats only wallets approved by reviews of the current
+    // qualified list: not approvals left from an earlier, smaller one.
+    const control = await this.freshStartControl();
+    const [{ qualifiedAt }] = await sql`select max(qualified_at) as "qualifiedAt" from pipeline_accounts`;
+    const since = control?.pending && qualifiedAt ? new Date(qualifiedAt as Date).getTime() : undefined;
+
     // The fresh bench (every approval of the last 12 h) and the wallets cooling down. Wallets released
     // by a fresh start don't cool down: an approved one can be seated again at once.
-    const bench = await this.freshBench(now);
+    const bench = await this.freshBench(now, since);
     const cooling = new Set<string>(
       (await sql`select address from roster_seats where released_at > ${new Date(now - ROSTER.cooldownHours * HOUR).toISOString()}
         and release_reason is distinct from 'fresh start'`).map((r: { address: string }) => r.address),
@@ -490,7 +496,6 @@ export class Pipeline {
     // A requested fresh start (ROSTER.md §4.6): once at least 5 approved wallets are on the bench,
     // release every seat admitted before the request; step 4 then fills from the bench (5 at once,
     // the rest at the usual pace) and step 5 activates the new roster.
-    const control = await this.freshStartControl();
     let freshStartWaiting = false;
     if (control?.pending) {
       const ready = bench.filter((b) => b.passesHold && now - b.approvedAt <= ROSTER.approvalFreshHours * HOUR && !cooling.has(b.address));
@@ -706,12 +711,13 @@ export class Pipeline {
     this.o.log("roster fresh start done; paper books restart", { seats: seated.length });
   }
 
-  // The bench (ROSTER.md §4.1): every wallet a review of the picks approved in the last 12 h, as of
-  // its latest review. A later review that didn't approve it takes it off.
-  private async freshBench(nowMs: number): Promise<(BenchEntry & { runId: number })[]> {
+  // The bench (ROSTER.md §4.1): every wallet a review of the picks approved in the last 12 h (and
+  // after `sinceMs`, when given), as of its latest review. A later review that didn't approve it takes it off.
+  private async freshBench(nowMs: number, sinceMs?: number): Promise<(BenchEntry & { runId: number })[]> {
+    const from = Math.max(nowMs - ROSTER.approvalFreshHours * HOUR, sinceMs ?? 0);
     const runs = await this.o.sql`select id, review -> 'bench' as bench, review -> 'verdicts' as verdicts from selection_runs
       where status = 'benched' and (review ->> 'scope') is distinct from 'seats'
-        and started_at > ${new Date(nowMs - ROSTER.approvalFreshHours * HOUR).toISOString()}
+        and started_at > ${new Date(from).toISOString()}
       order by started_at desc`;
     const decided = new Set<string>();
     const bench: (BenchEntry & { runId: number })[] = [];
