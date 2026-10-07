@@ -3,6 +3,7 @@
 import type { OrderResult } from "./exchange";
 import type { Plan, PlannedOrder } from "./planner";
 import type { Hex } from "viem";
+import type { TargetRow } from "./target-rows";
 
 export type Controls = { paused: boolean; updatedAt: number; updatedBy: string };
 
@@ -52,6 +53,9 @@ export interface ExecutorStore {
   // Atomically claims a run (one per 10-minute slot); false if another trigger already did.
   claimRun(runId: string): Promise<boolean>;
   saveRun(run: RunRecord): Promise<void>;
+  // Target history (run_targets): one row per perp per run; saving a run's rows again is a no-op.
+  saveTargets(rows: TargetRow[]): Promise<void>;
+  recentTargets(limit: number): Promise<TargetRow[]>;
   recentRuns(limit: number): Promise<RunRecord[]>;
   recentRunSummaries(limit: number): Promise<RunSummary[]>;
   equityCurve(): Promise<EquityPoint[]>;
@@ -63,6 +67,7 @@ export class MemoryStore implements ExecutorStore {
   private readonly claimed = new Set<string>();
   private readonly runs: RunRecord[] = [];
   private readonly batches = new Map<string, OrderBatch>();
+  private readonly targets: TargetRow[] = [];
   private controls: Controls = { paused: false, updatedAt: 0, updatedBy: "default" };
 
   private executionLock: Promise<void> = Promise.resolve();
@@ -99,6 +104,16 @@ export class MemoryStore implements ExecutorStore {
   async saveRun(run: RunRecord) {
     this.runs.push(run);
     if (this.runs.length > 1000) this.runs.shift();
+  }
+
+  async saveTargets(rows: TargetRow[]) {
+    const saved = new Set(this.targets.map((r) => `${r.runId}:${r.asset}`));
+    this.targets.push(...structuredClone(rows.filter((r) => !saved.has(`${r.runId}:${r.asset}`))));
+    if (this.targets.length > 20_000) this.targets.splice(0, this.targets.length - 20_000);
+  }
+
+  async recentTargets(limit: number) {
+    return structuredClone([...this.targets].sort((a, b) => b.runAt - a.runAt || (a.asset < b.asset ? -1 : 1)).slice(0, limit));
   }
 
   async recentRuns(limit: number) {

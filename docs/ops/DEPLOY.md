@@ -104,7 +104,8 @@ leverage, and needs at least 5. `REVIEW_GATE=strict` turns this off.
 
 1. **Supabase**: run `supabase/migrations/20261007120000_pipeline.sql`, then
    `20261007150000_pipeline_qualified.sql` and `20261007160000_pipeline_primary.sql`, **before**
-   the deploy. Both only add tables, columns
+   the deploy. `20261008010000_run_targets.sql` adds the target history; until it runs, each run
+   alerts "target history not saved" and otherwise trades as before. Both only add tables, columns
    and a wider status check, and are safe to run twice. The new code reads the new columns, so
    until they exist the pipeline routes fail.
 2. **Vercel variables**:

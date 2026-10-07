@@ -135,6 +135,30 @@ describe("Runner.executeRun (dry run)", () => {
     expect(await store.unresolvedOrderBatches()).toEqual([]);
   });
 
+  test("records one target-history row per perp, with the order and its result", async () => {
+    const { runner, store } = setup(fakeInfo({ equity: "400", core: [["ETH", "-0.05"]] }));
+    await runner.executeRun(AS_OF);
+    const rows = await store.recentTargets(10);
+    expect(rows.map((r) => [r.asset, r.action, r.side, r.resultStatus])).toEqual([
+      ["BTC", "order", "buy", "dry_run"],
+      ["ETH", "order", "sell", "dry_run"],
+    ]);
+    expect(rows[1]).toMatchObject({
+      runId: `mirror-${AS_OF}`, runAt: AS_OF * 1000, kind: "mirror", runStatus: "executed", dryRun: true,
+      configurationHash: CONFIGURATION, snapshotHash: `0x${"cd".repeat(32)}`, sizingEquityUsd: 400,
+      targetExposure: -0.875, targetUsd: -350, heldSize: -0.05, heldUsd: -200, gapUsd: -150, cloid: cloidFor(`mirror-${AS_OF}`, "ETH"),
+    });
+  });
+
+  test("a failed target-history write is alerted and never fails the run", async () => {
+    const { runner, store, alerts } = setup(fakeInfo({ equity: "400", core: [["ETH", "-0.05"]] }));
+    store.saveTargets = async () => { throw new Error("run_targets missing"); };
+    const run = await runner.executeRun(AS_OF);
+    expect(run.status).toBe("executed");
+    expect((await store.recentRuns(1))[0].status).toBe("executed");
+    expect(alerts).toEqual([`mirror-${AS_OF}: target history not saved: run_targets missing`]);
+  });
+
   test("expiry during leverage setup prevents the order batch", async () => {
     const { runnerDeps, exchange } = setup(fakeInfo({ equity: "400" }));
     let clock = AS_OF * 1000;
@@ -391,6 +415,13 @@ describe("Runner.flatten", () => {
     expect(run.plan?.orders.map((o) => [o.asset, o.assetId, o.isBuy, o.reduceOnly])).toEqual([
       ["BTC", 0, false, true],
       ["xyz:MSFT", 110_000, true, true],
+    ]);
+  });
+  test("records the flatten's closes in the target history (target 0)", async () => {
+    const { runner, store } = setup(fakeInfo({ equity: "400", core: [["BTC", "0.002"]] }));
+    const run = await runner.flatten("test");
+    expect(await store.recentTargets(5)).toMatchObject([
+      { runId: run.id, kind: "flatten", asset: "BTC", targetExposure: 0, targetUsd: 0, heldUsd: 200, gapUsd: -200, action: "order", reduceOnly: true, configurationHash: null },
     ]);
   });
 });

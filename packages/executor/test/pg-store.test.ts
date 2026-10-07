@@ -6,6 +6,7 @@ import { SQL } from "bun";
 import { postgresRunLock } from "../src/lock";
 import { PostgresStore } from "../src/pg-store";
 import { summarize, type RunRecord } from "../src/store";
+import type { TargetRow } from "../src/target-rows";
 
 const url = process.env.TEST_DATABASE_URL;
 
@@ -15,6 +16,7 @@ describe.skipIf(!url)("PostgresStore", async () => {
   const sql = new SQL(url);
   await sql.unsafe(await Bun.file(new URL("../../../supabase/migrations/20261006120000_mirror.sql", import.meta.url)).text());
   await sql.unsafe(await Bun.file(new URL("../../../supabase/migrations/20261006180000_executor_order_journal.sql", import.meta.url)).text());
+  await sql.unsafe(await Bun.file(new URL("../../../supabase/migrations/20261008010000_run_targets.sql", import.meta.url)).text());
   const store = new PostgresStore(sql);
   const unique = `${Date.now()}-${Math.random()}`;
 
@@ -83,6 +85,24 @@ describe.skipIf(!url)("PostgresStore", async () => {
       orders: [], cloids: [], kind: "leverage", details,
     });
     expect(await mine()).toMatchObject([{ id: leverageId, kind: "leverage", details, orders: [], cloids: [] }]);
+  });
+
+  test("saves target history once per run and perp, and reads it back newest first", async () => {
+    const row = (runId: string, runAt: number, asset: string, order: boolean): TargetRow => ({
+      runId, runAt, asset, kind: "mirror", dryRun: true, runStatus: "executed", configurationHash: `0x${"ab".repeat(32)}`, snapshotHash: null,
+      sizingEquityUsd: 10_000, targetExposure: 0.25, marginScale: 1, targetUsd: 2500, heldSize: 0.01, markPx: order ? 100_000 : null, heldUsd: 1000, gapUsd: 1500,
+      action: order ? "order" : "skipped", skipReason: order ? null : "UNKNOWN_MARKET", side: order ? "buy" : null, size: order ? "0.015" : null,
+      price: order ? "100500" : null, reduceOnly: order ? false : null, notionalUsd: order ? 1500 : null, cloid: order ? `0x${"02".repeat(16)}` : null,
+      resultStatus: order ? "filled" : null, filledSize: order ? "0.015" : null, avgPx: order ? "100020.5" : null, resultError: null,
+    });
+    const base = Date.parse("2099-01-01T00:00:00Z") + Math.floor(Math.random() * 1e9);
+    const older = [row(`mirror-a-${unique}`, base, "BTC", true)];
+    const newer = [row(`mirror-b-${unique}`, base + 600_000, "BTC", true), row(`mirror-b-${unique}`, base + 600_000, "xyz:CL", false)];
+    await store.saveTargets(older);
+    await store.saveTargets(newer);
+    await store.saveTargets(newer); // a re-save is a no-op
+    await store.saveTargets([]);
+    expect(await store.recentTargets(3)).toEqual([...newer, ...older]);
   });
 
   test("persists the kill switch", async () => {
