@@ -30,7 +30,7 @@ import { runCommitteeReview } from "../../review/committee/workflow.ts";
 import { MAX_SOURCES, type Assessment } from "../../review/workflow.ts";
 import { commitment, policyCommitment } from "../../../shared/src/commitments.ts";
 import { validate } from "../../../shared/src/validate.ts";
-import type { Policy, Row } from "../../../shared/src/contracts.ts";
+import type { Manifest, Policy, Row } from "../../../shared/src/contracts.ts";
 import { checkFrozenConfiguration, type FrozenConfiguration } from "../../../shared/frozen";
 import { ELIGIBLE_DEXES, type PositionsSnapshot, type WindDownSource } from "../../../shared/snapshot";
 import { keccakUtf8 } from "../snapshot";
@@ -198,7 +198,8 @@ export class Pipeline {
         max(listed_at) as listed_at
       from pipeline_accounts`;
     const runs = await sql`
-      select id, started_at, finished_at, status, accounts, configuration_hash, error, review -> 'manifest' as manifest
+      select id, started_at, finished_at, status, accounts, configuration_hash, error,
+        review -> 'manifest' as manifest, review ->> 'gate' as gate
       from selection_runs order by started_at desc limit 10`;
     const [active] = await sql`select hash, activated_at, configuration -> 'sources' as sources from configurations where status = 'active'`;
     // The latest run's finalists, funnel and per-candidate AI verdicts (dashboard).
@@ -428,12 +429,13 @@ export class Pipeline {
     // The bench (ROSTER.md §4.1): the wallets the AI approves, with their fit and hold measures. The
     // roster step seats them into open seats; nothing is activated here.
     const fitKey = `${policy.bucket.toLowerCase()}Fit`;
+    const gate = reviewGate(manifest, this.o.gate);
     const approved =
-      manifest.status === "VALID"
+      gate === "strict"
         ? manifest.sources.map((s) => ({ sourceAddress: s.sourceAddress, fit: Number(field("role", s.candidate, fitKey) ?? 0) }))
-        : this.o.gate === "strict"
-          ? []
-          : approvedCandidates(built.frame.candidates.map((c) => c.candidate), stageRows.role?.[0] ?? [], stageRows.risk?.[0] ?? [], policy, built.addresses);
+        : gate === "basic"
+          ? approvedCandidates(built.frame.candidates.map((c) => c.candidate), stageRows.role?.[0] ?? [], stageRows.risk?.[0] ?? [], policy, built.addresses)
+          : [];
     const bench: BenchEntry[] = approved.map((a) => {
       const address = a.sourceAddress.toLowerCase();
       const h = holds.get(address) ?? { copyableShare: null, closedPositions: 0, turnoverPerDay: null, tradedPerDayOverEquity: null };
@@ -448,7 +450,7 @@ export class Pipeline {
       return { address, approved: approvedSet.has(address), riskReject, fit: Number(field("role", candidate, fitKey) ?? 0), liquidatedAt: liquidatedAt.get(address) ?? null };
     });
     const status = bench.length || scope === "seats" ? "benched" : "rejected";
-    await sql`update selection_runs set review = review || ${JSON.stringify({ gate: manifest.status === "VALID" ? "strict" : this.o.gate ?? "basic", bench, verdicts, ...(scope === "seats" ? { scope } : {}) })}::text::jsonb,
+    await sql`update selection_runs set review = review || ${JSON.stringify({ gate, bench, verdicts, ...(scope === "seats" ? { scope } : {}) })}::text::jsonb,
       status = ${status}, finished_at = now() where id = ${id}`;
     const copyable = bench.filter((b) => b.passesHold).length;
     log("selection benched", { id, approved: bench.length, copyable });
@@ -716,7 +718,7 @@ export class Pipeline {
   private async freshBench(nowMs: number, sinceMs?: number): Promise<(BenchEntry & { runId: number })[]> {
     const from = Math.max(nowMs - ROSTER.approvalFreshHours * HOUR, sinceMs ?? 0);
     const runs = await this.o.sql`select id, review -> 'bench' as bench, review -> 'verdicts' as verdicts from selection_runs
-      where status = 'benched' and (review ->> 'scope') is distinct from 'seats'
+      where status in ('benched', 'rejected') and (review ->> 'scope') is distinct from 'seats'
         and started_at > ${new Date(from).toISOString()}
       order by started_at desc`;
     const decided = new Set<string>();
@@ -753,7 +755,16 @@ export class Pipeline {
       const result = scoreCandidates(inputs, { finalists: inputs.length, allowUnknown: ["minTrades"] });
       if (result.finalists.length === 0) throw new Error("no seat passed Score's filters");
       await this.review(id as number, inputs, result, 0, undefined, "seats");
-      const [run] = await sql`select review -> 'verdicts' as verdicts, finalists -> 'holds' as holds, finalists -> 'measured' as measured from selection_runs where id = ${id}`;
+      const [run] = await sql`select review -> 'manifest' as manifest, review -> 'verdicts' as verdicts,
+        finalists -> 'holds' as holds, finalists -> 'measured' as measured from selection_runs where id = ${id}`;
+      // An invalid committee run is not a decision to wind down every existing seat.
+      // Keep the manifest for audit and use the existing 30-minute failed-review retry.
+      if (!run?.manifest || reviewGate(run.manifest as Pick<Manifest, "status" | "reason">, this.o.gate) === "none") {
+        const reason = run?.manifest?.reason ?? "missing manifest";
+        await sql`update selection_runs set status = 'failed', error = ${`seat review without decision: ${reason}`}, finished_at = now() where id = ${id}`;
+        log("seat review produced no admission decision", { id, reason });
+        return undefined;
+      }
       // Fresh 30-day average leverage for each seat (the snapshot's normalization).
       for (const [address, m] of Object.entries((run?.measured ?? {}) as Record<string, Measured>)) {
         if (m.averageLeverage === null) continue;
@@ -871,6 +882,9 @@ const RISKS = ["drawdownRisk", "leverageRisk", "concentrationRisk", "pathRisk", 
 // policy's gross leverage. At most MAX_SOURCES (15) sources.
 // The finalists the AI approves (the basic gate's filter, and the roster's bench): not rejected by the
 // Role model, no Risk score above the reject threshold, positive fit for the bucket. Best fit first.
+export const reviewGate = (manifest: Pick<Manifest, "status" | "reason">, configured: "strict" | "basic" = "basic"): "strict" | "basic" | "none" =>
+  manifest.status === "VALID" ? "strict" : manifest.reason === "INSUFFICIENT_EVIDENCE" && configured === "basic" ? "basic" : "none";
+
 export const approvedCandidates = (
   candidates: number[],
   role: Row[],

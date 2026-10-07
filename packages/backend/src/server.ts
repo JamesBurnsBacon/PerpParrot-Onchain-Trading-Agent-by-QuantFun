@@ -12,6 +12,7 @@ import { ActiveConfigurationSource, FileConfigurationSource } from "./configurat
 import { MAX_GROSS_LEVERAGE, Pipeline, reviewPolicy, seatLeverage, windDownCaps } from "./pipeline";
 import { SnapshotError, SnapshotService } from "./service";
 import { exposuresFromSnapshot, MemoryPaperStore, PaperService, defaultBooks } from "./paper/service";
+import { exposureBreakdown, type ExposureSource } from "./paper/exposure-breakdown";
 import { targetsFromSnapshot } from "../../shared/copy";
 import type { PositionsSnapshot } from "../../shared/snapshot";
 import { keccakUtf8 } from "./snapshot";
@@ -216,7 +217,7 @@ const readArtifact = sql
 // Vercel Cron sends `Authorization: Bearer $CRON_SECRET` (open locally when unset).
 const cronAuthorized = (req: Request) => !env.CRON_SECRET || req.headers.get("authorization") === `Bearer ${env.CRON_SECRET}`;
 
-let exposuresCache: { runAt: number; exposures: { asset: string; fraction: number }[] } | undefined;
+let exposuresCache: { runAt: number; exposures: { asset: string; fraction: number }[]; sources?: ExposureSource[] } | undefined;
 
 // Small named reads reuse the existing store queries; no snapshot generation on this path.
 async function readActiveSources(): Promise<string[]> {
@@ -231,8 +232,14 @@ async function readLiveBookExposures() {
   if (exposuresCache?.runAt !== lastRunAt) {
     const snapshot = await store.get(lastRunAt);
     if (!snapshot) throw new SnapshotError(404, `run ${lastRunAt} has no snapshot`);
-    const exposures = exposuresFromSnapshot(JSON.parse(snapshot));
+    const parsed = JSON.parse(snapshot) as PositionsSnapshot;
+    const exposures = exposuresFromSnapshot(parsed);
     exposuresCache = { runAt: lastRunAt, exposures: [...exposures].map(([asset, fraction]) => ({ asset, fraction })) };
+    try {
+      exposuresCache.sources = exposureBreakdown(parsed);
+    } catch (error) {
+      console.error("exposure breakdown failed", { runAt: lastRunAt, error });
+    }
   }
   return exposuresCache;
 }

@@ -41,7 +41,8 @@ function compareSources(sources: string[] | null, shortlistAddresses: string[]):
 
 function summarizePaper(points: PaperPoint[]): LiveContext["paper"] {
   const books: NonNullable<LiveContext["paper"]> = [];
-  for (const spec of defaultBooks().filter(b => b.kind === "copy")) {
+  // The three buckets at the live size, as the Dashboard shows them: the $10k twins are the same strategies at another size.
+  for (const spec of defaultBooks().filter(b => b.kind === "copy" && !b.id.endsWith("-10k"))) {
     const rows = points.filter(p => p.bookId === spec.id && Number.isFinite(p.t) && Number.isFinite(p.equityUsd))
       .sort((a, b) => a.t - b.t);
     if (rows.length < 2 || rows[0].equityUsd <= 0) continue;

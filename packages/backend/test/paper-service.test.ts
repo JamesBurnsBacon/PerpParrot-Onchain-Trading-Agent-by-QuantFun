@@ -67,6 +67,9 @@ describe("PaperService", () => {
     expect((await service.view()).lastRunAt).toBe(600);
     await service.step(1200, snapshot(1200));
     const book = (await service.view()).books.find((b) => b.id === "aggressive-470")!;
+    // The run that created the book: the dashboard draws the curve's 0% origin there.
+    expect(book.startedAt).toBe(600);
+    expect(book.curve[0][0]).toBe(600);
     // $176.25 long (0.375 × 470) for 1/6 h at 0.06%/h.
     expect(book.fundingUsd).toBeCloseTo(176.25 * 0.0006 / 6, 9);
     expect(book.curve.at(-1)).toEqual([1200, expect.closeTo(470 - (176.25 * 0.0006) / 6, 9)]);

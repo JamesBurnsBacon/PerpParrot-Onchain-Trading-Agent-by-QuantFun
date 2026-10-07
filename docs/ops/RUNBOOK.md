@@ -194,10 +194,18 @@ redeploy of the current deployment), then flatten. While paused, runs are still 
 
 ## Data for the dashboard (README §4.11)
 
+`/exposures` keeps `runAt` and `exposures` unchanged. Its optional `sources` contains every snapshot
+wallet, its frozen weight as a fraction, and contributions as fractions of equity. Each raw
+source contribution is multiplied by the asset's final target / raw net, reconciling the breakdown
+after position limiting and gross capping. Zero/dropped targets are omitted; flat wallets have
+empty contributions. A failed breakdown is logged and omits `sources` without failing the old
+response. The response is cached per run. These contributions are attribution only; they do not
+change policy or execution.
+
 | Source | What | Access |
 |---|---|---|
 | `GET {backend}/paper[?since=unix]` | paper books: equity, return, fees, funding, trades, open positions, equity curve (≤ 1,500 points, rebuilt once per run) | public, CORS `*` |
-| `GET {backend}/exposures` | the target exposures of the last run the paper books stepped (fraction of equity per asset) | public, CORS `*` |
+| `GET {backend}/exposures` | the target exposures of the last run the paper books stepped: `runAt`, `exposures: [{ asset, fraction }]`, plus optional `sources: [{ address, weight, contributions: [{ asset, fraction }] }]` | public, CORS `*` |
 | `GET {backend}/snapshots/:runAt`, `/targets/:runAt` | a run's positions snapshot (exact bytes) and its target exposures | public, CORS `*` |
 | `GET {backend}/artifacts/backtest`, `/artifacts/funnel` | what other jobs published to `dashboard_artifacts` (below); 404 until then | public, CORS `*` |
 | `GET {executor}/status` | dry run on/off, account, API wallet, pinned configuration hash, last run time, kill-switch state | public, CORS `*` |

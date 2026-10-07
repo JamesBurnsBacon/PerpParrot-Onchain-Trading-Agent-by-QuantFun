@@ -21,12 +21,12 @@ test("paper uses ordered first and last points, not starting capital or intermed
   expect(c.paper).toEqual([{ bookId: "aggressive-470", label: "aggressive-470", returnPct: 4.2, days: 12 }]);
   expect(c.facts.join(" ")).toContain("existing paper book replay, not this shortlist or a forecast");
 });
-test("paper caps at three named copy books and ignores unknown and BTC books", async () => {
+test("paper lists the three live-size copy books (no $10k twins) and ignores unknown and BTC books", async () => {
   const d = deps();
   d.paperPoints = async () => [...defaultBooks().map(b => b.id), "made-up"].flatMap(bookId => [
     { bookId, t: DAY, equityUsd: 80 }, { bookId, t: 0, equityUsd: 100 }]);
-  expect((await buildLiveContext(d, [])).paper).toEqual(defaultBooks().filter(b => b.kind === "copy").map(b =>
-    ({ bookId: b.id, label: b.id, returnPct: -20, days: 1 })));
+  expect((await buildLiveContext(d, [])).paper).toEqual(["aggressive-470", "balanced-470", "conservative-470"].map(bookId =>
+    ({ bookId, label: bookId, returnPct: -20, days: 1 })));
 });
 test("paper needs two points and a positive start, and never emits nonfinite results", async () => {
   for (const rows of [[], [{ t: 0, equityUsd: 100 }], [{ t: 0, equityUsd: 0 }, { t: DAY, equityUsd: 100 }],
