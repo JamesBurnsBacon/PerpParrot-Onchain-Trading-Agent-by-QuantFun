@@ -24,6 +24,21 @@ export type TrackedAccountRow = {
   maker_share: number | null;
 };
 
+// Local testing only: score a prepared JSON of real accounts (scripts/fetch-local-finalists.ts) instead of the pipeline tables.
+// It is off unless PARROT_FINALISTS_FILE is set, and it is never used on Vercel or beside a database, so a deployed backend cannot take it.
+export const localFinalistsRows = (
+  env: Record<string, string | undefined>, hasDatabase: boolean,
+): (() => Promise<TrackedAccountRow[]>) | undefined => {
+  const path = env.PARROT_FINALISTS_FILE;
+  if (!path || hasDatabase || env.VERCEL) return undefined;
+  return async () => {
+    const rows: unknown = await Bun.file(resolve(path)).json();
+    if (!Array.isArray(rows) || !rows.every(r => r && typeof r === "object" && typeof r.address === "string" &&
+      (r.kind === "trader" || r.kind === "hypercore-vault") && Number.isFinite(r.account_value))) throw new Error("PARROT_FINALISTS_FILE must be an array of tracked account rows");
+    return rows as TrackedAccountRow[];
+  };
+};
+
 // Fewer scored accounts than this is not a meaningful pool: stay on the labelled sample instead.
 const MIN_ACCOUNTS = 30;
 const MIN_FINALISTS = 5;

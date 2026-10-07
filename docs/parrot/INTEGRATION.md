@@ -49,6 +49,24 @@ There is no “force live” switch. The pipeline operator prepares the database
 
 Check book context independently of shortlist source. Never relabel fixtures, manufacture paper history or change Score thresholds. The standalone `/parrot/receipts` receipt intentionally stays sample; `/parrot/receipts/live` uses the current turn's code-built facts. A caller-supplied receipt does not attest its provenance.
 
+## Voice confirmation routes
+
+| Route | What it does | Writes |
+| --- | --- | --- |
+| `POST /live/plan` `{intent}` | Selects the shortlist from the current finalists, builds the preview, then a hypothetical dry-run order sketch from public Hyperliquid reads (`packages/backend/src/live/plan.ts`, about 25 reads, cached 60 s per preview hash). Returns `{previewHash, sources, plan}`. | Nothing |
+| `POST /live/request` `{intent, previewHash}` | Saves one PENDING simulation request through the same `savePreviewRequest` as `/chat/preview`; refuses with 409 `changed` if the preview hash is no longer the one the visitor was shown. | One `strategy_requests` row |
+
+Both are gated by `LIVE_ENABLED` and use the `preview` limiter kind (zero cost). The tools `request_confirmation` and `confirm_request` are defined in `packages/backend/src/live/config.ts`; the browser-side gate (nonce, window, transcript check, button) is `packages/dashboard/lib/parrot-confirm.ts`. The dry-run sketch signs and sends nothing and imports no executor code. Shared type: `packages/shared/dry-run-plan.ts`.
+
+## Local testing with real wallets (no database, no production writes)
+
+To see real wallet metrics instead of the labelled sample without touching the production database, score a local file of real accounts:
+
+1. `cd packages/backend && bun run scripts/fetch-local-finalists.ts --out /tmp/finalists.json` reads Hyperliquid's public leaderboard and portfolios (read-only) plus the production pipeline's current finalists (one public `GET /pipeline`) and writes the rows.
+2. Start the local backend with `PARROT_FINALISTS_FILE=/tmp/finalists.json` and no `DATABASE_URL`. The existing Score code then picks finalists from that pool and the page shows no SAMPLE DATA badge.
+
+The pool is smaller than production's (about 85 accounts against about 250 qualified), so finalists can differ from production's. The variable is ignored when a database is configured or `VERCEL` is set, so a deployed backend cannot use it. Never point a local backend at the production `DATABASE_URL`: outside Vercel it builds snapshots and steps the paper books on a timer.
+
 ## Environment and Vercel ownership
 
 **Operator** means the Vercel project operator with team access: set server variables in the intended environment and redeploy. GitHub Actions secrets do not populate Vercel. Never expose keys in browser variables. Defaults: [`server.ts`](../../packages/backend/src/server.ts), [`readLiveEnv`](../../packages/backend/src/live/config.ts) and [`readDecisionsEnv`](../../packages/backend/src/live/decisions.ts).

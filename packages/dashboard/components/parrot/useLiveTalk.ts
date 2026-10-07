@@ -1,9 +1,12 @@
 // WebRTC session lifecycle and strategy updates used by the Parrot page.
 // Close media on termination and clear unfinished selections; never configure trading.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { describeError, type ChatResponse } from "../../lib/parrot";
+import { describeError, type ChatResponse, type PreviewResponse } from "../../lib/parrot";
 import { setMicEnabled, functionResultMessages, hasUnfinishedLiveStrategy, initialLiveEvents, isLiveSession, isLiveStrategy, liveAsChat, pendingLiveCalls, reduceLiveEvent, type LiveEvents } from "../../lib/parrot-live";
 import { isReadTool, runReadTool, type LiveCard } from "../../lib/parrot-reads";
+import { isConfirmTool } from "../../lib/parrot-read-tools";
+import { confirmByButton, runConfirmTool, type ConfirmContext, type ConfirmOutcome, type Pending } from "../../lib/parrot-confirm";
+import type { StrategyIntent } from "../../../shared/strategy-intent";
 import type { WalletEvidence } from "../../../shared/wallet-evidence";
 import { post, type Failure } from "./api";
 
@@ -16,13 +19,15 @@ type Runtime = {
 export type LiveView = { phase: Phase; user: string; parrot: string; avatar: "listening" | "speaking" | "thinking"; remaining: number; status: string; failure: Failure | null; playbackBlocked: boolean; muted: boolean };
 const idle: LiveView = { phase: "idle", user: "", parrot: "", avatar: "listening", remaining: 0, status: "", failure: null, playbackBlocked: false, muted: false };
 
-export type LiveObservers = { onParrotDelta?: (delta: string) => void; onStrategyFacts?: (facts: string) => void; onCard?: (card: LiveCard) => void; onEnd?: () => void };
+export type LiveObservers = { onParrotDelta?: (delta: string) => void; onStrategyFacts?: (facts: string) => void; onCard?: (card: LiveCard) => void; onRequestSaved?: (saved: PreviewResponse) => void; onEnd?: () => void };
 
 export function useLiveTalk(onStrategy: (chat: ChatResponse) => void, onStale: () => void, previousIds: string[] = [], activity?: { gesture: () => void; input: () => void }, observers?: LiveObservers) {
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const observersRef = useRef(observers); observersRef.current = observers;
   const shown = useRef(previousIds);
   const evidence = useRef<WalletEvidence[]>([]); // the latest checked shortlist's evidence, for the wallet drill-down
+  const lastIntent = useRef<StrategyIntent | null>(null); // the latest checked intent, for the voice confirmation
+  const pending = useRef<Pending | null>(null); // the summary the visitor was shown and must confirm
   const activityRef = useRef(activity);
   useEffect(() => { shown.current = previousIds; activityRef.current = activity; }, [previousIds, activity]);
   const [view, setView] = useState<LiveView>(idle);
@@ -90,9 +95,34 @@ export function useLiveTalk(onStrategy: (chat: ChatResponse) => void, onStale: (
     };
   }, [cleanup, end]);
 
+  const confirmContext = (run: Runtime | null, signal: () => AbortSignal): ConfirmContext => ({
+    intent: lastIntent.current, addresses: shown.current, get transcripts() { return run?.events.transcripts ?? []; }, // read live: run.events is replaced on every event
+    pending: pending.current, setPending: p => { pending.current = p; },
+    now: Date.now, newNonce: () => Math.random().toString(36).slice(2, 10),
+    post: (path, body, guard) => post(path, body, guard, signal()),
+  });
+  const applyOutcome = (outcome: ConfirmOutcome) => {
+    if (outcome.card) observersRef.current?.onCard?.(outcome.card);
+    if (outcome.saved) observersRef.current?.onRequestSaved?.(outcome.saved);
+    observersRef.current?.onStrategyFacts?.(outcome.facts);
+  };
+  // The on-screen Confirm button: the visitor's own click stands in for the spoken yes. The parrot is told so it can say what happened.
+  async function confirmNow() {
+    const run = active.current;
+    const outcome = await confirmByButton(confirmContext(run, () => AbortSignal.timeout(20_000)));
+    if (!outcome || outcome.stale) return; // a late answer for a replaced confirmation shows nothing
+    applyOutcome(outcome);
+    if (run && !run.closing && run.channel?.readyState === "open") {
+      const text = `(The visitor pressed the Confirm button. ${outcome.facts})`.slice(0, 1500);
+      run.channel.send(JSON.stringify({ type: "response.item.create", event_id: `ui_${Date.now()}`, item: { type: "message", role: "user", content: [{ type: "input_text", text }] } }));
+      run.channel.send(JSON.stringify({ type: "response.create", event_id: `ui_continue_${Date.now()}` }));
+    }
+  }
+
   async function start() {
     if (active.current) return;
     activityRef.current?.gesture();
+    lastIntent.current = null; pending.current = null; // a new call starts without an open confirmation
     const run: Runtime = { controller: new AbortController(), timers: new Set(), events: initialLiveEvents(), closing: false, draining: false, processedCalls: new Set() };
     active.current = run;
     setView({ ...idle, phase: "connecting", avatar: "thinking", status: "Warming up my voice…" });
@@ -117,7 +147,13 @@ export function useLiveTalk(onStrategy: (chat: ChatResponse) => void, onStale: (
           for (const call of calls) {
             if (!current() || run.closing) return;
             let output = call.error ?? "Strategy could not be checked. Please try again.";
-            if (call.args && call.name && isReadTool(call.name)) {
+            if (call.args && call.name && isConfirmTool(call.name)) {
+              // Voice confirmation: the browser, not the model, decides whether the visitor actually said yes.
+              const outcome = await runConfirmTool(call.name, call.args, confirmContext(run, signal));
+              if (!current() || run.closing) return;
+              applyOutcome(outcome);
+              output = outcome.facts;
+            } else if (call.args && call.name && isReadTool(call.name)) {
               // Read-only Dashboard tools: public GETs, code-built facts, a card for the page. Never a mutation.
               const read = await runReadTool(call.name, call.args, { shown: shown.current, evidence: evidence.current }, signal());
               if (!current() || run.closing) return;
@@ -131,6 +167,8 @@ export function useLiveTalk(onStrategy: (chat: ChatResponse) => void, onStale: (
                 if (run.events.calls.findLast(c => c.name === "set_strategy")?.callId === call.callId) {
                   shown.current = result.data.shortlist.addresses;
                   evidence.current = result.data.evidence;
+                  lastIntent.current = result.data.intent;
+                  pending.current = null; // a new strategy voids any summary the visitor was shown
                   callback.current(liveAsChat(result.data));
                 }
                 observersRef.current?.onStrategyFacts?.(result.data.facts);
@@ -253,5 +291,5 @@ export function useLiveTalk(onStrategy: (chat: ChatResponse) => void, onStale: (
       if (active.current === run) setView(v => ({ ...v, playbackBlocked: false }));
     } catch { /* Keep the user-gesture retry available if playback is still blocked. */ }
   }
-  return { view, audio, remoteStream, start, end, toggleMute, resumeAudio, active: view.phase !== "idle" };
+  return { view, audio, remoteStream, start, end, toggleMute, resumeAudio, confirmNow, active: view.phase !== "idle" };
 }

@@ -2,11 +2,12 @@
 // Public GETs only: no executor mutation, no secrets. Code builds every number the parrot may say; an
 // unavailable source is reported as unavailable, never filled in.
 import type { BacktestArtifact, FunnelArtifact } from "../../shared/dashboard";
+import type { DryRunPlan } from "../../shared/dry-run-plan";
 import type { WalletEvidence } from "../../shared/wallet-evidence";
 import { walletNickname } from "../../shared/wallet-persona";
 import { BACKEND, EXECUTOR, ordersOf, runTime, type Exposures, type PipelineView, type Run, type Series, type Status } from "./data";
 
-import { isReadTool, type ReadToolName } from "./parrot-read-tools";
+import { isReadTool, type ConfirmToolName, type ReadToolName } from "./parrot-read-tools";
 export { isReadTool, READ_TOOL_NAMES, type ReadToolName } from "./parrot-read-tools";
 
 export type WalletLine = { label: string; value: string };
@@ -14,7 +15,8 @@ export type LiveCard =
   | { kind: "run"; runs: Run[]; status: Status | null; exposures: { asset: string; fraction: number }[]; asOf: number }
   | { kind: "wallet"; address: string; nickname: string; lines: WalletLine[]; rationale: string | null; picked: boolean | null; asOf: number }
   | { kind: "backtest"; window: string; series: Series[]; generatedAt: number }
-  | { kind: "unavailable"; tool: ReadToolName; what: string };
+  | { kind: "request"; stage: "awaiting" | "saved"; plan: DryRunPlan; previewHash: string; requestId: string | null; sources: number }
+  | { kind: "unavailable"; tool: ReadToolName | ConfirmToolName; what: string };
 export type ReadResult = { facts: string; card: LiveCard };
 
 const FACTS_MAX = 1200; // the same cap the strategy facts keep (shared with the receipts judge)

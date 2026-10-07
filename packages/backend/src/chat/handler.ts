@@ -55,6 +55,7 @@ const REPLIES = {
   infeasible: "Squawk, that preview cannot be saved with the base policy. An operator must review it.",
   too_few_sources: "Squawk, I need more eligible sources for that preview.",
   unavailable: "Squawk, I cannot prepare that selection right now.",
+  changed: "Squawk, that selection changed; let me summarize it again before you confirm.",
 } as const;
 type FailureCode = keyof typeof REPLIES;
 const json = (body: unknown, status = 200, headers: Record<string, string> = {}): Response =>
@@ -161,6 +162,29 @@ export const handleChat = async (req: Request, deps: ChatDeps): Promise<Response
   }
 };
 
+// The visitor's intent as a preview sees it: only the structured fields matter, the free text is replaced.
+export const previewIntent = (parsed: StrategyIntent): StrategyIntent => Object.freeze({ ...parsed, reply: PREVIEW_REPLY, clarify: null });
+
+// The preview a visitor intent leads to right now (no write): the selection from the current finalists, then equal weights.
+export const previewForIntent = async (intent: StrategyIntent, deps: Pick<ChatDeps, "basePolicy" | "finalists">) => {
+  const { intent: effective, shortlist: { addresses } } = selectStrategy(intent, deps.basePolicy, await deps.finalists());
+  return { effective, addresses, preview: buildPreview({ intent: effective, basePolicy: deps.basePolicy, addresses }) };
+};
+
+export class PreviewChanged extends Error {
+  constructor() { super("changed"); this.name = "PreviewChanged"; }
+}
+
+// Saves a pending simulation request for the intent. With `expectedHash`, saves only if the preview is still the one the visitor
+// was shown (the finalists can move between the summary and the confirmation).
+export const savePreviewRequest = async (intent: StrategyIntent, deps: Pick<ChatDeps, "basePolicy" | "finalists" | "requests" | "newId" | "now">, expectedHash?: string) => {
+  const { effective, preview } = await previewForIntent(intent, deps);
+  if (expectedHash !== undefined && preview.previewHash !== expectedHash) throw new PreviewChanged();
+  const requestId = deps.newId();
+  await deps.requests.save({ id: requestId, createdAtMs: deps.now(), previewHash: preview.previewHash, intent: effective, preview });
+  return { requestId, preview };
+};
+
 export const handlePreview = async (req: Request, deps: ChatDeps): Promise<Response> => {
   if (req.method !== "POST") return failure(405, "method_not_allowed");
   if (!deps.env.enabled) return failure(503, "disabled");
@@ -173,7 +197,7 @@ export const handlePreview = async (req: Request, deps: ChatDeps): Promise<Respo
     if (deps.env.apiKey && JSON.stringify(parsed).includes(deps.env.apiKey)) throw new Error();
     // Only the structured fields matter for a preview. The visitor's free text (reply, clarify) is not stored
     // and does not enter the hash: nothing a visitor typed ends up in the database or in an operator's view.
-    intent = Object.freeze({ ...parsed, reply: PREVIEW_REPLY, clarify: null });
+    intent = previewIntent(parsed);
   } catch {
     return failure(400, "bad_request");
   }
@@ -182,10 +206,7 @@ export const handlePreview = async (req: Request, deps: ChatDeps): Promise<Respo
   try {
     const reservation = await reserve(req, deps, "preview");
     if (!reservation.ok) { audit(reservation.reason); return denied(reservation); }
-    const { intent: effective, shortlist: { addresses } } = selectStrategy(intent, deps.basePolicy, await deps.finalists());
-    const preview = buildPreview({ intent: effective, basePolicy: deps.basePolicy, addresses });
-    const requestId = deps.newId();
-    await deps.requests.save({ id: requestId, createdAtMs: deps.now(), previewHash: preview.previewHash, intent: effective, preview });
+    const { requestId, preview } = await savePreviewRequest(intent, deps);
     audit("ok");
     return json({ ok: true, requestId, preview });
   } catch (error) {
