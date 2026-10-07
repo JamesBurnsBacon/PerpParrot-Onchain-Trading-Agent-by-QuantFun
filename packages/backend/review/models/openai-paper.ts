@@ -10,6 +10,7 @@ import {ROLE_PROMPT,RISK_PROMPT,RED_TEAM_PROMPT} from '../../../shared/src/promp
 import type {CommitteeEvidence} from '../../../shared/src/committee-evidence.ts';
 import type {CommitteeDependencies,EvidenceObservation,EvidenceCritique,CritiqueInput} from '../committee/types.ts';
 import type {PaperModelOptions,PaperModelCore,CommitteeStage} from './types.ts';
+import {COMMITTEE_PAYLOAD_BYTES} from '../../../shared/src/committee-evidence.ts';
 const modelPattern=/^gpt-[A-Za-z0-9.-]+-\d{4}-\d{2}-\d{2}$/;
 const nodeId='paper-provider';
 /** Real server-side provider adapter: one honest observation per stage (quorum 1). Several
@@ -33,7 +34,7 @@ export function openAIPaperCommittee(options:PaperModelOptions,core:PaperModelCo
     const user={evidence:saved,...(draft?{draft:{draftHash:draft.draftHash,policy:draft.policy,sources:draft.sources,cashWeight:draft.cashWeight}}:{})};
     const body={model,messages:[{role:'system',content:prompts[stage]},{role:'user',content:JSON.stringify(user)}],temperature:0,store:false,max_completion_tokens:8192,
       response_format:{type:'json_schema',json_schema:{name:`paper_${stage}`,strict:true,schema:{type:'object',additionalProperties:false,properties,required:Object.keys(properties)}}}};
-    if(new TextEncoder().encode(JSON.stringify(body)).length>115000)throw new Error('paper model request exceeds budget');
+    if(new TextEncoder().encode(JSON.stringify(body)).length>COMMITTEE_PAYLOAD_BYTES+100_000)throw new Error('paper model request exceeds budget');
     const value=await postJson(endpoint,body,{Authorization:`Bearer ${apiKey}`},signal,fetcher,core.agentTimeoutMs);
     const envelope=z.object({model:z.literal(model),choices:z.array(z.object({finish_reason:z.literal('stop'),message:z.object({content:z.string().max(200000),refusal:z.string().nullable().optional()})})).length(1)}).parse(value);
     if(envelope.choices[0].message.refusal)throw new Error('model refusal');

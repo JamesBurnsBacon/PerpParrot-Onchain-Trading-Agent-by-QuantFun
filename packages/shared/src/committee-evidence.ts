@@ -3,6 +3,9 @@ import {validateEvidence,byteLength} from './review-evidence.ts';
 import {commitment,verifyInputCommitments} from './commitments.ts';
 import type {Binding,Frame,Policy} from './contracts.ts';
 import type {Evidence} from './review-evidence.ts';
+/** Evidence sent with each model call. ~1 MB (about 250k tokens) fits the model's context with room
+ * for prompts and output; the earlier 105 KB came from Chainlink CRE's HTTP limits (removed). */
+export const COMMITTEE_PAYLOAD_BYTES=1_000_000;
 export interface CommitteeEvidence {
   schemaVersion:Binding['schemaVersion'];snapshotHash:string;policyHash:string;asOfMs:number;
   finalists:({candidate:number;kind:Frame['candidates'][number]['kind'];metrics:Frame['candidates'][number]['metrics']} & Pick<Evidence['finalists'][number],'equityCurve'|'positions'|'patterns'>)[];
@@ -28,6 +31,6 @@ export function bindCommitteeEvidence(frame:Frame,policy:Policy,addresses:Readon
   if(frame.pairs.length!==evidence.pairs.length||new Set(frame.pairs.map(p=>`${Math.min(p.a,p.b)}:${Math.max(p.a,p.b)}`)).size!==frame.pairs.length)throw new Error('incomplete committee matrix');
   for(const pair of evidence.pairs){const original=frame.pairs.find(p=>p.a===pair.a&&p.b===pair.b||p.a===pair.b&&p.b===pair.a);if(!original||original.correlation!==pair.correlation||original.linkedSource!==pair.linkedSource)throw new Error('contradictory committee matrix');}
   const payload={schemaVersion:frame.schemaVersion,snapshotHash:frame.snapshotHash,policyHash:frame.policyHash,asOfMs:frame.asOfMs,finalists,pairs:structuredClone(frame.pairs).sort((a,b)=>a.a-b.a||a.b-b.b)};
-  if(byteLength(payload)>105000)throw new Error('committee payload exceeds reserved request budget');
+  if(byteLength(payload)>COMMITTEE_PAYLOAD_BYTES)throw new Error('committee payload exceeds reserved request budget');
   return {...payload,evidenceHash:commitment('perpparrot:committee-evidence:v1',payload)};
 }
