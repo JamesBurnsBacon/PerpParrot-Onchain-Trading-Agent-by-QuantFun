@@ -75,6 +75,7 @@ The backend can fail over its Hyperliquid info reads to NOWNodes' copy (`hype.no
 | `INFO_SHADOW_PERCENT` | Share of official `clearinghouseState` reads also sent to NOWNodes in the background and compared (account value, position count); nothing waits for it. |
 | `PICK_OVERLAP_GUARD` | `on` (with `NOWNODES_API_KEY`) makes the 10-minute pick read the top 60 candidates' books, **NOWNodes first** (official API as the fallback), and prefer candidates whose book does not overlap one already chosen by more than the policy's `maxExposureOverlap`. Off by default; see below. |
 | `NOWNODES_PROBE` | `on` (with a routing mode other than `official` and a key) probes, in the background and at most every 6 hours per instance, which info methods NOWNodes answers. A method on the allowlist that NOWNodes answers 422 for stops being retried there; nothing is ever added. Off by default. The same probe runs by hand with `NOWNODES_API_KEY=… bun run packages/backend/scripts/probe-nownodes.ts`. |
+| `CONTRACT_CHECK` | `on` (with a key) reads `eth_getCode` from NOWNodes' HyperEVM endpoint (`hype.nownodes.io/evm`) for each AI-review pick and records which have code on HyperEVM in the run's `finalists.contracts`; the dashboard marks them. It shows code, not trading: the 7 such addresses checked on 2026-10-07 held no perp positions at that check. Evidence only: it never selects or excludes. A read that fails is "unread", never "not a contract". Off by default. |
 | `SNAPSHOT_VERIFY` | `on` or `strict` (with a key) reads every source's positions again from NOWNodes before a mirror snapshot is stored and compares them asset by asset (tolerance `SNAPSHOT_VERIFY_TOLERANCE_PCT`, default 1%, and never less than $5). A difference that survives a re-read of both providers stores nothing and fails the run with a 503, which the executor records and alerts on; the next run rebuilds. If NOWNodes cannot be read, `on` stores the snapshot as usual and `strict` refuses it. `strict` without a key refuses to start rather than running unchecked; a tolerance outside 0-50% falls back to 1%. After a mismatch both providers are read again, and the snapshot is refused unless they agree with each other *and* with what it recorded. Off by default; see below. |
 
 Only `meta`, `perpDexs`, `clearinghouseState`, `spotClearinghouseState`, `webData2`, `userVaultEquities`, `spotMeta` and `vaultSummaries` can go to NOWNodes; `portfolio`, fills and the rest always use the official API (NOWNodes answers 422). The executor is not routed. Three NOWNodes failures in a row pause it for 60 s. `GET /pipeline` returns `routing` (reads, average latency and errors per provider, failovers, shadow matches) and the dashboard's Pipeline panel shows it when NOWNodes is in use.
@@ -83,9 +84,38 @@ Only `meta`, `perpDexs`, `clearinghouseState`, `spotClearinghouseState`, `webDat
 
 **Snapshot cross-check.** `SNAPSHOT_VERIFY` adds a second delivery path to the same Hyperliquid state: it catches a stale or partial answer from one provider before the executor sizes orders from it. It cannot catch an error Hyperliquid itself makes, and it only compares what NOWNodes serves (`clearinghouseState`: positions), not `portfolio` equity. The outcome is not written into the snapshot (the snapshot's bytes are hashed and never change); `GET /pipeline` returns `verification` (checks, verified, blocked, unverified, the last result) from the instance that answers, so on Vercel the counters are per instance. A run the check blocks also skips that run's paper-book step, because no snapshot is stored.
 
+**Try the cross-check on live data before turning it on.** `NOWNODES_API_KEY=… bun run packages/backend/scripts/verify-live-dryrun.ts` reads the fixture's sources from the official API, checks them against NOWNodes (expected: verified), then checks a doctored copy (expected: mismatch). Read-only; exit 0 only when both come out as expected. One run is one moment in time.
+
 **Try the failover without touching anything.** `bun run packages/backend/scripts/chaos-read-demo.ts` runs the real router twice over a simulated network in which the official API answers 429 for part of the run, once with the default routing and once with `overflow`, and prints the failed reads, failovers and virtual latency of each. It uses no key and no network.
 
 `split` is slower (NOWNodes measured about 1.7x the official latency), so prefer `overflow` unless a benchmark says otherwise.
+
+## Turning the NOWNodes features on (checklist)
+
+Every NOWNodes feature is off by default: with its variables unset the code is the path from before NOWNodes. Before assuming what a deployment runs, look at its real configuration (`vercel env ls production`). Nothing needs doing until someone decides to switch a feature on, and in a shared environment that is agreed first. The order below goes from "cannot touch trading" to "can stop a run". The executor is never routed through NOWNodes, whatever is set.
+
+**Before setting anything** (read-only, no deploy). Give the key to the two commands through a hidden prompt, so it does not land in the shell history, a PR or a chat:
+
+```bash
+printf 'NOWNodes key: '; read -rs NOWNODES_API_KEY; echo; export NOWNODES_API_KEY
+bun run packages/backend/scripts/probe-nownodes.ts        # exits 0 when the allowlist and NOWNodes agree
+bun run packages/backend/scripts/verify-live-dryrun.ts    # prints OK when a live snapshot verifies and a doctored copy does not
+unset NOWNODES_API_KEY
+```
+
+**Setting a variable:** on the Vercel project the backend deploys from, `vercel env add <NAME> production` (it prompts for the value; use the prompt for the key), then redeploy: a variable takes effect with the next deployment. Check on `GET /api/backend/pipeline`. All of these need `NOWNODES_API_KEY`; step 2 also needs `INFO_ROUTING=overflow` from step 1 (the probe does not run in `official` mode).
+
+| Step | Set | What it can do to trading | What to see afterwards |
+|---|---|---|---|
+| 1 | `NOWNODES_API_KEY`, `INFO_ROUTING=overflow` | Changes where a read comes from only after the official API fails it (429, 5xx, timeout); while the official API answers, nothing. | `routing.mode` is `overflow`; `routing.nownodes.requests` stays 0 until the official API fails. |
+| 2 | `NOWNODES_PROBE=on` | Can stop retrying a method NOWNodes refuses (never adds one). | `routing.capabilities` appears after the first routed read; `narrowed` is `[]`. |
+| 3 | `CONTRACT_CHECK=on` | Nothing; evidence only. | After the next AI review, `latest.finalists.contracts` is present and the finalist table marks contracts. |
+| 4 | `SNAPSHOT_VERIFY=on` | **Can stop a run**: a confirmed mismatch stores no snapshot and the executor records a failed run. With NOWNodes unreadable it still stores the snapshot (so use `on`; `strict` would refuse it, and refuses to start without a key). | `verification.verified` grows with each snapshot and `verification.unverified` stays 0 (a growing `unverified` means NOWNodes could not be read and nothing was compared); `verification.mismatches` stays 0. `verification.mode` reads `off` until the first check has run. |
+| 5 | `PICK_OVERLAP_GUARD=on` | **Can change the picks**, and so trigger more AI reviews. Not part of the default recommendation. | `latest.finalists.overlapGuard`. |
+
+Not recommended: `SNAPSHOT_VERIFY=strict` (a NOWNodes outage would stop trading) and `INFO_ROUTING=split` (NOWNodes measured slower per read).
+
+**Undo:** remove a feature's own variable (`vercel env rm <NAME> production`) and redeploy; that changes only that feature. Remove the feature variables before `NOWNODES_API_KEY`. `routing.mode` returns to `official` only once `INFO_ROUTING` is removed; `verification` stops growing once `SNAPSHOT_VERIFY` is removed. Picks the overlap guard already changed are not reverted: the next scoring just stops using it.
 
 ## Selection pipeline (2026-10-07; [docs/ingest/PIPELINE.md](../ingest/PIPELINE.md))
 

@@ -19,6 +19,7 @@ import { ENTER_OI_USD, fetchOpenInterest } from "../eligibility";
 import { PacedInfo, getJson } from "./hl";
 import { routingStats } from "./info-router";
 import { verificationStats } from "../snapshot-verify";
+import { checkContracts, nownodesCode, type CodeReader } from "./contract-check";
 import { overlapGuard, readPositionsBulk, type GuardSummary, type PositionReader } from "./overlap-pick";
 import { pickVaults } from "./vaults";
 import { parsePortfolio, scoreCandidates, toFrameCandidates, type ScoreInput, type ScoreResult } from "../score";
@@ -59,6 +60,8 @@ export type PipelineOptions = {
   // PICK_OVERLAP_GUARD=on (and NOWNODES_API_KEY): prefer picks whose books do not overlap (overlap-pick.ts).
   overlapGuard?: boolean;
   positions?: PositionReader; // book reader for the guard (tests)
+  // CONTRACT_CHECK=on (and NOWNODES_API_KEY): record which picks are contracts on HyperEVM (contract-check.ts). Evidence only.
+  contractCode?: CodeReader;
   picks?: number; // how many accounts a pick keeps (default PICKS; tests)
   // "strict": only the review core's VALID manifest activates. "basic" (default): when the core
   // rejects for missing measured evidence, keep the finalists the AI rated acceptable (below).
@@ -312,6 +315,18 @@ export class Pipeline {
     const funnel = result.funnel;
     await sql`update selection_runs set finalists = ${JSON.stringify({ finalists, funnel, highFrequency, ...(guard ? { overlapGuard: guard } : {}), ...(scope === "seats" ? { scope } : {}) })}::text::jsonb where id = ${id}`;
     if (score.candidates.length === 0) throw new Error(`no frame candidates (${result.finalists.length} finalists)`);
+
+    // Which picks are contracts on HyperEVM, via NOWNodes' /evm. Evidence only: nothing here selects or excludes.
+    const code = this.o.contractCode ?? (process.env.CONTRACT_CHECK === "on" && process.env.NOWNODES_API_KEY ? nownodesCode(process.env.NOWNODES_API_KEY) : undefined);
+    if (code) {
+      try {
+        const contracts = await checkContracts(score.addresses, code);
+        await sql`update selection_runs set finalists = coalesce(finalists, '{}'::jsonb) || ${JSON.stringify({ contracts })}::text::jsonb where id = ${id}`;
+        log("contract check", { id, checked: contracts.checked, contracts: contracts.contracts.length, unread: contracts.unread.length, ms: contracts.ms });
+      } catch (e) {
+        log("contract check not recorded", { id, error: String((e as Error)?.message ?? e) });
+      }
+    }
 
     // Live positions and equity of each finalist (the review's evidence and the leverage check).
     type State = Parameters<typeof positionsFromStates>[0][number] & { marginSummary: { accountValue: string } };

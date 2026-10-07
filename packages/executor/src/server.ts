@@ -21,12 +21,20 @@ const log = (msg: string, extra: Record<string, unknown> = {}) =>
 
 // Supabase Postgres supplies durable run claims, runs, controls and action journals.
 // Production configuration rejects a missing DATABASE_URL.
-// Small pools: Supabase's session pooler allows 15 connections across every instance of the
-// executor (the backend uses the transaction pooler). 3, not fewer: a run holds one for the run
-// lock (lock.ts) while its queries need another, and an operator action may wait on the lock with
-// a third. On Vercel they let go quickly; the long-running executor (Railway) keeps 4.
+// Small pools: Supabase's session pooler allows 20 connections across every instance of both
+// services (raised from 15 on 2026-10-07). 3, not fewer: a run holds one for the run lock (lock.ts)
+// while its queries need another, and an operator action may wait on the lock with a third. On
+// Vercel they let go quickly; the long-running executor (Railway) keeps 4 instead of Bun's 10.
 const sql = process.env.DATABASE_URL ? new SQL(process.env.DATABASE_URL, config.vercel ? { max: 3, idleTimeout: 5 } : { max: 4 }) : undefined;
 const store = sql ? new PostgresStore(sql) : new MemoryStore();
+// The dashboard's reads (/status, /runs, /equity) and the watchdog go through Supabase's transaction
+// pooler (port 6543) when EXECUTOR_READ_DATABASE_URL is set: they hold no session state, and a burst of
+// dashboard polling or overlapping deployments then can't take the session connections runs need.
+// The transaction pooler can't keep prepared statements.
+const readSql = process.env.EXECUTOR_READ_DATABASE_URL
+  ? new SQL(process.env.EXECUTOR_READ_DATABASE_URL, { prepare: false, ...(config.vercel ? { max: 2, idleTimeout: 5 } : {}) })
+  : undefined;
+const readStore = readSql ? new PostgresStore(readSql) : store;
 const alert = createAlert({ botToken: config.telegramBotToken, chatId: config.telegramChatId, log: (m) => log(m) });
 // Report write-ahead intents a crash left without a recorded outcome. Nothing is paused: the next
 // run reconciles them from Hyperliquid automatically (reconcile.ts). Never fatal, so a database
@@ -80,9 +88,10 @@ const runner = new Runner({
 const app = createApp({
   runner,
   store,
+  readStore,
   adminToken: config.adminToken,
   cronSecret: config.cronSecret,
-  watchdog: cronWatchdog({ store, alert, now: Date.now, afterMs: config.missedRunAlertMinutes * 60_000, everyMs: 5 * 60_000 }),
+  watchdog: cronWatchdog({ store: readStore, alert, now: Date.now, afterMs: config.missedRunAlertMinutes * 60_000, everyMs: 5 * 60_000 }),
   log,
   status: () => ({
     dryRun: config.dryRun,
@@ -90,7 +99,7 @@ const app = createApp({
     apiWallet: exchange.signer,
     frozenConfigurationHash: config.frozenConfigurationHash,
     lastRunAt: runner.lastRunAt || null,
-    store: sql ? "postgres" : "memory",
+    store: sql ? (readSql ? "postgres (reads: transaction pooler)" : "postgres") : "memory",
   }),
 });
 

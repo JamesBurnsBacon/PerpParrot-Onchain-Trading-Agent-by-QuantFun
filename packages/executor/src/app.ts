@@ -8,6 +8,9 @@ import type { ExecutorStore } from "./store";
 export type AppDeps = {
   runner: Runner;
   store: ExecutorStore;
+  // The public dashboard reads (/status, /runs, /equity): Supabase's transaction pooler when
+  // EXECUTOR_READ_DATABASE_URL is set, so they don't use up the session pooler runs need.
+  readStore?: ExecutorStore;
   adminToken?: string;
   watchdog?: () => Promise<Record<string, unknown>>;
   cronSecret?: string;
@@ -51,18 +54,19 @@ export const createApp = (deps: AppDeps) => async (req: Request): Promise<Respon
 
   if (req.method === "GET" && pathname === "/health") return json({ ok: true });
   if (req.method === "GET" && pathname === "/status") {
-    return json({ ...deps.status(), controls: await deps.store.getControls() }, 200, PUBLIC);
+    return json({ ...deps.status(), controls: await (deps.readStore ?? deps.store).getControls() }, 200, PUBLIC);
   }
   // Public run log: plans, order results and what each run traded toward (README §4.11).
   if (req.method === "GET" && pathname === "/runs") {
     const summary = searchParams.get("summary") === "1";
     const limit = Math.min(Math.max(Number(searchParams.get("limit") ?? 20) || 20, 1), summary ? 500 : 200);
-    return json(await (summary ? deps.store.recentRunSummaries(limit) : deps.store.recentRuns(limit)), 200, PUBLIC);
+    const reads = deps.readStore ?? deps.store;
+    return json(await (summary ? reads.recentRunSummaries(limit) : reads.recentRuns(limit)), 200, PUBLIC);
   }
   if (req.method === "GET" && pathname === "/equity") {
     const now = Date.now(); let cached = equityCaches.get(deps);
     if (!cached || now - cached.at > 60_000) {
-      const all = await deps.store.equityCurve();
+      const all = await (deps.readStore ?? deps.store).equityCurve();
       cached = { at: now, body: { runs: all.length, points: thin(all.filter((p) => !p.dryRun).map((p): [number, number] => [p.t, p.equityUsd]), 1500) } };
       equityCaches.set(deps, cached);
     }
