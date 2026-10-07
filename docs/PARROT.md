@@ -1,42 +1,20 @@
 # Parrot: wallet exploration over the existing pipeline
 
-`/parrot` is a voice-first wallet explorer with an optional text-chat path. It is **an extra view over the existing pipeline**: it reuses tracked Hyperliquid accounts, Score, the shared shortlist contract and read-only book evidence. The Parrot adds presentation—nicknames, bird tiles and explanations—and can save a pending simulation request. It sits outside the ten-minute execution loop and has no trading authority.
+## Start here
 
-```text
-Existing pipeline on our infrastructure:
-Hyperliquid → Score → AI review (Role / Risk / Red-Team) → frozen configuration
-                                                             ↓
-                      snapshots + target exposures → executor → recorded runs / paper books
-                             │                            (separate authority)
-                             └──────── read-only evidence ──────────┐
-Score finalists + active configuration ─────────────────────────────┤
-                                                                   ↓
-Visitor → WebRTC GPT-Live → delegated backend model → set_strategy → Parrot
-          gpt-live-1        gpt-5.6-terra                │            ↓
-                                               POST /live/strategy  shortlist + facts
-Visitor → hold to confirm → POST /chat/preview → PENDING simulation request
-                                                 ↓
-                                     separate operator review and freeze
-```
+- [Overview and documentation index](parrot/README.md)
+- [Developer integration, setup and deployment checklist](parrot/INTEGRATION.md)
+- [Presenter script, fallbacks and honest claims](parrot/DEMO.md)
 
-Architecture and operations: [README §§4.7, 4.8, 4.14](../README.md), [runbook](ops/RUNBOOK.md), [deployment](ops/DEPLOY.md), [AI review integration](agents/INTEGRATION.md), [verified integration status](agents/PRODUCTION_INTEGRATION.md). Chainlink CRE and its DON are removed; do not reintroduce that architecture.
+This is the technical reference for selection semantics, wire contracts, lifecycle details and recorded verification. The root [design](../README.md), [runbook](ops/RUNBOOK.md) and [AI review integration](agents/INTEGRATION.md) describe the surrounding pipeline.
 
 ## Invariants
 
-1. **No trading authority.** No orders, signing keys, administrative credentials, execution endpoints or configuration freeze operations belong in Parrot code. Keep `parrot-no-authority.test.ts` unchanged.
-2. **Confirmation saves only a PENDING request.** Every saved preview has `approvalRequired: true` and the base policy unchanged except `mode: "SIMULATION"`. Requested leverage never enters that policy. Only separate operator review and freeze can lead to execution.
-3. **Code owns selection and facts.** Validate the shared `StrategyIntent`; treat model prose and visitor text as untrusted data. Never change Score, frozen policy or allocation rules through a prompt, nickname, vibe or retrieved context.
-4. **The server owns the voice session.** The browser data channel permits exactly `response.item.create`, `response.create`, `session.close`; it cannot replace prompts, tools, models or delegation.
-5. **Keep controls intact.** `CHAT_ENABLED` and `LIVE_ENABLED` default off and are independent. Preserve rate limits, reservations, shared daily budget, microphone teardown, response guards and speech suppression of sound effects.
-6. **Keep development materials out of production.** Preserve the `NODE_ENV`-guarded dynamic imports and the `/parrot/lab` `outputFileTracingExcludes` entry in `next.config.ts`.
+The canonical [invariants and ownership boundaries](parrot/INTEGRATION.md#invariants-and-ownership) live in the integration guide.
 
 ### Instructions for agents editing this feature
 
-Read root `AGENTS.md` and `packages/dashboard/AGENTS.md` first. Check current source and tests rather than older PRs or memory. Keep changes behavior-preserving unless a feature change is explicitly requested; preserve sound mapping, persona text and HTTP shapes. Do not add dependencies.
-
-These files belong to other workstreams: `packages/shared/strategy-intent.ts`, `packages/backend/src/strategy-intent-adapter.ts`, `packages/backend/test/strategy-intent.test.ts`, `packages/backend/scripts/review-input.ts`, backend `src/pipeline/*`, `src/paper/*`, `src/score/*`, `packages/executor/**`, `.github/workflows/*`, root `AGENTS.md`, root `README.md`, and `vercel.json`. Read them to understand integration; do not edit them for a Parrot cleanup.
-
-Run both packages' type checks and tests, then the dashboard webpack build and production marker scan below. For selection, context or scheduler refactors, also run the relevant mutation script. Use local tools for offline work; do not install packages or run provider evaluations without network authorization. Make small English commits when Git permissions allow.
+Follow the integration guide's [ownership rules](parrot/INTEGRATION.md#invariants-and-ownership) and [pre-merge / pre-deploy checklist](parrot/INTEGRATION.md#pre-merge--pre-deploy-checklist). Verification commands remain [below](#verify-offline).
 
 ## Visitor preferences and available facts
 
@@ -100,27 +78,7 @@ Local backend paths below are served under `/api/backend` on Vercel. Browser req
 
 `previous` accepts up to 25 distinct known finalist ids; unknown ids/keys are rejected. The shared preview limiter also covers `/live/strategy`. Rate/budget rejections return 429 with `retryAfterSec`. Only a definite provider 4xx releases the reservation; 5xx, timeouts and unusable bodies retain it. Provider bodies and keys never reach the browser.
 
-| Environment variable | Default / purpose |
-| --- | --- |
-| `OPENAI_API_KEY` | Server-only key for text intent extraction, voice sessions and receipt Decisions |
-| `CHAT_ENABLED` / `LIVE_ENABLED` | Off; only literal `true` enables each |
-| `DECISIONS_ENABLED` | Off; only literal `true` enables receipt calls |
-| `DECISIONS_MODEL` | `gpt-6-luna`; server-owned model |
-| `DECISIONS_PRICE_PER_M_USD` | 0.10; estimate per million input tokens, no output charge |
-| `DECISIONS_IP_HOURLY_LIMIT` / `DECISIONS_GLOBAL_DAILY_LIMIT` | 240 / 3000; independent call counts, shared daily budget |
-| `CHAT_MODEL` | `gpt-5.4-mini` |
-| `CHAT_IP_SALT` | `perpparrot-chat-v1`; hashes client IP for limiter storage |
-| `CHAT_DAILY_BUDGET_USD` | 5; shared chat/Live/Decisions reservation budget |
-| `CHAT_IP_HOURLY_LIMIT` / `CHAT_GLOBAL_DAILY_LIMIT` | 10 / 100 |
-| `CHAT_PREVIEW_IP_HOURLY_LIMIT` / `CHAT_PREVIEW_GLOBAL_DAILY_LIMIT` | 30 / 500 |
-| `CHAT_PRICE_IN_PER_M_USD` / `CHAT_PRICE_OUT_PER_M_USD` | 1 / 4; reservation estimates |
-| `LIVE_MODEL` / `LIVE_BACKEND_MODEL` | `gpt-live-1` / `gpt-5.6-terra` |
-| `LIVE_VOICE` / `LIVE_BACKEND_REASONING` | `gleam` / `medium` |
-| `LIVE_MAX_SESSION_SECONDS` | 180; integer 1–900, browser countdown only |
-| `LIVE_IP_HOURLY_LIMIT` / `LIVE_GLOBAL_DAILY_LIMIT` | 3 / 30 sessions |
-| `LIVE_VOICE_PRICE_PER_MIN_USD` / `LIVE_BACKEND_ALLOWANCE_USD` | 0.05 / 0.15; per-minute estimate plus per-session allowance |
-
-Invalid optional numeric settings fall back to defaults. Session reservations use at least 15 seconds plus the backend allowance. Database configuration and frozen-configuration loading follow the runbook. Apply migrations `20261006140000_chat.sql`, then `20261007000000_live_usage.sql` and `20261008000000_decisions_usage.sql`; without a database, request/limiter stores are in-memory and do not provide durable or cross-instance state.
+Environment defaults, Vercel ownership and migration order have one home in [Integration](parrot/INTEGRATION.md#environment-and-vercel-ownership). Session reservations use at least 15 seconds plus the backend allowance.
 
 ### Receipt Guillotine
 
@@ -134,7 +92,7 @@ Enable `DECISIONS_ENABLED=true` and the server key for real calls; the switch de
 
 On disabled, rate-limited or failed requests, **CACHED DEMO** offers six hand-authored preset results. The Lens says **cached, no API call**, describing the displayed illustration; the preceding failed attempt may have reached the provider. Free text is disabled with a reason. Cached examples have no request/response, token count, latency or charged cost. Reload after the operator restores service to try live calls again.
 
-Residual risks: the API is beta (GA expected within weeks); the parser reads `answers`, `model` and `usage.input_tokens` and ignores other usage detail fields, which the real API returns (hand-extended fixture `packages/backend/test/fixtures/decisions.hand-extended.json`: it replaces the old two-answer fixture, preserving its recorded usage shape but adding a synthetic `states_a_fact` answer; it is **not** a new API recording). The grounding and relation questions can disagree (a real run called "Wallet A had the higher Sharpe." faithful with 0% support), so the page stamps UNCLEAR when the relation and `supported_by_facts` contradict each other (`settle` in `lib/parrot-receipts.ts`) and shows that disagreement. Accuracy beyond the 18-sentence check below, sarcasm and languages other than English and Japanese are unverified; output is a model's opinion about the sentence, never about the market. Prompt-injection resistance is an instruction boundary, not a guarantee. Pricing is a configurable estimate, provider rate limits are undocumented, and byte-based reservations are conservative estimates rather than provider billing caps. Provider spend controls remain an operational backstop.
+Residual risks: the API is public beta (general-availability timing is not verified); the parser reads `answers`, `model` and `usage.input_tokens` and ignores other usage detail fields, which the real API returns (hand-extended fixture `packages/backend/test/fixtures/decisions.hand-extended.json`: it replaces the old two-answer fixture, preserving its recorded usage shape but adding a synthetic `states_a_fact` answer; it is **not** a new API recording). The grounding and relation questions can disagree (a real run called "Wallet A had the higher Sharpe." faithful with 0% support), so the page stamps UNCLEAR when the relation and `supported_by_facts` contradict each other (`settle` in `lib/parrot-receipts.ts`) and shows that disagreement. Accuracy beyond the 18-sentence check below, sarcasm and languages other than English and Japanese are unverified; output is a model's opinion about the sentence, never about the market. Prompt-injection resistance is an instruction boundary, not a guarantee. Pricing is a configurable estimate, provider rate limits are undocumented, and byte-based reservations are conservative estimates rather than provider billing caps. Provider spend controls remain an operational backstop.
 
 Offline checks: `bun packages/backend/scripts/receipt-mutations.ts` exercises facts validation, required `states_a_fact`, facts/request consistency, the two-request cap, drop-oldest waiting, sample override rejection, the relation enum, 4xx budget release and the browser's unknown-key guard in a disposable tree. It requires assertion RED, restored GREEN and matching workspace/disposable SHA-256. The real-Postgres migration test skips without `TEST_DATABASE_URL`. Offline tests cannot establish provider compatibility, real billable cost, deployment, visual layout, animation, sound or browser interaction acceptance.
 
@@ -162,22 +120,11 @@ Production receipts are **silent**, with no verdict sounds or added animations; 
 
 Offline proof: `bun packages/dashboard/scripts/compact-receipt-mutations.ts` runs the real hook harness in disposable copies. Removing the never-worked guard and misapplying a late result to the latest row must each fail their named assertion, then pass after restoration with matching workspace/disposable SHA-256. `test/fixtures/parrot-live-before.html` freezes the live-stage markup captured from pre-integration commit `84ded11`; unavailable production renders compare byte-for-byte against it. The native-dialog host tests verify handlers and focus-return delegation, not actual browser Tab containment or screen-reader behavior.
 
-Live-specific residual risks: sentence segmentation is heuristic, with punctuation lookahead, decimal/version/address exceptions, short-fragment merging and a 200-character cap. A 180 ms silence timer releases terminal punctuation, so a delayed decimal continuation or closing quote can still segment incorrectly; unfinished text on End is not judged. Output transcript timing is not audio playback timing, so a card/verdict may lead or lag what is heard. The owner measured the old two-question API at 0.33–0.71 s and roughly **$0.00005 per call**; the new three-question live path has no real latency/cost measurement. Accuracy on noisy transcripts, banter classification and sustained bursts is unverified. These verdicts remain a model opinion about the receipt, not market truth or advice. Public facts mode accepts caller-supplied text; it does not attest its provenance.
+Live-specific residual risks: sentence segmentation is heuristic, with punctuation lookahead, decimal/version/address exceptions, short-fragment merging and a 200-character cap. A 180 ms silence timer releases terminal punctuation, so a delayed decimal continuation or closing quote can still segment incorrectly; unfinished text on End is not judged. Output transcript timing is not audio playback timing, so a card/verdict may lead or lag what is heard. The owner measured the old two-question API at 0.33–0.71 s and roughly **$0.00005 per call**; the later typed-turn three-question measurement is recorded in [Verification record](#verification-record); sustained latency/cost and real spoken audio remain unverified. Accuracy on noisy transcripts, banter classification and sustained bursts is unverified. These verdicts remain a model opinion about the receipt, not market truth or advice. Public facts mode accepts caller-supplied text; it does not attest its provenance.
 
 ### Run locally
 
-Backend, from `packages/backend` (memory stores and labelled sample; no database required):
-
-```sh
-CONFIGURATION_PATH=fixtures/frozen-configuration.json \
-FROZEN_CONFIGURATION_HASH=<configurationHash from that file> \
-CHAT_ENABLED=true LIVE_ENABLED=true OPENAI_API_KEY=<local secret> \
-PORT=8788 bun run src/server.ts
-```
-
-Dashboard, from `packages/dashboard`: `bun run dev`, then open `http://localhost:3000/parrot`. The development rewrite points `/api/backend` to port 8788. Real voice/text calls require provider access; offline inspection can use cached demo or the labs. Allow microphone access in the browser for voice testing. End, cancellation, hidden tab, errors and countdown expiry close media; unfinished strategy updates clear the confirmable plan.
-
-Deployment uses the existing Vercel project and service routing. Someone with Vercel team access must add `OPENAI_API_KEY` and the desired switches to the correct project/environment; GitHub Actions secrets are not automatically Vercel environment variables. Keep Live disabled outside the intended demo window. No deployment is implied by an offline build.
+Use [local setup](parrot/INTEGRATION.md#migrations-and-local-setup) and the [presentation pre-flight](parrot/DEMO.md#prerequisites-and-pre-flight). End, cancellation, hidden tab, errors and countdown expiry close media; unfinished strategy updates clear the confirmable plan.
 
 ### Verify offline
 
