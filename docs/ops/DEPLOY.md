@@ -31,6 +31,8 @@ vault standing in for ours; the services only *read* it.
    ADMIN_TOKEN=<openssl rand -hex 32; keep it in a password manager>
    CRON_SECRET=<openssl rand -hex 32>
    DATABASE_URL=<service-role connection string>
+   BACKEND_DATABASE_URL=<transaction pooler connection string, port 6543>  # backend only; the
+   # session pooler (DATABASE_URL) allows 15 clients in all, and the executor's run lock needs it
    ```
    Don't set `BACKEND_URL` (the binding injects it), `DRY_RUN`, `HL_API_WALLET_KEY` or the
    `NEXT_PUBLIC_*` URLs (the executor runs production rules on Vercel and refuses `DRY_RUN=false`
@@ -62,36 +64,63 @@ vault standing in for ours; the services only *read* it.
 Going live (`DRY_RUN=false`, API wallet, funding, a long-running executor) is RUNBOOK § Deploy
 step 5 and is not part of this rehearsal.
 
-## Selection pipeline (basic flow, 2026-10-07)
+## NOWNodes failover (optional)
 
-The backend discovers 100 leaderboard traders (≥ $10k, positive month and all-time PnL, by month
-PnL) and 100 vaults (hyperliquidvaults.com's top by its score, else Hyperliquid's vault list).
-It refreshes their portfolio and fills every 5 minutes. Twice a day (06:00 and 18:00 UTC, and
-once right after the first full refresh) it scores them, has the AI committee review the
-finalists, freezes the result for `HL_ACCOUNT` and activates it. The backend then serves the
-active configuration and the executor checks targets against its hash.
+The backend can fail over its Hyperliquid info reads to NOWNodes' copy (`hype.nownodes.io/info`). It is off by default; with `INFO_ROUTING` unset or `official` the code path is a plain `fetch` to `api.hyperliquid.xyz`, as before.
 
-**Basic gate (default):** the review core can't pass anyone yet, because the frame has no
-measured out-of-sample or execution evidence. When it rejects, the pipeline keeps finalists the
+| Variable | Meaning |
+|---|---|
+| `NOWNODES_API_KEY` | Required for anything but `official`. Set it as a Vercel env var with `vercel env add` (never in the repo). |
+| `INFO_ROUTING` | `official` (default), `overflow` (a read the official API answers with 429, 5xx or a timeout is retried on NOWNodes), `split` (`INFO_SPLIT_PERCENT`, default 25, of capable reads go to NOWNodes first, failing over to official). |
+| `INFO_SHADOW_PERCENT` | Share of official `clearinghouseState` reads also sent to NOWNodes in the background and compared (account value, position count); nothing waits for it. |
+| `PICK_OVERLAP_GUARD` | `on` (with `NOWNODES_API_KEY`) makes the 10-minute pick read the top 60 candidates' books, **NOWNodes first** (official API as the fallback), and prefer candidates whose book does not overlap one already chosen by more than the policy's `maxExposureOverlap`. Off by default; see below. |
+
+Only `meta`, `perpDexs`, `clearinghouseState`, `spotClearinghouseState`, `webData2`, `userVaultEquities`, `spotMeta` and `vaultSummaries` can go to NOWNodes; `portfolio`, fills and the rest always use the official API (NOWNodes answers 422). The executor is not routed. Three NOWNodes failures in a row pause it for 60 s. `GET /pipeline` returns `routing` (reads, average latency and errors per provider, failovers, shadow matches) and the dashboard's Pipeline panel shows it when NOWNodes is in use.
+
+**Overlap guard.** The pick is Score's top 25. With the guard on, the top 60 are read (about 120 `clearinghouseState` calls, ~2 s in parallel, none of the official API's 1,200 weight/min), the ranking is walked best first, and a candidate whose same-direction overlap (`review/overlap.ts`) with one already chosen is above `maxExposureOverlap` is left out; Score then runs again without the left-out accounts. The pick never shrinks (left-out ones come back in rank order if the pool is short). A single failed read, a paused NOWNodes, or any error leaves Score's own pick, and the guard needs `NOWNODES_API_KEY` (without it nothing runs, so it never turns into a burst on the official API). The run's `finalists.overlapGuard` records what it did and the dashboard shows it. Because a book changes within minutes, turning it on can change the picks more often than today (each change of the 25 triggers an AI review); watch `selection_runs` before leaving it on.
+
+`split` is slower (NOWNodes measured about 1.7x the official latency), so prefer `overflow` unless a benchmark says otherwise.
+
+## Selection pipeline (2026-10-07; [docs/ingest/PIPELINE.md](../ingest/PIPELINE.md))
+
+Every 12 hours (00:15 and 12:15 UTC) the backend scans every leaderboard trader (≥ $10k, positive
+month and all-time PnL) and HyperCore vault (hyperliquidvaults.com's list first, then
+Hyperliquid's: open, not a child, ≥ $10k, ≥ 39 days old), about 14k accounts. The refresh
+(every 5 minutes, 900 weight/min) keeps their portfolios within 12 hours and reads the
+qualified accounts' portfolio and fills every hour, three reads at a time. Primary sources
+(hyperliquidvaults.com's vaults, the leaderboard's top 200) are read first. Once they are fresh
+and 95% of a scan is (or 3.5 hours after the scan), Score qualifies its top 250. Every 10 minutes Score picks 25 from the qualified list, leaving out
+high-frequency traders (> 100 orders a day). When the 25 change, the AI committee reviews them;
+the result is frozen for `HL_ACCOUNT` and activated if its sources differ from the active set's
+(otherwise the run is `kept`). The backend serves the active configuration and the executor
+checks targets against its hash.
+
+**Basic gate (default):** the AI review sees measured evidence for each finalist (hold time,
+leverage, trailing holdouts, execution fit, exposure overlap; docs/ingest/PIPELINE.md "Review
+gate"), but its strict rules rarely keep the 5 sources a freeze needs. When it rejects, the pipeline keeps finalists the
 Role model doesn't reject and that have no Risk score above the reject threshold (evidence risk
 aside). It weights them by Aggressive fit, within the per-source cap, cash buffer and gross
 leverage, and needs at least 5. `REVIEW_GATE=strict` turns this off.
 
-1. **Supabase**: run `supabase/migrations/20261007120000_pipeline.sql` (new tables only; safe
-   before the deploy).
+1. **Supabase**: run `supabase/migrations/20261007120000_pipeline.sql`, then
+   `20261007150000_pipeline_qualified.sql` and `20261007160000_pipeline_primary.sql`, **before**
+   the deploy. `20261008010000_run_targets.sql` adds the target history; until it runs, each run
+   alerts "target history not saved" and otherwise trades as before. Both only add tables, columns
+   and a wider status check, and are safe to run twice. The new code reads the new columns, so
+   until they exist the pipeline routes fail.
 2. **Vercel variables**:
    - `HL_ACCOUNT` = our account (`0x7269502c48c582768ee38e4e71e7572e6ebf70f7`).
    - `DRY_RUN_EQUITY_USD=10000`.
    - `OPENAI_API_KEY` (already set).
-
-   Until the first configuration activates, mirror runs fail with "account mismatch": the
-   fixture still names the stand-in account. That's expected and nothing trades.
 3. **Merge** and wait for Ready. Watch `GET /api/backend/pipeline`:
-   - accounts `fresh` climbs to 200 in about 20–25 minutes;
-   - then the next `:x4` selection runs, and `active` shows the sources;
+   - `accounts.qualified` appears once the latest scan is 95% refreshed: from a 200-account
+     list right away, from a full 14k scan after ~8 hours;
+   - the qualified accounts' fills are read within about an hour, then the next `:x4` run picks
+     25 and reviews them, and `active` shows the sources;
    - the next `:x0` run trades toward them (dry run).
-4. **Operator**: `POST /api/backend/admin/pipeline/select` with `Authorization: Bearer $ADMIN_TOKEN`
-   forces a selection. `discover` and `refresh` work the same way.
+4. **Operator**: `POST /api/backend/admin/pipeline/scan|refresh|select` with
+   `Authorization: Bearer $ADMIN_TOKEN`. An operator's `select` qualifies on partial data and
+   reviews an unchanged pick.
 
 ## Upgrading a deployment from before 2026-10-07 (Chainlink CRE removed)
 

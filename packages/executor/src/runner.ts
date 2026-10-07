@@ -5,6 +5,8 @@ import { loadAccount, loadMarkets, type InfoFn } from "./hyperliquid";
 import { planFlatten, planOrders, type Market, type Plan, type PlanConfig } from "./planner";
 import type { ExecutorStore, RunRecord } from "./store";
 import type { TargetSource } from "./targets";
+import { targetRows } from "./target-rows";
+import { reconcileBatches } from "./reconcile";
 import { noLock, type RunLock } from "./lock";
 
 export type RunnerConfig = {
@@ -41,6 +43,9 @@ export type RunnerDeps = {
 export const cloidFor = (runId: string, asset: string): Hex => keccak256(toHex(`${runId}:${asset}`)).slice(0, 34) as Hex;
 
 type CancelToken = { cancelled: boolean };
+
+// A run's plan and what it was sized from (the target history rows need both).
+type Planned = { plan: Plan; runAt: number; sizingEquityUsd: number; exposures: Map<string, number>; configurationHash: string | null; snapshotHash: string | null };
 
 export class Runner {
   // One run at a time: runs are 10 minutes apart, so queueing is enough (README §4.8).
@@ -122,15 +127,24 @@ export class Runner {
       // Targets = exposure × our equity now (account = truth).
       const equity = this.deps.exchange.dryRun && config.dryRunEquityUsd ? config.dryRunEquityUsd : Math.max(account.equityUsd, 0);
       // A dry run sized on dryRunEquityUsd plans its margin on that equity too.
-      return planOrders(new Map(exposures.map((e) => [e.asset, e.fraction * equity])), { ...account, equityUsd: equity }, markets, config.plan);
+      const plan = planOrders(new Map(exposures.map((e) => [e.asset, e.fraction * equity])), { ...account, equityUsd: equity }, markets, config.plan);
+      return {
+        plan, runAt: runAt * 1000, sizingEquityUsd: equity, exposures: new Map(exposures.map((e) => [e.asset, e.fraction])),
+        configurationHash: targets.configurationHash, snapshotHash: targets.snapshotHash,
+      };
     }, expiresAt));
   }
 
   // Kill switch: close everything, whatever the targets say (README §4.8).
   flatten(by: string): Promise<RunRecord> {
     const id = `flatten-${this.deps.now()}`;
+    // Signed with an expiry like a mirror run, so a lost answer can be reconciled automatically.
+    const expiresAt = this.deps.now() + this.deps.config.runTtlSeconds * 1000;
     return this.serial(id, (token) =>
-      this.run(id, id, "flatten", { by }, token, async (markets, account) => planFlatten(account, markets, this.deps.config.plan.slippageBps)),
+      this.run(id, id, "flatten", { by }, token, async (markets, account) => ({
+        plan: planFlatten(account, markets, this.deps.config.plan.slippageBps),
+        runAt: this.deps.now(), sizingEquityUsd: account.equityUsd, exposures: new Map(), configurationHash: null, snapshotHash: null,
+      }), expiresAt),
     );
   }
 
@@ -140,21 +154,27 @@ export class Runner {
     kind: RunRecord["kind"],
     evidence: unknown,
     token: CancelToken,
-    makePlan: (markets: Map<string, Market>, account: Awaited<ReturnType<typeof loadAccount>>, record: RunRecord) => Promise<Plan>,
+    makePlan: (markets: Map<string, Market>, account: Awaited<ReturnType<typeof loadAccount>>, record: RunRecord) => Promise<Planned>,
     expiresAt?: number,
   ): Promise<RunRecord> {
     const { store, exchange, info, alert, now, config } = this.deps;
     const record: RunRecord = { id, runId, kind, status: "executed", dryRun: exchange.dryRun, startedAt: now(), finishedAt: 0, evidence };
     let release: (() => Promise<void>) | undefined;
+    let history: (Planned & { markets: Map<string, Market>; account: Awaited<ReturnType<typeof loadAccount>> }) | undefined;
     try {
       release = await (this.deps.lock ?? noLock).acquire(config.runTimeoutMs);
+      // Earlier actions whose outcome was never recorded are reconciled automatically (reconcile.ts);
+      // they never pause trading. Perps of an action that might still land are left alone this run.
       const unresolved = await store.unresolvedOrderBatches();
-      if (kind === "mirror" && unresolved.length > 0) {
-        await store.setControls({ paused: true, updatedAt: now(), updatedBy: `unresolved-order-batch:${unresolved[0].id}` });
-        record.status = "skipped_paused";
-        record.error = `${unresolved.length} order batch(es) need reconciliation`;
-        await alert(`${runId}: execution held; reconcile order batch ${unresolved[0].id}`);
-        return record;
+      let inFlight = new Set<string>();
+      if (unresolved.length > 0) {
+        const outcome = await reconcileBatches({ store, info, account: config.account, now, runTtlSeconds: config.runTtlSeconds }, unresolved);
+        inFlight = outcome.inFlight;
+        for (const assetId of outcome.leverageAssetIds) this.leverageSet.delete(assetId);
+        if (outcome.resolved.length > 0) {
+          await alert(`${runId}: auto-reconciled ${outcome.resolved.length} earlier order action(s): ${outcome.resolved.map((r) => `${r.id} (${r.evidence})`).join(" | ")}`.slice(0, 3_500));
+        }
+        if (inFlight.size > 0) await alert(`${runId}: leaving ${[...inFlight].sort().join(", ")} untouched this run: an earlier action may still land`);
       }
       const controls = await store.getControls();
       if (kind === "mirror" && controls.paused) {
@@ -163,8 +183,15 @@ export class Runner {
       }
       const [markets, account] = await Promise.all([loadMarkets(info), loadAccount(info, config.account)]);
       record.equityUsd = account.equityUsd;
-      const plan = await makePlan(markets, account, record);
+      const planned = await makePlan(markets, account, record);
+      const { plan } = planned;
+      // A flatten still closes everything: reduce-only orders can't add to whatever lands.
+      if (kind === "mirror" && inFlight.size > 0) {
+        plan.skipped.push(...plan.orders.filter((o) => inFlight.has(o.asset)).map((o) => ({ asset: o.asset, reason: "IN_FLIGHT" as const, targetUsd: o.targetUsd, currentUsd: o.currentUsd })));
+        plan.orders = plan.orders.filter((o) => !inFlight.has(o.asset));
+      }
       record.plan = plan;
+      history = { ...planned, markets, account };
 
       // Re-read durable controls after asynchronous work and before each exchange
       // action. A pause or expiry while loading accounts/updating leverage must
@@ -182,9 +209,9 @@ export class Runner {
         if (reason) throw new Error(reason);
       };
 
-      // Journal account leverage changes before dispatch; ambiguous results block
-      // every later exchange action until an operator checks account state. A definitive
-      // HL refusal skips only that asset's order, as before (README §4.8).
+      // Journal account leverage changes before dispatch. An ambiguous result ends this run's
+      // exchange actions; the next run reconciles it from Hyperliquid (reconcile.ts). A definitive
+      // HL refusal skips only that perp's order (README §4.8).
       const failedLeverage = new Set<string>();
       for (const o of plan.orders) {
         await assertActive();
@@ -240,13 +267,25 @@ export class Runner {
             cloids: [...cloids],
             kind: "orders",
           }),
-          afterResponse: (batchIndex, results) => store.finishOrderBatch(`${id}:${batchIndex}`, results),
+          afterResponse: async (batchIndex, results) => {
+            try {
+              await store.finishOrderBatch(`${id}:${batchIndex}`, results);
+            } catch (error) {
+              // Even the final/only batch must fail the run if its result is not durable.
+              // Preserve the observed fills; exchange.submit stops subsequent batches.
+              // The dispatching intent remains the recovery authority after a restart.
+              // The batch stays 'dispatching'; the next run reconciles it automatically.
+              record.status = "failed";
+              record.error = `journal write failed after dispatch (batch ${batchIndex} is reconciled on the next run): ${(error as Error).message}`;
+              throw error;
+            }
+          },
         },
       );
       if (record.results.some((r) => r.status === "unknown")) {
+        // Later batches were not sent; the next run reconciles this one from Hyperliquid and trades on.
         record.status = "failed";
-        record.error = "exchange outcome unknown; reconcile order IDs and account before resuming";
-        await store.setControls({ paused: true, updatedAt: now(), updatedBy: `unknown-outcome:${id}` });
+        record.error = "exchange outcome unknown; the next run reconciles it automatically";
       }
       if (record.results.some((r) => r.status === "not_sent")) record.status = "failed";
       // Don't overwrite a more important error (e.g. an unknown exchange outcome).
@@ -266,6 +305,13 @@ export class Runner {
       record.finishedAt = now();
       try {
         await store.saveRun(record);
+        // Target history is a record, not a control: a failed write is alerted, never fails the run.
+        if (history) {
+          const { markets, account, plan, ...sizing } = history;
+          await Promise.resolve()
+            .then(() => store.saveTargets(targetRows({ record, plan, markets, account, ...sizing, cloidFor: (asset) => cloidFor(id, asset) })))
+            .catch((e) => alert(`${runId}: target history not saved: ${(e as Error).message}`).catch(() => undefined));
+        }
       } finally {
         // A failed unlock must not hide the run (or a saveRun error); Postgres releases the
         // session lock with its connection anyway.

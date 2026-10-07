@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { ExposureBars, Funnel, Panel, PaperTable, RunStrip, StatTile, TargetsVsHeld, Waiting } from "../components/Charts";
 import { Finalists } from "../components/Finalists";
 import { LineChart } from "../components/LineChart";
+import { Pipeline } from "../components/Pipeline";
 import { RunLog } from "../components/RunLog";
 import { performanceSeries, pct, runTime, stamp, time, useDashboard, usd, type Series } from "../lib/data";
 
@@ -111,6 +112,12 @@ export default function Page() {
         )}
         <Panel title="Heartbeat" meta="one cell per 10-min run">
           {data?.runs?.length ? <RunStrip runs={data.runs} /> : <Waiting what="No runs yet" source="executor /runs" />}
+        </Panel>
+      </div>
+
+      <div className="mb-4">
+        <Panel title="Selection pipeline" meta="scan 12 h → refresh 5 min → qualify ~250 → pick 25 every 10 min → AI review → activate">
+          {data?.pipeline ? <Pipeline view={data.pipeline} /> : <Waiting what="Pipeline not running yet" source="backend /pipeline" />}
         </Panel>
       </div>
 

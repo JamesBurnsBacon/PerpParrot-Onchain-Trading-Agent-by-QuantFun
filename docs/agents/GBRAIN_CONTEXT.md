@@ -68,10 +68,11 @@ Do not claim GBrain is active merely because its plugin or MCP entry appears con
 
 An approved record should be short and source-backed, for example:
 
-> Fact: executor restart recovery uses a durable order-action journal and starts paused
-> when unresolved actions remain. Source: `packages/executor/src/server.ts`,
+> Fact: executor recovery uses a durable order-action journal; each run reconciles
+> unresolved actions from Hyperliquid automatically and never pauses (only a human does).
+> Source: `packages/executor/src/reconcile.ts`, `packages/executor/src/runner.ts`,
 > `packages/executor/src/pg-store.ts`, and `docs/ops/RUNBOOK.md`. Last checked: YYYY-MM-DD.
-> Limitation: this does not establish successful Postgres recovery drills or real
+> Limitation: this does not establish successful Postgres recovery drills or a live
 > Hyperliquid reconciliation.
 
 Update or withdraw this record when code or runbook behavior changes. Do not use it as

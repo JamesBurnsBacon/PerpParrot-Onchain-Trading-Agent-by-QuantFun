@@ -39,6 +39,16 @@ const fakeInfo = (account: { equity: string; core?: [string, string][]; xyz?: [s
     throw new Error(`unexpected info request ${req.type}`);
   }) as InfoFn;
 
+// Hyperliquid's answers for reconciliation: orderStatus by client order ID, activeAssetData by perp.
+const withOrders = (base: InfoFn, statuses: Record<string, unknown>, assetData: Record<string, unknown> = {}): InfoFn =>
+  (async (req: Record<string, unknown>) => {
+    if (req.type === "orderStatus") return statuses[req.oid as string] ?? { status: "unknownOid" };
+    if (req.type === "activeAssetData") return assetData[req.coin as string] ?? { leverage: { type: "cross", value: 1 } };
+    return base(req);
+  }) as InfoFn;
+const orderStatus = (status: string, origSz: string, sz: string) => ({ status: "order", order: { order: { origSz, sz }, status } });
+const order = (asset: string) => ({ asset, assetId: 0, isBuy: true, price: "100500", size: "0.01", reduceOnly: false, notionalUsd: 1000, targetUsd: 1000, currentUsd: 0 });
+
 const setup = (info: InfoFn) => {
   const store = new MemoryStore();
   // The backend's answer per run; tests override a run's targets here.
@@ -135,6 +145,30 @@ describe("Runner.executeRun (dry run)", () => {
     expect(await store.unresolvedOrderBatches()).toEqual([]);
   });
 
+  test("records one target-history row per perp, with the order and its result", async () => {
+    const { runner, store } = setup(fakeInfo({ equity: "400", core: [["ETH", "-0.05"]] }));
+    await runner.executeRun(AS_OF);
+    const rows = await store.recentTargets(10);
+    expect(rows.map((r) => [r.asset, r.action, r.side, r.resultStatus])).toEqual([
+      ["BTC", "order", "buy", "dry_run"],
+      ["ETH", "order", "sell", "dry_run"],
+    ]);
+    expect(rows[1]).toMatchObject({
+      runId: `mirror-${AS_OF}`, runAt: AS_OF * 1000, kind: "mirror", runStatus: "executed", dryRun: true,
+      configurationHash: CONFIGURATION, snapshotHash: `0x${"cd".repeat(32)}`, sizingEquityUsd: 400,
+      targetExposure: -0.875, targetUsd: -350, heldSize: -0.05, heldUsd: -200, gapUsd: -150, cloid: cloidFor(`mirror-${AS_OF}`, "ETH"),
+    });
+  });
+
+  test("a failed target-history write is alerted and never fails the run", async () => {
+    const { runner, store, alerts } = setup(fakeInfo({ equity: "400", core: [["ETH", "-0.05"]] }));
+    store.saveTargets = async () => { throw new Error("run_targets missing"); };
+    const run = await runner.executeRun(AS_OF);
+    expect(run.status).toBe("executed");
+    expect((await store.recentRuns(1))[0].status).toBe("executed");
+    expect(alerts).toEqual([`mirror-${AS_OF}: target history not saved: run_targets missing`]);
+  });
+
   test("expiry during leverage setup prevents the order batch", async () => {
     const { runnerDeps, exchange } = setup(fakeInfo({ equity: "400" }));
     let clock = AS_OF * 1000;
@@ -204,38 +238,104 @@ describe("Runner.executeRun (dry run)", () => {
     expect((await store.recentRuns(1))[0]).toEqual(run);
   });
 
-  test("unknown exchange outcome pauses subsequent runs for reconciliation", async () => {
-    const { runnerDeps, exchange, store } = setup(fakeInfo({ equity: "400" }));
+  test("unknown exchange outcome fails the run but never pauses; the next run reconciles it and trades on", async () => {
+    const { runnerDeps, exchange, store, alerts } = setup(withOrders(fakeInfo({ equity: "400" }), {
+      [cloidFor(`mirror-${AS_OF}`, "BTC")]: orderStatus("filled", "0.012", "0"),
+    }));
     let submissions = 0;
-    exchange.submit = async (orders, cloids, _stop, _expiry, journal) => {
-      submissions++;
+    const submit = exchange.submit.bind(exchange);
+    exchange.submit = async (orders, cloids, stop, expiry, journal) => {
+      if (++submissions > 1) return submit(orders, cloids, stop, expiry, journal);
       await journal?.beforeDispatch(0, orders, cloids);
-      const results = [{ asset: "BTC", status: "unknown" as const, error: "response lost" }];
+      const results = orders.map((o) => ({ asset: o.asset, status: "unknown" as const, error: "response lost" }));
       await journal?.afterResponse(0, results);
       return results;
     };
-    const runner = new Runner(runnerDeps);
-    const run = await runner.executeRun(AS_OF);
+    const run = await new Runner(runnerDeps).executeRun(AS_OF);
     expect(run.status).toBe("failed");
-    expect(run.error).toContain("reconcile order IDs");
-    expect((await store.getControls()).paused).toBe(true);
-    const next = await runner.executeRun(AS_OF + 600);
-    expect(next.status).toBe("skipped_paused");
-    expect(submissions).toBe(1);
-    const [batch] = await store.unresolvedOrderBatches();
-    expect(batch).toMatchObject({ state: "uncertain", runId: run.id });
-    await store.reconcileOrderBatch(batch.id, "operator", "Verified all client order IDs and current positions against the exchange", AS_OF * 1000);
+    expect(run.error).toContain("reconciles it automatically");
+    expect((await store.getControls()).paused).toBe(false);
+    expect(await store.unresolvedOrderBatches()).toMatchObject([{ state: "uncertain", runId: run.id }]);
+
+    // Ten minutes on, the action is past its signed expiry: reconciled from Hyperliquid, then a normal run.
+    const next = await new Runner({ ...runnerDeps, now: () => (AS_OF + 600) * 1000 }).executeRun(AS_OF + 600);
+    expect(next.status).toBe("executed");
+    expect(submissions).toBe(2);
+    expect(await store.unresolvedOrderBatches()).toEqual([]);
+    expect(alerts.find((a) => a.includes("auto-reconciled 1"))).toContain("BTC 0x");
+    expect(alerts.find((a) => a.includes("auto-reconciled 1"))).toContain("filled, filled 0.012 of 0.012");
+  });
+
+  test("an action Hyperliquid already shows final is reconciled before its expiry", async () => {
+    const cloid = `0x${"34".repeat(16)}` as Hex;
+    const { runner, store, alerts } = setup(withOrders(fakeInfo({ equity: "400" }), { [cloid]: orderStatus("canceled", "0.01", "0.01") }));
+    await store.beginOrderBatch({ id: "earlier:0", runId: "earlier", createdAt: AS_OF * 1000, orders: [order("BTC")], cloids: [cloid], kind: "orders" });
+    const run = await runner.executeRun(AS_OF);
+    expect(run.status).toBe("executed");
+    expect(run.plan?.orders.map((o) => o.asset)).toEqual(["BTC", "ETH"]);
+    expect(await store.unresolvedOrderBatches()).toEqual([]);
+    expect(alerts.join()).toContain("every order final on Hyperliquid");
+  });
+
+  test("an action that may still land leaves only its perps untouched; everything else trades", async () => {
+    const cloid = `0x${"56".repeat(16)}` as Hex;
+    const { runner, store, alerts } = setup(withOrders(fakeInfo({ equity: "400" }), {}));
+    await store.beginOrderBatch({ id: "earlier:0", runId: "earlier", createdAt: AS_OF * 1000, orders: [order("BTC")], cloids: [cloid], kind: "orders" });
+    const run = await runner.executeRun(AS_OF);
+    expect(run.status).toBe("executed");
+    expect(run.plan?.orders.map((o) => o.asset)).toEqual(["ETH"]);
+    expect(run.plan?.skipped).toContainEqual({ asset: "BTC", reason: "IN_FLIGHT", targetUsd: 1200, currentUsd: 0 });
+    expect((await store.getControls()).paused).toBe(false);
+    expect(await store.unresolvedOrderBatches()).toMatchObject([{ id: "earlier:0" }]);
+    expect(alerts).toContain(`mirror-${AS_OF}: leaving BTC untouched this run: an earlier action may still land`);
+  });
+
+  test("final IOC result write failure fails the run without pausing; the next run reconciles and trades", async () => {
+    const { runnerDeps, exchange, store } = setup(fakeInfo({ equity: "400" }));
+    const finish = store.finishOrderBatch.bind(store);
+    store.finishOrderBatch = async (id, results) => {
+      if (!id.includes(":leverage:")) throw new Error("IOC result database failure");
+      await finish(id, results);
+    };
+    const run = await new Runner(runnerDeps).executeRun(AS_OF);
+    expect(run.status).toBe("failed");
+    expect(run.error).toContain("batch 0 is reconciled on the next run");
+    expect(run.results?.map(r => r.status)).toEqual(["dry_run", "dry_run"]);
+    expect((await store.recentRuns(1))[0].status).toBe("failed");
+    expect((await store.unresolvedOrderBatches()).map(b => b.state)).toEqual(["dispatching"]);
+    expect((await store.getControls()).paused).toBe(false);
+    store.finishOrderBatch = finish;
+    const actions = exchange.recorded().length;
+    const next = await new Runner({ ...runnerDeps, now: () => (AS_OF + 600) * 1000 }).executeRun(AS_OF + 600);
+    expect(next.status).toBe("executed");
+    expect(exchange.recorded().length).toBeGreaterThan(actions);
     expect(await store.unresolvedOrderBatches()).toEqual([]);
   });
 
-  test("a batch left dispatching after a crash blocks the next run", async () => {
-    const { runner, store, exchange } = setup(fakeInfo({ equity: "400" }));
+  test("a batch left dispatching after a crash is reconciled by the next run, which trades", async () => {
+    const { runnerDeps, store, exchange } = setup(fakeInfo({ equity: "400" }));
     await store.beginOrderBatch({ id: "orphaned:0", runId: "orphaned", createdAt: AS_OF * 1000, orders: [], cloids: [], kind: "orders" });
-    const next = await runner.executeRun(AS_OF + 600);
-    expect(next.status).toBe("skipped_paused");
-    expect(next.error).toContain("need reconciliation");
-    expect((await store.getControls()).paused).toBe(true);
-    expect(exchange.recorded()).toEqual([]);
+    const next = await new Runner({ ...runnerDeps, now: () => (AS_OF + 600) * 1000 }).executeRun(AS_OF + 600);
+    expect(next.status).toBe("executed");
+    expect((await store.getControls()).paused).toBe(false);
+    expect(exchange.recorded().length).toBeGreaterThan(0);
+    expect(await store.unresolvedOrderBatches()).toEqual([]);
+  });
+
+  test("an uncertain leverage update is reconciled from Hyperliquid and set again on the next opening order", async () => {
+    const s = setup(withOrders(fakeInfo({ equity: "400" }), {}, { BTC: { leverage: { type: "cross", value: 40 } } }));
+    const original = s.exchange.setLeverage;
+    let fail = true;
+    s.exchange.setLeverage = async (assetId, lev, expiry) => {
+      if (assetId === 0 && fail) throw new Error("socket hang up");
+      return original(assetId, lev, expiry);
+    };
+    expect((await s.runner.executeRun(AS_OF)).status).toBe("failed");
+    fail = false;
+    const next = await s.runner.executeRun(AS_OF + 600);
+    expect(next.status).toBe("executed");
+    expect(await s.store.unresolvedOrderBatches()).toEqual([]);
+    expect(s.alerts.join()).toContain("BTC leverage cross 40x (wanted cross 40x)");
   });
 
   test("sets leverage once per asset across runs", async () => {
@@ -370,6 +470,13 @@ describe("Runner.flatten", () => {
       ["xyz:MSFT", 110_000, true, true],
     ]);
   });
+  test("records the flatten's closes in the target history (target 0)", async () => {
+    const { runner, store } = setup(fakeInfo({ equity: "400", core: [["BTC", "0.002"]] }));
+    const run = await runner.flatten("test");
+    expect(await store.recentTargets(5)).toMatchObject([
+      { runId: run.id, kind: "flatten", asset: "BTC", targetExposure: 0, targetUsd: 0, heldUsd: 200, gapUsd: -200, action: "order", reduceOnly: true, configurationHash: null },
+    ]);
+  });
 });
 
 describe("app routes", () => {
@@ -442,7 +549,7 @@ describe("app routes", () => {
     expect(await store.getControls()).toMatchObject({ paused: true, updatedBy: "james" });
   });
 
-  test("uncertain order batches can only be reconciled with authenticated evidence", async () => {
+  test("a human can still reconcile a batch by hand, with authenticated evidence", async () => {
     const { app, store } = make("s3cret");
     await store.beginOrderBatch({
       id: "run:0", runId: "run", createdAt: AS_OF * 1000,
@@ -452,9 +559,11 @@ describe("app routes", () => {
     expect((await app(get())).status).toBe(401);
     const listing = await app(get({ authorization: "Bearer s3cret" }));
     expect(await listing.json()).toMatchObject([{ id: "run:0", state: "dispatching" }]);
+    // Unresolved actions never block a resume: runs reconcile them on their own.
+    await store.setControls({ paused: true, updatedAt: 1, updatedBy: "james" });
     const resume = await app(post("/admin/resume", { headers: { authorization: "Bearer s3cret" } }));
-    expect(resume.status).toBe(409);
-    expect(await resume.json()).toMatchObject({ unresolved: 1, paused: true });
+    expect(resume.status).toBe(200);
+    expect((await store.getControls()).paused).toBe(false);
     const invalid = await app(post("/admin/reconcile-batch", {
       headers: { authorization: "Bearer s3cret", "content-type": "application/json" },
       body: JSON.stringify({ id: "run:0", evidence: "looked" }),
@@ -464,9 +573,10 @@ describe("app routes", () => {
       headers: { authorization: "Bearer s3cret", "x-operator": "james", "content-type": "application/json" },
       body: JSON.stringify({ id: "run:0", evidence: "Verified client order ID, fills and positions against Hyperliquid" }),
     }));
-    expect(await resolved.json()).toMatchObject({ reconciled: "run:0", unresolved: 0, paused: true });
+    expect(await resolved.json()).toEqual({ reconciled: "run:0", unresolved: 0 });
     expect(await store.unresolvedOrderBatches()).toEqual([]);
-    expect((await store.getControls()).paused).toBe(true);
+    // A manual reconciliation leaves the controls as they were.
+    expect((await store.getControls()).paused).toBe(false);
   });
 
   test("reconciliation waits for an active run (the run lock)", async () => {

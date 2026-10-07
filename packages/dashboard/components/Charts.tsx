@@ -173,6 +173,7 @@ const SKIP_LABEL: Record<string, string> = {
   UNKNOWN_MARKET: "no market",
   SIZE_ROUNDS_TO_ZERO: "rounds to 0",
   LEVERAGE_FAILED: "leverage failed",
+  IN_FLIGHT: "earlier order in flight",
 };
 
 // Last run, per asset: target (bar) vs held before the run (tick), and what the executor did.

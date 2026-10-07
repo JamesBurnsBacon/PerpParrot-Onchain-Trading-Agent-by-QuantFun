@@ -138,11 +138,13 @@ configuration (e.g. the fixture before the go-live freeze). First-time setup, st
       perps) and approves the API wallet (trade, no withdraw). It never moves funds.
    5. Set `HL_API_WALLET_KEY` and `DRY_RUN=false` on the executor and redeploy. Watch the next
       run's `results` in `/runs`.
-   6. **Crash recovery:** an unresolved entry in `GET /admin/order-batches` means an exchange
-      action may have reached Hyperliquid without a durable response. Keep the executor paused,
-      compare the recorded client order IDs and assets against live account/order state, then use
-      `POST /admin/reconcile-batch` with operator identity and a written evidence record. Resume
-      only after every unresolved action is settled or reconciled; never resubmit by assumption.
+   6. **Crash recovery is automatic:** an unresolved entry in `GET /admin/order-batches` is an
+      exchange action without a recorded outcome (a lost response or a crash). The next run
+      reconciles it from Hyperliquid by client order ID, once its signed expiry (run time + 5 min)
+      has passed or every order is already final. It closes the batch with
+      `resolved_by = 'auto-reconciler'` and the order statuses as evidence, and trades on. A
+      Telegram alert says what was reconciled. Nothing pauses; pausing and flattening are human
+      actions. `POST /admin/reconcile-batch` is still there to close a batch by hand.
 
 ## Freeze (go-live set)
 
@@ -188,6 +190,7 @@ redeploy of the current deployment), then flatten. While paused, runs are still 
 | `GET {executor}/runs?limit=N` (≤ 200) | per run: `runId`, `kind`, `status`, `dryRun`, equity, `plan` (orders, skipped legs with reasons, margin scale), `results` (per-order fill/error), `evidence` (snapshot hash, configuration hash, targets) | public, CORS `*` |
 | Supabase `executor_runs` | same rows as `/runs` | anon `select` |
 | Supabase `run_snapshots` | each run's snapshot JSON (`body`, exact bytes) and its keccak hash | anon `select` |
+| Supabase `run_targets` | target history: one row per perp per run (target exposure and USD, held, gap, the order or skip reason, the fill) | anon `select` |
 | Supabase `executor_controls` | kill-switch state | anon `select` |
 
 ### Publishing the backtest, funnel and finalists

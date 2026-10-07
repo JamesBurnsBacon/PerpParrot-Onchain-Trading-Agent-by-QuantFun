@@ -2,7 +2,7 @@
 
 > Copy the best Hyperliquid perps traders and vaults, picked by quant screens and an AI agent, mirrored every ten minutes.
 >
-> **TOKEN2049 Origins Hackathon** · Track: **AI x Crypto** · Status: scoring, AI review, mirror runs and executor built; dry run live on Vercel (perpparrot.vercel.app)
+> **TOKEN2049 Origins Hackathon** · Tracks: **AI x Crypto** · **NOWNodes Multichain Infrastructure Challenge** · Status: scoring, AI review, mirror runs and executor built; dry run live on Vercel (perpparrot.vercel.app)
 >
 > **Direction (2026-10-07): no Chainlink CRE.** We no longer depend on Chainlink approving us for real usage, and the
 > product is simpler without it: **read Hyperliquid → process (score, frozen configuration, targets) → AI review →
@@ -88,6 +88,9 @@
 ## 4. Components
 
 ### 4.1 Ingest (backend)
+
+The [research screening v1 methodology](docs/ingest/RESEARCH_SCREENING_V1.md) documents the October 6 first-pass shortlist, exact return and selection rules, and two reproducible high-return examples. It describes a local research snapshot; formal Score eligibility remains separate.
+
 - **Universe:**
   - the leaderboard file (~47.5k addresses)
   - the HyperCore vault list (~3.1k open)
@@ -100,6 +103,7 @@
   - **Daily snapshots:** save each tracked address's `month` points (in the `allTime` PnL baseline). `allTime` is coarse (7–14 days between points for older accounts), so this is the only way to get ~16-hour resolution beyond 30 days.
 - **Fills** (trade count, leverage, holding times, maker share): only for addresses that pass the cheap filters.
 - Cache the leaderboard every few hours and save every snapshot.
+- **Production schedule** (Vercel Cron, state in Supabase): a scan every 12 h (~14k accounts), a rate-limited refresh every 5 min, a qualified list of ~250, and 25 picked every 10 min (high-frequency traders left out). See [docs/ingest/PIPELINE.md](docs/ingest/PIPELINE.md).
 
 ### 4.2 Score (backend)
 - **Hard filters:**
@@ -157,7 +161,7 @@
 ### 4.5 Source-set changes
 **Hackathon: the set is fully frozen at go-live.** The agent only monitors.
 
-**Production** (reselection daily or weekly):
+**Production** (25 sources picked **every 10 minutes** from a qualified list rebuilt every 12 h; a reviewed set whose sources changed goes live automatically at the next `:x0` run: [docs/ingest/PIPELINE.md](docs/ingest/PIPELINE.md)):
 
 | Type | Trigger | Handling |
 |---|---|---|
@@ -226,7 +230,7 @@ Code: `packages/executor`. A Bun service. Dry run deploys as the `executor` serv
 - **Kill switch:** manual, bearer-token admin routes (any team member with `ADMIN_TOKEN`; the dashboard calls them behind auth).
   - **Pause / resume:** stop or restart trading, keep positions.
   - **Flatten:** pause, then close everything reduce-only, whatever the targets say.
-- **Durable recovery:** run claims, runs, controls, and each exchange action's write-ahead intent/results are stored in Supabase. Before dispatch the executor journals the exact order batch and deterministic client IDs; an unknown response or restart with an unresolved batch pauses all new runs. Inspect `GET /admin/order-batches` with `ADMIN_TOKEN`; reconcile only after checking Hyperliquid order and position state, submit operator identity and evidence through `POST /admin/reconcile-batch`, then explicitly resume. Never retry an ambiguous order blindly. Apply `20261006180000_executor_order_journal.sql` before enabling the journaled executor.
+- **Durable recovery:** run claims, runs, controls, and each exchange action's write-ahead intent/results are stored in Supabase. Before dispatch the executor journals the exact order batch and deterministic client IDs; an unknown response, or a restart with an unresolved batch, is **reconciled automatically** by the next run (`packages/executor/src/reconcile.ts`). Every action is signed with `expiresAfter` (the run's expiry), so once that has passed it either landed or never will. The run looks up each client order ID with Hyperliquid's `orderStatus` (leverage with `activeAssetData`), records that as the evidence, and trades against the live account. Before expiry, a batch closes only if every order is already final; otherwise only its perps are left alone for that run (`IN_FLIGHT`) and everything else trades. **No bot pauses trading**: only a human pauses (`/admin/pause`) or flattens. `GET /admin/order-batches` and `POST /admin/reconcile-batch` remain for manual inspection. Never retry an ambiguous order blindly: the next run re-plans from the account. Apply `20261006180000_executor_order_journal.sql` before enabling the journaled executor.
 - **Run log:** `GET /runs` (plans, order results, evidence: snapshot hash, configuration, targets), `GET /runs?summary=1`, `GET /equity` and `GET /status`; retained in Supabase when `DATABASE_URL` is set. Vercel dry-run mode requires Supabase and `CRON_SECRET`; live trading remains restricted to one long-running executor.
 - **Alerts:** Telegram bot (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`) for failed runs, failed orders and missed runs.
 - **Account mode: unified** (one USDC balance margins core and `xyz` perps; `scripts/setup-account.ts`). Equity and the margin rule use HL's account value, which is only all usable margin in unified mode.
@@ -290,7 +294,7 @@ Status: built (`packages/dashboard`): live account vs paper books vs BTC, target
 - **One Vercel project, three services** (root `vercel.json`): dashboard at `/`, backend at `/api/backend/*`, executor at `/api/executor/*`. The executor reaches the backend over a service binding (`BACKEND_URL`). Supabase Postgres holds all state. Deploy and operations: [docs/ops/DEPLOY.md](docs/ops/DEPLOY.md), [docs/ops/RUNBOOK.md](docs/ops/RUNBOOK.md).
 - **Vercel Cron** (production deployments only): `:x9` snapshot pre-build, `:x0` executor run, every 5 min the missed-run watchdog. Cron routes require `CRON_SECRET`.
 - **Live trading** needs one long-running executor process (one HL nonce sequence, no function timeout): the `Dockerfile` + `railway.json` build it; it triggers its own runs at `:x0`. The executor refuses `DRY_RUN=false` on Vercel.
-- **Jobs that outgrow a function** (the leaderboard ingest, scheduled AI reviews): Vercel Cron if they fit, otherwise an AWS service (e.g. a scheduled container). Not decided yet.
+- **Ingest, scoring and scheduled AI reviews**: Vercel Cron as well (decided 2026-10-07; [docs/ingest/PIPELINE.md](docs/ingest/PIPELINE.md)). If Hyperliquid rate-limits Vercel's IPs, only the refresh job moves to one long-running process (Railway, same code).
 - **CI:** `.github/workflows/service-checks.yml` (backend and executor against Postgres, dashboard build) and `.github/workflows/agent-review-checks.yaml` (AI review core). No secrets in CI.
 
 ## 5. Stack
@@ -304,7 +308,8 @@ Status: built (`packages/dashboard`): live account vs paper books vs BTC, target
 | Storage / hosting | Supabase. One Vercel project with three services (root `vercel.json`): dashboard at `/`, backend at `/api/backend`, executor at `/api/executor`, Vercel Cron for the snapshot pre-build, the run and the missed-run watchdog. Live trading moves the executor to one long-running process (nonces and run ordering; `Dockerfile` + `railway.json`); the leaderboard download, once built, may need one too (too slow for a function). |
 | Secrets | Vercel env vars. `.env.example` only in the repo. Runbook: `docs/ops/RUNBOOK.md`. |
 | Testing | Fixtures, then $10–20 mainnet runs before the freeze. No testnet. |
-| Optional / unused | NOWNodes (HyperEVM RPC + an Info API copy) if it helps with rate limits; not a track. No AgentKit. |
+| NOWNodes challenge | NOWNodes (HyperEVM RPC + an Info API copy), our entry in its Multichain Infrastructure Challenge: a failover for the backend's Hyperliquid info reads and the first choice for the overlap guard's position reads. Both are opt-in and off by default; see "NOWNodes" below. |
+| Unused | No AgentKit. |
 
 ## 6. Timeline (SGT)
 Budget ~1 h of testing per 2 h of features. Integrate only tested modules.
@@ -340,9 +345,9 @@ Budget ~1 h of testing per 2 h of features. Integrate only tested modules.
 - [ ] ❓ Per-tier type-B threshold N (production)
 - [x] Backend → executor: **exposures** (§4.13); `rebalance-report.schema.json` (orders) is kept as a contract document only
 - [x] Live bucket: **Aggressive** (team decision 2026-10-06); enforced in the review core and the frozen-configuration checks
-- [x] Freeze confirmation: `configurationHash` pinned in the backend and executor environment; no HyperEVM contract
+- [x] Freeze confirmation: `configurationHash` pinned in the backend and executor environment; no HyperEVM contract. With automatic go-live it moves to an `active` row in Supabase ([docs/ingest/PIPELINE.md](docs/ingest/PIPELINE.md))
 - [x] Orchestration: **no Chainlink CRE** (2026-10-07); Vercel Cron and our own services, AWS if a job outgrows a function
-- [ ] ❓ Where scheduled AI reviews and the leaderboard ingest run (Vercel Cron vs. AWS)
+- [x] Scheduled AI reviews and the ingest: **Vercel Cron**, 12-hour scans, 25 picked every 10 minutes, automatic go-live ([docs/ingest/PIPELINE.md](docs/ingest/PIPELINE.md))
 - [ ] ❓ Our account mode: **unified** is simplest (one USDC balance margins core and `xyz`); standard mode needs USDC moved into each dex. Equity is read the same way either way
 
 ---
@@ -390,11 +395,18 @@ Budget ~1 h of testing per 2 h of features. Integrate only tested modules.
 - DefiLlama yields API (chain "Hyperliquid L1"): 529 pools, 75 with ≥ $1M TVL.
 - When a vault trades on HyperCore via CoreWriter, its HyperCore account shares the contract's address, so on the leaderboard it **looks like a normal address**. Hence the `eth_getCode` check.
 
-### NOWNodes (optional infra)
-- `hype.nownodes.io` has two parts:
-  - **HyperEVM JSON-RPC:** `eth_getCode`, `eth_call`, `eth_getLogs`, `eth_sendRawTransaction`, …
-  - **A copy of HL's Info API:** `clearinghouseState`, spot state, vault summaries, user vault equities, `webData2`, …
-- Missing from the Info API copy: `portfolio`, fill history, `userFunding`. No `/exchange`, so orders go to HL directly.
+### NOWNodes (our Multichain Infrastructure Challenge entry)
+- **Available integrations** (opt-in and off by default; each needs `NOWNODES_API_KEY` plus the flag named in its bullet; with nothing set the backend uses Hyperliquid only, as before):
+  - **Failover**: with `INFO_ROUTING=overflow`, an official-API read that fails (429, 5xx, timeout) is retried on NOWNodes for the eight methods it serves (`packages/backend/src/pipeline/info-router.ts`).
+  - **Shadow check**: `INFO_SHADOW_PERCENT=N` compares N% of official `clearinghouseState` reads with NOWNodes in the background (account value, position count).
+  - **First choice for bulk reads**: with `PICK_OVERLAP_GUARD=on`, the top 60 candidates' positions are read NOWNodes first (in a local benchmark on 2026-10-07, about 120 reads took ~2 s, all on NOWNodes, so none of the official API's 1,200 weight/min; a read that falls back to the official API does count against it) so the pick can leave out candidates that overlap one already chosen (`packages/backend/src/pipeline/overlap-pick.ts`).
+  - **Dashboard**: the Pipeline panel shows reads, latency and failovers per provider when NOWNodes is in use, and the overlap guard's summary above the finalists table.
+  - **Limits, stated plainly**: NOWNodes is slower per read (below) and does not serve `portfolio` or fills, so the existing paths stay on Hyperliquid; the defaults are Hyperliquid only; the guard's effect on returns is not measured.
+- `hype.nownodes.io` has two parts (key in the `api-key` header; measured 2026-10-07):
+  - **HyperEVM JSON-RPC** at `/evm` (`eth_blockNumber` answers; `/` is a 404).
+  - **A copy of HL's Info API** at `/info`. It serves `meta`, `perpDexs`, `clearinghouseState`, `spotClearinghouseState`, `webData2`, `userVaultEquities`, `spotMeta` and `vaultSummaries`.
+- It answers 422 for `portfolio`, `userFillsByTime`, `userFunding`, `metaAndAssetCtxs`, `vaultDetails`, `allMids`, `l2Book` and `candleSnapshot`, so the selection pipeline's heavy reads (`portfolio`, fills) stay on Hyperliquid. No `/exchange`, so orders go to HL directly.
+- About 1.7x slower than the official API per read (median 0.36 s vs 0.21 s). The backend therefore keeps Hyperliquid as the primary and uses NOWNodes only as a failover (`INFO_ROUTING=overflow`), see `docs/ops/DEPLOY.md`.
 - Paid plans advertise unlimited requests per second. It needs an API key. [Docs](https://docs.nownodes.io/hype)
 
 ### Coinbase AgentKit

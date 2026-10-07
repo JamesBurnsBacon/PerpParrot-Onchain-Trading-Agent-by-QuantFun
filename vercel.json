@@ -41,6 +41,7 @@
     { "path": "/api/backend/cron/snapshot", "schedule": "9,19,29,39,49,59 * * * *" },
     { "path": "/api/executor/cron/run", "schedule": "0,10,20,30,40,50 * * * *" },
     { "path": "/api/executor/cron/watchdog", "schedule": "*/5 * * * *" },
+    { "path": "/api/backend/cron/pipeline/scan", "schedule": "15 0,12 * * *" },
     { "path": "/api/backend/cron/pipeline/refresh", "schedule": "2,7,12,17,22,27,32,37,42,47,52,57 * * * *" },
     { "path": "/api/backend/cron/pipeline/select", "schedule": "4,14,24,34,44,54 * * * *" }
   ]

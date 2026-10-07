@@ -61,6 +61,12 @@ jobs:
         if: matrix.package == 'executor'
         run: bun install --frozen-lockfile --cwd ../backend
       - run: bun test
+      # The backend's Postgres tests again with prepared statements (the session pooler path; the
+      # first run is prepare: false, as production's transaction pooler).
+      - if: matrix.package == 'backend'
+        run: bun test test/pg-store.test.ts test/pipeline-pg.test.ts
+        env:
+          TEST_PG_PREPARE: "1"
       - run: bunx tsc --noEmit
 
   dashboard:

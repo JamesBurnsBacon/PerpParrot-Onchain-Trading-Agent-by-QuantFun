@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { fillStats, latestSlot, pickLeaderboard, selectionDue, type LeaderboardRow } from "../src/pipeline/derive";
+import { FILLS_PAGE, fillStats, isHighFrequency, pickLeaderboard, sameAddresses, scoringWindows, type Fill, type LeaderboardRow } from "../src/pipeline/derive";
 import { decodeSeroval } from "../src/pipeline/vaults";
 import { basicSources } from "../src/pipeline";
+import { PacedInfo } from "../src/pipeline/hl";
 import type { Policy, Row } from "../../shared/src/contracts.ts";
 
 const DAY = 86_400_000;
@@ -21,10 +22,21 @@ describe("fillStats", () => {
     );
     expect(stats.tradeCount).toBe(3);
     expect(stats.makerShare).toBeCloseTo(200 / 500);
+    expect(stats.ordersPerDay).toBeCloseTo(3 / 30); // a partial page covers the 30 days asked for
+  });
+
+  test("a full page is the oldest 2,000 fills: orders per day over the page's own span", () => {
+    // 2,000 fills, one order each, over 2 days: 1,000 orders a day, a high-frequency trader.
+    const fills: Fill[] = Array.from({ length: FILLS_PAGE }, (_, i) => ({ coin: "BTC", oid: i, px: "1", sz: "1", crossed: true, time: NOW - 10 * DAY + (i * 2 * DAY) / (FILLS_PAGE - 1) }));
+    const { ordersPerDay } = fillStats(fills, NOW);
+    expect(ordersPerDay).toBeCloseTo(1_000);
+    expect(isHighFrequency(ordersPerDay)).toBe(true);
+    expect(isHighFrequency(45)).toBe(false);
+    expect(isHighFrequency(null)).toBe(false); // unknown isn't high-frequency; Score's minTrades decides
   });
 
   test("no recent fills: maker share unknown", () => {
-    expect(fillStats([], NOW)).toEqual({ tradeCount: 0, makerShare: null });
+    expect(fillStats([], NOW)).toEqual({ tradeCount: 0, makerShare: null, ordersPerDay: null });
   });
 });
 
@@ -47,21 +59,16 @@ describe("pickLeaderboard", () => {
   });
 });
 
-describe("selection schedule", () => {
-  test("slots at 06:00 and 18:00 UTC", () => {
-    expect(new Date(latestSlot(Date.parse("2026-10-07T05:59:00Z"))).toISOString()).toBe("2026-10-06T18:00:00.000Z");
-    expect(new Date(latestSlot(Date.parse("2026-10-07T06:00:00Z"))).toISOString()).toBe("2026-10-07T06:00:00.000Z");
-    expect(new Date(latestSlot(Date.parse("2026-10-07T23:00:00Z"))).toISOString()).toBe("2026-10-07T18:00:00.000Z");
-  });
+test("scoringWindows keeps only month and allTime", () => {
+  const window = { accountValueHistory: [], pnlHistory: [] };
+  expect(scoringWindows([["day", window], ["month", window], ["perpMonth", window], ["allTime", window]])).toEqual([["month", window], ["allTime", window]]);
+});
 
-  test("once per slot; a failed run retries after 30 minutes; a rejection waits for the next slot", () => {
-    const at = (iso: string) => Date.parse(iso);
-    expect(selectionDue(at("2026-10-07T03:00:00Z"), [])).toBe(true);
-    expect(selectionDue(at("2026-10-07T03:00:00Z"), [{ startedAt: at("2026-10-07T02:00:00Z"), status: "rejected" }])).toBe(false);
-    expect(selectionDue(at("2026-10-07T03:00:00Z"), [{ startedAt: at("2026-10-07T02:40:00Z"), status: "failed" }])).toBe(false);
-    expect(selectionDue(at("2026-10-07T03:00:00Z"), [{ startedAt: at("2026-10-07T02:20:00Z"), status: "failed" }])).toBe(true);
-    expect(selectionDue(at("2026-10-07T06:05:00Z"), [{ startedAt: at("2026-10-07T02:00:00Z"), status: "activated" }])).toBe(true);
-  });
+test("sameAddresses ignores order and case", () => {
+  expect(sameAddresses(["0xAA", "0xbb"], ["0xbb", "0xaa"])).toBe(true);
+  expect(sameAddresses(["0xaa", "0xbb"], ["0xaa"])).toBe(false);
+  expect(sameAddresses(["0xaa", "0xbb"], ["0xaa", "0xcc"])).toBe(false);
+  expect(sameAddresses([], [])).toBe(true);
 });
 
 test("decodeSeroval: the site's object/array/number/string/constant nodes", () => {
@@ -92,8 +99,25 @@ describe("basicSources", () => {
     expect(sources[1].weight).toBeCloseTo(0.225); // 0.9 × 30/120
   });
 
+  test("keeps at most 15 sources, best fit first", () => {
+    const ids = Array.from({ length: 20 }, (_, i) => i);
+    const many = new Map(ids.map((c) => [c, `0x${(c + 1).toString(16).padStart(40, "0")}`]));
+    const sources = basicSources(ids, ids.map((c) => role(c, 40 + c)), ids.map((c) => risk(c)), policy, many, flat);
+    expect(sources).toHaveLength(15);
+    expect(sources.map((s) => s.candidate)).toEqual(ids.slice(5).reverse()); // fits 59 … 45
+  });
+
   test("scales to the policy's gross leverage", () => {
     const sources = basicSources([0, 1], [role(0, 50), role(1, 50)], [risk(0), risk(1)], policy, addresses, () => ({ executableTargets: 2, grossLeverage: 6, withinPolicy: false }));
     expect(sources[0].weight).toBeCloseTo(0.3 * (0.95 * 3) / 6);
   });
+});
+
+test("PacedInfo: concurrent reads share one budget", async () => {
+  const waits: number[] = [];
+  const ok = (async () => Response.json([])) as unknown as typeof fetch;
+  const started = Date.now();
+  const hl = new PacedInfo(60, ok, async (ms) => void waits.push(Math.round((ms + Date.now() - started) / 1000)));
+  await Promise.all([1, 2, 3].map(() => hl.post({ type: "portfolio" }, 20)));
+  expect(waits).toEqual([20, 40, 60]); // 20 weight each at 60 a minute
 });

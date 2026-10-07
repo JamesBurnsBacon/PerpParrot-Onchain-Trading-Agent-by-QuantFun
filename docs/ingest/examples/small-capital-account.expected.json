@@ -1,0 +1,58 @@
+{
+  "address": "0x3e7c16408c6691e0218167cee78bec7ebad03909",
+  "name": null,
+  "classification": "unverified-account",
+  "decision": "candidate",
+  "reasons": [
+    "recent-month-return-at-least-5pct",
+    "historical-stage-return-at-least-15pct"
+  ],
+  "flags": [
+    "short-history"
+  ],
+  "evaluatedAt": "2026-10-06T13:44:58.445Z",
+  "fetchedAt": "2026-10-06T10:50:51.931Z",
+  "evidenceSha256": "fc1bc1f9c5946ab9a340a9d6521c9196815cab7a025468db9685e9cb41875336",
+  "seedCapitalUsd": 15477.873075,
+  "capitalSource": "leaderboard-account-value",
+  "portfolioEquityUsd": 14425.062292,
+  "capitalAt": "2026-10-06T10:50:51.649Z",
+  "monthVolumeUsd": 36946618.09,
+  "observation": {
+    "start": "2026-07-22T22:26:00.016Z",
+    "end": "2026-10-06T10:50:51.649Z",
+    "days": 75.51726427083334,
+    "return": 55.988999688550166,
+    "pnlUsd": 22136.043062,
+    "maxDrawdown": 0.01865438018937704,
+    "drawdownPeak": "2026-09-14T21:46:00.055Z",
+    "drawdownTrough": "2026-09-15T22:06:00.059Z",
+    "maxGapDays": 7.041667141203703
+  },
+  "recentMonth": {
+    "start": "2026-09-05T22:26:00.053Z",
+    "end": "2026-10-06T10:50:51.649Z",
+    "days": 30.51726384259259,
+    "return": 3.892138586374948,
+    "pnlUsd": 14906.158698,
+    "maxDrawdown": 0.01865438018937704,
+    "drawdownPeak": "2026-09-14T21:46:00.055Z",
+    "drawdownTrough": "2026-09-15T22:06:00.059Z",
+    "maxGapDays": 1.054345636574074
+  },
+  "bestStage": {
+    "start": "2026-07-22T22:26:00.016Z",
+    "end": "2026-10-06T02:26:00.038Z",
+    "days": 75.1666669212963,
+    "return": 56.12125257688319,
+    "pnlUsd": 22175.930965000003,
+    "maxDrawdown": 0.01865438018937704,
+    "drawdownPeak": "2026-09-14T21:46:00.055Z",
+    "drawdownTrough": "2026-09-15T22:06:00.059Z",
+    "maxGapDays": 7.041667141203703
+  },
+  "lossBlocks": [],
+  "fineTimeShare": 0.40410976400239024,
+  "score": null,
+  "eligible": null
+}

@@ -2,6 +2,7 @@ import { SQL } from "bun";
 import { runAtMs, summarize, type Controls, type EquityPoint, type ExecutorStore, type OrderBatch, type RunRecord, type RunSummary } from "./store";
 import type { OrderResult } from "./exchange";
 import type { PlannedOrder } from "./planner";
+import type { TargetRow } from "./target-rows";
 import type { Hex } from "viem";
 
 // Every query gets a deadline so a dead database fails a run instead of hanging it
@@ -19,8 +20,9 @@ const deadline = <T>(query: Promise<T>): Promise<T> =>
 const jsonValue = (value: unknown): unknown =>
   value === undefined ? null : JSON.parse(JSON.stringify(value, (_, item) => (typeof item === "bigint" ? item.toString() : item)));
 
-// executor_run_claims / executor_runs / executor_controls / executor_order_batches
-// (supabase/migrations/20261006120000_mirror.sql and 20261006180000_executor_order_journal.sql).
+// executor_run_claims / executor_runs / executor_controls / executor_order_batches / run_targets
+// (supabase/migrations/20261006120000_mirror.sql, 20261006180000_executor_order_journal.sql and
+// 20261008010000_run_targets.sql).
 export class PostgresStore implements ExecutorStore {
   constructor(private readonly sql: SQL) {}
 
@@ -84,6 +86,36 @@ export class PostgresStore implements ExecutorStore {
       on conflict (id) do update set
         status = excluded.status, finished_at = excluded.finished_at, equity_usd = excluded.equity_usd,
         plan = excluded.plan, results = excluded.results, error = excluded.error`);
+  }
+
+  async saveTargets(rows: TargetRow[]): Promise<void> {
+    if (rows.length === 0) return;
+    const values = rows.map((r) => ({
+      run_id: r.runId, run_at: new Date(r.runAt), asset: r.asset, kind: r.kind, dry_run: r.dryRun, run_status: r.runStatus,
+      configuration_hash: r.configurationHash, snapshot_hash: r.snapshotHash, sizing_equity_usd: r.sizingEquityUsd,
+      target_exposure: r.targetExposure, margin_scale: r.marginScale, target_usd: r.targetUsd, held_size: r.heldSize,
+      mark_px: r.markPx, held_usd: r.heldUsd, gap_usd: r.gapUsd, action: r.action, skip_reason: r.skipReason,
+      side: r.side, size: r.size, price: r.price, reduce_only: r.reduceOnly, notional_usd: r.notionalUsd, cloid: r.cloid,
+      result_status: r.resultStatus, filled_size: r.filledSize, avg_px: r.avgPx, result_error: r.resultError,
+    }));
+    await deadline(this.sql`insert into run_targets ${this.sql(values)} on conflict (run_id, asset) do nothing`);
+  }
+
+  async recentTargets(limit: number): Promise<TargetRow[]> {
+    const rows = await deadline(this.sql`select * from run_targets order by run_at desc, asset limit ${limit}`);
+    const num = (v: unknown) => (v === null ? null : Number(v));
+    return rows.map((r: Record<string, unknown>): TargetRow => ({
+      runId: r.run_id as string, runAt: (r.run_at as Date).getTime(), asset: r.asset as string, kind: r.kind as TargetRow["kind"],
+      dryRun: r.dry_run as boolean, runStatus: r.run_status as TargetRow["runStatus"],
+      configurationHash: (r.configuration_hash as string | null) ?? null, snapshotHash: (r.snapshot_hash as string | null) ?? null,
+      sizingEquityUsd: Number(r.sizing_equity_usd), targetExposure: Number(r.target_exposure), marginScale: Number(r.margin_scale),
+      targetUsd: Number(r.target_usd), heldSize: Number(r.held_size), markPx: num(r.mark_px), heldUsd: Number(r.held_usd),
+      gapUsd: Number(r.gap_usd), action: r.action as TargetRow["action"], skipReason: (r.skip_reason as TargetRow["skipReason"]) ?? null,
+      side: (r.side as TargetRow["side"]) ?? null, size: (r.size as string | null) ?? null, price: (r.price as string | null) ?? null,
+      reduceOnly: (r.reduce_only as boolean | null) ?? null, notionalUsd: num(r.notional_usd), cloid: (r.cloid as string | null) ?? null,
+      resultStatus: (r.result_status as TargetRow["resultStatus"]) ?? null, filledSize: (r.filled_size as string | null) ?? null,
+      avgPx: (r.avg_px as string | null) ?? null, resultError: (r.result_error as string | null) ?? null,
+    }));
   }
 
   async recentRuns(limit: number): Promise<RunRecord[]> {
