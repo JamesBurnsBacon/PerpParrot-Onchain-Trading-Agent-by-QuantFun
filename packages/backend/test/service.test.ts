@@ -186,6 +186,31 @@ describe("buildSnapshot", () => {
   });
 });
 
+describe("SnapshotService: leverage normalization", () => {
+  test("records each seated wallet's scale (2 ÷ its average), only for configured wallets with a known average, sorted", async () => {
+    const runAt = nextRunAt(NOW / 1000);
+    const [first, second, third] = configuration.sources.map((s) => s.sourceAddress.toLowerCase());
+    const service = new SnapshotService({
+      configurations: { load: async () => configuration },
+      eligibility: new EligibilityTracker(new MemoryEligibilityStore(), async () => new Map([["BTC", 1e9]])),
+      store: new MemorySnapshotStore(),
+      nowMs: () => NOW,
+      hl,
+      leverage: async () => [
+        { address: third!, averageLeverage: null },
+        { address: second!, averageLeverage: 0.25 },
+        { address: "0x" + "e".repeat(40), averageLeverage: 1 },
+        { address: first!, averageLeverage: 1 },
+      ],
+    });
+    const snap = JSON.parse(await service.get(runAt)) as PositionsSnapshot;
+    expect(snap.leverage).toEqual([{ address: first, scaleE6: "2000000" }, { address: second, scaleE6: "8000000" }].sort((a, b) => (a.address! < b.address! ? -1 : 1)));
+    // Every source holds 0.5× BTC: normalized ones count for more, within the 3× fixture cap.
+    const plain = { ...snap, leverage: undefined };
+    expect(targetsFromSnapshot(snap)[0]!.exposureE9).toBeGreaterThan(targetsFromSnapshot(plain)[0]!.exposureE9);
+  });
+});
+
 describe("SnapshotService: winding-down caps", () => {
   test("records the caps of sources in the configuration, sorted, and leaves the snapshot unchanged without any", async () => {
     const runAt = nextRunAt(NOW / 1000);

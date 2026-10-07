@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  leverageScaleE6,
   cappedNotional,
   capGrossExposure,
   computeExposures,
@@ -83,6 +84,32 @@ describe("winding-down caps (ROSTER.md §4.4)", () => {
     const exp = computeExposures([capped, src("0xb", 500_000, "1000000000", [["ETH", "1000000000"]])]);
     // A: BTC capped at 0.5 × weight 0.5; its new ETH isn't followed. B: ETH 1 × 0.5.
     expect(exp).toEqual([{ asset: "BTC", exposureE9: 250_000_000n }, { asset: "ETH", exposureE9: 500_000_000n }]);
+  });
+});
+
+describe("leverage normalization (owner: each wallet at 2× of its usual leverage)", () => {
+  test("the scale is 2 ÷ the wallet's 30-day average, floored at 0.05×; unknown leaves the wallet as it is", () => {
+    expect(leverageScaleE6(0.1)).toBe("20000000"); // a 0.1× vault: ×20
+    expect(leverageScaleE6(4)).toBe("500000"); // a 4× trader: ×0.5
+    expect(leverageScaleE6(0.01)).toBe("40000000"); // floored at 0.05×: ×40, not ×200
+    expect(leverageScaleE6(0)).toBe("40000000");
+    expect(leverageScaleE6(null)).toBeNull();
+    expect(leverageScaleE6(Number.NaN)).toBeNull();
+  });
+
+  test("a usual day: a 0.1× vault and a 4× trader each count at 2× per unit of weight", () => {
+    const vault = { ...src("0xa", 500_000, "1000000000", [["BTC", "100000000"]]), scaleE6: 20_000_000n, maxGrossE9: 5_000_000_000n };
+    const trader = { ...src("0xb", 500_000, "1000000000", [["ETH", "-4000000000"]]), scaleE6: 500_000n, maxGrossE9: 5_000_000_000n };
+    expect(computeExposures([vault, trader])).toEqual([{ asset: "BTC", exposureE9: 1_000_000_000n }, { asset: "ETH", exposureE9: -1_000_000_000n }]);
+  });
+
+  test("a wallet above its usual leverage moves us up, but never counts past the gross cap on its own", () => {
+    // The vault triples to 0.3×: 0.3 × 20 = 6×, capped at 5×; × weight 0.5 = 2.5.
+    const vault = { ...src("0xa", 500_000, "1000000000", [["BTC", "300000000"]]), scaleE6: 20_000_000n, maxGrossE9: 5_000_000_000n };
+    expect(computeExposures([vault])).toEqual([{ asset: "BTC", exposureE9: 2_500_000_000n }]);
+    // Halving its leverage halves our exposure: its de-risking is still a signal.
+    const calmer = { ...vault, positions: [{ asset: "BTC", notionalE6: "50000000" }] };
+    expect(computeExposures([calmer])).toEqual([{ asset: "BTC", exposureE9: 500_000_000n }]);
   });
 });
 

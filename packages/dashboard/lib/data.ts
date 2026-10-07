@@ -69,6 +69,8 @@ export type RosterSeat = {
   flatRuns: number;
   windDownUntil: number | null;
   caps: Record<string, number> | null;
+  // 30-day average leverage: the seat is copied at 2× ÷ this (absent before the normalization).
+  averageLeverage?: number | null;
 };
 export type RosterEvent = { at: string; address: string; kind: "seeded" | "admitted" | "seated" | "released" | "removed" | "winding_down" | "weight"; detail: Record<string, unknown> | null };
 export type RosterView = { seats: RosterSeat[]; events: RosterEvent[]; impliedTurnover: number | null };

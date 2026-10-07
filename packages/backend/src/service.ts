@@ -2,7 +2,7 @@ import type { EligibilityTracker } from "./eligibility";
 import type { ConfigurationSource } from "./configuration-source";
 import type { HlReader } from "./hyperliquid";
 import { buildSnapshot, type SnapshotStore } from "./snapshot";
-import { CLOSE_CONFIRM_RUNS, pendingCloses, targetsFromSnapshot } from "../../shared/copy";
+import { CLOSE_CONFIRM_RUNS, leverageScaleE6, pendingCloses, targetsFromSnapshot } from "../../shared/copy";
 import type { PositionsSnapshot, WindDownSource } from "../../shared/snapshot";
 
 export const RUN_INTERVAL_SECONDS = 600;
@@ -23,6 +23,8 @@ export type SnapshotServiceDeps = {
   maxLagSeconds?: number;
   // Caps of the sources winding down (roster_seats), recorded in the snapshot (ROSTER.md §4.4).
   windDown?: () => Promise<WindDownSource[]>;
+  // Each seated wallet's 30-day average leverage (roster_seats), for the snapshot's normalization.
+  leverage?: () => Promise<{ address: string; averageLeverage: number | null }[]>;
   // Called once per run after its snapshot is stored (paper books step here).
   onBuilt?: (runAt: number, json: string) => Promise<void>;
 };
@@ -67,6 +69,14 @@ export class SnapshotService {
       .map((w) => ({ address: w.address.toLowerCase(), caps: [...w.caps].sort((a, b) => (a.asset < b.asset ? -1 : 1)) }))
       .sort((a, b) => (a.address < b.address ? -1 : 1));
     if (windDown.length) snapshot.windDown = windDown;
+    const leverage = (await this.deps.leverage?.() ?? [])
+      .filter((l) => inConfiguration.has(l.address.toLowerCase()))
+      .flatMap((l) => {
+        const scaleE6 = leverageScaleE6(l.averageLeverage);
+        return scaleE6 === null ? [] : [{ address: l.address.toLowerCase(), scaleE6 }];
+      })
+      .sort((a, b) => (a.address < b.address ? -1 : 1));
+    if (leverage.length) snapshot.leverage = leverage;
     const json = await this.deps.store.putIfAbsent(runAt, JSON.stringify(snapshot));
     // After serving starts, so a slow hook never delays the executor's run.
     if (this.deps.onBuilt) queueMicrotask(() => void this.deps.onBuilt!(runAt, json).catch(() => undefined));
