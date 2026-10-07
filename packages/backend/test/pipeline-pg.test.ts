@@ -14,7 +14,8 @@ const migration = (name: string) => Bun.file(new URL(`../../../supabase/migratio
 
 describe.skipIf(!url)("Pipeline on Postgres", async () => {
   if (!url) return;
-  const sql = new SQL(url, { prepare: false }); // as production (transaction pooler)
+  // prepare: false as production (transaction pooler); TEST_PG_PREPARE=1 for the session pooler path.
+  const sql = new SQL(url, { prepare: process.env.TEST_PG_PREPARE === "1" });
   await sql.unsafe("drop table if exists configurations, selection_runs, pipeline_accounts cascade");
   await sql.unsafe(await migration("20261007120000_pipeline.sql"));
   await sql.unsafe(await migration("20261007150000_pipeline_qualified.sql"));
@@ -128,6 +129,11 @@ describe.skipIf(!url)("Pipeline on Postgres", async () => {
     const first = await pipeline.select();
     expect(first.status).toBe("failed");
     const [run] = await sql`select finalists from selection_runs where id = ${first.id!}`;
+    // Stored as JSON values, not JSON-encoded strings (both connection modes).
+    const [types] = await sql`select jsonb_typeof(finalists) as finalists,
+      (select jsonb_typeof(portfolio) from pipeline_accounts where portfolio is not null limit 1) as portfolio
+      from selection_runs where id = ${first.id!}`;
+    expect(types).toEqual({ finalists: "object", portfolio: "array" });
     const picked = (run.finalists.finalists as { address: string }[]).map((f) => f.address);
     expect(picked.length).toBeGreaterThan(0);
     expect(picked).not.toContain([...highFrequency][0]);
@@ -210,14 +216,14 @@ describe.skipIf(!url)("Pipeline on Postgres", async () => {
 
   test("recording the picks' overlap adds one field and leaves the saved pick untouched", async () => {
     const saved = { finalists: [{ address: "0xa", rank: 1 }], funnel: [{ stage: "scored", count: 3 }], highFrequency: 2 };
-    const [{ id }] = await sql`insert into selection_runs (started_at, status, finalists) values (now(), 'rejected', ${JSON.stringify(saved)}::jsonb) returning id`;
+    const [{ id }] = await sql`insert into selection_runs (started_at, status, finalists) values (now(), 'rejected', ${JSON.stringify(saved)}::text::jsonb) returning id`;
     const overlap = { threshold: 0.5, pairs: 1, above: 0, max: 0.4, top: [], byAddress: { "0xa": 0.4 } };
-    await sql`update selection_runs set finalists = coalesce(finalists, '{}'::jsonb) || ${JSON.stringify({ overlap })}::jsonb where id = ${id}`;
+    await sql`update selection_runs set finalists = coalesce(finalists, '{}'::jsonb) || ${JSON.stringify({ overlap })}::text::jsonb where id = ${id}`;
     const [run] = await sql`select finalists from selection_runs where id = ${id}`;
     expect(run.finalists).toEqual({ ...saved, overlap });
     // A run whose pick was never saved still records (coalesce) instead of silently staying null.
     const [{ id: bare }] = await sql`insert into selection_runs (started_at, status) values (now(), 'rejected') returning id`;
-    await sql`update selection_runs set finalists = coalesce(finalists, '{}'::jsonb) || ${JSON.stringify({ overlap })}::jsonb where id = ${bare}`;
+    await sql`update selection_runs set finalists = coalesce(finalists, '{}'::jsonb) || ${JSON.stringify({ overlap })}::text::jsonb where id = ${bare}`;
     const [fresh] = await sql`select finalists from selection_runs where id = ${bare}`;
     expect(fresh.finalists).toEqual({ overlap });
     await sql`delete from selection_runs where id in ${sql([id, bare])}`;

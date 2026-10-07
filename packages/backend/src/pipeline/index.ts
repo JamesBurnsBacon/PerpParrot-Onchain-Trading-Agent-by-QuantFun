@@ -149,11 +149,11 @@ export class Pipeline {
             );
             const { tradeCount, makerShare, ordersPerDay } = fillStats(fills, this.now());
             await sql`
-              update pipeline_accounts set portfolio = ${JSON.stringify(portfolio)}::jsonb, trade_count = ${tradeCount}, maker_share = ${makerShare},
+              update pipeline_accounts set portfolio = ${JSON.stringify(portfolio)}::text::jsonb, trade_count = ${tradeCount}, maker_share = ${makerShare},
                 orders_per_day = ${ordersPerDay}, refreshed_at = now(), fills_at = now(), attempted_at = null, error = null
               where address = ${address}`;
           } else {
-            await sql`update pipeline_accounts set portfolio = ${JSON.stringify(portfolio)}::jsonb, refreshed_at = now(), attempted_at = null, error = null where address = ${address}`;
+            await sql`update pipeline_accounts set portfolio = ${JSON.stringify(portfolio)}::text::jsonb, refreshed_at = now(), attempted_at = null, error = null where address = ${address}`;
           }
           refreshed++;
         } catch (e) {
@@ -288,7 +288,7 @@ export class Pipeline {
     const byAddress = new Map(result.candidates.map((c) => [c.address, c]));
     const finalists = result.finalists.map((address) => ({ address, kind: byAddress.get(address)?.kind, score: byAddress.get(address)?.score, rank: byAddress.get(address)?.rank }));
     const funnel = result.funnel;
-    await sql`update selection_runs set finalists = ${JSON.stringify({ finalists, funnel, highFrequency, ...(guard ? { overlapGuard: guard } : {}) })}::jsonb where id = ${id}`;
+    await sql`update selection_runs set finalists = ${JSON.stringify({ finalists, funnel, highFrequency, ...(guard ? { overlapGuard: guard } : {}) })}::text::jsonb where id = ${id}`;
     if (score.candidates.length === 0) throw new Error(`no frame candidates (${result.finalists.length} finalists)`);
 
     // Live positions and equity of each finalist (the review's evidence and the leverage check).
@@ -304,7 +304,7 @@ export class Pipeline {
     // Each pick's largest same-direction overlap with another pick. Evidence only: nothing here selects.
     try {
       const overlap = summarizeOverlap(score.addresses, positions, policy.maxExposureOverlap);
-      await sql`update selection_runs set finalists = coalesce(finalists, '{}'::jsonb) || ${JSON.stringify({ overlap })}::jsonb where id = ${id}`;
+      await sql`update selection_runs set finalists = coalesce(finalists, '{}'::jsonb) || ${JSON.stringify({ overlap })}::text::jsonb where id = ${id}`;
     } catch (e) {
       log("overlap not recorded", { id, error: String((e as Error)?.message ?? e) });
     }
@@ -358,7 +358,7 @@ export class Pipeline {
       receiptHash: receipt.receiptHash,
       audit,
     };
-    await sql`update selection_runs set review = ${JSON.stringify(review)}::jsonb where id = ${id}`;
+    await sql`update selection_runs set review = ${JSON.stringify(review)}::text::jsonb where id = ${id}`;
     let payload: Omit<FrozenConfiguration, "configurationHash">;
     if (manifest.status === "VALID") {
       // Freeze for our account (as freezePaperSession: bound to the review receipt).
@@ -371,7 +371,7 @@ export class Pipeline {
         log("selection rejected", { id, reason: manifest.reason, basicSources: basic.length });
         return { status: "rejected", reason: `${manifest.reason}; basic gate kept ${basic.length}` };
       }
-      await sql`update selection_runs set review = review || ${JSON.stringify({ gate: "basic", basicSources: basic })}::jsonb where id = ${id}`;
+      await sql`update selection_runs set review = review || ${JSON.stringify({ gate: "basic", basicSources: basic })}::text::jsonb where id = ${id}`;
       payload = {
         schemaVersion: "1.0.0",
         account: this.o.account.toLowerCase(),
@@ -401,7 +401,7 @@ export class Pipeline {
     await sql.begin(async (tx) => {
       await tx`update configurations set status = 'retired' where status = 'active'`;
       await tx`insert into configurations (hash, configuration, status, selection_id, activated_at)
-        values (${configuration.configurationHash}, ${JSON.stringify(configuration)}::jsonb, 'active', ${id}, now())
+        values (${configuration.configurationHash}, ${JSON.stringify(configuration)}::text::jsonb, 'active', ${id}, now())
         on conflict (hash) do update set status = 'active', activated_at = now()`;
       await tx`update selection_runs set status = 'activated', configuration_hash = ${configuration.configurationHash}, finished_at = now() where id = ${id}`;
     });

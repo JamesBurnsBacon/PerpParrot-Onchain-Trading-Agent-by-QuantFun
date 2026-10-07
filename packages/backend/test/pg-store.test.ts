@@ -9,7 +9,8 @@ const url = process.env.TEST_DATABASE_URL;
 // describe.skipIf still runs the describe body, so connect lazily.
 describe.skipIf(!url)("PostgresSnapshotStore", async () => {
   if (!url) return;
-  const sql = new SQL(url, { prepare: false }); // as production (transaction pooler)
+  // prepare: false as production (transaction pooler); TEST_PG_PREPARE=1 for the session pooler path.
+  const sql = new SQL(url, { prepare: process.env.TEST_PG_PREPARE === "1" });
   await sql.unsafe(await Bun.file(new URL("../../../supabase/migrations/20261006120000_mirror.sql", import.meta.url)).text());
   const store = new PostgresSnapshotStore(sql);
   const runAt = 2_000_000_000 + Math.floor(Math.random() * 1e6) * 600;
@@ -34,6 +35,8 @@ describe.skipIf(!url)("PostgresSnapshotStore", async () => {
     const state = { assets: ["BTC", "ETH", "xyz:MSFT"], checkedAt: Date.parse("2026-10-07T00:01:00Z") };
     await eligibility.save(state);
     expect(await eligibility.load()).toEqual(state);
+    const [{ type }] = await sql`select jsonb_typeof(assets) as type from eligibility_state`;
+    expect(type).toBe("array");
   });
 
   test("saves paper books and their equity points, only forward", async () => {
