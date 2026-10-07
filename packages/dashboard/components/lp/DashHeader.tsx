@@ -1,4 +1,6 @@
 import { Parrot } from "./ParrotSymbols";
+import { DemoModal } from "./DemoModal";
+import { DEMO_VIDEO } from "../../lib/demo-video";
 
 // Sticky bar of the dashboard half: the product name and three anchors. It shows nothing about the
 // executor while all is well; `alert` is set only for an abnormal state (paused, offline).
@@ -21,6 +23,13 @@ export function DashHeader({ alert }: { alert?: string }) {
           {alert}
         </span>
       )}
+      <div className="lp-dh-actions">
+        <a className="lp-dh-action lp-dh-pro" href="/parrot">
+          <Parrot />
+          Pro
+        </a>
+        {DEMO_VIDEO && <DemoModal video={DEMO_VIDEO} />}
+      </div>
     </div>
   );
 }
