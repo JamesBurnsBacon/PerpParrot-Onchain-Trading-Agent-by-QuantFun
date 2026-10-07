@@ -34,6 +34,7 @@ Start with the checked-in sources of truth for the task:
 - `README.md` (design, §4.7 mirror runs, §4.8 executor, §4.14 hosting).
 - `docs/ops/RUNBOOK.md` and `docs/ops/DEPLOY.md` for deployment, recovery, and operator procedures.
 - `docs/ingest/PIPELINE.md` for the ingest, scoring, scheduled review and go-live jobs.
+- `docs/agents/STRICT_GATE_PLAN.md` for the AI review's strict gate: owner decisions and the work to make it pass ≥ 5 sources.
 - `docs/agents/INTEGRATION.md` and `docs/agents/PRODUCTION_INTEGRATION.md` for the AI review boundary and verified status.
 - The relevant package source, tests, schemas, migrations, and `vercel.json` for current behavior.
 
