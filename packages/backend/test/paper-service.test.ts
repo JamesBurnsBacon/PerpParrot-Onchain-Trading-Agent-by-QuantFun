@@ -23,7 +23,7 @@ const snapshot = (runAt: number): string =>
   } satisfies PositionsSnapshot);
 
 const marketsAt = (btc: number) => async () => new Map<string, Market>([["BTC", { markPx: btc, maxLeverage: 40, feeBps: 0 }]]);
-const cfg = { minOrderUsd: 10, driftFraction: 0.1, marginCap: 0.95, slippageBps: 0 };
+const cfg = { minOrderUsd: 10, driftFraction: 0.1, equityBandFraction: 0, marginCap: 0.95, slippageBps: 0 };
 
 describe("exposuresFromSnapshot", () => {
   test("matches the copy math: weights 0.75 invested × 0.5× each = 0.375 BTC", () => {

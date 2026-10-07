@@ -68,7 +68,7 @@ const setup = (info: InfoFn) => {
       maxGrossLeverage: 50,
       runTtlSeconds: 300,
       runTimeoutMs: 1_000,
-      plan: { minOrderUsd: 10, driftFraction: 0.1, marginCap: 0.95, slippageBps: 50 },
+      plan: { minOrderUsd: 10, driftFraction: 0.1, equityBandFraction: 0, marginCap: 0.95, slippageBps: 50 },
     },
   };
   return { store, exchange, runner: new Runner(runnerDeps), runnerDeps, alerts, overrides };
@@ -143,6 +143,16 @@ describe("Runner.executeRun (dry run)", () => {
     expect(orderReq.nonce).toBeGreaterThan(0);
     expect(await store.recentRuns(1)).toEqual([run]);
     expect(await store.unresolvedOrderBatches()).toEqual([]);
+  });
+
+  test("keeps a held perp whose close is pending, and records why", async () => {
+    const { runner, store, overrides } = setup(fakeInfo({ equity: "400", core: [["BTC", "0.002"]] }));
+    overrides.set(AS_OF, { exposures: [{ asset: "ETH", exposureE9: -875_000_000n }], pendingCloses: ["BTC"] });
+    const run = await runner.executeRun(AS_OF);
+    expect(run.plan?.orders.map((o) => o.asset)).toEqual(["ETH"]);
+    expect(run.plan?.skipped).toEqual([{ asset: "BTC", reason: "CLOSE_PENDING", targetUsd: 0, currentUsd: 200 }]);
+    expect(run.evidence).toMatchObject({ pendingCloses: ["BTC"] });
+    expect((await store.recentTargets(5)).find((r) => r.asset === "BTC")).toMatchObject({ action: "skipped", skipReason: "CLOSE_PENDING" });
   });
 
   test("records one target-history row per perp, with the order and its result", async () => {

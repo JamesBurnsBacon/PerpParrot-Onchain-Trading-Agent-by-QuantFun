@@ -173,6 +173,8 @@ const SKIP_LABEL: Record<string, string> = {
   UNKNOWN_MARKET: "no market",
   SIZE_ROUNDS_TO_ZERO: "rounds to 0",
   LEVERAGE_FAILED: "leverage failed",
+  BELOW_EQUITY_BAND: "under 0.5% of equity",
+  CLOSE_PENDING: "close pending (3 runs)",
   IN_FLIGHT: "earlier order in flight",
 };
 

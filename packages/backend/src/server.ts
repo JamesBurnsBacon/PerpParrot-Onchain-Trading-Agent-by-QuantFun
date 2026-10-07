@@ -65,7 +65,11 @@ function envNumber(name: string, fallback: number, min: number, max: number): nu
 const paper = new PaperService({
   store: sql ? new PostgresPaperStore(sql) : new MemoryPaperStore(),
   specs: defaultBooks(envNumber("PAPER_BALANCED_MULTIPLIER", 0.5, 0.05, 1)),
-  cfg: { minOrderUsd: 10, driftFraction: 0.1, marginCap: 0.95, slippageBps: envNumber("PAPER_SLIPPAGE_BPS", 5, 0, 100) },
+  cfg: {
+    minOrderUsd: 10, driftFraction: 0.1, marginCap: 0.95, slippageBps: envNumber("PAPER_SLIPPAGE_BPS", 5, 0, 100),
+    // As the executor's EQUITY_BAND_FRACTION (0.5% of equity).
+    equityBandFraction: envNumber("PAPER_EQUITY_BAND_FRACTION", 0.005, 0, 0.1),
+  },
 });
 
 // The pinned file (the fixture) until the pipeline activates a configuration in Supabase.
@@ -96,7 +100,10 @@ const service = new SnapshotService({
   // Local end-to-end runs ask for the next :x0 ahead of time (scripts/e2e-mirror.sh): set 600 there.
   maxLeadSeconds: leadSeconds(env.SNAPSHOT_MAX_LEAD_SECONDS),
   onBuilt: (runAt, json) => {
-    const step = paper.step(runAt, json).then(
+    const step = service
+      .pendingCloses(runAt, targetsFromSnapshot(JSON.parse(json) as PositionsSnapshot))
+      .then((pending) => paper.step(runAt, json, pending))
+      .then(
       (points) => {
         if (points.length) log("paper books stepped", { runAt, books: points.length });
       },
@@ -204,13 +211,16 @@ const server = Bun.serve({
         return new Response(json, { headers: { "Content-Type": "application/json", ...cors } });
       }
       const snapshot = JSON.parse(json) as PositionsSnapshot;
+      const exposures = targetsFromSnapshot(snapshot);
       const targets = {
         runId: `mirror-${runAt}`,
         runAt,
         snapshotHash: keccakUtf8(json),
         configurationHash: snapshot.configuration.configurationHash,
         account: snapshot.configuration.account,
-        exposures: targetsFromSnapshot(snapshot).map((e) => ({ asset: e.asset, exposureE9: e.exposureE9.toString() })),
+        exposures: exposures.map((e) => ({ asset: e.asset, exposureE9: e.exposureE9.toString() })),
+        // Held perps at 0 here that the executor keeps until their close is confirmed (3 runs at 0).
+        pendingCloses: await service.pendingCloses(runAt, exposures),
       };
       log("targets served", { runAt, exposures: targets.exposures.length });
       return Response.json(targets, { headers: cors });

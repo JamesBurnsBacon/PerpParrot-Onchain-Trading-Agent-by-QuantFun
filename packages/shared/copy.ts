@@ -70,3 +70,23 @@ export const targetsFromSnapshot = (snapshot: PositionsSnapshot): { asset: strin
   const maxGrossE9 = BigInt(Math.round(snapshot.configuration.policy.maxGrossLeverage * Number(EXPOSURE_SCALE)));
   return capGrossExposure(computeExposures(sources), maxGrossE9);
 };
+
+// Closes wait for confirmation (owner, 2026-10-07): a perp whose target went to 0 is closed only once
+// its target has been 0 for CLOSE_CONFIRM_RUNS runs in a row (~30 min), so a wallet that exits and
+// re-enters within that time costs no round trip. Reductions to a nonzero target are not delayed.
+export const CLOSE_CONFIRM_RUNS = 3;
+
+// The perps whose close is still pending at this run: targeted (nonzero) in one of the previous
+// CLOSE_CONFIRM_RUNS − 1 runs and at 0 now. `previous` holds those runs' targets, newest first;
+// undefined for a run without a snapshot (it counts as a run at 0). Sorted.
+export const pendingCloses = (
+  current: { asset: string; exposureE9: bigint }[],
+  previous: ({ asset: string; exposureE9: bigint }[] | undefined)[],
+): string[] => {
+  const now = new Set(current.filter((e) => e.exposureE9 !== 0n).map((e) => e.asset));
+  const pending = new Set<string>();
+  for (const run of previous.slice(0, CLOSE_CONFIRM_RUNS - 1)) {
+    for (const e of run ?? []) if (e.exposureE9 !== 0n && !now.has(e.asset)) pending.add(e.asset);
+  }
+  return [...pending].sort();
+};

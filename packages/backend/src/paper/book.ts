@@ -1,8 +1,8 @@
 // Paper books (README §4.10): the live copy strategy simulated at other sizes and
 // multipliers, plus a BTC buy-and-hold benchmark. Pure, so every rule is unit-tested.
 //
-// Fills: at mark ± slippage (always adverse), plus a taker fee, with the live executor's
-// $10 minimum and 10% drift rule and the 95% margin rule. Funding accrues between runs at
+// Fills: at mark ± slippage (always adverse), plus a taker fee, with the live executor's leg rule
+// (shared/rebalance.ts: $10 minimum, 10% drift, equity band, confirmed closes) and the 95% margin rule. Funding accrues between runs at
 // the current hourly rate. Lot/tick rounding is not modelled.
 
 // markPx: the last mark seen, so a market that disappears keeps its last value, not its entry.
@@ -25,12 +25,12 @@ export type PaperBook = {
   trades: number;
 };
 
+import { legSkip, type BandConfig } from "../../../shared/rebalance";
+
 // fundingRate: HL's hourly funding rate (longs pay when positive).
 export type Market = { markPx: number; maxLeverage: number; feeBps: number; fundingRate?: number };
 
-export type PaperConfig = {
-  minOrderUsd: number;
-  driftFraction: number;
+export type PaperConfig = BandConfig & {
   marginCap: number;
   slippageBps: number;
 };
@@ -103,15 +103,23 @@ export const stepCopyBook = (
   exposures: Map<string, number>,
   markets: Map<string, Market>,
   cfg: PaperConfig,
+  pendingCloses: ReadonlySet<string> = new Set(),
 ): void => {
   const equity = Math.max(equityOf(book, markets), 0);
   const targets = new Map<string, number>();
   for (const [asset, e] of exposures) if (markets.has(asset)) targets.set(asset, e * book.multiplier * equity);
 
-  // 95% margin rule: scale all targets pro-rata if initial margin would exceed it.
+  // 95% margin rule: scale all targets pro-rata if initial margin would exceed it, counting the
+  // positions kept while their close is pending (they hold margin but aren't scaled).
   let margin = 0;
+  let reserved = 0;
   for (const [asset, usd] of targets) margin += Math.abs(usd) / markets.get(asset)!.maxLeverage;
-  const scale = margin > cfg.marginCap * equity && margin > 0 ? (cfg.marginCap * equity) / margin : 1;
+  for (const [asset, p] of Object.entries(book.positions)) {
+    const m = markets.get(asset);
+    if (m && pendingCloses.has(asset) && !targets.get(asset)) reserved += Math.abs(p.szi * m.markPx) / m.maxLeverage;
+  }
+  const room = Math.max(cfg.marginCap * equity - reserved, 0);
+  const scale = margin > room && margin > 0 ? room / margin : 1;
 
   const assets = [...new Set([...targets.keys(), ...Object.keys(book.positions)])].sort();
   for (const asset of assets) {
@@ -122,7 +130,7 @@ export const stepCopyBook = (
     const gapUsd = targetUsd - currentSz * market.markPx;
     if (gapUsd === 0) continue;
     const fullClose = targetUsd === 0 && currentSz !== 0;
-    if (!fullClose && (Math.abs(gapUsd) < cfg.driftFraction * Math.abs(targetUsd) || Math.abs(gapUsd) < cfg.minOrderUsd)) continue;
+    if (legSkip({ targetUsd, currentUsd: currentSz * market.markPx, equityUsd: equity, closePending: pendingCloses.has(asset) }, cfg)) continue;
     const isBuy = gapUsd > 0;
     const fillPx = market.markPx * (1 + ((isBuy ? 1 : -1) * cfg.slippageBps) / 10_000);
     const delta = fullClose ? -currentSz : gapUsd / market.markPx;
