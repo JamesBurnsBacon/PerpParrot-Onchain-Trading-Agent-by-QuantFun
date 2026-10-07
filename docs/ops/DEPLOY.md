@@ -83,6 +83,8 @@ Only `meta`, `perpDexs`, `clearinghouseState`, `spotClearinghouseState`, `webDat
 
 **Snapshot cross-check.** `SNAPSHOT_VERIFY` adds a second delivery path to the same Hyperliquid state: it catches a stale or partial answer from one provider before the executor sizes orders from it. It cannot catch an error Hyperliquid itself makes, and it only compares what NOWNodes serves (`clearinghouseState`: positions), not `portfolio` equity. The outcome is not written into the snapshot (the snapshot's bytes are hashed and never change); `GET /pipeline` returns `verification` (checks, verified, blocked, unverified, the last result) from the instance that answers, so on Vercel the counters are per instance. A run the check blocks also skips that run's paper-book step, because no snapshot is stored.
 
+**Try the cross-check on live data before turning it on.** `NOWNODES_API_KEY=… bun run packages/backend/scripts/verify-live-dryrun.ts` reads the fixture's sources from the official API, checks them against NOWNodes (expected: verified), then checks a doctored copy (expected: mismatch). Read-only; exit 0 only when both come out as expected. One run is one moment in time.
+
 **Try the failover without touching anything.** `bun run packages/backend/scripts/chaos-read-demo.ts` runs the real router twice over a simulated network in which the official API answers 429 for part of the run, once with the default routing and once with `overflow`, and prints the failed reads, failovers and virtual latency of each. It uses no key and no network.
 
 `split` is slower (NOWNodes measured about 1.7x the official latency), so prefer `overflow` unless a benchmark says otherwise.
