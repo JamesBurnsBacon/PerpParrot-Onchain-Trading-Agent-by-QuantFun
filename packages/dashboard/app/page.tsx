@@ -44,9 +44,9 @@ export default function Page() {
     <div className="lp">
       <ParrotSymbols />
       <ScrollBuddy />
+      <DashHeader alert={alert} />
       <Hero />
       <div className="lp-dash-wrap" ref={dash}>
-        <DashHeader alert={alert} />
         <main id="live" className="lp-dash">
           <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
             {BUCKETS.map((k) => {
