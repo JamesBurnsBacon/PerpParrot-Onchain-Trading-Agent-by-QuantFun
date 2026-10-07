@@ -62,6 +62,20 @@ vault standing in for ours; the services only *read* it.
 Going live (`DRY_RUN=false`, API wallet, funding, a long-running executor) is RUNBOOK § Deploy
 step 5 and is not part of this rehearsal.
 
+## NOWNodes failover (optional)
+
+The backend can fail over its Hyperliquid info reads to NOWNodes' copy (`hype.nownodes.io/info`). It is off by default; with `INFO_ROUTING` unset or `official` the code path is a plain `fetch` to `api.hyperliquid.xyz`, as before.
+
+| Variable | Meaning |
+|---|---|
+| `NOWNODES_API_KEY` | Required for anything but `official`. Set it as a Vercel env var with `vercel env add` (never in the repo). |
+| `INFO_ROUTING` | `official` (default), `overflow` (a read the official API answers with 429, 5xx or a timeout is retried on NOWNodes), `split` (`INFO_SPLIT_PERCENT`, default 25, of capable reads go to NOWNodes first, failing over to official). |
+| `INFO_SHADOW_PERCENT` | Share of official `clearinghouseState` reads also sent to NOWNodes in the background and compared (account value, position count); nothing waits for it. |
+
+Only `meta`, `perpDexs`, `clearinghouseState`, `spotClearinghouseState`, `webData2`, `userVaultEquities`, `spotMeta` and `vaultSummaries` can go to NOWNodes; `portfolio`, fills and the rest always use the official API (NOWNodes answers 422). The executor is not routed. Three NOWNodes failures in a row pause it for 60 s. `GET /pipeline` returns `routing` (reads, average latency and errors per provider, failovers, shadow matches) and the dashboard's Pipeline panel shows it when NOWNodes is in use.
+
+`split` is slower (NOWNodes measured about 1.7x the official latency), so prefer `overflow` unless a benchmark says otherwise.
+
 ## Selection pipeline (2026-10-07; [docs/ingest/PIPELINE.md](../ingest/PIPELINE.md))
 
 Every 12 hours (00:15 and 12:15 UTC) the backend scans every leaderboard trader (≥ $10k, positive
