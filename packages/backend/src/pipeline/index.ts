@@ -223,10 +223,12 @@ export class Pipeline {
 
     // The AI review runs when the 25 change, and at least every 12 h so the roster's bench of approvals
     // stays fresh (ROSTER.md §4.1). A rejected set isn't reviewed again within that time.
-    const [last] = await sql`select finalists -> 'finalists' as finalists, started_at from selection_runs
+    const [last] = await sql`select finalists -> 'finalists' as finalists, started_at, status from selection_runs
       where status <> 'failed' and finalists is not null and (finalists ->> 'scope') is distinct from 'seats' order by started_at desc limit 1`;
     const lastPicks = ((last?.finalists ?? []) as { address: string }[]).map((f) => f.address);
-    const fresh = last && this.now() - new Date(last.started_at as string | Date).getTime() < ROSTER.approvalFreshHours * HOUR;
+    // Only a review that produced a bench (or rejected the 25) counts: one from before the roster has none.
+    const fresh = last && (last.status === "benched" || last.status === "rejected") &&
+      this.now() - new Date(last.started_at as string | Date).getTime() < ROSTER.approvalFreshHours * HOUR;
     if (!force && fresh && sameAddresses(lastPicks, result.finalists)) return { status: "unchanged" };
     // One review at a time, and a failed one is retried after 30 minutes.
     // (A failed seat review doesn't hold the picks up.)
