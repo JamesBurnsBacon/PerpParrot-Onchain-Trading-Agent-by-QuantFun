@@ -336,3 +336,21 @@ html:has(.parrot-show), body:has(.parrot-show) { height: 100%; overflow: hidden;
 /* The result first, then the audit bar underneath ("Audited by [OpenAI] Decisions"). */
 .parrot-show .compact-receipt-row { border-top: 0 !important; border-bottom: 1px dashed #b7bda6 !important; }
 .parrot-show .compact-receipt .compact-receipt-header { min-height: 32px; background: #f1ecdb; font-size: 11px; }
+
+/* No hover tilt or lift on any button; a pressed button only sinks a little (and not at all in calm / reduced-motion). */
+.parrot-show button:not(:disabled):hover, .parrot-show .parrot-back:hover, .parrot-show .decisions-drawer button:not(:disabled):hover { transform: none; }
+@media (prefers-reduced-motion: no-preference) {
+  .parrot-show:not([data-calm="true"]) button:not(:disabled):active, .parrot-show:not([data-calm="true"]) .parrot-back:active { transform: scale(.97); }
+}
+
+/* The talk / End button sits in the middle under the parrot: mute on its left, the label on its right (equal 1fr columns, so nothing
+   moves when the text or the mute button changes), and the status and the countdown centered underneath. */
+.parrot-show .parrot-live { display: grid; width: 100%; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); grid-template-rows: auto auto auto; align-items: center; justify-items: center; column-gap: 14px; row-gap: 6px; }
+.parrot-show .parrot-talk-row { display: contents; width: auto; }
+.parrot-show .parrot-mute { grid-column: 1; grid-row: 1; justify-self: end; }
+.parrot-show .parrot-talk { grid-column: 2; grid-row: 1; }
+.parrot-show .parrot-talk-label { grid-column: 3; grid-row: 1; justify-self: start; text-align: left; }
+.parrot-show .parrot-live-status { grid-column: 1 / -1; grid-row: 2; max-width: 280px; justify-content: center; text-align: center; }
+.parrot-show .parrot-countdown { grid-column: 1 / -1; grid-row: 3; }
+.parrot-show .parrot-live > .parrot-button { grid-column: 1 / -1; grid-row: 4; }
+.parrot-show .voice-dock { min-height: 244px; }
