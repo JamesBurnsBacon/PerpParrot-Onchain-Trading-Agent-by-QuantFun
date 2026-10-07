@@ -41,7 +41,7 @@ export class PostgresEligibilityStore implements EligibilityStore {
   async save(state: EligibilityState): Promise<void> {
     await this.sql`
       insert into eligibility_state (id, assets, checked_at, refusing_since)
-      values (1, ${state.assets}::jsonb, ${new Date(state.checkedAt)}, ${state.refusingSince ? new Date(state.refusingSince) : null})
+      values (1, ${JSON.stringify(state.assets)}::jsonb, ${new Date(state.checkedAt).toISOString()}, ${state.refusingSince ? new Date(state.refusingSince).toISOString() : null})
       on conflict (id) do update set
         assets = excluded.assets, checked_at = excluded.checked_at, refusing_since = excluded.refusing_since`;
   }
@@ -60,7 +60,7 @@ export class PostgresPaperStore implements PaperStore {
     return this.sql.begin(async (tx) => {
       // Only forward: a second instance stepping the same run from the same state writes nothing.
       const written = await tx`
-        insert into paper_state (id, state, last_run_at) values (1, ${JSON.parse(JSON.stringify(state))}::jsonb, ${state.lastRunAt})
+        insert into paper_state (id, state, last_run_at) values (1, ${JSON.stringify(state)}::jsonb, ${state.lastRunAt})
         on conflict (id) do update set state = excluded.state, last_run_at = excluded.last_run_at, updated_at = now()
         where paper_state.last_run_at < excluded.last_run_at
         returning id`;

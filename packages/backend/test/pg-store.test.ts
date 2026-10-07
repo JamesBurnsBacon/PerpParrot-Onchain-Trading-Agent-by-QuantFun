@@ -9,7 +9,7 @@ const url = process.env.TEST_DATABASE_URL;
 // describe.skipIf still runs the describe body, so connect lazily.
 describe.skipIf(!url)("PostgresSnapshotStore", async () => {
   if (!url) return;
-  const sql = new SQL(url);
+  const sql = new SQL(url, { prepare: false }); // as production (transaction pooler)
   await sql.unsafe(await Bun.file(new URL("../../../supabase/migrations/20261006120000_mirror.sql", import.meta.url)).text());
   const store = new PostgresSnapshotStore(sql);
   const runAt = 2_000_000_000 + Math.floor(Math.random() * 1e6) * 600;

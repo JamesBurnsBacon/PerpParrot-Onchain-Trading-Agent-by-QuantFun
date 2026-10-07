@@ -14,7 +14,7 @@ const migration = (name: string) => Bun.file(new URL(`../../../supabase/migratio
 
 describe.skipIf(!url)("Pipeline on Postgres", async () => {
   if (!url) return;
-  const sql = new SQL(url);
+  const sql = new SQL(url, { prepare: false }); // as production (transaction pooler)
   await sql.unsafe("drop table if exists configurations, selection_runs, pipeline_accounts cascade");
   await sql.unsafe(await migration("20261007120000_pipeline.sql"));
   await sql.unsafe(await migration("20261007150000_pipeline_qualified.sql"));
