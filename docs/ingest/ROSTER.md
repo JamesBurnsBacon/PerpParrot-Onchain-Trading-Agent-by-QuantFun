@@ -45,7 +45,7 @@
 
 The active configuration becomes a **roster**: a set of seats, each holding one wallet.
 
-- **Size is the AI's call within 5–15.** The target `N` is the number of wallets the latest AI reviews approve (the bench plus seated wallets still approved), clamped to 5–15. Minimum 5 is also the freeze's floor.
+- **Size: at least 5 wallets, aiming for 12–15** (owner, 2026-10-07; the separate 5–15 limit is on *positions*, the perps we hold, see README §4.4). The target `N` is the number of wallets the latest AI reviews approve (the bench plus seated wallets still approved), clamped to **12–15**: with fewer approved wallets, seats stay sized for 12 and the rest is cash. Minimum 5 is the freeze's floor.
 - **Fixed seat weight.** Each seat's weight is set **when its wallet is admitted** and doesn't change when other seats change:
   - `weight = s × fit modifier`;
   - `s = (1 − cashBuffer) / N`, with `N` as it stands **at admission** (0.9 ÷ 10 = 9%); existing seats keep their weights when `N` changes;
@@ -201,7 +201,7 @@ The owner chose **on as soon as built**: we're in dry run, so there is no flag g
 | — | Copyable horizon | 90 minutes |
 | D6 | Pace of change | ≤ 2 admissions an hour and 8 a day; 24 h cooldown |
 | D7 | Late entry | Copy everything |
-| D8 | Roster size | The AI's call within 5–15 |
+| D8 | Roster size | At least 5 wallets, sized for 12–15 (the AI's approvals above 12 raise it); positions (perps held) at most 15 — clarified 2026-10-07 |
 | — | Churn budget | Monitor only |
 | — | Risk | Only a 50% trading loss (PnL since admission) removes; withdrawals never count; the other signs wind down |
 | — | Re-review | Every 12 h |

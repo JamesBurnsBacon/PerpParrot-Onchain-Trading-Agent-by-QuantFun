@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
+  limitPositions,
+  MAX_POSITIONS,
   countedGross,
   leverageScaleE6,
   cappedNotional,
@@ -111,6 +113,34 @@ describe("leverage normalization (owner: each wallet at 2× of its usual leverag
     // Halving its leverage halves our exposure: its de-risking is still a signal.
     const calmer = { ...vault, positions: [{ asset: "BTC", notionalE6: "50000000" }] };
     expect(computeExposures([calmer])).toEqual([{ asset: "BTC", exposureE9: 500_000_000n }]);
+  });
+});
+
+describe("at most 15 positions (owner: the book holds 5–15 perps)", () => {
+  const e = (asset: string, exposureE9: bigint) => ({ asset, exposureE9 });
+
+  test("15 or fewer perps are left as they are", () => {
+    const few = Array.from({ length: MAX_POSITIONS }, (_, i) => e(`P${String(i).padStart(2, "0")}`, BigInt(i + 1) * 10_000_000n));
+    expect(limitPositions(few)).toBe(few);
+  });
+
+  test("keeps the 15 largest by |exposure| and scales them so the counted gross is unchanged", () => {
+    // 20 perps: 15 longs of 0.1× and 5 small shorts of −0.02×.
+    const many = [
+      ...Array.from({ length: 15 }, (_, i) => e(`L${String(i).padStart(2, "0")}`, 100_000_000n)),
+      ...Array.from({ length: 5 }, (_, i) => e(`S${i}`, -20_000_000n)),
+    ];
+    const kept = limitPositions(many);
+    expect(kept).toHaveLength(15);
+    expect(kept.every((k) => k.asset.startsWith("L"))).toBe(true);
+    // Before: 1.5 long + ½ × 0.1 short = 1.55×; after: the 15 longs scaled to 1.55× in total.
+    expect(countedGross(kept.map((k) => k.exposureE9))).toBe(countedGross(many.map((m) => m.exposureE9)) - 5n); // integer rounding only
+    expect(kept[0]!.exposureE9).toBe(103_333_333n);
+  });
+
+  test("ties at the edge are broken by perp name, so the cut is deterministic", () => {
+    const tied = Array.from({ length: 16 }, (_, i) => e(`T${String(15 - i).padStart(2, "0")}`, 50_000_000n));
+    expect(limitPositions(tied).map((k) => k.asset)).toEqual(Array.from({ length: 15 }, (_, i) => `T${String(i).padStart(2, "0")}`));
   });
 });
 

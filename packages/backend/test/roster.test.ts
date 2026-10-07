@@ -160,15 +160,16 @@ describe("the 50% loss rule (owner: withdrawals don't count)", () => {
 });
 
 describe("admissions (owner D3, D6, D8)", () => {
-  test("the AI's approvals set the target within 5–15; fixed seats sized at 90% ÷ target × fit", () => {
+  test("seats are sized for 12–15 wallets (owner): 90% ÷ target × fit, with the AI's approvals above 12 raising the target", () => {
     const b = [bench(1, 90), bench(2, 60), bench(3, 30)];
     const active = [0, 4, 5, 6, 7].map((i) => seat({ address: addr(i), weightUnits: 100_000 }));
-    expect(targetSeats(active, b)).toBe(8);
+    expect(targetSeats(active, b)).toBe(12); // 8 approved wallets: still sized for 12, the rest cash
     const out = planAdmissions(admissionInput(active, b, { admittedLastHour: 0 }));
-    // Target 8 → seat 112,500; mean fit 60 → modifiers 1.5, 1.0, 0.5. Two this hour (pace).
-    expect(out.map((a) => [a.entry.address, a.weightUnits])).toEqual([[addr(1), 168_750], [addr(2), 112_500]]);
+    // Target 12 → seat 75,000; mean fit 60 → modifiers 1.5, 1.0, 0.5. Two this hour (pace).
+    expect(out.map((a) => [a.entry.address, a.weightUnits])).toEqual([[addr(1), 112_500], [addr(2), 75_000]]);
     expect(out[0].minTenureUntil).toBe(NOW + tenureMs(0.5));
-    expect(targetSeats([], [])).toBe(ROSTER.minSeats);
+    expect(targetSeats([], [])).toBe(ROSTER.targetSeatsMin);
+    expect(targetSeats([], Array.from({ length: 13 }, (_, i) => bench(i, 50)))).toBe(13);
     expect(targetSeats([], Array.from({ length: 20 }, (_, i) => bench(i, 50)))).toBe(ROSTER.maxSeats);
   });
 
@@ -186,11 +187,10 @@ describe("admissions (owner D3, D6, D8)", () => {
     const active = [0, 1, 2, 3, 4].map((i) => seat({ address: addr(i), weightUnits: 150_000 })); // 75% used
     const b = [bench(0, 99), bench(5, 90), bench(6, 80, { approvedAt: NOW - 13 * HOUR }), bench(7, 70, { passesHold: false }), bench(8, 60), bench(9, 50)];
     const out = planAdmissions(admissionInput(active, b, { cooling: new Set([addr(5)]) }));
-    // Target 8 (seat 112,500); 15% room: addr(8) at 0.80× fit, addr(9) shrunk to what is left.
-    expect(out.map((a) => a.entry.address)).toEqual([addr(8), addr(9)]);
-    expect(out.reduce((sum, a) => sum + a.weightUnits, 0)).toBe(150_000);
+    // Target 12 (seat 75,000); mean fit 74.75: addr(8) at 0.80×, addr(9) at 0.67×, within the 15% room.
+    expect(out.map((a) => [a.entry.address, a.weightUnits])).toEqual([[addr(8), 60_200], [addr(9), 50_167]]);
     // With less than half a seat of room left, nothing more is admitted.
-    expect(planAdmissions(admissionInput([...active, seat({ address: addr(20), weightUnits: 110_000 })], b))).toEqual([]);
+    expect(planAdmissions(admissionInput([...active, seat({ address: addr(20), weightUnits: 120_000 })], b))).toEqual([]);
   });
 
   test("implied turnover is Σ weight × traded per day ÷ equity, over seats that know it", () => {

@@ -8,6 +8,7 @@ const HOUR = 3_600_000;
 // Owner decisions, 2026-10-07 (ROSTER.md §10).
 export const ROSTER = {
   minSeats: 5, // the freeze's floor
+  targetSeatsMin: 12, // owner: aim for 12–15 wallets; seats are sized for at least 12
   maxSeats: 15,
   tenureMinHours: 12,
   tenureMaxHours: 72,
@@ -184,11 +185,12 @@ export type AdmissionInput = {
   maxSourceWeight: number;
 };
 
-// The seat count the AI is taken to want: every wallet it currently approves (the fresh bench that
-// passes the hold gate, plus seats not winding down), within 5–15 (owner D8).
+// The seat count to size seats for: every wallet the AI currently approves (the fresh bench that
+// passes the hold gate, plus seats not winding down), within the owner's 12–15 target. With fewer
+// approved wallets, seats stay sized for 12 and the rest is cash (owner, 2026-10-07).
 export const targetSeats = (active: Seat[], approved: BenchEntry[]): number => {
   const wallets = new Set([...approved.map((b) => b.address), ...active.filter((s) => s.state !== "winding_down").map((s) => s.address)]);
-  return Math.min(Math.max(wallets.size, ROSTER.minSeats), ROSTER.maxSeats);
+  return Math.min(Math.max(wallets.size, ROSTER.targetSeatsMin), ROSTER.maxSeats);
 };
 
 // Which bench wallets to seat now, best fit first, each at a fixed weight: 90% ÷ the target count ×

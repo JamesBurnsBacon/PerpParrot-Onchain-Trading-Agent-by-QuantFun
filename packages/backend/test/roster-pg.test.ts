@@ -57,12 +57,13 @@ describe.skipIf(!url)("Roster on Postgres", async () => {
     await snapshot(T0, [seeded[0]]);
     await bench([{ address: newcomer(1), fit: 80 }, { address: newcomer(2), fit: 40 }, { address: newcomer(3), fit: 90, passesHold: false }], T0 * 1000);
     const result = await at(T0).roster();
-    // Target 9 (2 copyable approvals + 7 seats) → seat 100,000; fit 80 of mean 60 → 133,333; then too little room for the next.
+    // Sized for 12 seats → 75,000; fits 80 and 40 of mean 60 → 100,000 and 50,000, filling the 15% room.
     expect(result.status).toBe("activated");
     expect(result.changes.filter((c) => c.startsWith("seeded"))).toHaveLength(7);
-    expect(result.changes.filter((c) => c.startsWith("admitted"))).toEqual([`admitted ${newcomer(1)} (open seat)`]);
+    expect(result.changes.filter((c) => c.startsWith("admitted"))).toEqual([`admitted ${newcomer(1)} (open seat)`, `admitted ${newcomer(2)} (open seat)`]);
     const rows = await seats();
-    expect(rows.find((r) => r.address === newcomer(1))).toMatchObject({ state: "probation", weight_units: 133_333 });
+    expect(rows.find((r) => r.address === newcomer(1))).toMatchObject({ state: "probation", weight_units: 100_000 });
+    expect(rows.find((r) => r.address === newcomer(2))).toMatchObject({ state: "probation", weight_units: 50_000 });
     // The bench approval counts as its review: no seat review of it for 12 h (none 10 minutes after admission).
     const [admitted] = await sql`select reviewed_at from roster_seats where address = ${newcomer(1)} and state = 'probation'`;
     expect(new Date(admitted.reviewed_at).getTime()).toBe(T0 * 1000);
@@ -71,7 +72,7 @@ describe.skipIf(!url)("Roster on Postgres", async () => {
     const config = await active();
     checkFrozenConfiguration(keccakUtf8, config, config.configurationHash, T0 * 1000 + HOUR);
     expect(config.sources.map((s) => s.sourceAddress)).toContain(newcomer(1));
-    expect(config.cashUnits).toBe(1e6 - 750_000 - 133_333);
+    expect(config.cashUnits).toBe(1e6 - 750_000 - 150_000);
     // Unchanged next step: the configuration is kept.
     expect((await at(T0).roster()).status).toBe("kept");
   });
@@ -98,14 +99,14 @@ describe.skipIf(!url)("Roster on Postgres", async () => {
     expect((await seatLeverage(sql)).find((l) => l.address === seeded[4])).toEqual({ address: seeded[4], averageLeverage: 0.3 });
   });
 
-  test("a seated wallet flat for 3 runs releases its seat; the replacement waits for weight to free up, then fills it", async () => {
+  test("a seated wallet flat for 3 runs releases its seat, and the configuration drops it", async () => {
     await snapshot(T0 + 600, [seeded[0]], [newcomer(1)]);
     expect((await at(T0 + 600).roster()).changes).toEqual([]); // flat 2 runs
     await snapshot(T0 + 1200, [seeded[0]], [newcomer(1)]);
     const result = await at(T0 + 1200).roster();
     expect(result.changes[0]).toBe(`released ${seeded[0]} (exit)`);
-    // Its 150,000 frees room: newcomer(2) is admitted the same step (bench still fresh).
-    expect(result.changes).toContain(`admitted ${newcomer(2)} (open seat)`);
+    // No copyable bench wallet is left to fill it (newcomer(3) fails the hold gate): it stays cash.
+    expect(result.changes.some((c) => c.startsWith("admitted"))).toBe(false);
     expect(result.status).toBe("activated");
     const config = await active();
     expect(config.sources.map((s) => s.sourceAddress)).not.toContain(seeded[0]);
