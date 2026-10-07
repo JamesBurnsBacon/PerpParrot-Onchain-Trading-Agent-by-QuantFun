@@ -23,6 +23,8 @@ import { pickVaults } from "../src/pipeline/vaults";
 import { PacedInfo, getJson } from "../src/pipeline/hl";
 import { parsePortfolio, scoreCandidates, type ScoreInput } from "../src/score";
 
+// The isolated research-runtime builder changes these two limits only in its copy.
+const MAX_RESEARCH_FINALISTS=40,MAX_RESEARCH_TIMEOUT_MS=60000;
 const { values } = parseArgs({
   options: {
     traders: { type: "string", default: "40" },
@@ -37,6 +39,7 @@ const { values } = parseArgs({
     finalists: {type:"string",default:"40"},
     serial: {type:"boolean",default:false},
     "stage-spacing-ms": {type:"string",default:"0"},
+    "replay-run": {type:"string"},
     provider: {type:"string",default:"openai"},
     offline: {type:"boolean",default:false},
     "prepare-only": {type:"boolean",default:false},
@@ -47,7 +50,7 @@ const url=process.env.DATABASE_URL;
 if(!values['local-dir']&&(!url||!['localhost','127.0.0.1','[::1]'].includes(new URL(url).hostname)))
   throw new Error('Use --local-dir or a loopback DATABASE_URL; remote databases are forbidden');
 if(!['openai','kimi'].includes(values.provider!))throw new Error('unknown provider');
-const localResearch=values.provider==='kimi'||values.offline||values['prepare-only']||values['timeout-ms']!=='60000'||values.finalists!=='40'||values.serial||values['stage-spacing-ms']!=='0';
+const localResearch=values['replay-run']||values.provider==='kimi'||values.offline||values['prepare-only']||values['timeout-ms']!=='60000'||values.finalists!=='40'||values.serial||values['stage-spacing-ms']!=='0';
 if(localResearch&&!values['local-dir'])throw new Error('Research flags require --local-dir; no external database allowed');
 if(values.offline&&(!values.reads||!values.inputs||!values['as-of']))throw new Error('--offline requires reads, inputs and as-of');
 const apiKey=values.provider==='kimi'?process.env.MOONSHOT_API_KEY:process.env.OPENAI_API_KEY;
@@ -55,14 +58,19 @@ if(!apiKey&&!values['prepare-only'])throw new Error('provider API key is require
 const model=values.model??(values.provider==='kimi'?'kimi-k3':process.env.REVIEW_MODEL??'gpt-4.1-mini-2025-04-14');
 const timeoutMs=Number(values['timeout-ms']);
 const finalists=Number(values.finalists),spacingMs=Number(values['stage-spacing-ms']);
-if(!Number.isSafeInteger(finalists)||finalists<5||finalists>40)throw new Error('finalists must be 5..40');
+if(!Number.isSafeInteger(finalists)||finalists<5||finalists>MAX_RESEARCH_FINALISTS)throw new Error('unsupported finalist count; an expanded count requires the isolated research runtime');
 if(!Number.isSafeInteger(spacingMs)||spacingMs<0||spacingMs>120000||spacingMs>0&&!values.serial)throw new Error('spacing requires serial and 0..120000ms');
-if(!Number.isSafeInteger(timeoutMs)||timeoutMs<1000||timeoutMs>300000)throw new Error('invalid timeout');
+if(!Number.isSafeInteger(timeoutMs)||timeoutMs<1000||timeoutMs>MAX_RESEARCH_TIMEOUT_MS)throw new Error('unsupported timeout; extended waits require the isolated research runtime');
 // The local adapter implements the tagged reads/writes/transactions used by review(), not Bun's full driver.
 const sql=values['local-dir']?await localReviewDb(values['local-dir']) as unknown as SQL:new SQL(url!);
 // Reuse identical public reads for same-input model comparisons. Never cache keys or model calls.
 const reads:Record<string,unknown>=values.reads&&await Bun.file(values.reads).exists()?await Bun.file(values.reads).json():{};
+if(values['replay-run']&&!values.offline)throw new Error('Replaying validated stages requires offline evidence');
+const replay=values['replay-run']?await Bun.file(values['replay-run']).json():undefined;
+if(replay&&(replay.report?.preparedOnly||replay.report?.requestedModel!==model||replay.report?.provider!==values.provider))throw new Error('replay model mismatch');
+const replayHash=replay?commitment('perpparrot:research-replay:v1',replay):undefined;
 const modelCalls:Record<string,unknown>[]=[];
+const replayedStages:string[]=[];
 const preparedRequests:unknown[]=[];
 const cacheMisses:string[]=[];
 const stageFailures:{stage:string;error:string;message:string}[]=[];
@@ -159,6 +167,17 @@ const pipeline = new Pipeline({
   openAiKey: apiKey??'prepare-only-no-key',
   paperCommittee:(options,core)=>{
     const deps=(values.provider==='kimi'?kimiPaperCommittee:openAIPaperCommittee)(options,{...core,agentTimeoutMs:timeoutMs});
+    const replayStage=(stage:'role'|'risk'|'redteam',evidence:{evidenceHash:string},draftHash?:string)=>{
+      const record=replay?.run?.review?.audit?.find((r:{stage:string;draftHash?:string})=>r.stage===stage&&r.draftHash===draftHash);
+      if(!record)return undefined;
+      const output=record.output;
+      const call=replay.report.modelCalls.find((c:{stage:string})=>c.stage===`paper_${stage}`);
+      const promptHash=stage==='role'?deps.rolePromptHash:stage==='risk'?deps.riskPromptHash:deps.redTeamPromptHash;
+      if(!call||call.preparedOnly||call.model!==model||call.finishReason!=='stop'||record.evidenceHash!==evidence.evidenceHash||output.evidenceHash!==evidence.evidenceHash||output.modelConfigHash!==deps.modelConfigHash||output.promptHash!==promptHash)
+        throw new Error('replay evidence/model/prompt mismatch');
+      modelCalls.push({...call,replayed:true,replayRunHash:replayHash});replayedStages.push(stage);
+      return [structuredClone(output)]; // The bridge independently revalidates schema, IDs and binding.
+    };
     let queue=Promise.resolve(),lastStart=0;
     const wrap=<Args extends unknown[],Result>(stage:string,fn:(...args:Args)=>Promise<Result>)=>(...args:Args)=>{
       const call=async()=>{
@@ -169,7 +188,10 @@ const pipeline = new Pipeline({
       if(!values.serial)return call();
       const next=queue.then(call);queue=next.then(()=>{},()=>{});return next;
     };
-    deps.role=wrap('role',deps.role);deps.risk=wrap('risk',deps.risk);deps.redTeam=wrap('redTeam',deps.redTeam);
+    const role=wrap('role',deps.role),risk=wrap('risk',deps.risk),red=wrap('redTeam',deps.redTeam);
+    deps.role=async(evidence,signal)=>replayStage('role',evidence)??role(evidence,signal);
+    deps.risk=async(evidence,signal)=>replayStage('risk',evidence)??risk(evidence,signal);
+    deps.redTeam=async(draft,signal)=>replayStage('redteam',draft.evidence,draft.draftHash)??red(draft,signal);
     return deps;
   },
   model,
@@ -217,7 +239,7 @@ const oldGateSameRatings=summary.filter(c=>{
     candidateGate(c.metrics,r.role as Row,r.risk as Row,{...policy,minConfidence:60}).reasons.length===0;
 }).length;
 const blockers:Record<string,number>={};for(const c of summary)for(const reason of c.gate?.reasons??['no-model-output'])blockers[reason]=(blockers[reason]??0)+1;
-const report={provider:values.provider,preparedOnly:values['prepare-only'],offline:values.offline,cacheMisses,stageFailures,agentTimeoutMs:timeoutMs,serial:values.serial,stageSpacingMs:spacingMs,requestedFinalists:finalists,asOf:new Date(now).toISOString(),requestedModel:model,accounts:inputs.length,highFrequencyExcluded:highFrequency,scored:selectedInputs.length,finalists:summary.length,modelCalls,
+const report={provider:values.provider,preparedOnly:values['prepare-only'],offline:values.offline,replayedStages,replayRunHash:replayHash??null,cacheMisses,stageFailures,agentTimeoutMs:timeoutMs,serial:values.serial,stageSpacingMs:spacingMs,requestedFinalists:finalists,asOf:new Date(now).toISOString(),requestedModel:model,accounts:inputs.length,highFrequencyExcluded:highFrequency,scored:selectedInputs.length,finalists:summary.length,modelCalls,
   kinds:summary.reduce((n,c)=>(n[c.kind]=(n[c.kind]??0)+1,n),{} as Record<string,number>),
   candidatePass:passing.length,oldGateSameRatings,passingKinds:passing.reduce((n,c)=>(n[c.kind]=(n[c.kind]??0)+1,n),{} as Record<string,number>),
   blockers,outcome,freezeEligible:run.review?.freezeEligible??false,manifest:run.review?.manifest,

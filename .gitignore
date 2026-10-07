@@ -1,4 +1,4 @@
-node_modules/
+node_modules
 .env
 *.env
 .env.*
@@ -6,3 +6,5 @@ node_modules/
 work/
 dist/
 *.wasm
+__pycache__/
+*.pyc
