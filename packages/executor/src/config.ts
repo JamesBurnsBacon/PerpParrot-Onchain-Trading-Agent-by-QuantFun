@@ -22,6 +22,7 @@ export type ExecutorConfig = {
   missedRunAlertMinutes: number;
   runTtlSeconds: number;
   runTimeoutMs: number;
+  dryRunEquityUsd?: number;
 };
 
 const hex = (name: string, value: string | undefined, bytes: number): Hex => {
@@ -79,5 +80,7 @@ export const loadConfig = (env: Record<string, string | undefined>): ExecutorCon
     missedRunAlertMinutes: num(env, "MISSED_RUN_ALERT_MINUTES", 25),
     runTtlSeconds: num(env, "RUN_TTL_SECONDS", 300),
     runTimeoutMs: num(env, "RUN_TIMEOUT_SECONDS", 60) * 1000,
+    // Ignored unless dry run: sizes the plan as if our account held this much.
+    dryRunEquityUsd: dryRun && env.DRY_RUN_EQUITY_USD ? num(env, "DRY_RUN_EQUITY_USD", 0) : undefined,
   };
 };
