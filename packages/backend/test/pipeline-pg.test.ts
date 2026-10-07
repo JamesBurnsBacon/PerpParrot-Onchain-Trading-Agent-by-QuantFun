@@ -22,6 +22,8 @@ describe.skipIf(!url)("Pipeline on Postgres", async () => {
   await sql.unsafe(await migration("20261007150000_pipeline_qualified.sql")); // safe to run twice
   await sql.unsafe(await migration("20261007160000_pipeline_primary.sql"));
   await sql.unsafe(await migration("20261007160000_pipeline_primary.sql"));
+  await sql.unsafe("drop table if exists pipeline_controls");
+  await sql.unsafe(await migration("20261008050000_fresh_start.sql"));
 
   // Leaderboard: every sample account (≥ $10k ones pass the scan). No vaults from either list.
   const leaderboardRows = sample.map((s, i) => ({
@@ -143,6 +145,14 @@ describe.skipIf(!url)("Pipeline on Postgres", async () => {
     // A failed run is retried; a rejected one with the same 25 isn't reviewed again within 12 h...
     await sql`update selection_runs set status = 'rejected' where id = ${first.id!}`;
     expect(await pipeline.select()).toEqual({ status: "unchanged" });
+    // A fresh start's request reviews the unchanged 25 once more (ROSTER.md §4.6), then not again.
+    await sql`update pipeline_controls set fresh_start_requested_at = ${new Date(NOW - 60_000).toISOString()} where id = 1`;
+    expect((await pipeline.select()).status).toBe("failed"); // reviewed (no OpenAI key here)
+    const [control] = await sql`select fresh_start_review_at from pipeline_controls where id = 1`;
+    expect(new Date(control.fresh_start_review_at).getTime()).toBe(NOW);
+    expect(await pipeline.select()).toEqual({ status: "unchanged" });
+    await sql`update pipeline_controls set fresh_start_requested_at = null, fresh_start_review_at = null where id = 1`;
+    await sql`delete from selection_runs where id > ${first.id!}`;
     // ...but is after, so the roster's bench of approvals stays fresh.
     expect((await pipelineAt(NOW + 12 * 3_600_000).select()).status).toBe("failed"); // reviewed again (no OpenAI key here)
     await sql`delete from selection_runs where id > ${first.id!}`;

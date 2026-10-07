@@ -70,7 +70,7 @@ The active configuration becomes a **roster**: a set of seats, each holding one 
 ## 4. Seat lifecycle
 
 ### 4.1 Admission: filling an open seat
-- **The bench.** The top approved candidates are kept as a ranked bench: Score's 25, reviewed by the AI, filtered by the copyability gates of §5.
+- **The bench.** The top approved candidates are kept as a ranked bench: Score's 25, reviewed by the AI, filtered by the copyability gates of §5. It holds every wallet a review of the picks approved in the last 12 h, as of that wallet's latest review (a later review that didn't approve it takes it off).
 - **Filling a seat.** When a seat is open, the highest-fit bench candidate whose approval is fresh (reviewed within 12 h) is admitted at the next 10-minute select. A fresh approval needs no new AI call.
 - **Rate limit:** at most **2 admissions per hour** and **8 per day**. The cap keeps the roster from turning over in a burst, as it did this morning. Below 5 seats the limit doesn't apply, so the roster can always be frozen.
 - **Cooldown:** a released wallet can't be re-admitted for 24 h, so a wallet can't ping-pong in and out.
@@ -110,6 +110,21 @@ The owner trusts the sorting and doesn't want the portfolio to panic sell. **Wit
   - the Risk model rejects it at a 12-hourly re-review;
   - it turns high-frequency (more than 100 orders a day);
   - it is liquidated.
+
+### 4.6 Fresh start (operator)
+Replaces every seat at once, e.g. after the roster was seeded from an early, small sample (owner, 2026-10-07). In the Supabase SQL editor:
+
+```sql
+update pipeline_controls set fresh_start_requested_at = now() where id = 1;
+```
+
+- The next select step reviews the current 25 once more, even if they haven't changed, so the bench gains approvals.
+- The old seats stay and **nobody is admitted** until at least **5** approved wallets are on the bench (fresh, passing the hold gate, not cooling down).
+- Then every seat admitted before the request is **released** (`release_reason = 'fresh start'`, no 24 h cooldown, so an approved old wallet can come straight back). The bench fills 5 seats at once; the rest follow at the usual pace (§4.1). The new roster is frozen and activated.
+- Once it stands, the **paper books restart** from their starting capital: `paper_state` and `paper_points` move to `paper_state_archive` and `paper_points_archive` (with `archived_at`). Nothing is deleted.
+- `pipeline_controls.fresh_start_done_at` records it. A new request (a later `fresh_start_requested_at`) starts another.
+
+The live equity chart needs no reset: `/api/executor/equity` plots live runs only, so it starts at go-live.
 
 ## 5. Hold time, reconsidered
 
