@@ -90,6 +90,33 @@ Only `meta`, `perpDexs`, `clearinghouseState`, `spotClearinghouseState`, `webDat
 
 `split` is slower (NOWNodes measured about 1.7x the official latency), so prefer `overflow` unless a benchmark says otherwise.
 
+## Turning the NOWNodes features on (checklist)
+
+Every NOWNodes feature is off by default: with its variables unset the code is the path from before NOWNodes. Before assuming what a deployment runs, look at its real configuration (`vercel env ls production`). Nothing needs doing until someone decides to switch a feature on, and in a shared environment that is agreed first. The order below goes from "cannot touch trading" to "can stop a run". The executor is never routed through NOWNodes, whatever is set.
+
+**Before setting anything** (read-only, no deploy). Give the key to the two commands through a hidden prompt, so it does not land in the shell history, a PR or a chat:
+
+```bash
+printf 'NOWNodes key: '; read -rs NOWNODES_API_KEY; echo; export NOWNODES_API_KEY
+bun run packages/backend/scripts/probe-nownodes.ts        # exits 0 when the allowlist and NOWNodes agree
+bun run packages/backend/scripts/verify-live-dryrun.ts    # prints OK when a live snapshot verifies and a doctored copy does not
+unset NOWNODES_API_KEY
+```
+
+**Setting a variable:** on the Vercel project the backend deploys from, `vercel env add <NAME> production` (it prompts for the value; use the prompt for the key), then redeploy: a variable takes effect with the next deployment. Check on `GET /api/backend/pipeline`. All of these need `NOWNODES_API_KEY`; step 2 also needs `INFO_ROUTING=overflow` from step 1 (the probe does not run in `official` mode).
+
+| Step | Set | What it can do to trading | What to see afterwards |
+|---|---|---|---|
+| 1 | `NOWNODES_API_KEY`, `INFO_ROUTING=overflow` | Changes where a read comes from only after the official API fails it (429, 5xx, timeout); while the official API answers, nothing. | `routing.mode` is `overflow`; `routing.nownodes.requests` stays 0 until the official API fails. |
+| 2 | `NOWNODES_PROBE=on` | Can stop retrying a method NOWNodes refuses (never adds one). | `routing.capabilities` appears after the first routed read; `narrowed` is `[]`. |
+| 3 | `CONTRACT_CHECK=on` | Nothing; evidence only. | After the next AI review, `latest.finalists.contracts` is present and the finalist table marks contracts. |
+| 4 | `SNAPSHOT_VERIFY=on` | **Can stop a run**: a confirmed mismatch stores no snapshot and the executor records a failed run. With NOWNodes unreadable it still stores the snapshot (so use `on`; `strict` would refuse it, and refuses to start without a key). | `verification.verified` grows with each snapshot and `verification.unverified` stays 0 (a growing `unverified` means NOWNodes could not be read and nothing was compared); `verification.mismatches` stays 0. `verification.mode` reads `off` until the first check has run. |
+| 5 | `PICK_OVERLAP_GUARD=on` | **Can change the picks**, and so trigger more AI reviews. Not part of the default recommendation. | `latest.finalists.overlapGuard`. |
+
+Not recommended: `SNAPSHOT_VERIFY=strict` (a NOWNodes outage would stop trading) and `INFO_ROUTING=split` (NOWNodes measured slower per read).
+
+**Undo:** remove a feature's own variable (`vercel env rm <NAME> production`) and redeploy; that changes only that feature. Remove the feature variables before `NOWNODES_API_KEY`. `routing.mode` returns to `official` only once `INFO_ROUTING` is removed; `verification` stops growing once `SNAPSHOT_VERIFY` is removed. Picks the overlap guard already changed are not reverted: the next scoring just stops using it.
+
 ## Selection pipeline (2026-10-07; [docs/ingest/PIPELINE.md](../ingest/PIPELINE.md))
 
 Every 12 hours (00:15 and 12:15 UTC) the backend scans every leaderboard trader (≥ $10k, positive
