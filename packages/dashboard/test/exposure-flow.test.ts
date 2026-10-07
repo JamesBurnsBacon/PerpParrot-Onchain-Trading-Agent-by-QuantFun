@@ -2,7 +2,7 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import type { Exposures } from "../lib/data";
-import { bandWidth, buildExposureFlow, shiftLabel, sideLabel, targetsWithMutes, walletLabel } from "../lib/exposure-flow";
+import { bandWidth, buildExposureFlow, shiftLabel, sideLabel, targetsWithMutes, TOP_ASSETS, visibleAssets, walletLabel } from "../lib/exposure-flow";
 
 const first = "0x2bd600000000000000000000000000000000b8d8";
 const second = "0x5a7200000000000000000000000000000000eec4";
@@ -123,5 +123,24 @@ describe("exposure flow", () => {
     assert.equal(shiftLabel(0), "no change");
     assert.equal(shiftLabel(1e-12), "no change");
     assert.equal(shiftLabel(-0.00001), "<0.1 pp more short");
+  });
+
+  test("many assets fold behind a +N more button; a single leftover is just shown", () => {
+    const assets = (n: number) => Array.from({ length: n }, (_, i) => `A${i}`);
+    assert.deepEqual(visibleAssets(assets(5), false), { shown: assets(5), hidden: 0, foldable: false });
+    assert.deepEqual(visibleAssets(assets(TOP_ASSETS + 1), false), { shown: assets(TOP_ASSETS + 1), hidden: 0, foldable: false });
+    const folded = visibleAssets(assets(15), false);
+    assert.deepEqual(folded, { shown: assets(TOP_ASSETS), hidden: 7, foldable: true });
+    assert.deepEqual(visibleAssets(assets(15), true), { shown: assets(15), hidden: 0, foldable: true });
+  });
+
+  test("the shown assets are the largest unmuted targets, and muting does not reorder them", () => {
+    const many: Exposures = { runAt: 1, exposures: Array.from({ length: 12 }, (_, i) => ({ asset: `X${i}`, fraction: (i % 2 ? 1 : -1) * (0.01 + i * 0.01) })), sources: [] };
+    const model = buildExposureFlow(many);
+    const { shown } = visibleAssets(model.assets, false);
+    assert.equal(shown.length, TOP_ASSETS);
+    assert.equal(shown[0].asset, "X11");
+    assert.ok(shown.every((row, i) => i === 0 || Math.abs(shown[i - 1].net) >= Math.abs(row.net)));
+    assert.deepEqual(targetsWithMutes(model, new Set(["any"])).map((row) => row.asset), model.assets.map((row) => row.asset));
   });
 });

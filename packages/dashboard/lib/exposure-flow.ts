@@ -71,3 +71,12 @@ export function shiftLabel(delta: number): string {
   const size = (Math.abs(delta) * 100).toFixed(1);
   return `${size === "0.0" ? "<0.1" : size} pp more ${delta > 0 ? "long" : "short"}`;
 }
+
+// The chart shows the largest targets first (the model is sorted by the unmuted size, so muting never reorders it).
+// With more than TOP_ASSETS + 1 assets the rest fold behind a "+N more" button; one leftover asset is just shown.
+export const TOP_ASSETS = 8;
+export function visibleAssets<T>(assets: readonly T[], open: boolean, top = TOP_ASSETS): { shown: T[]; hidden: number; foldable: boolean } {
+  const foldable = assets.length > top + 1;
+  if (open || !foldable) return { shown: [...assets], hidden: 0, foldable };
+  return { shown: assets.slice(0, top), hidden: assets.length - top, foldable };
+}
