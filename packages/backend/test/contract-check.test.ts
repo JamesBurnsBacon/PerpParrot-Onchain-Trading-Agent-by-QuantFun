@@ -27,6 +27,10 @@ describe("nownodesCode", () => {
       () => rpc("not hex"),
       () => rpc("0x123"), // odd number of hex digits
       () => new Response("<html>", { status: 200 }),
+      () => new Response(JSON.stringify({ result: "0x" }), { status: 200 }), // no jsonrpc/id
+      () => new Response(JSON.stringify({ jsonrpc: "2.0", id: 2, result: "0x" }), { status: 200 }), // someone else's id
+      () => new Response(JSON.stringify({ jsonrpc: "2.0", id: 1, result: "0x6080", error: null }), { status: 200 }), // an error member, even a null one
+      () => new Response("null", { status: 200 }),
       () => Promise.reject(new Error("network")),
     ];
     for (const a of answers) expect(await nownodesCode("k", (async () => a()) as unknown as typeof fetch)("0xabc")).toBeNull();
@@ -65,6 +69,14 @@ describe("checkContracts", () => {
     await checkContracts(Array.from({ length: 20 }, (_, i) => `0x${i}`), slow, { concurrency: 3 });
     expect(peak).toBeLessThanOrEqual(3);
     expect(peak).toBeGreaterThan(1);
+  });
+
+  test("a bad concurrency value still reads every address, and none is silently dropped", async () => {
+    for (const concurrency of [Number.NaN, 0, -2, 1.5]) {
+      const out = await checkContracts(["0xa", "0xb"], read, { concurrency });
+      expect(out).toMatchObject({ checked: 2, unread: [] });
+      expect(out.contracts).toEqual([{ address: "0xb", bytes: 793 }]);
+    }
   });
 
   test("no addresses is an empty, valid result", async () => {

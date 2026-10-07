@@ -221,6 +221,11 @@ describe.skipIf(!url)("Pipeline on Postgres", async () => {
 
   test("the contract check records the contracts among the picks and leaves the pick as Score made it", async () => {
     const free = () => sql`update selection_runs set status = 'failed', started_at = now() - interval '2 hours'`;
+    const ambient = process.env.CONTRACT_CHECK;
+    delete process.env.CONTRACT_CHECK; // the "off" run below must not depend on the environment this runs in
+    afterAll(() => {
+      if (ambient !== undefined) process.env.CONTRACT_CHECK = ambient;
+    });
     const make = (contractCode?: (address: string) => Promise<number | null>) =>
       new Pipeline({ sql, account: address(999), policy: { maxExposureOverlap: 0.5 } as Policy, log: () => {}, now: () => NOW, info: (perMinute) => new PacedInfo(perMinute, info, async () => {}), ...(contractCode ? { contractCode } : {}), picks: 8 });
     await free();

@@ -32,10 +32,13 @@ export const nownodesCode = (key: string, fetchImpl: typeof fetch = fetch, timeo
       signal: AbortSignal.timeout(timeoutMs),
     });
     if (!res.ok) return null;
-    const body = (await res.json()) as { result?: unknown; error?: unknown };
+    const body = (await res.json()) as Record<string, unknown> | null;
+    // Only a well-formed JSON-RPC answer to our request counts: version, id and no error member. Anything
+    // else is unread, never "no code".
+    if (!body || typeof body !== "object" || body.jsonrpc !== "2.0" || body.id !== 1 || "error" in body) return null;
     const code = body.result;
-    // "0x" is no code; anything else must be hex of whole bytes. An RPC error or a malformed answer is unread.
-    if (body.error || typeof code !== "string" || !/^0x(?:[0-9a-fA-F]{2})*$/.test(code)) return null;
+    // "0x" is no code; anything else must be hex of whole bytes.
+    if (typeof code !== "string" || !/^0x(?:[0-9a-fA-F]{2})*$/.test(code)) return null;
     return (code.length - 2) / 2;
   } catch {
     return null;
@@ -54,12 +57,13 @@ export const checkContracts = async (addresses: readonly string[], read: CodeRea
       results.set(address, await read(address).catch(() => null));
     }
   };
-  await Promise.all(Array.from({ length: Math.max(1, Math.min(o.concurrency ?? 6, unique.length)) }, worker));
+  const requested = Number.isInteger(o.concurrency) && o.concurrency! > 0 ? o.concurrency! : 6; // a bad value falls back to the default
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(requested, unique.length)) }, worker));
   return {
     provider: "nownodes",
     checked: unique.length,
     contracts: unique.flatMap((address) => ((results.get(address) ?? 0) > 0 ? [{ address, bytes: results.get(address)! }] : [])),
-    unread: unique.filter((address) => results.get(address) === null),
+    unread: unique.filter((address) => (results.get(address) ?? null) === null), // an address with no result counts as unread
     ms: now() - started,
   };
 };

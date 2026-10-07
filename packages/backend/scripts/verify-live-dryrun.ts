@@ -21,7 +21,12 @@ if (!key) {
   process.exit(2);
 }
 
-const configPath = process.argv.includes("--config") ? process.argv[process.argv.indexOf("--config") + 1] : undefined;
+const configAt = process.argv.indexOf("--config");
+const configPath = configAt >= 0 ? process.argv[configAt + 1] : undefined;
+if (configAt >= 0 && (!configPath || configPath.startsWith("--"))) {
+  console.error("--config needs a path to a frozen configuration file");
+  process.exit(2);
+}
 const configuration = (await Bun.file(configPath ?? new URL("../fixtures/frozen-configuration.json", import.meta.url).pathname).json()) as FrozenConfiguration;
 
 const names = async (dex: string) => ((await info<{ universe?: { name: string }[] }>({ type: "meta", ...(dex ? { dex } : {}) })).universe ?? []).map((u) => u.name);
