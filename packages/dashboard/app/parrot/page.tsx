@@ -13,6 +13,7 @@ import { PARROT_PRESETS, type ParrotPreset } from "../../lib/parrot-presets";
 import { ParrotEffectsProvider, useParrotEffects, FunControls, Fever } from "../../components/parrot/ParrotEffects";
 import { diffWallets } from "../../lib/wallet-board";
 import { WaitingFlock } from "../../components/parrot/WalletBoard";
+import { EffectsLab } from "../../components/parrot/EffectsLab";
 import "./parrot.css";
 
 export default function ParrotPage() { return <ParrotEffectsProvider><ParrotContent /></ParrotEffectsProvider>; }
@@ -27,6 +28,9 @@ function ParrotContent() {
   const [previewError, setPreviewError] = useState<Failure | null>(null);
   const [busy, setBusy] = useState(false);
   const [stale, setStale] = useState(false);
+  const [lab, setLab] = useState(false);
+  // Development-only effects lab: open /parrot?fx=1 (never rendered in production builds).
+  useEffect(() => { if (process.env.NODE_ENV !== "production" && new URLSearchParams(location.search).get("fx") === "1") setLab(true); }, []);
   const request = useRef<AbortController | null>(null);
   const live = useLiveTalk(result => {
     setStale(false); setChat(result); setDemo(null); setPreview(null); setPreviewError(null); setStep(0);
@@ -94,6 +98,10 @@ function ParrotContent() {
         </div>}
         {!chat && <WaitingFlock />}
       </div>
+      {lab && process.env.NODE_ENV !== "production" && <EffectsLab
+        onPreset={preset => { setStale(false); setDemo(preset); setChat(preset.chat); setPreview(null); setPreviewError(null); setStep(0); }}
+        onLock={() => { const p = demo ?? PARROT_PRESETS[0]; if (!demo) { setDemo(p); setChat(p.chat); } setPreview(p.preview); }}
+        onReset={() => { setChat(null); setDemo(null); setPreview(null); setStep(0); lastChat.current = null; }} />}
       <footer className="parrot-privacy">Voice is processed by OpenAI. The parrot cannot trade.</footer>
     </div>
   </main>;

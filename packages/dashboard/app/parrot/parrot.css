@@ -241,3 +241,11 @@
 @keyframes ghost-collapse { 0%,88% { max-height:300px; overflow:visible; } 89% { overflow:hidden; } 100% { max-height:0; opacity:0; overflow:hidden; } }
 .wallet-ghost { animation:ghost-collapse 2.5s ease-in both; }
 .wallet-ghost > .wallet-card { min-height:0; }
+
+/* Development-only effects lab (?fx=1). */
+.fx-lab { position: fixed; left: 12px; bottom: 12px; z-index: 50; width: min(340px, calc(100vw - 24px)); max-height: 70vh; overflow: auto; padding: 12px; border-radius: 14px; background: var(--surface); color: var(--ink); border: 1px solid var(--ring); box-shadow: 0 10px 30px #0006; font-size: 12px; display: flex; flex-direction: column; gap: 6px; }
+.fx-lab p { margin: 4px 0 0; color: var(--ink-2); }
+.fx-lab div { display: flex; flex-wrap: wrap; gap: 6px; }
+.fx-lab button { padding: 6px 10px; border-radius: 999px; border: 1px solid var(--ring); background: var(--surface); color: var(--ink); cursor: pointer; font-size: 12px; }
+.fx-lab button:hover { background: var(--parrot-green); color: #142514; }
+.fx-lab button:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
