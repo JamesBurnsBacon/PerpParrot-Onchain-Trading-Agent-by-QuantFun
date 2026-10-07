@@ -45,7 +45,7 @@ honor cancellation and bound provider request sizes; the offline deadline cannot
 interrupt synchronous CPU loops. Inputs are copied before awaiting models, and
 freshness is rechecked through manifest issuance.
 
-The core compiles a conservative deterministic allocation from bucket-fit scores,
+The core compiles a conservative deterministic allocation from bucket-fit scores scaled by the lower Role/Risk confidence,
 execution latency and risk ceilings. Weights are capped and residual capital stays
 in cash; no cap overflow is redistributed. Missing essential OOS/leverage/holding
 period evidence excludes a candidate. Missing pair evidence prevents joint selection.

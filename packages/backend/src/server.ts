@@ -77,7 +77,7 @@ const pipeline = sql
   ? new Pipeline({
       sql,
       account: env.HL_ACCOUNT ?? "",
-      policy: reviewPolicy(await Bun.file(resolve(import.meta.dir, "..", "fixtures/frozen-configuration.json")).json()),
+      policy: reviewPolicy(await Bun.file(resolve(import.meta.dir, "..", "fixtures/review-policy.json")).json()),
       openAiKey: env.OPENAI_API_KEY,
       model: env.REVIEW_MODEL,
       gate: env.REVIEW_GATE === "strict" ? "strict" : "basic",

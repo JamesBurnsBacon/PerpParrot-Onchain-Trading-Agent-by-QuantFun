@@ -177,6 +177,12 @@ auditing every model output; see [production integration status](docs/agents/PRO
 a frozen configuration, is the only execution authority (§4.7). A real-provider run, the two-model evaluation and a
 schedule (Vercel Cron or AWS) remain.
 
+The scheduled review uses `packages/backend/fixtures/review-policy.json`, separate from the
+pinned frozen configuration. Minimum Role/Risk confidence is 40; fit × latency × confidence
+sets relative weights. The largest of five trading risks (excluding evidence risk) sets
+rejection and allocation caps. At least five sources are still required for freezing;
+the basic gate remains the fallback.
+
 - **Before go-live:** the agent picks **5–25 sources from ~25 finalists**, assigns weights, and writes a rationale and red flags (martingale, wash-like behavior, concentration, near-liquidation). It also judges:
   - **diversification**, from the correlation matrix and vault ↔ leader links
   - **time in market** (avoid often-flat sources)
