@@ -1,5 +1,5 @@
 import type { SQL } from 'bun';
-import type { Budget } from './client';
+import { BUDGET_WINDOW_MS, DISPATCH_LEASE_MS, type Budget } from './client';
 import type { Candidate, KindResult } from './types';
 import type { HistoryRow } from './history';
 import type { FillStats } from './fills';
@@ -109,11 +109,14 @@ export class PgIngestStore implements Budget {
         if(busy.length)return {waitMs:250};
       }
       const [row]=await db.query("select reservations,blocked_until,extract(epoch from clock_timestamp())*1000 as ms from public.ingest_budget where id=1 for update");
-      const now=Number(row.ms),all=(row.reservations as {id:string;scope:string;weight:number;time:number}[]).filter(r=>r.time>now-60_000);
+      // A request can start after its SQL grant. Keep the grant through its entire dispatch
+      // lease plus one minute, so boundary traffic is counted from the actual send as well.
+      const retention=BUDGET_WINDOW_MS+DISPATCH_LEASE_MS;
+      const now=Number(row.ms),all=(row.reservations as {id:string;scope:string;weight:number;time:number}[]).filter(r=>r.time>now-retention);
       if(Number(row.blocked_until[scope])>now)return {waitMs:Math.ceil(Number(row.blocked_until[scope])-now)};
       const active=all.filter(r=>r.scope===scope).sort((a,b)=>a.time-b.time);
       let total=active.reduce((n,r)=>n+r.weight,0);
-      if(total+weight>cap){for(const r of active){total-=r.weight;if(total+weight<=cap)return {waitMs:Math.max(1,Math.ceil(r.time+60_000-now)+20)};}}
+      if(total+weight>cap){for(const r of active){total-=r.weight;if(total+weight<=cap)return {waitMs:Math.max(1,Math.ceil(r.time+retention-now)+20)};}}
       const id=crypto.randomUUID();all.push({id,scope,weight,time:now});
       await db.query('update public.ingest_budget set reservations=$1::jsonb where id=1',[j(all)]);
       return {id,waitMs:0};

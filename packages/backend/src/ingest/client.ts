@@ -4,6 +4,9 @@ export const SOURCES = {
   info: 'https://api.hyperliquid.xyz/info',
   hyperevm: 'https://rpc.hyperliquid.xyz/evm',
 } as const;
+export const BUDGET_WINDOW_MS = 60_000;
+// Retain each grant for this extra time and never dispatch with a grant older than it.
+export const DISPATCH_LEASE_MS = 1_000;
 export class RpcError extends Error {
   constructor(public code: number, message: string) { super(message); }
 }
@@ -18,7 +21,7 @@ export type Transport = (url:string,init?:RequestInit)=>Promise<Response>;
 export class BudgetClient implements ReadClient {
   requests=0; retries=0; rateLimited=0; infoWeight=0; rpcRequests=0;
   constructor(private budget: Budget, readonly signal: AbortSignal, private fetcher: Transport=fetch,
-    private sleep: (ms:number)=>Promise<void>=Bun.sleep) {}
+    private sleep: (ms:number)=>Promise<void>=Bun.sleep, private monotonic=()=>performance.now()) {}
   async wait(ms:number) {
     for(let left=ms;left>0;left-=250){this.signal.throwIfAborted();await this.sleep(Math.min(250,left));}
     this.signal.throwIfAborted();
@@ -26,17 +29,29 @@ export class BudgetClient implements ReadClient {
   async request(url:string, body?:object, weight=20, cost?: (value:unknown)=>number):Promise<unknown> {
     if(!Object.values(SOURCES).includes(url as typeof SOURCES.info))throw new Error('Unsupported data endpoint');
     const scope=url===SOURCES.hyperevm?'rpc':'info';
+    const request:RequestInit={method:body?'POST':'GET',headers:{'Content-Type':'application/json',
+      'User-Agent':'PerpParrot-ingest/1.0'},body:body?JSON.stringify(body):undefined,redirect:'error'};
     for(let attempt=0;attempt<3;attempt++){
       this.signal.throwIfAborted();
-      let reservation;
-      do { reservation=await this.budget.reserve(scope,weight); if(reservation.waitMs)await this.wait(reservation.waitMs); }
-      while(!reservation.id);
-      this.signal.throwIfAborted();this.requests++;
-      if(scope==='info')this.infoWeight+=weight;else this.rpcRequests++;
+      let reservation:Awaited<ReturnType<Budget['reserve']>>,pending:Promise<Response>;
+      for(;;){
+        this.signal.throwIfAborted();
+        // Starting before the SQL call includes its round trip and commit delay in the lease.
+        const requestedAt=this.monotonic();
+        reservation=await this.budget.reserve(scope,weight);
+        if(reservation.waitMs){await this.wait(reservation.waitMs);continue;}
+        if(!reservation.id)continue;
+        const init={...request,signal:AbortSignal.any([this.signal,AbortSignal.timeout(body?25_000:150_000)])};
+        this.signal.throwIfAborted();
+        // A late permit remains conservatively charged, but cannot authorize a late HTTP call.
+        if(this.monotonic()-requestedAt>=DISPATCH_LEASE_MS)continue;
+        this.requests++;
+        if(scope==='info')this.infoWeight+=weight;else this.rpcRequests++;
+        try{pending=this.fetcher(url,init);}catch(error){pending=Promise.reject(error);}
+        break;
+      }
       let res:Response;
-      try {res=await this.fetcher(url,{method:body?'POST':'GET',headers:{'Content-Type':'application/json',
-        'User-Agent':'PerpParrot-ingest/1.0'},body:body?JSON.stringify(body):undefined,redirect:'error',
-        signal:AbortSignal.any([this.signal,AbortSignal.timeout(body?25_000:150_000)])});}
+      try {res=await pending;}
       catch {this.signal.throwIfAborted();if(attempt===2)throw new Error('Source network/timeout failure');this.retries++;await this.wait(1000*2**attempt);continue;}
       if(!res.ok){
         await res.body?.cancel();

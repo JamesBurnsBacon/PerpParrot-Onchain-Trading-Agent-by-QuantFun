@@ -68,6 +68,11 @@ The existing Role/Risk/Red-Team committee and its OOS/execution-evidence require
 
 The shared Postgres limiter admits at most **1,200 Info weight per rolling minute**, the documented official REST limit per IP; the old 600 cap is removed.
 The classification RPC lane uses a separate official 100/min cap.
+Each SQL grant is retained for 61 seconds: the 60-second window plus a one-second dispatch lease.
+The client measures from before the reservation round trip with a monotonic clock; a grant that takes one second or more
+cannot dispatch and must be acquired again. This covers the delay between reserving weight and actually sending HTTP,
+which caused a one-millisecond boundary overlap in the first live rehearsal. Expired unused grants stay charged conservatively.
+The caps remain 1,200 and 100; the extra retention slightly reduces sustained throughput. Capacity arithmetic below is an upper bound before this margin.
 Portfolio costs 20. Retries reserve again; `429 Retry-After` pauses other invocations too.
 No recurring fill-history cost is included because there are no recurring fill-history requests.
 See [official rate limits](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/rate-limits-and-user-limits) and [fill pagination](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint).

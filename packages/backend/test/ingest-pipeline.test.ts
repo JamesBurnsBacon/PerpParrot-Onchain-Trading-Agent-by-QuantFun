@@ -2,7 +2,7 @@ import {afterAll,beforeAll,beforeEach,describe,expect,test} from 'bun:test';
 import {PGlite} from '@electric-sql/pglite';
 import {SQL} from 'bun';
 import {PgIngestStore,bunDatabase,type Database,type Account} from '../src/ingest/store';
-import {BudgetClient,SOURCES,type Transport} from '../src/ingest/client';
+import {BudgetClient,SOURCES,DISPATCH_LEASE_MS,type Transport} from '../src/ingest/client';
 import {IngestPipeline,ingestHandler,jobBucket} from '../src/ingest/pipeline';
 import {discover} from '../src/ingest/discovery';
 import {loadInputs,prepareHistory,toScoreInput} from '../src/ingest/loader';
@@ -84,6 +84,23 @@ test('shared minute budget never grants more than 1200, refunds only unused capa
   expect((await store.reserve('rpc',1)).id).toBeDefined();
   await db.query("update public.ingest_budget set reservations='[]'");expect((await store.reserve('info',600)).id).toBeDefined();
 });
+test('minute boundary retains weight until the dispatch lease also expires',async()=>{
+  await db.query(`update public.ingest_budget set reservations=jsonb_build_array(jsonb_build_object(
+    'id','delayed-send','scope','info','weight',1200,'time',extract(epoch from clock_timestamp())*1000-60500))`);
+  expect((await store.reserve('info',20)).id).toBeUndefined();
+  await db.query(`update public.ingest_budget set reservations=jsonb_build_array(jsonb_build_object(
+    'id','expired','scope','info','weight',1200,'time',extract(epoch from clock_timestamp())*1000-61001))`);
+  expect((await store.reserve('info',20)).id).toBeDefined();
+});
+test('a delayed SQL grant cannot authorize an HTTP dispatch after its lease',async()=>{
+  let ms=0,grants=0,calls=0;
+  const delayed={reserve:async()=>{grants++;ms+=grants===1?DISPATCH_LEASE_MS:1;return {id:String(grants),waitMs:0};},refund:async()=>{}};
+  const client=new BudgetClient(delayed,new AbortController().signal,async()=>{
+    calls++;expect(grants).toBe(2);return Response.json([]);
+  },async()=>{},()=>ms);
+  await client.request(SOURCES.info,{type:'portfolio',user:address(1)});
+  expect(grants).toBe(2);expect(calls).toBe(1);expect(client.requests).toBe(1);expect(client.infoWeight).toBe(20);
+});
 test('429 retries honor Retry-After and reserve each attempt',async()=>{
   let calls=0,reservations=0,slept=0;
   const client=new BudgetClient({reserve:async()=>{reservations++;return {id:'x',waitMs:0};},refund:async()=>{}},new AbortController().signal,
@@ -159,6 +176,22 @@ test('background refresh never requests fills, even when initial trade evidence 
   expect(result.updated).toBe(6);expect(result.failed).toBe(0);
   const rows=await store.accounts();expect(loadInputs(rows,Date.now()).coverage.fresh).toBe(6);
   expect(rows.every(row=>row.stats===null)).toBe(true);
+});
+test('background refresh resolves missing classification before saving without fetching fills',async()=>{
+  await seed(1);const calls:string[]=[];
+  const fetcher=transport((_url,body)=>{
+    calls.push(body.method??body.type);
+    if(body.method==='eth_chainId')return {result:'0x3e7'};
+    if(body.method==='eth_blockNumber')return {result:'0x123'};
+    if(body.method==='eth_getCode')return {result:'0x'};
+    if(body.type==='portfolio')return portfolio(Date.now());
+    throw new Error('Unexpected request');
+  });
+  const pipeline=new IngestPipeline(store,Date.now,signal=>new BudgetClient(budget,signal,fetcher));
+  const result=await pipeline.run('refresh',new AbortController().signal);
+  expect(result.updated).toBe(1);expect(result.failed).toBe(0);
+  expect(calls).toEqual(['eth_chainId','eth_blockNumber','eth_getCode','portfolio']);
+  const [row]=await store.accounts();expect(row.classification?.kind).toBe('trader');expect(row.stats).toBeNull();
 });
 test('authentication rejects missing configuration and wrong secret before work',async()=>{
   const req=(secret?:string)=>new Request('https://example.test/cron/refresh',{headers:secret?{authorization:`Bearer ${secret}`}:{}});

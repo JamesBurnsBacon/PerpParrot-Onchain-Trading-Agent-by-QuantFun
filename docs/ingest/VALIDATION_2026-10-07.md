@@ -24,3 +24,36 @@ priority preemption fences the previous writer; minute budgets, duplicate trigge
 Cloud status remains unverified: no new migration or production cron cutover, no paid OpenAI/Anthropic batch, and no measured production 12-hour coverage.
 Vercel console login was required, so `DATABASE_URL` presence could not be confirmed. The legacy local collector and research files were retained.
 Deployment/import/recovery steps: [POSTGRES_RUNBOOK.md](POSTGRES_RUNBOOK.md).
+
+## Ten-minute live rehearsal and follow-up
+
+Run: **03:30:24–03:40:24 UTC**, 600.003 seconds, at commit `4230cc5`.
+[Machine-readable aggregate evidence](evidence/ten-minute-rehearsal-20261007.json) includes hashes of the retained local artifacts.
+No account lists, raw responses, positions or unredacted logs are checked in here.
+
+| Observation | Result |
+| --- | --- |
+| Priority cohort | 200/200 refreshed in 182.290 seconds; 196 traders, 4 vaults |
+| Further refreshes | 394 successful; 1 cached source lacked classification; 4 budget waits cancelled before HTTP at the deadline |
+| Score finalists | 24 traders + 1 vault; all eight gates pass; pool percentiles and weighted scores independently recomputed |
+| Input/replay check | All 200 inputs match saved API portfolios; production Score replay reproduces the complete result |
+| Current position evidence | 50 core/xyz state queries; 6 finalists had nonzero positions, 19 did not; 97 position rows total |
+| Source HTTP | 595 portfolio + 50 state requests; all 645 returned 200; zero 429s; no fill-history requests |
+| Budget finding | 12,000 total weight; one 60-second dispatch window reached **1,220 for a 1 ms overlap**; strict rolling-limit check **failed** |
+| Economic actions | No model call, production publication, configuration activation or exchange order |
+
+The preserved 10,987-source cache had only 1,661 fresh valid sources at start. This rehearsal deliberately used a preview-only
+cache preselection, then real refreshes and the existing Score on the 200-source cohort. It did not publish through the production
+95% global-freshness gate or demonstrate global-current Top 25, a complete 12-hour cycle, or trading profitability.
+The temporary replay driver rejected an unclassified source; the production worker already resolves unknown classification before fetching its portfolio.
+A regression test now exercises that path and confirms it does not request fills.
+
+The follow-up limiter change retains grants through a one-second dispatch lease in addition to the full rolling minute.
+The client refuses to dispatch a grant that has already consumed that lease, measured before the SQL round trip.
+Regression tests cover the minute boundary and a delayed grant; the original live result above remains a failure, not evidence of the fix.
+No second live ten-minute run or hosted PostgreSQL concurrency test has been performed for this follow-up.
+
+Follow-up checks: backend `bun test` **402 passed, 1 real-PostgreSQL test skipped, 0 failures**;
+`bun run typecheck` passed. The three new regressions cover delayed-dispatch accounting, expired permits,
+and the existing missing-classification recovery path. This follow-up does not change cron schedules,
+cohort/finalist counts, the Score formula, Review policy or execution settings.

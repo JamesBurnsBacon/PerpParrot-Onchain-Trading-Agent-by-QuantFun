@@ -1,0 +1,82 @@
+{
+  "schemaVersion": "1.0.0",
+  "type": "local-live-read-rehearsal-aggregate",
+  "codeCommit": "4230cc5cf0a4903e068586b945f83dc4698eff42",
+  "startedAt": "2026-10-07T03:30:24.007Z",
+  "finishedAt": "2026-10-07T03:40:24.010Z",
+  "elapsedSeconds": 600.003,
+  "scope": "Preserved initial screening cache preselection, then real API refresh and cohort scoring; local PGlite, no production publication.",
+  "initialCandidates": 10987,
+  "initialFreshCandidates": 1661,
+  "initialFreshFraction": 0.15117866569582233,
+  "initialCachePreviewOnly": true,
+  "productionFreshnessGateBypassedForPublication": false,
+  "productionPublished": false,
+  "priority": {
+    "expected": 200,
+    "updated": 200,
+    "elapsedSeconds": 182.29,
+    "accounts": 196,
+    "vaults": 4
+  },
+  "background": {
+    "updated": 394,
+    "missingClassificationRejected": 1,
+    "deadlineCancelledBeforeDispatch": 4
+  },
+  "selection": {
+    "scope": "Top 25 within the refreshed 200, not a simultaneous global Top 25",
+    "accounts": 24,
+    "vaults": 1,
+    "sourcesWithPositions": 6,
+    "sourcesWithoutPositions": 19,
+    "positionRows": 97,
+    "positionDexes": [
+      "",
+      "xyz"
+    ]
+  },
+  "http": {
+    "attempts": 645,
+    "status200": 645,
+    "rateLimited": 0,
+    "requestsByType": {
+      "clearinghouseState": 50,
+      "portfolio": 595
+    },
+    "infoWeight": 12000,
+    "maxRolling60sWeight": 1220,
+    "rollingLimitPassed": false,
+    "overweightWindows": [
+      {
+        "requestIndex": 583,
+        "weight": 1220,
+        "expiryOverlapMs": 1
+      }
+    ]
+  },
+  "scoreChecks": "passed",
+  "checks": [
+    "25 unique finalists",
+    "All 8 gates passed",
+    "All 5 percentiles independently reconstructed from raw pool metrics",
+    "Score recomputed from 5 percentiles",
+    "Exact production Score replay",
+    "200 inputs matched to saved live API responses",
+    "All finalist portfolios refreshed during this run",
+    "25 current position reads succeeded on core and xyz",
+    "No recurring fill requests",
+    "No orders submitted"
+  ],
+  "modelCalled": false,
+  "ordersSubmitted": 0,
+  "localArtifactSha256": {
+    "summary.json": "abe93fb2abff7b555c6688b43b3a08312c9df1c6f93f9543e06cc8de19df8757",
+    "selection.json": "e203d89a0d9102a472f9a5ff27acc9d6f2655a68ca84c7666960d23fb7985364",
+    "http-attempts.json": "672b69d13ee69b6f5d2295e0667530cd0864bd7a340dbd23fa0db04dc96b47d9",
+    "verification.json": "d11774079097b32f7af3ce8e8297c86c07bec6eca7abd62d2eacc31c1a920e66",
+    "score-audit.json": "735e1e368d9ee7344577f9581440a4e8b231f2ed1a6b97386100ebb0cb261bee"
+  },
+  "privacy": "Aggregate facts and hashes only. Account lists, raw responses, positions and original logs remain local.",
+  "followup": "Dispatch-lease fix is validated separately. This original live run predates the fix; do not relabel its rolling-limit failure as a pass."
+}
