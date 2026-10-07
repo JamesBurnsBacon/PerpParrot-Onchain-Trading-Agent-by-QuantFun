@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Badge } from "../../components/parrot/Badge";
 import { ParrotAvatar, type AvatarState } from "../../components/parrot/ParrotAvatar";
 import { StepRail, type Step } from "../../components/parrot/StepRail";
@@ -13,8 +13,12 @@ import { PARROT_PRESETS, type ParrotPreset } from "../../lib/parrot-presets";
 import { ParrotEffectsProvider, useParrotEffects, FunControls, Fever } from "../../components/parrot/ParrotEffects";
 import { diffWallets } from "../../lib/wallet-board";
 import { WaitingFlock } from "../../components/parrot/WalletBoard";
-import { EffectsLab } from "../../components/parrot/EffectsLab";
 import "./parrot.css";
+
+// Development-only: the whole module is behind a constant condition, so production builds contain neither the import nor its chunk.
+const EffectsLab = process.env.NODE_ENV !== "production"
+  ? lazy(() => import("../../components/parrot/EffectsLab").then(m => ({ default: m.EffectsLab })))
+  : null;
 
 export default function ParrotPage() { return <ParrotEffectsProvider><ParrotContent /></ParrotEffectsProvider>; }
 function ParrotContent() {
@@ -98,10 +102,10 @@ function ParrotContent() {
         </div>}
         {!chat && <WaitingFlock />}
       </div>
-      {lab && process.env.NODE_ENV !== "production" && <EffectsLab
+      {lab && EffectsLab && <Suspense fallback={null}><EffectsLab
         onPreset={preset => { setStale(false); setDemo(preset); setChat(preset.chat); setPreview(null); setPreviewError(null); setStep(0); }}
         onLock={() => { const p = demo ?? PARROT_PRESETS[0]; if (!demo) { setDemo(p); setChat(p.chat); } setPreview(p.preview); }}
-        onReset={() => { setChat(null); setDemo(null); setPreview(null); setStep(0); lastChat.current = null; }} />}
+        onReset={() => { setChat(null); setDemo(null); setPreview(null); setStep(0); lastChat.current = null; }} /></Suspense>}
       <footer className="parrot-privacy">Voice is processed by OpenAI. The parrot cannot trade.</footer>
     </div>
   </main>;
