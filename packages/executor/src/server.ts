@@ -1,6 +1,6 @@
 // Executor service (README §4.8): once per 10-minute run, takes the backend's target exposures,
 // sizes them with our live equity and trades. Dry run on Vercel (the `executor` service under
-// /api/executor, triggered by Vercel Cron); live trading needs one long-running process, where a
+// /api/executor, with a cron watchdog); live trading needs one long-running process, where a
 // timer triggers the runs. Locally: bun run dev.
 import { SQL } from "bun";
 import { createAlert } from "./alerts";
@@ -107,7 +107,7 @@ const app = createApp({
 // Request bodies are tiny (admin actions); cap them anyway.
 const server = Bun.serve({ port: config.port, fetch: app, maxRequestBodySize: 256 * 1024 });
 
-// A long-running host triggers its own runs at each :x0 (on Vercel, Vercel Cron calls /cron/run).
+// A long-running host triggers its own runs at each :x0 (root vercel.json does not schedule /cron/run).
 // The per-run claim makes this safe alongside any other trigger.
 let lastTriggered = 0;
 if (!config.vercel) setInterval(() => {

@@ -3,7 +3,7 @@
 Status: **revision 2 (2026-10-06), implemented.** The code in `src/score/` follows this file; its test fixtures were
 produced by a separate Python reference written from this file alone (see `test/fixtures/score/README.md`). Revision 2
 records the decisions from the review of PR #2 (see "Revision 2 decisions
-and evidence" at the end). Values marked **[tune]** are provisional and are set in the tuning session on 2026-10-07.
+and evidence" at the end). Values marked **[tune]** are provisional defaults, not evidence of completed calibration.
 Where the README is silent, a choice is marked **[interpretation]**.
 
 ## What it does
@@ -373,14 +373,10 @@ Invalid config throws, and the error names the field: `finalists`, `minMonthPoin
 `allowUnknown` entries must be filter names; `pureTakerMakerShare` in [0, 1]; `pureTakerPenalty` in [0, 1] and a
 multiple of 0.001.
 
-## Snapshots (ingest, README 4.1)
-Hyperliquid serves `month` at about 16-hour resolution but older history only through the coarse `allTime` window.
-Ingest therefore saves, once a day for every address it tracks, each `month` point as
-`(address, tsMs, accountValue, pnlAllTimeBaseline)`, with `pnlAllTimeBaseline = month.pnl + offset` computed from the
-same response (see "Baselines"). Rows are keyed by `(address, tsMs)`; a re-fetched row must agree within the tolerance
-above, or ingest keeps the newer row and logs the mismatch. Score receives the stored rows older than the current
-`month` window as `history`. After 60 days of snapshots, the 90-day lookback is at month resolution for every
-tracked address.
+## Stored history extension (not enabled in the pipeline)
+Hyperliquid serves `month` at finer resolution than older `allTime` history. Score accepts stored rows as `history`, but the current pipeline passes `history: null` and stitches the API windows. There is no daily fine-resolution archive feeding production Score.
+
+A future archive could retain `(address, tsMs, accountValue, pnlAllTimeBaseline)` rows using the baseline rules above, reconcile refetched rows and supply points older than the current month. This requires an explicit ingest/storage implementation; it is not an existing deployment feature.
 
 ## Frame adapter (review `candidate-curation-frame`)
 The review workflow consumes `packages/shared/schemas/candidate-curation-frame.schema.json`. Its `oos*` and
@@ -415,8 +411,7 @@ logging, and the caller logs it. Candidate positions count only kept finalists. 
 dropped; remaining pairs are remapped to the kept positions. A finalist with missing metrics or
 `maxDrawdown === null` still throws as a fail-closed guard; scoring should never produce one.
 
-Consequence: `review/workflow.ts` rejects a candidate with `oosSharpe === null`, so no candidate passes the review
-gate until the backtest supplies out-of-sample values. This is intended.
+The strict core rejects missing required OOS evidence. Production selection supplements the pure adapter with measured trailing holdouts, positions and fills; these are not independent walk-forward validation. Only an `INSUFFICIENT_EVIDENCE` result can use the configured basic gate. Approved candidates still go through bench and roster admission; see [PIPELINE.md](../../../../docs/ingest/PIPELINE.md).
 
 ## Code conventions (match `packages/backend`)
 TypeScript strict, ESM, extensionless imports, double quotes, semicolons, trailing commas, `const` arrow-function
@@ -426,8 +421,8 @@ Files: `src/score/{types,config,parse,stitch,returns,metrics,filters,score,clone
 ## To decide in tuning (2026-10-07)
 - The **[tune]** values: `lookbackDays` 90, `stillActiveDays` 7, `dustEquityFraction` 0.01, `maxSkippedTimeShare`
   0.20, `cloneCorrelation` 0.90, and the `finalistSplit` between traders and vaults (to be set after seeing how live traders and vaults differ).
-- **Pure-taker penalty** `pureTakerMakerShare` 0.05 and `pureTakerPenalty` 0.02. It is dormant until ingest supplies
-  `makerShare` from fills; recheck its size against live funnels.
+- **Pure-taker penalty** `pureTakerMakerShare` 0.05 and `pureTakerPenalty` 0.02. The pipeline supplies
+  `makerShare` from ingested fills; recheck its size against measured funnels.
 - **Near-cash accounts rank first.** On the sample, `addr-21` (+0.4% over 82 days, 0.008% drawdown, R² 0.94)
   ranks #1. All five terms are risk-adjusted or shape-based, so an account with almost no risk and almost no return
   wins. A return hurdle (minimum `annualisedReturn`) or a return term may be needed.
@@ -454,7 +449,7 @@ the implementation and checked against the independent Python reference.
 | 7 | Not annualised | Ratios still not annualised; annualised return and volatility reported | A 30/90-day Sharpe scaled by sqrt(365) looks far more reliable than it is (`addr-21` over the 30-day month: 7.3 per sqrt(day) -> ~140 per year). |
 | 8 | Ties by address | Ties by raw Sharpe, then address | The address string should not decide the last finalist slot. |
 | 9 | Score's own record, no adapter | Adapter to frame 1.1.0 with in-sample fields | Putting in-sample metrics in `oos*` would label them as validated. |
-| - | `month` window only (30 days) | 90-day stitched lookback; snapshots in ingest | Team decision: 30 days is a minimum, not the lookback. The `month`/`allTime` offset is exact (24/24 accounts). |
+| - | `month` window only (30 days) | 90-day stitched lookback; stored-history input supported | Team decision: 30 days is a minimum, not the lookback. The `month`/`allTime` offset is exact (24/24 accounts). |
 | - | Ruin ranked with curve 0 | Ruin is ineligible (`noRuin`) | An account that lost everything in the lookback is not a copy source. |
 | - | (none) | `minCoverage`: <= 20% of time in dust intervals | Excludes `addr-08`, which traded for only ~2 weeks of the window. |
 | - | (none) | `allTimeMaxDrawdown` reported | Shows the agent a blow-up older than the lookback. |
@@ -476,15 +471,14 @@ Funnel on the sample (synthetic `closed`/`tradeCount` overlay, default config): 
 - Addresses are compared case-insensitively, and two inputs that differ only by case throw `duplicate address`.
 - The funnel counts candidates that passed each filter and all earlier ones.
 - Pure functions in `packages/backend/src/score/`, nothing exported from a package entry point, no new dependencies.
-- Fill-derived values (`tradeCount`, `avgLeverage`, `timeInMarket`, `medianHoldHours`, `makerShare`) are inputs that a
-  future ingest supplies. Score passes them through. `makerShare` also drives the pure-taker penalty (next item).
+- Fill-derived values (`tradeCount`, `avgLeverage`, `timeInMarket`, `medianHoldHours`, `makerShare`) are inputs that ingest and review evidence builders supply when available. Missing values remain unknown. Score passes them through. `makerShare` also drives the pure-taker penalty (next item).
 - Fixture addresses are replaced by `addr-NN`. `closed` and `tradeCount` in `portfolio-sample.json` are synthetic.
 - **Decided 2026-10-06** (after PR #18): link groups are built over all inputs, so an unranked account can bridge two
   ranked ones; a unit moves as a whole when its head is a correlation clone; a head is compared with every member of
   each earlier representative's link unit (not with correlation clones), and `cloneOf.via` names the member that matched.
 - **[interpretation of this task]** The flag for a non-finite main-path drawdown is named `overflow`.
 - **Decided 2026-10-06** (after PR #18): `toFrameCandidates` stays pure and returns `skipped`; its caller logs it.
-- **Decided 2026-10-06** (README §8 "Maker share: a plus or an exclusion?"): neither. Zero or near-zero maker volume is a
+- **Decided 2026-10-06** (historical README research, now `docs/research/OBSERVATIONS_20261006.md`): neither. Zero or near-zero maker volume is a
   **slight negative**: the pure-taker penalty in "Ranking". The evidence is `scripts/research/maker-share/`, an
   out-of-sample test with maker share measured on the 30 days before t0 and the outcome on the 30 days after.
   There were two periods of 200 randomly drawn accounts each.

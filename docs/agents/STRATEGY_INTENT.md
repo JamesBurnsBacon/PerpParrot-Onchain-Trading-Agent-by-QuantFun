@@ -1,10 +1,15 @@
 # Strategy-intent preview boundary
 
-`packages/shared/strategy-intent.ts` is the first building block for a future
-“talk to the parrot” interface. It accepts only a small strict intent object, compiles
-that into a deterministic **simulation preview**, and can choose a deterministic
-shortlist from already-scored finalists. It does not call a model, read secrets, fetch
-data, persist intent, or place orders. There is no endpoint or UI wired to it.
+`packages/shared/strategy-intent.ts` provides the strict intent schema, parser,
+simulation-policy compiler and deterministic shortlist helpers. The backend chat
+handlers and the `/parrot` UI use its intent contract; chat strategy selection uses
+its shortlist helper. See [the Parrot integration guide](../parrot/INTEGRATION.md)
+for the endpoint and UI flow.
+
+The module itself does not call a model, read secrets, fetch data, persist intent or
+place orders. The `intentToPreview` policy compiler described below always
+produces a **simulation preview**. It is not the separate live-session authorization
+path, and using the shared intent schema does not grant execution authority.
 
 ## Contract and safety boundary
 
@@ -24,8 +29,7 @@ the result again. It emits `SIMULATION` and `SIMULATION_PREVIEW` unconditionally
 chat request cannot produce a live policy. If the model indicates that it needs more
 information, compilation and shortlisting stop until that clarification is answered.
 
-This branch intentionally differs from PR #23 in two places that affect user intent
-and control boundaries:
+The simulation compiler enforces two user-intent and control boundaries:
 
 - `maxSources` is treated as a real maximum. If the risk ceilings require more
   independent source slots than the visitor asked for, compilation fails with an
@@ -67,5 +71,4 @@ The typed bridge is implemented in `packages/backend/src/strategy-intent-adapter
 It maps only actual ranked finalists, uses Score's native non-annualised
 `metrics.realizedVol`, and keeps clone status tri-state. If a visitor asks to avoid
 clones, only sources with explicit `false` evidence survive; unknown status is not
-treated as proof of independence. The current Score pipeline has no clone detector,
-so callers must supply verified clone evidence for this option to retain candidates.
+treated as proof of independence. Score already groups linked/correlated clones (`src/score/clones.ts`) and exposes `cloneOf`/`clones`. The bridge must carry that evidence; absent evidence remains unknown.

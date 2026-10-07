@@ -1,8 +1,6 @@
 # GBrain for project continuity
 
-Status: design and operating guidance only. GBrain is not installed or connected in
-this workspace, and this document does not claim that memory capture or retrieval has
-been tested. The optional setup is for developer context across agent sessions; it is
+Status: design and operating guidance only. Installation and connection are environment-specific; this document does not attest that memory capture or retrieval has been tested. The optional setup is for developer context across agent sessions; it is
 not part of the review, backend, executor, or funded trading runtime.
 
 ## What to adopt
@@ -47,8 +45,7 @@ risk limits, freeze hashes, configuration checks, or executor actions.
 
 ## Optional local setup
 
-GBrain requires Bun; it is currently unavailable in the development environment, so
-the following has not been run or verified. Follow the current official instructions
+The application uses Bun, but that does not establish a working GBrain installation. The following optional setup is not validated by the application tests. Follow the current official instructions
 before setup because the install flow and client integration can change. The
 documented keyless local path is:
 

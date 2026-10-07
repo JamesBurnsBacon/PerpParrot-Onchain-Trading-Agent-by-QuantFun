@@ -18,7 +18,9 @@ Browser: /parrot and receipt pages
   | POST /live/session (SDP) <--> backend <--> OpenAI GPT-Live
   | <================ WebRTC voice / tool events ===============>
   | POST /live/strategy (validated intent) <--> backend code
-  | POST /chat/preview (intent) -----------> pending SIMULATION request
+  | POST /live/plan ----------------------> reviewable plan (no save)
+  | POST /live/request (confirmation) ----> pending SIMULATION request
+  | POST /chat/preview (intent) -----------> optional text preview / pending request
   | POST /decide/receipt (claim + facts) <--> backend <--> OpenAI Decisions API
   |                                                     (display-only opinion)
   |                         backend reads only:
@@ -27,7 +29,7 @@ Browser: /parrot and receipt pages
   |                         paper books + stored snapshots -> context
   |                                     ^
   +---- rendered facts / preview ------- | existing pipeline on our infrastructure
-                                        | review -> freeze -> targets -> executor
+                                        | review -> bench -> roster -> freeze -> targets -> executor
                                         | (separate authority; Parrot cannot invoke it)
 ```
 

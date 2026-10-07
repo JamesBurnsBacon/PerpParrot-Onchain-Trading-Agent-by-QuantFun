@@ -45,7 +45,7 @@ Other workstreams own these files; read, but do not edit for a Parrot cleanup:
 
 ## Switch from sample to stored live data
 
-There is no “force live” switch. The pipeline operator prepares the database and ingestion using the [deploy guide](../ops/DEPLOY.md#selection-pipeline-basic-flow-2026-10-07). Set backend `DATABASE_URL`; the existing reader selects live finalists automatically when the [pool requirements](../PARROT.md#data-caches-and-fallbacks) pass. Wait for its cache to expire, then inspect `shortlist.dataSource === "live"` and the stored listing/portfolio freshness. The listing filter is relative to the latest stored listing, not wall-clock freshness.
+There is no “force live” switch. The pipeline operator prepares the database and ingestion using the [deploy guide](../ops/DEPLOY.md#selection-pipeline). Set backend `BACKEND_DATABASE_URL` or `DATABASE_URL`; the existing reader selects live finalists automatically when the [pool requirements](../PARROT.md#data-caches-and-fallbacks) pass. Wait for its cache to expire, then inspect `shortlist.dataSource === "live"` and the stored listing/portfolio freshness. The listing filter is relative to the latest stored listing, not wall-clock freshness.
 
 Check book context independently of shortlist source. Never relabel fixtures, manufacture paper history or change Score thresholds. The standalone `/parrot/receipts` receipt intentionally stays sample; `/parrot/receipts/live` uses the current turn's code-built facts. A caller-supplied receipt does not attest its provenance.
 
@@ -91,7 +91,7 @@ The pool is smaller than production's (about 85 accounts against about 250 quali
 | `DECISIONS_MODEL` | `gpt-6-luna` | Operator (override) |
 | `DECISIONS_PRICE_PER_M_USD` | `0.10`; estimated input-only cost per million tokens | Operator (override) |
 | `DECISIONS_IP_HOURLY_LIMIT` / `DECISIONS_GLOBAL_DAILY_LIMIT` | `240` / `3000` calls | Operator (override) |
-| `DATABASE_URL` / `CRON_SECRET` | Unset; both required on Vercel by backend startup | Shared-service operator; [runbook](../ops/RUNBOOK.md) |
+| `DATABASE_URL` (or backend-only `BACKEND_DATABASE_URL`) / `CRON_SECRET` | Unset; a database connection and cron secret are required on Vercel | Shared-service operator; [runbook](../ops/RUNBOOK.md) |
 | `CONFIGURATION_PATH` / `FROZEN_CONFIGURATION_HASH` | No defaults; required configuration file and pin | Shared-service operator; [deployment](../ops/DEPLOY.md) |
 
 Invalid optional numeric Parrot settings fall back to defaults. Reservations are estimates, not provider billing caps; session/backend cost and IP trust limits are in [Residual risks](../PARROT.md#residual-risks-and-unverified-items).
@@ -108,7 +108,7 @@ Apply shared-service migrations using the [runbook](../ops/RUNBOOK.md), without 
 
 Live sources also require (`20261007120000_pipeline.sql`) and the snapshot/table upgrade described in the deploy guide. Follow the full shared migration order. Without a database, local request/limiter stores are in-memory and not durable or cross-instance.
 
-From `packages/backend`, using a locally supplied secret (never commit its value):
+For an in-memory local rehearsal, unset both `DATABASE_URL` and `BACKEND_DATABASE_URL` and avoid loading a production `.env`. From `packages/backend`, using a locally supplied secret (never commit its value):
 
 ```sh
 CONFIGURATION_PATH=fixtures/frozen-configuration.json \
@@ -122,7 +122,7 @@ From `packages/dashboard`, run `bun run dev` and open `http://localhost:3000/par
 ## Pre-merge / pre-deploy checklist
 
 - [ ] Review the diff against the ownership/invariant boundaries; no secrets or private account/trade data in docs or fixtures.
-- [ ] Run both packages' tests/type checks, dashboard webpack build and production marker scan in [Verify offline](../PARROT.md#verify-offline). Dashboard minimum: `cd packages/dashboard && bun test && bunx --no-install tsc --noEmit`. Run relevant mutation scripts for selection, context, scheduler or receipt changes.
+- [ ] Run both packages' tests/type checks, dashboard default build and production marker scan in [Verify offline](../PARROT.md#verify-offline). Dashboard minimum: `cd packages/dashboard && bun test && bunx --no-install tsc --noEmit`. Run relevant mutation scripts for selection, context, scheduler or receipt changes.
 - [ ] Check Markdown paths/anchors and all references before moving content. Record checks as local evidence, separately from CI and deployment.
 - [ ] Operator confirms migrations, Vercel variables, ingress IP-header handling and provider spend controls; their deployed state is not verified here.
 - [ ] Rehearse [DEMO.md](DEMO.md), including fallback labels, End/Mute and a real microphone; the historical provider checks used typed turns only.

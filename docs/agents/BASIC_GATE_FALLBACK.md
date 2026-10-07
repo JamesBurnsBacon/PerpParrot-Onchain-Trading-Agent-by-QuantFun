@@ -1,6 +1,9 @@
 # Fix: a failed strict review falls back to approving almost everyone
 
-**For:** Bradley. **Status:** fix implemented on this PR branch; not deployed. **Found:** 2026-10-07, before go-live.
+**Status:** historical incident and implemented fix. **Found:** 2026-10-07.
+Current `pipeline/index.ts::reviewGate` permits basic fallback only for
+`INSUFFICIENT_EVIDENCE`; other invalid reasons produce `none`. Deployment status must
+be checked independently. The code excerpt and run counts below describe the old bug.
 
 ## What happened
 
@@ -8,7 +11,8 @@ At the time of this incident, the roster's bench was built from each review of S
 `packages/backend/src/pipeline/index.ts`, the `const approved =` block). Three reviews of the same
 250-account qualified list:
 
-The current pipeline picks 40 finalists; the run counts below are historical evidence of the fallback bug.
+The checked-in pipeline default is 25 finalists (`PICKS`); the run counts below are
+historical evidence, not the current bench or account state.
 
 | Run | Started (UTC) | Review core manifest | Path taken | Wallets approved |
 |---|---|---|---|---|
@@ -70,7 +74,10 @@ const approved =
 - An invalid seat re-review preserves the existing seats and is retried after the failed-review cooldown.
 - The dashboard labels the actual `strict`, `basic`, or `none` path and the manifest reason.
 
-## Interim (owner's call)
+## Historical interim mitigation
+
+These options were recorded before the fix. They do not assert those wallets are
+still seated or require a current production configuration change.
 
 - Setting `REVIEW_GATE=strict` in Vercel (Production) and redeploying stops fallback approvals now,
   with no code change. The bench then grows only from `VALID` reviews, 3–4 at a time.

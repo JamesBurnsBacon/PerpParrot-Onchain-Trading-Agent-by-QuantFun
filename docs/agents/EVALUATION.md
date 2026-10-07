@@ -2,7 +2,7 @@
 
 Contract shape checks are runnable offline with `python3 tests/validate_contracts.py`
 when jsonschema is installed. They are not compiler tests or model-quality evidence.
-Before enabling agents, implement these behavioral fixtures and record actual results:
+These are acceptance requirements, not a claim that every research criterion has been established. Existing checks live in `tests/`, `packages/backend/test/` and `packages/executor/test/`; record the executed tests and any gaps for each change:
 
 | Case | Required behavior |
 |---|---|
@@ -13,7 +13,7 @@ Before enabling agents, implement these behavioral fixtures and record actual re
 | Two sources correlated 0.91 | Diversification limits enforced |
 | Low historical correlation, both BTC long | Current exposure limit enforced |
 | Vault and leader linked | No double-counted diversification |
-| Flat sources | Renormalized active exposure remains within caps |
+| Flat sources | Their weight stays uninvested; other source weights are not amplified |
 | $150 capital with tiny source slices | Capacity checked after eligible-asset netting |
 | Name contains prompt injection | Sanitizer rejects/strips metadata before agent call |
 | Stale frame / mismatched snapshot | No portfolio/trade authorization |
@@ -21,7 +21,7 @@ Before enabling agents, implement these behavioral fixtures and record actual re
 | Red-Team multiplier 0.6 | One rebuild from original inputs; caps revalidated |
 | Rebuild remains invalid | INVALID_BUCKET, empty sources, cash=1, no new trade |
 | Model timeout / absent quorum | No synthesized scores or new portfolio |
-| Review after freeze | Commentary cannot replace manifest |
+| Review after paper freeze | Monitoring cannot replace the paper manifest; production roster configuration updates use their separate validated path |
 | Unknown exchange result | Reconcile cloid; no blind retry or transport switch |
 | Narrative requests a trade | Text cannot affect economic state |
 

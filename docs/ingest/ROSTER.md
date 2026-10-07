@@ -1,6 +1,6 @@
 # Per-wallet roster: tenure, exits and hold time
 
-**Status:** decisions settled by the owner on 2026-10-07 (§10); being built in that order. This document is the reference.
+**Status:** implemented in `packages/backend/src/pipeline/roster.ts` and the pipeline service; checked 2026-10-07. §2 records the earlier system that motivated the change; §9 records the rollout sequence. Deployment health requires current run evidence.
 **Context:** `churn_limit.md` issues #3 (stickiness) and #5 (hold time), and the owner's answers on churn.
 **Already shipped on `main`:**
 - #63: closes wait for 3 runs at 0; drift band floor at 0.5% of equity.
@@ -16,7 +16,7 @@
 | Hold time | Needs deeper consideration. | Measured as **copyable share** and **book turnover** rather than a median hold. Used for admission and tenure length; churn is monitored (§5). |
 | Risk | Withdrawals are not trades. Only a 50% trading loss removes a wallet; "I don't want the portfolio to panic sell". | One immediate removal: a 50% loss on PnL since admission. Every other warning sign winds the wallet down (§4.5). |
 
-## 2. Evidence from the live system (2026-10-07)
+## 2. Historical evidence before the roster (2026-10-07)
 
 **The wallet list is swapped wholesale.** Three selections in 1 h 40 min (03:54, 04:34, 05:34 UTC) each activated a different wallet set. Every swap re-targets the whole book:
 - the executor went from 31 to 20 to 33 to 20 targeted perps across configurations;
@@ -48,12 +48,12 @@ The active configuration becomes a **roster**: a set of seats, each holding one 
 - **Size: at least 5 wallets, aiming for 12–15** (owner, 2026-10-07; the separate 5–15 limit is on *positions*, the perps we hold, see README §4.4). The target `N` is the number of wallets the latest AI reviews approve (the bench plus seated wallets still approved), clamped to **12–15**: with fewer approved wallets, seats stay sized for 12 and the rest is cash. Minimum 5 is the freeze's floor.
 - **Fixed seat weight.** Each seat's weight is set **when its wallet is admitted** and doesn't change when other seats change:
   - `weight = s × fit modifier`;
-  - `s = (1 − cashBuffer) / N`, with `N` as it stands **at admission** (0.9 ÷ 10 = 9%); existing seats keep their weights when `N` changes;
+  - `s = (1 − cashBuffer) / N`, with `N` as it stands **at admission** (0.9 ÷ 12 = 7.5%); existing seats keep their weights when `N` changes;
   - fit modifier = the wallet's AI fit ÷ the mean fit of approved wallets, clamped to [0.5, 1.5], capped at `maxSourceWeight`;
   - a new seat never takes the total past `1 − cashBuffer`: it is shrunk to the room left, or waits if under half a seat;
   - refreshed only by a re-review, and only when the weight moves by more than 5 points (#64's rule).
 - **Why fixed weights:** renormalizing all weights on each admission would rescale every perp (the same churn #65 removed for exits). With fixed seats, admitting or releasing one wallet touches **only that wallet's perps**.
-- **Empty seats hold cash** until they're filled. Seats are filled fast (§4.1), so this cash is short-lived.
+- **Empty seats hold cash** until they're filled. Filling depends on fresh approvals and the admission pace limits (§4.1); cash can persist.
 - **The executor contract is unchanged.** Each roster change freezes a new `FrozenConfiguration` (hash) that the executor checks, as today. The new configuration differs from the previous one only in the seats that changed.
 
 ```
@@ -71,7 +71,7 @@ The active configuration becomes a **roster**: a set of seats, each holding one 
 
 ### 4.1 Admission: filling an open seat
 - **The bench.** The top approved candidates are kept as a ranked bench: Score's 25, reviewed by the AI, filtered by the copyability gates of §5. It holds every wallet a review of the picks approved in the last 12 h, as of that wallet's latest review (a later review that didn't approve it takes it off).
-- **Filling a seat.** When a seat is open, the highest-fit bench candidate whose approval is fresh (reviewed within 12 h) is admitted at the next 10-minute select. A fresh approval needs no new AI call.
+- **Filling a seat.** When a seat is open, the highest-fit bench candidate whose approval is fresh (reviewed within 12 h) is admitted by the next 10-minute roster job (`:x6`). A fresh approval needs no new AI call.
 - **Rate limit:** at most **2 admissions per hour** and **8 per day**. The cap keeps the roster from turning over in a burst, as it did this morning. Below 5 seats the limit doesn't apply, so the roster can always be frozen.
 - **Cooldown:** a released wallet can't be re-admitted for 24 h, so a wallet can't ping-pong in and out.
 - **Late entry:** a wallet admitted while holding positions is copied at once, whole book (owner: copy everything).
@@ -86,7 +86,7 @@ The active configuration becomes a **roster**: a set of seats, each holding one 
 - **Risk breaches override tenure** (§4.5).
 
 ### 4.3 Exit releases the seat (the owner's "cleanest time to replace")
-- **After tenure:** a wallet **flat for 3 runs in a row** (the same confirmation as our closes, #63) releases its seat, and the next select admits a replacement.
+- **After tenure:** a wallet **flat for 3 runs in a row** (the same confirmation as our closes, #63) releases its seat, and a subsequent roster step can admit a replacement within its limits.
 - **During probation:** the seat is kept while the wallet is briefly flat, but released once it has been **flat for 6 h** (idle).
 - **Why it's clean:** by then we have already followed its exit, so releasing the seat forces no trade of ours. The replacement's opening trades deploy the cash the exit freed.
 
@@ -101,7 +101,7 @@ It then goes into **winding down**:
 
 Winding down never forces us to sell a position the wallet still holds, which is where most rotation churn comes from. **Cap:** 48 h. After that the seat is released and its remaining slice closes through the normal 3-run confirmation.
 
-**How it's enforced:** when winding down starts, the wallet's leverage per perp (notional ÷ equity) is recorded as a cap. Each select ratchets the cap down to what the wallet still holds (same sign, never up). A perp that flips or closes drops out. Each snapshot carries the caps (`windDown`), and `targetsFromSnapshot` limits the wallet's slice to them, so the executor and the paper books apply them alike. Once no cap is left, the seat is released.
+**How it's enforced:** when winding down starts, the wallet's leverage per perp (notional ÷ equity) is recorded as a cap. Each roster step ratchets the cap down to what the wallet still holds (same sign, never up). A perp that flips or closes drops out. Each snapshot carries the caps (`windDown`), and `targetsFromSnapshot` limits the wallet's slice to them, so the executor and the paper books apply them alike. Once no cap is left, the seat is released.
 
 ### 4.5 Risk: one removal, everything else winds down
 The owner trusts the sorting and doesn't want the portfolio to panic sell. **Withdrawals are not trades and never count.**
@@ -130,10 +130,10 @@ The live equity chart needs no reset: `/api/executor/equity` plots live runs onl
 
 ## 5. Hold time, reconsidered
 
-### 5.1 What we use today
+### 5.1 Review evidence and the separate admission gate
 - `medianHoldMinutes`: the median of fully closed positions over 30 days, **by count** (`pipeline/evidence.ts`).
 - `executionFit`: allows only for our ≤ 10-minute **entry** lag.
-- The **strict gate** drops holds under 60 min and discounts those under 3 h and 6 h. The **basic gate**, which is the one deciding today, ignores hold time.
+- The **strict gate** drops holds under 60 min and discounts those under 3 h and 6 h. The **basic gate**, fallback does not itself enforce this strict-core hold-time rule. The roster admission gate separately enforces copyable share or turnover in either review mode.
 
 ### 5.2 Why that's not enough
 1. **Exit lag is now longer than entry lag.**
@@ -143,7 +143,7 @@ The live equity chart needs no reset: `/api/executor/equity` plots live runs onl
 2. **A count median underweights the trades that matter.** Many small scalps hide a few large, long positions, and the reverse also happens. What we copy is notional, not trade count.
 3. **Wallets that never close a position have no episode hold**, yet can turn over their book several times a day (§2). For our churn, what matters is how fast the book changes.
 
-### 5.3 Proposal: two measures, three uses
+### 5.3 Implemented measures and uses
 
 | Measure | Definition | Why |
 |---|---|---|
@@ -153,9 +153,9 @@ The live equity chart needs no reset: `/api/executor/equity` plots live runs onl
 **Uses:**
 1. **Bench gate:** copyable share ≥ 50%, *or* τ ≤ 1 per day for wallets with no closed positions.
 2. **Tenure length:** `T_min` from τ (§4.2). A wallet with unknown τ gets 24 h.
-3. **Churn, monitored only:** the roster's implied turnover, Σ over seats of `weight × traded per day ÷ equity`, is shown on `/pipeline` and never blocks an admission (owner). Today's roster would be at 0.30× equity a day.
+3. **Churn, monitored only:** the roster's implied turnover, Σ over seats of `weight × traded per day ÷ equity`, is shown on `/pipeline` and never blocks an admission (owner). The earlier sample in §2 implied 0.30× equity a day.
 
-### 5.4 The current picks against it
+### 5.4 The historical sample against it
 From the table in §2, at the 90-minute horizon (copyable share = 1 − share of notional in shorter holds):
 - **Fail the 50% copyable-share gate:** 0x73f6… (38%) and 0x4b0e… (7%), the two fastest active vaults.
 - **Pass:** 0xa1b6… (78%), 0xb65d… (63%), 0xa415… (56%), and 0xe65b… (no closed positions; book turnover 0.2 a day ≤ 1). So do most of the long-hold traders and vaults further down Score's 25.
@@ -166,13 +166,15 @@ That is the intended shift: toward wallets whose trades we can follow from a 10-
 
 | Table | Purpose |
 |---|---|
-| `roster_seats` (new) | One row per seat occupancy. Columns:<br>• `address`, `weight_units`, `admitted_at`, `min_tenure_until`<br>• `state`: `probation` / `seated` / `winding_down` / `released` / `removed`<br>• flat tracking: `flat_since`, `flat_runs`, `last_run_at`<br>• PnL baseline: `equity_at_admission`, `pnl_at_admission`<br>• wind-down: `wind_down_until`, `caps`<br>• `released_at`, `release_reason`, `admitted_by` (selection run), `reviewed_at`, `unqualified_reviews` |
-| `roster_events` (new) | Append-only: admit, release (exit), wind-down start, removal (with which breach), weight refresh. Gives a per-wallet history and churn accounting. |
+| `roster_seats` | One row per seat occupancy. Columns:<br>• `address`, `weight_units`, `admitted_at`, `min_tenure_until`<br>• `state`: `probation` / `seated` / `winding_down` / `released` / `removed`<br>• flat tracking: `flat_since`, `flat_runs`, `last_run_at`<br>• PnL baseline: `equity_at_admission`, `pnl_at_admission`<br>• wind-down: `wind_down_until`, `caps`<br>• `released_at`, `release_reason`, `admitted_by` (selection run), `reviewed_at`, `unqualified_reviews` |
+| `roster_events` | Append-only: admit, release (exit), wind-down start, removal (with which breach), weight refresh. Gives a per-wallet history and churn accounting. |
 | `selection_runs` | Gains the **bench**: approved candidates with fit, the §5 measures and approval time. |
 | `configurations` | Unchanged. One frozen configuration per roster version; the executor still checks the hash. |
 | `run_targets` (#60) | Unchanged. Used to measure churn per perp. |
 
-## 7. The 10-minute select, with a roster
+## 7. The 10-minute roster step
+
+Selection at `:x4` refreshes the reviewed bench; the roster job at `:x6` performs these steps (UTC).
 1. **Observe:** from the latest stored snapshot, update each seat's flat tracking and ratchet wind-down caps.
 2. **Loss check:** PnL since admission for every seat → `removed` at a 50% loss.
 3. **Lifecycle:**
@@ -180,7 +182,7 @@ That is the intended shift: toward wallets whose trades we can follow from a 10-
    - probation flat for 6 h → `released`;
    - seated flat for 3 runs → `released`;
    - winding down with no cap left, flat, or past 48 h → `released`.
-4. **Review:** review the bench when Score's 25 change, and every seat every 12 h (warning signs, approval, weight refresh).
+4. **Review:** re-review seats every 12 h for warnings, approval and weight refresh. The separate selection job reviews changed picks and refreshes unchanged picks at least every 12 h when their fills are ready; forced runs can refresh sooner.
 5. **Fill:** open seats from the fresh bench, within the pace limits.
 6. **Freeze and activate:** if any seat or weight changed and at least 5 seats are active.
 
@@ -193,10 +195,10 @@ That is the intended shift: toward wallets whose trades we can follow from a 10-
   - seat changes per day and median tenure;
   - idle-cash share (empty seats plus flat wallets);
   - tracking error against unconstrained targets.
-- **Acceptance:** turnover at least halved against today's rules, idle-cash share under 20% on average, no rise in drawdown in replay.
+- **Acceptance:** turnover at least halved against the pre-roster baseline, idle-cash share under 20% on average, no rise in drawdown in replay.
 
-## 9. Rollout (each step a PR, merged when green)
-The owner chose **on as soon as built**: we're in dry run, so there is no flag gate and no replay prerequisite. Churn is measured on the paper books as it runs.
+## 9. Historical rollout sequence
+The owner chose **on as soon as built** during dry-run development. The phases below are implemented in the checked-in source. This records that decision, not the current deployment or permission to send orders. Churn is measured on paper books and by replay.
 
 | Phase | Change |
 |---|---|

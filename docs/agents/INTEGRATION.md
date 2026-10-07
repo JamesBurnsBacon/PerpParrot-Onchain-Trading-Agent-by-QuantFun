@@ -1,8 +1,11 @@
 # Running and integrating the review core
 
 The mirror path (frozen configuration → snapshot → target exposures → executor) is in
-the README and [docs/ops](../ops/RUNBOOK.md). A real-provider review run and a review
-schedule remain integration gates.
+the README and [docs/ops](../ops/RUNBOOK.md). Production selection and review run
+through `packages/backend/src/pipeline/index.ts`, scheduled by Vercel Cron. See
+[PIPELINE.md](../ingest/PIPELINE.md) and [ROSTER.md](../ingest/ROSTER.md) for the
+review → bench → roster → active configuration path. This document describes the
+strict review core's contracts, not an alternative production scheduler.
 
 This repository has a server-side TypeScript review implementation, independent of
 exchange submission. Requires Node 24+ and pnpm. Run `pnpm install
@@ -31,8 +34,8 @@ there is no permissive adapter implementation. Strict shape validation and commi
 | redTeam | Fresh context, numeric draft projection without source addresses; match draftHash |
 | assess | Deterministic eligible-position replay/netting/drift/minimum-order capacity and worst-case active-source exposure validation |
 
-The three model adapters must return observations from distinct configured nodes. A
-node is one independent model observation; the current adapter supplies one honest
+Within each stage, observations must have distinct configured node IDs. Role, Risk and Red Team may use the same configured provider node in separate calls. A
+node identifies a model observation; the current adapter supplies one honest
 provider node (quorum 1), and several observations would be aggregated by median. The
 core rejects duplicate/unknown node IDs and checks quorum against the configured
 roster. IDs are transport metadata, not model output; the adapter must ensure that
@@ -60,7 +63,7 @@ penalties and rebuilds all undergo the same final exposure/capacity assessment.
 
 `assess` must calculate executable targets from actual eligible source positions,
 capital, source equity, live account state, netting, $10 order floor and drift gates.
-It must validate active-source weight renormalization, gross exposure and all market/
+It must validate fixed-source exposure behavior (including flat sources), gross exposure and all market/
 bucket constraints. A synthetic pass callback is used only in unit tests and must
 never be used in a live adapter. Throws, invalid measurements or failed limits close
 the result to INVALID_BUCKET with no sources and cash=1. Valid results include a
@@ -71,24 +74,29 @@ helpers in producers, not a different JSON/string/hash convention.
 
 ## Rollout boundary
 
-The core runs under Node 24 and Bun on the server. It relies on structuredClone,
-AbortController, setTimeout/clearTimeout, JSON imports and Ajv compilation. It runs
-outside the 10-minute loop; if reviews are automated, the schedule (Vercel Cron or
-AWS) is a separate, not yet decided integration step.
+The core runs under Node 24 and Bun on the server. Production orchestration is in
+`packages/backend/src/pipeline/index.ts`: `select` builds measured evidence, calls
+`openAIPaperCommittee` and `runCommitteeReview`, and persists output and its audit
+under `selection_runs.review`. Approved wallets form a bench. The separate `roster`
+job admits seats and freezes/activates a configuration when the seats change.
 
-Persist valid review results to the existing `reviews`/`buckets` boundary only after
-successful verification. A separate freeze step (`packages/backend/scripts/freeze.ts`)
-writes the live configuration and its hash, which both services pin.
-After freeze, hourly review output is commentary-only. Mirror must accept only the
-frozen VALID live manifest and fresh state; it must never call `runReview`, model
-adapters or narrative generation. Simulated manifests cannot authorize execution.
-The mirror's targets/execute interface is unchanged by the review core: it
-implements no orders, capital movement or transport changes.
+The configured `REVIEW_GATE` distinguishes the strict core manifest from the default
+basic approval gate. Their rules are documented in [PIPELINE.md](../ingest/PIPELINE.md).
+Do not describe a basic-gate selection as a strict-core PASS. The roster's deterministic
+limits and frozen-configuration checks remain in force in either case.
 
-Use SYSTEM_PROMPTS.md in adapters; model outputs never provide execution authority.
-Narrative is optional dashboard content and is deliberately absent from this core.
+Vercel schedules selection at `:x4` and roster updates at `:x6`; snapshot pre-builds
+run at `:x9`. The long-running executor triggers the `:x0` mirror run. The mirror
+consumes the active frozen configuration and snapshot-derived targets; it does not
+call model adapters during execution. `backend/scripts/review-run.ts` and
+`backend/scripts/freeze.ts` are explicit operator tools, not the cron entrypoints.
 
-Persisted manifests should pass `validateManifest`; mirror must call
-`requireFrozenLiveManifest(manifest, nowMs, trustedFrozenHash)` before accepting it.
-This helper rejects simulation, invalid status, mismatched freeze hashes, expired
-manifests and semantic inconsistencies; it is not a signature verifier.
+The review core also has a separate paper lifecycle and manifest-validation API
+(`validateManifest`, `requireFrozenLiveManifest`). These are documented in
+[PAPER_LIFECYCLE.md](PAPER_LIFECYCLE.md). Production snapshot and executor checks use
+`packages/shared/frozen.ts` and the active/pinned configuration hash; do not substitute
+an arbitrary model manifest for that execution authority.
+
+Use SYSTEM_PROMPTS.md in adapters. Narrative is optional dashboard content and
+cannot authorize orders. Current deployment evidence must be checked separately from
+local tests; see [PRODUCTION_INTEGRATION.md](PRODUCTION_INTEGRATION.md).

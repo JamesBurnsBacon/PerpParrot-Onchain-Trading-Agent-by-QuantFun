@@ -1,6 +1,6 @@
 # Maker share vs. forward performance
 
-Research for README §4.2 / §8 ("Maker share: a plus or an exclusion?"). Question: do accounts whose fills are
+Dated research supporting README §4.2; the former §8 research notes are archived in [the historical observations](../../../docs/research/OBSERVATIONS_20261006.md). Question: do accounts whose fills are
 mostly maker (resting, `crossed: false`) go on to perform better than takers?
 
 ## Run
@@ -13,7 +13,7 @@ bun scripts/research/maker-share/analyze.ts --period=2
 bun test scripts/research/maker-share
 ```
 
-`work/` is gitignored. Every HL response is cached there, so reruns of `fetch.ts` resume for free and
+`work/` is gitignored. Every HL response is cached there, so reruns of `fetch.ts` reuse cached responses (missing responses still need requests) and
 `analyze.ts` never touches the network. The analysis writes `report.txt`, `results.json` and `dataset.csv`.
 
 ## Design

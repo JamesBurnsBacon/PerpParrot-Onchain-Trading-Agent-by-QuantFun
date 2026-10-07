@@ -73,7 +73,8 @@ export const createApp = (deps: AppDeps) => async (req: Request): Promise<Respon
     return json(cached.body, 200, PUBLIC);
   }
 
-  // Vercel Cron at :x0 (vercel.json); a timer does the same on a long-running host (server.ts).
+  // Authenticated cron-compatible trigger; root vercel.json does not schedule it.
+  // The long-running host owns the :x0 timer (server.ts).
   if (req.method === "GET" && pathname === "/cron/run") {
     if (!authorized(req, deps.cronSecret)) return json({ error: "unauthorized" }, 401);
     const runAt = dueRunAt((deps.now ?? Date.now)());
