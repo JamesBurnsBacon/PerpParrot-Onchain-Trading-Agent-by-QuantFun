@@ -20,6 +20,8 @@ export type HlFill = {
   startPosition: string;
   crossed: boolean;
   time: number;
+  // Present on a liquidation fill.
+  liquidation?: { liquidatedUser?: string } | null;
 };
 
 export type Measured = {

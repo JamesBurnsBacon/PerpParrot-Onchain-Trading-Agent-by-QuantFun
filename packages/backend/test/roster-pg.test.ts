@@ -3,7 +3,7 @@
 // release a wallet that exited → remove one at a 50% trading loss → freeze and activate.
 import { describe, expect, test } from "bun:test";
 import { SQL } from "bun";
-import { Pipeline, reviewPolicy } from "../src/pipeline";
+import { Pipeline, reviewPolicy, windDownCaps } from "../src/pipeline";
 import { PacedInfo } from "../src/pipeline/hl";
 import { checkFrozenConfiguration, type FrozenConfiguration } from "../../shared/frozen";
 import { keccakUtf8 } from "../src/snapshot";
@@ -107,6 +107,33 @@ describe.skipIf(!url)("Roster on Postgres", async () => {
     expect(roster!.seats.length).toBeGreaterThanOrEqual(5);
     expect(roster!.events[0]).toHaveProperty("kind");
     expect(roster!.impliedTurnover).toBeGreaterThan(0);
+  });
+
+  test("turning high-frequency winds a seat down with caps from the snapshot; caps ratchet down and release it once nothing is left", async () => {
+    const target = seeded[3];
+    await sql`insert into pipeline_accounts (address, source, kind, account_value, listed_at, orders_per_day)
+      values (${target}, 'leaderboard', 'trader', 100000, now(), 500)`;
+    await sql`update roster_seats set reviewed_at = now() where state in ('probation', 'seated')`; // no seat review this step
+    const result = await at(T0 + 2400).roster();
+    expect(result.changes).toContain(`winding_down ${target} (high-frequency)`);
+    const [row] = await sql`select state, caps, wind_down_until from roster_seats where address = ${target} and state = 'winding_down'`;
+    expect(row.caps).toEqual({ BTC: 0.5 }); // $50k BTC on $100k equity
+    expect(await windDownCaps(sql)).toEqual([{ address: target, caps: [{ asset: "BTC", leverageE9: "500000000" }] }]);
+    // The wallet closes BTC: the cap drops out and the seat is released (wound down).
+    await snapshot(T0 + 3000, [target], [newcomer(1), newcomer(2)]);
+    const next = await at(T0 + 3000).roster();
+    expect(next.changes).toContain(`released ${target} (wound down)`);
+  });
+
+  test("a failing seat review is retried after 30 minutes, not every step, and never blocks the picks", async () => {
+    await sql`update roster_seats set reviewed_at = null where state in ('probation', 'seated')`;
+    const before = (await sql`select count(*)::int as n from selection_runs where (finalists ->> 'scope') = 'seats'`)[0].n;
+    // Over 30 minutes after the last failed one: one new attempt (no OpenAI key: it fails), then none.
+    await at(T0 + 5400).roster();
+    await at(T0 + 5400).roster();
+    const runs = await sql`select status from selection_runs where (finalists ->> 'scope') = 'seats'`;
+    expect(runs.length).toBe(before + 1);
+    expect(runs.every((r: { status: string }) => r.status === "failed")).toBe(true);
   });
 
   test("probation: briefly flat is kept, idle 6 h releases", async () => {

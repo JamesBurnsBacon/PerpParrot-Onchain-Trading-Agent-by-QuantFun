@@ -3,7 +3,7 @@ import type { ConfigurationSource } from "./configuration-source";
 import type { HlReader } from "./hyperliquid";
 import { buildSnapshot, type SnapshotStore } from "./snapshot";
 import { CLOSE_CONFIRM_RUNS, pendingCloses, targetsFromSnapshot } from "../../shared/copy";
-import type { PositionsSnapshot } from "../../shared/snapshot";
+import type { PositionsSnapshot, WindDownSource } from "../../shared/snapshot";
 
 export const RUN_INTERVAL_SECONDS = 600;
 
@@ -21,6 +21,8 @@ export type SnapshotServiceDeps = {
   maxLeadSeconds?: number;
   // Refuse to build snapshots for runs that are this far in the past.
   maxLagSeconds?: number;
+  // Caps of the sources winding down (roster_seats), recorded in the snapshot (ROSTER.md §4.4).
+  windDown?: () => Promise<WindDownSource[]>;
   // Called once per run after its snapshot is stored (paper books step here).
   onBuilt?: (runAt: number, json: string) => Promise<void>;
 };
@@ -57,7 +59,14 @@ export class SnapshotService {
     const nowMs = this.deps.nowMs();
     const configuration = await this.deps.configurations.load(nowMs);
     const eligible = await this.deps.eligibility.current(nowMs);
-    const snapshot = await buildSnapshot(configuration, eligible, runAt, this.deps.nowMs, this.deps.hl);
+    const snapshot: PositionsSnapshot = await buildSnapshot(configuration, eligible, runAt, this.deps.nowMs, this.deps.hl);
+    // Only sources in this configuration, and only perps it lists, sorted: the JSON stays canonical.
+    const inConfiguration = new Set(configuration.sources.map((s) => s.sourceAddress.toLowerCase()));
+    const windDown = (await this.deps.windDown?.() ?? [])
+      .filter((w) => inConfiguration.has(w.address.toLowerCase()))
+      .map((w) => ({ address: w.address.toLowerCase(), caps: [...w.caps].sort((a, b) => (a.asset < b.asset ? -1 : 1)) }))
+      .sort((a, b) => (a.address < b.address ? -1 : 1));
+    if (windDown.length) snapshot.windDown = windDown;
     const json = await this.deps.store.putIfAbsent(runAt, JSON.stringify(snapshot));
     // After serving starts, so a slow hook never delays the executor's run.
     if (this.deps.onBuilt) queueMicrotask(() => void this.deps.onBuilt!(runAt, json).catch(() => undefined));
