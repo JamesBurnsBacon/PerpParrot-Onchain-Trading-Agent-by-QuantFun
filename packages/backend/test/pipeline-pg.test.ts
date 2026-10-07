@@ -219,6 +219,40 @@ describe.skipIf(!url)("Pipeline on Postgres", async () => {
     expect(row.finalists.finalists).toEqual(base.finalists.finalists);
   });
 
+  test("the contract check records the contracts among the picks and leaves the pick as Score made it", async () => {
+    const free = () => sql`update selection_runs set status = 'failed', started_at = now() - interval '2 hours'`;
+    const make = (contractCode?: (address: string) => Promise<number | null>) =>
+      new Pipeline({ sql, account: address(999), policy: { maxExposureOverlap: 0.5 } as Policy, log: () => {}, now: () => NOW, info: (perMinute) => new PacedInfo(perMinute, info, async () => {}), ...(contractCode ? { contractCode } : {}), picks: 8 });
+    await free();
+    const plain = await make().select(true);
+    const [base] = await sql`select finalists from selection_runs where id = ${plain.id!}`;
+    expect(base.finalists.contracts).toBeUndefined(); // off: the saved pick has no new field
+    const picks = base.finalists.finalists as { address: string }[];
+
+    await free();
+    const asked: string[] = [];
+    const checked = await make(async (a) => {
+      asked.push(a);
+      return a === picks[0]!.address.toLowerCase() ? 793 : a === picks[1]!.address.toLowerCase() ? null : 0;
+    }).select(true);
+    const [row] = await sql`select finalists from selection_runs where id = ${checked.id!}`;
+    expect(asked).toHaveLength(8);
+    expect(row.finalists.contracts).toMatchObject({
+      provider: "nownodes",
+      checked: 8,
+      contracts: [{ address: picks[0]!.address.toLowerCase(), bytes: 793 }],
+      unread: [picks[1]!.address.toLowerCase()],
+    });
+    expect(row.finalists.finalists).toEqual(base.finalists.finalists); // evidence only: the same picks
+
+    await free();
+    const failing = await make(async () => Promise.reject(new Error("down")) as Promise<never>).select(true);
+    const [failed] = await sql`select finalists from selection_runs where id = ${failing.id!}`;
+    expect(failed.finalists.contracts).toMatchObject({ checked: 8, contracts: [] }); // every read failed: all unread, none called contracts
+    expect(failed.finalists.contracts.unread).toHaveLength(8);
+    expect(failed.finalists.finalists).toEqual(base.finalists.finalists);
+  });
+
   test("recording the picks' overlap adds one field and leaves the saved pick untouched", async () => {
     const saved = { finalists: [{ address: "0xa", rank: 1 }], funnel: [{ stage: "scored", count: 3 }], highFrequency: 2 };
     const [{ id }] = await sql`insert into selection_runs (started_at, status, finalists) values (now(), 'rejected', ${JSON.stringify(saved)}::text::jsonb) returning id`;
