@@ -7,7 +7,7 @@
 //            change → freeze → activate when the sources change
 // The active configuration is what the 10-minute mirror loop copies from its next run on.
 import type { SQL } from "bun";
-import { FILLS_PAGE, fillStats, isHighFrequency, pickLeaderboard, sameAddresses, scoringWindows, type Fill, type LeaderboardRow, type Tracked } from "./derive";
+import { FILLS_PAGE, fillStats, isHighFrequency, keepsActive, pickLeaderboard, sameAddresses, scoringWindows, type Fill, type LeaderboardRow, type Tracked } from "./derive";
 import { EVIDENCE_DAYS, measure, type HlFill, type Measured } from "./evidence";
 import { ENTER_OI_USD, fetchOpenInterest } from "../eligibility";
 import { PacedInfo, getJson } from "./hl";
@@ -411,11 +411,11 @@ export class Pipeline {
     }
     const configuration = { ...payload, configurationHash: commitment("perpparrot:frozen:v1", payload) } as FrozenConfiguration;
     checkFrozenConfiguration(keccakUtf8, configuration, configuration.configurationHash, this.now());
-    // Same sources as the active configuration: keep it, so the executor and paper books don't see
-    // a new configuration every 10 minutes.
+    // Same wallets as the active configuration and no weight moved by more than 5 points: keep it,
+    // so the executor and paper books don't see a new configuration for every small re-weighting.
     const [active] = await sql`select configuration -> 'sources' as sources from configurations where status = 'active'`;
-    const activeSources = ((active?.sources ?? []) as { sourceAddress: string }[]).map((s) => s.sourceAddress);
-    if (active && sameAddresses(activeSources, configuration.sources.map((s) => s.sourceAddress))) {
+    const activeSources = (active?.sources ?? []) as { sourceAddress: string; weightUnits: number }[];
+    if (active && keepsActive(activeSources, configuration.sources)) {
       await sql`update selection_runs set status = 'kept', finished_at = now() where id = ${id}`;
       log("configuration kept", { id, sources: activeSources.length });
       return { status: "kept" };

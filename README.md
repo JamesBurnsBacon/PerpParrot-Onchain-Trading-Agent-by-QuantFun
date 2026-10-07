@@ -162,7 +162,7 @@ The [research screening v1 methodology](docs/ingest/RESEARCH_SCREENING_V1.md) do
 ### 4.5 Source-set changes
 **Hackathon: the set is fully frozen at go-live.** The agent only monitors.
 
-**Production** (25 sources picked **every 10 minutes** from a qualified list rebuilt every 12 h; a reviewed set whose sources changed goes live automatically at the next `:x0` run: [docs/ingest/PIPELINE.md](docs/ingest/PIPELINE.md)):
+**Production** (25 sources picked **every 10 minutes** from a qualified list rebuilt every 12 h; a reviewed set whose wallets changed, or whose weights moved by more than 5 points, goes live automatically at the next `:x0` run: [docs/ingest/PIPELINE.md](docs/ingest/PIPELINE.md)):
 
 | Type | Trigger | Handling |
 |---|---|---|
