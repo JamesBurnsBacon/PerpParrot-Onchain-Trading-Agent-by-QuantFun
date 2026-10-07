@@ -69,49 +69,47 @@ export class ParrotSfx {
     source.onended = () => { this.voices.delete(source); source.disconnect(); filter.disconnect(); gain.disconnect(); };
     source.start(at); source.stop(at + duration);
   }
-  // Big, layered, over-the-top voices. Only the cue scheduling (tested separately) decides when they play.
+  // Applause: many short, randomly spaced hand-claps (band-passed noise ticks). Deterministic so it sounds the same every time.
+  private applause(at: number, duration: number, volume: number) {
+    let seed = 987654321;
+    const rand = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+    const claps = Math.round(duration * 46);
+    for (let i = 0; i < claps; i++) {
+      const x = i / claps, envelope = Math.sin(Math.PI * Math.min(1, x * 1.15)) ** 0.6; // swells up, then fades out
+      if (rand() > envelope) continue;
+      const when = at + x * duration + rand() * .012, center = 1700 + rand() * 2200;
+      this.noise(when, .028 + rand() * .02, "bandpass", center, center * .7, volume * (.35 + rand() * .65) * envelope);
+    }
+  }
+  // Party popper: a sharp bang with a low thump, then the confetti rustling down.
+  private cracker(at: number, volume = 1) {
+    this.noise(at, .06, "highpass", 900, 3500, .55 * volume); this.tone(at, .09, 210, 55, "sine", .3 * volume);
+    this.noise(at + .05, .32, "highpass", 5200, 4200, .12 * volume); this.noise(at + .17, .26, "highpass", 4800, 3800, .08 * volume);
+  }
+  // Crash cymbal: bright noise plus a few inharmonic metallic partials, long decay.
+  private cymbal(at: number, volume = 1, decay = 1.2) {
+    this.noise(at, decay, "highpass", 5500, 3300, .38 * volume); this.noise(at, decay * .65, "bandpass", 8200, 6200, .2 * volume);
+    [2130, 3290, 4870].forEach(f => this.tone(at, .35, f, f * .98, "square", .025 * volume));
+  }
+  // Play one building block on its own (used by the development-only effects lab).
+  solo(name: "cracker" | "cymbal" | "applause") {
+    if (!this.context || !this.master || this.context.state !== "running") return;
+    const t = this.context.currentTime;
+    if (name === "cracker") this.cracker(t); else if (name === "cymbal") this.cymbal(t, 1, 1.3); else this.applause(t, 1.8, .5);
+  }
+  // Plain, familiar celebration sounds. Only the cue scheduling (tested separately) decides when they play.
   private synth(cue: SfxCue) {
     if (!this.context) return;
-    const t = this.context.currentTime, hz = (note: number, base = 392) => base * 2 ** (note / 12);
+    const t = this.context.currentTime;
     switch (cue.kind) {
-      case "fever": {
-        // Rising two-layer fanfare, a held major chord, a cymbal crash and a shower of coin sparkles.
-        [0, 4, 7, 12, 16, 19, 24, 28].forEach((note, i) => {
-          this.tone(t + i * .085, .24, hz(note), hz(note), "square", .11);
-          this.tone(t + i * .085, .24, hz(note) * 1.006, hz(note) * 1.006, "sawtooth", .09);
-        });
-        [12, 16, 19, 24].forEach(note => { this.tone(t + .72, .95, hz(note), hz(note), "sawtooth", .12); this.tone(t + .72, .95, hz(note) * .995, hz(note) * .995, "square", .07); });
-        this.noise(t + .72, 1.1, "highpass", 6500, 4200, .34);
-        for (let i = 0; i < 12; i++) this.tone(t + .15 + i * .105, .07, 2100 + (i * 397) % 2900, 2600 + (i * 211) % 2400, "sine", .07);
-        break;
-      }
-      case "ding":
-        // Bell: inharmonic partials plus a shimmering fifth.
-        this.tone(t, .6, cue.pitch, cue.pitch, "sine", .28); this.tone(t, .4, cue.pitch * 2.76, cue.pitch * 2.76, "sine", .12); this.tone(t, .25, cue.pitch * 5.4, cue.pitch * 5.4, "sine", .06);
-        this.tone(t + .12, .6, cue.pitch * 1.5, cue.pitch * 1.5, "sine", .24); this.tone(t + .12, .4, cue.pitch * 4.14, cue.pitch * 4.14, "sine", .1);
-        break;
-      case "tick":
-        this.tone(t, .07, cue.pitch * 1.4, cue.pitch * 1.1, "triangle", .2); this.noise(t, .035, "highpass", 4500, 3000, .16);
-        break;
-      case "swoosh":
-        this.noise(t, .3, "bandpass", 300, 3800, .42); this.tone(t, .26, 180, 1500, "triangle", .14);
-        break;
-      case "pop":
-        this.tone(t, .16, 280, 48, "sine", .42); this.noise(t, .06, "lowpass", 1100, 300, .22); this.tone(t + .03, .1, 1300, 2100, "sine", .1);
-        break;
-      case "stamp":
-        // Heavy thud, wooden crack and a low boom.
-        this.tone(t, .38, 150, 28, "sine", .55); this.noise(t, .14, "lowpass", 900, 200, .4); this.tone(t, .55, 92, 38, "triangle", .38); this.noise(t + .005, .05, "highpass", 3000, 2000, .18);
-        break;
-      case "bonk":
-        // Cartoon boing: a thud, then a springy FM wobble.
-        this.tone(t, .22, 170, 50, "triangle", .42, true); this.tone(t + .05, .5, 140, 560, "sine", .26, true); this.tone(t + .05, .5, 280, 1120, "triangle", .08);
-        break;
-      case "squawk":
-        // Two quick squawks: "BRAWK-awk!".
-        this.tone(t, .3, 820, 250, "sawtooth", .22, true); this.tone(t, .3, 1240, 520, "square", .07, true);
-        this.tone(t + .26, .2, 960, 360, "sawtooth", .18, true); this.tone(t + .26, .2, 1500, 700, "square", .06, true);
-        break;
+      case "fever": this.cymbal(t, 1, 1.3); this.applause(t + .05, 1.6, .5); this.cracker(t + .18, .8); break;   // LOCKED IN / big moment
+      case "ding": this.cracker(t); this.applause(t + .08, .9, .38); break;                                       // STRATEGY SET
+      case "tick": this.noise(t, .03, "bandpass", 2600 + cue.pitch, 2000 + cue.pitch, .12); break;                // reel click
+      case "swoosh": this.noise(t, .22, "bandpass", 500, 2600, .16); break;
+      case "pop": this.tone(t, .12, 240, 55, "sine", .3); this.noise(t, .04, "lowpass", 1000, 300, .14); break;
+      case "stamp": this.cracker(t, 1); break;
+      case "bonk": this.tone(t, .22, 170, 55, "triangle", .34, true); break;
+      case "squawk": this.tone(t, .26, 780, 260, "sawtooth", .18, true); this.tone(t + .24, .16, 920, 380, "sawtooth", .14, true); break;
     }
   }
   cancel() { for (const timer of this.timers) clearTimeout(timer); this.timers.clear(); for (const voice of this.voices) { try { voice.stop(); } catch {} } this.voices.clear(); }

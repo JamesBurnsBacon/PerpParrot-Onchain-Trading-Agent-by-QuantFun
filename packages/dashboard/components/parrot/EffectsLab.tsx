@@ -29,8 +29,9 @@ const labPresets: ParrotPreset[] = LAB.map(l => {
 // It is rendered only when the page is opened with ?fx=1 outside production (see page.tsx).
 const SOUNDS: { label: string; event: EffectEvent; count?: number; removed?: number; clamped?: boolean }[] = [
   { label: "Start squawk", event: "start" }, { label: "Swoosh in", event: "in" }, { label: "Pop out", event: "out" },
-  { label: "Reels: 6 wallets", event: "strategy", count: 6 }, { label: "Reels: 12 wallets, 4 out", event: "strategy", count: 12, removed: 4 },
-  { label: "Clamp bonk", event: "clamp", clamped: true }, { label: "Lock stamp + jingle", event: "lock" },
+  { label: "Strategy set: clicks + cracker + applause (6)", event: "strategy", count: 6 },
+  { label: "Strategy set (12 wallets, 4 out)", event: "strategy", count: 12, removed: 4 },
+  { label: "Clamp bonk", event: "clamp", clamped: true }, { label: "LOCKED IN: cracker + cymbal + applause", event: "lock" },
 ];
 
 export function EffectsLab({ onPreset, onLock, onReset }: { onPreset: (preset: ParrotPreset) => void; onLock: () => void; onReset: () => void }) {
@@ -46,6 +47,8 @@ export function EffectsLab({ onPreset, onLock, onReset }: { onPreset: (preset: P
     <div><button type="button" onClick={onLock}>Lock request</button><button type="button" onClick={onReset}>Reset</button></div>
     <p>Fever only:</p>
     <div><button type="button" onClick={() => void fever("strategy")}>STRATEGY SET</button><button type="button" onClick={() => void fever("clamp")}>BOUNDED BY CODE</button><button type="button" onClick={() => void fever("lock")}>LOCKED IN</button></div>
+    <p>Building blocks:</p>
+    <div>{(["cracker", "cymbal", "applause"] as const).map(name => <button type="button" key={name} onClick={async () => { await fx.sfx.unlock(); fx.sfx.solo(name); }}>{name[0].toUpperCase() + name.slice(1)}</button>)}</div>
     <p>Sounds only:</p>
     <div>{SOUNDS.map(s => <button type="button" key={s.label} onClick={() => void play(s)}>{s.label}</button>)}</div>
     <p>Motion: <button type="button" onClick={fx.toggleCalm}>{fx.calm ? "Calm on (no motion)" : "Calm off (full motion)"}</button> Sound: <button type="button" onClick={fx.toggleSound}>{fx.sound ? "on" : "off"}</button></p>
