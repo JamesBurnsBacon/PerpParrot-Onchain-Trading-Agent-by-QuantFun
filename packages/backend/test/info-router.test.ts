@@ -5,7 +5,7 @@ import { NOWNODES_CAPABLE, makeRoutedFetch, type RouterOptions } from "../src/pi
 const OFFICIAL = "https://api.hyperliquid.xyz/info";
 const NOW = "https://hype.nownodes.io/info";
 
-type Call = { url: string; type: string; key: string | null };
+type Call = { url: string; type: string; key: string | null; redirect?: string };
 type Reply = Response | Error | ((c: Call) => Response | Error);
 
 // A fake network: `official` and `nownodes` decide each answer; every call is recorded.
@@ -18,14 +18,14 @@ const rig = (official: Reply, nownodes: Reply, env: Record<string, string>) => {
     return v.clone();
   };
   const fetchImpl = async (url: string, init?: RequestInit) => {
-    const c: Call = { url, type: JSON.parse(String(init?.body)).type, key: new Headers(init?.headers).get("api-key") };
+    const c: Call = { url, type: JSON.parse(String(init?.body)).type, key: new Headers(init?.headers).get("api-key"), redirect: init?.redirect };
     calls.push(c);
     return answer(url === NOW ? nownodes : official, c);
   };
   let t = 0;
   const router = makeRoutedFetch({ env: () => env, fetchImpl: fetchImpl as unknown as RouterOptions["fetchImpl"], now: () => (t += 1), log: (m) => logs.push(m) });
-  const post = (type: string, extra: Record<string, unknown> = {}) =>
-    router(OFFICIAL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type, ...extra }) });
+  const post = (type: string, extra: Record<string, unknown> = {}, signal?: AbortSignal) =>
+    router(OFFICIAL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type, ...extra }), signal });
   return { router, post, calls, logs, advance: (ms: number) => (t += ms) };
 };
 
@@ -173,5 +173,60 @@ describe("with the pipeline's pacer", () => {
     const out = await paced.post<{ marginSummary: { accountValue: string } }>({ type: "clearinghouseState", user: "0xabc" }, 2);
     expect(out.marginSummary.accountValue).toBe("5");
     expect(sleeps.filter((ms) => ms >= 1000)).toEqual([]); // no Retry-After sleep was needed
+  });
+});
+
+describe("review fixes", () => {
+  const env = { INFO_ROUTING: "overflow", ...KEY };
+
+  test("the NOWNodes key never follows a redirect, and the official host never sees it", async () => {
+    const r = rig(status(503), ok(), env);
+    await r.post("clearinghouseState");
+    expect(r.calls.find((c) => c.url === NOW)?.redirect).toBe("error");
+    expect(r.calls.filter((c) => c.url === OFFICIAL).every((c) => c.key === null)).toBe(true);
+    const split = rig(status(401), ok(), { INFO_ROUTING: "split", INFO_SPLIT_PERCENT: "100", ...KEY });
+    await split.post("clearinghouseState");
+    expect(split.calls.filter((c) => c.url === OFFICIAL).every((c) => c.key === null)).toBe(true);
+  });
+
+  test("a read the caller cancelled is not retried; one that only timed out is", async () => {
+    const cancelled = new AbortController();
+    cancelled.abort();
+    const a = rig(new Error("aborted"), ok(), env);
+    await expect(a.post("clearinghouseState", {}, cancelled.signal)).rejects.toThrow("aborted");
+    expect(only(a.calls, NOW)).toBe(0);
+
+    const timedOut = new AbortController();
+    timedOut.abort(new DOMException("timed out", "TimeoutError"));
+    const b = rig(new Error("timeout"), ok({ from: "nownodes" }), env);
+    expect(await (await b.post("clearinghouseState", {}, timedOut.signal)).json()).toEqual({ from: "nownodes" });
+    expect(only(b.calls, NOW)).toBe(1);
+  });
+
+  test("shadow checks also run when official serves a read in overflow and split modes", async () => {
+    const state = { marginSummary: { accountValue: "10" }, assetPositions: [] };
+    for (const mode of ["overflow", "split"]) {
+      const r = rig(ok(state), ok(state), { INFO_ROUTING: mode, INFO_SPLIT_PERCENT: "0", INFO_SHADOW_PERCENT: "100", ...KEY });
+      await r.post("clearinghouseState");
+      for (let i = 0; i < 20; i++) await new Promise((x) => setTimeout(x, 0));
+      expect(r.router.stats().shadow.compared).toBe(1);
+    }
+  });
+
+  test("403/404/422 from NOWNodes also trip the breaker", async () => {
+    for (const code of [403, 404, 422]) {
+      const r = rig(status(503), status(code), env);
+      for (let i = 0; i < 3; i++) await r.post("clearinghouseState");
+      expect(r.router.stats().breakerOpen).toBe(true);
+      await r.post("clearinghouseState");
+      expect(only(r.calls, NOW)).toBe(3);
+    }
+  });
+
+  test("official reads are counted on every path", async () => {
+    const r = rig(ok(), ok(), { ...KEY });
+    await r.post("portfolio");
+    await r.post("clearinghouseState");
+    expect(r.router.stats().official.requests).toBe(2);
   });
 });

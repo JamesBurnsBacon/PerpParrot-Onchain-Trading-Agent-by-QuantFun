@@ -93,16 +93,35 @@ export const makeRoutedFetch = (o: RouterOptions = {}) => {
     try {
       const headers = new Headers(init.headers);
       if (provider === "nownodes") headers.set("api-key", key ?? "");
-      const res = await base(provider === "nownodes" ? NOWNODES_URL : OFFICIAL_URL, { ...init, headers, signal: signal ?? init.signal });
+      // The key must never follow a redirect to another host.
+      const guard: RequestInit = provider === "nownodes" ? { redirect: "error" } : {};
+      const res = await base(provider === "nownodes" ? NOWNODES_URL : OFFICIAL_URL, { ...init, ...guard, headers, signal: signal ?? init.signal });
       if (!res.ok) s.errors++;
       if (provider === "nownodes") {
-        consecutiveFailures = failed(res) || res.status === 401 ? consecutiveFailures + 1 : 0;
+        consecutiveFailures = res.ok ? 0 : consecutiveFailures + 1;
         if (consecutiveFailures >= BREAKER_FAILURES) pausedUntil = now() + BREAKER_PAUSE_MS;
       }
       return res;
     } catch (e) {
       s.errors++;
       if (provider === "nownodes" && ++consecutiveFailures >= BREAKER_FAILURES) pausedUntil = now() + BREAKER_PAUSE_MS;
+      throw e;
+    } finally {
+      s.totalMs += now() - started;
+    }
+  };
+
+  // The caller's request, untouched, with only the counters around it.
+  const direct = async (url: string, init?: RequestInit): Promise<Response> => {
+    const s = stats.official;
+    s.requests++;
+    const started = now();
+    try {
+      const res = await base(url, init);
+      if (!res.ok) s.errors++;
+      return res;
+    } catch (e) {
+      s.errors++;
       throw e;
     } finally {
       s.totalMs += now() - started;
@@ -129,22 +148,28 @@ export const makeRoutedFetch = (o: RouterOptions = {}) => {
     }
   };
 
+  // A read the caller aborted on purpose is not retried; one that merely timed out is (with a fresh timeout).
+  const cancelledByCaller = (init: RequestInit) => !!init.signal?.aborted && (init.signal.reason as { name?: string } | undefined)?.name !== "TimeoutError";
+  const retrySignal = (init: RequestInit) => {
+    const timeout = AbortSignal.timeout(FALLBACK_TIMEOUT_MS);
+    const caller = init.signal;
+    return !caller || caller.aborted ? timeout : AbortSignal.any([caller, timeout]);
+  };
+
   const routed = async (url: string, init?: RequestInit): Promise<Response> => {
     const e = env();
     const mode = e.INFO_ROUTING === "overflow" || e.INFO_ROUTING === "split" ? e.INFO_ROUTING : "official";
     stats.mode = mode;
     const key = e.NOWNODES_API_KEY;
     const type = bodyType(init);
+    const shadowPercent = Number(e.INFO_SHADOW_PERCENT ?? 0);
+    // Background comparison of an official clearinghouseState answer; never awaited.
+    const maybeShadow = (res: Response) => {
+      if (key && init && type === "clearinghouseState" && shadowPercent > 0 && res.ok && (++shadowCounter * shadowPercent) % 100 < shadowPercent) void shadowCompare(init, res, key);
+      return res;
+    };
     const capable = mode !== "official" && !!key && !!init && type !== null && NOWNODES_CAPABLE.has(type) && url === OFFICIAL_URL;
-    if (!capable) {
-      if (key && init && type === "clearinghouseState" && url === OFFICIAL_URL && Number(e.INFO_SHADOW_PERCENT ?? 0) > 0) {
-        // official mode with shadow checks: same request, same response, plus a background comparison.
-        const res = await base(url, init);
-        if (res.ok && (++shadowCounter * Number(e.INFO_SHADOW_PERCENT)) % 100 < Number(e.INFO_SHADOW_PERCENT)) void shadowCompare(init, res, key);
-        return res;
-      }
-      return base(url, init);
-    }
+    if (!capable) return url === OFFICIAL_URL ? maybeShadow(await direct(url, init)) : base(url, init);
     stats.breakerOpen = now() < pausedUntil;
     const nownodesFirst = mode === "split" && !stats.breakerOpen && (++splitCounter * Number(e.INFO_SPLIT_PERCENT ?? 25)) % 100 < Number(e.INFO_SPLIT_PERCENT ?? 25);
 
@@ -156,7 +181,7 @@ export const makeRoutedFetch = (o: RouterOptions = {}) => {
     let firstErr: unknown = null;
     try {
       firstRes = await call(first, init, key);
-      if (!bad(first, firstRes)) return firstRes;
+      if (!bad(first, firstRes)) return first === "official" ? maybeShadow(firstRes) : firstRes;
     } catch (err) {
       firstErr = err;
     }
@@ -164,10 +189,10 @@ export const makeRoutedFetch = (o: RouterOptions = {}) => {
       if (firstRes) return firstRes;
       throw firstErr;
     };
+    if (cancelledByCaller(init!)) return giveUp();
     if (second === "nownodes" && now() < pausedUntil) return giveUp(); // breaker open: do not retry on NOWNodes
-    // Fresh timeout: the caller's signal may be the thing that just expired.
     try {
-      const retry = await call(second, init, key, AbortSignal.timeout(FALLBACK_TIMEOUT_MS));
+      const retry = await call(second, init!, key, retrySignal(init!));
       if (!bad(second, retry)) {
         stats.fallbacks++;
         return retry;
