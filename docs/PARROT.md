@@ -2,7 +2,7 @@
 
 `/parrot` is a voice-first demo page: a visitor talks to an animated clay parrot (OpenAI GPT-Live), and the parrot turns the conversation into a
 **wallet-exploration conversation** that code uses to shortlist wallets and can save as a **pending request**. It sits **outside** the 10-minute trading loop
-and has no trading authority.
+and has no trading authority. It is an extra view over the existing pipeline: it reuses Score, the pipeline's tracked accounts and the active configuration, and keeps no selection logic of its own; the pipeline's names (Score fields, `kind`, `sources`) are used as they are, and only the presentation (nicknames, the flock) is Parrot's.
 
 ```
 visitor voice ──WebRTC──► GPT-Live (gpt-live-1) ──delegates──► backend model (gpt-5.6-terra)
@@ -19,6 +19,19 @@ browser ── hold to confirm ──► POST /chat/preview ──► PENDING re
   and `src/live` references none of `ADMIN_TOKEN`, `HL_API_WALLET_KEY`, `CRE_API_KEY`.
 - **The model never allocates.** Requested leverage (including 100x) is display/context only: it is never applied, clamped, traded, or written into policy. Every saved preview copies the **base policy unchanged except `mode: "SIMULATION"`**, with `approvalRequired: true`. An operator must review and freeze separately; confirmation creates only a PENDING request. Only code builds the facts the parrot speaks. Visitor text and model prose never enter state or the prompt as facts.
 - **Honest labels.** With Postgres and enough refreshed accounts the finalists are **live**: Score (unchanged) run over `pipeline_accounts`, the accounts the selection pipeline refreshed (read-only, cached 5 minutes, up to 25 finalists). Otherwise (no database, fewer than 30 refreshed accounts, fewer than 5 finalists, or any failure) the **sample data** is used and the page shows the `SAMPLE DATA` badge; `dataSource` in every response says which. Nothing on the page is a forecast.
+
+## What the Parrot knows
+
+The Parrot can state the wallet list and its code-built evidence (Score rank and risk metrics,
+plus period return and Sharpe when available for live finalists), how many selected wallets
+are already in the active live book, the existing copy paper books' returns over their available
+points in the last 30 days, and the live book's gross and top three exposures from its last stepped
+snapshot targets. Paper returns belong to those existing books, never to the new shortlist;
+snapshot targets are not a fresh measurement of executed positions. These are all read-only,
+code-built facts, and nothing is a forecast. Missing or slow reads are omitted independently.
+A question about the live book, paper performance or comparison refreshes the same preferences.
+One muted line beneath the flock summarizes available context; it remains plain text in Calm mode.
+Sample/demo fixtures have no context or extra return/Sharpe details. Saved previews stay SIMULATION.
 
 ## Strategy contract
 

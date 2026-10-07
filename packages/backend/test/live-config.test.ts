@@ -13,6 +13,7 @@ test("live config snapshot has only one strict bounded function and server-owned
   expect(JSON.stringify(config)).not.toContain("web_search");
   expect(LIVE_INSTRUCTIONS.length).toBeLessThanOrEqual(2500);
   expect(BACKEND_INSTRUCTIONS).toContain(STRATEGY_FIELD_GUIDE);
+  expect(BACKEND_INSTRUCTIONS).toContain("When the visitor asks about the live book, paper performance, or how the list compares, call set_strategy again with the unchanged preferences to refresh the facts, then answer ONLY from the facts.");
   expect(CHAT_SYSTEM_PROMPT).toContain(STRATEGY_FIELD_GUIDE);
   expect(new Bun.CryptoHasher("sha256").update(CHAT_SYSTEM_PROMPT).digest("hex")).toBe("dd2f22546f5c7fcd6d51d6ac2b330b57b91d6a627324fe158600d505743538fe");
 });

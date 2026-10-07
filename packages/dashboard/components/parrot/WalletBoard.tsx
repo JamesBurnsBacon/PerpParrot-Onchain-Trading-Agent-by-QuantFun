@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from
 import { shortenAddress, type ChatResponse } from "../../lib/parrot";
 import { changeSummary, diffWallets, reelSchedule, updateWalletBoard, type WalletBoardState, walletLabel, walletNickname, walletVibe } from "../../lib/wallet-board";
 import type { WalletEvidence } from "../../../shared/wallet-evidence";
+import { liveContextLine } from "../../lib/parrot-context";
 import { Badge } from "./Badge";
 import { useParrotEffects } from "./ParrotEffects";
 import { WalletBird } from "./WalletBird";
@@ -39,6 +40,8 @@ export function WalletTile({ address, evidence, reason, change, quiet = false, i
         <p>Score rank: {evidence.rank}</p>
         <p>Drawdown: {metric(evidence.maxDrawdown)}</p>
         <p>Realized volatility: {metric(evidence.realizedVol)}</p>
+        {evidence.periodReturn != null && <p>Period return: {metric(evidence.periodReturn)}</p>}
+        {evidence.sharpe != null && <p>Sharpe: {evidence.sharpe}</p>}
         {evidence.tags.length > 0 && <p>{evidence.tags.join(" · ")}</p>}
       </> : <p>Metrics unavailable</p>}
       {reason && <p>{reason}</p>}
@@ -47,6 +50,7 @@ export function WalletTile({ address, evidence, reason, change, quiet = false, i
 }
 
 export function WalletBoard({ chat }: { chat: ChatResponse }) {
+  const contextLine = liveContextLine(chat.context);
   const { quiet, celebration } = useParrotEffects();
   const [state, setState] = useState<WalletBoardState>(() => ({ chat, before: [], ghosts: [], epoch: 1, labels: true }));
   // Preserve card identity across strategy revisions; only removed identities become ghosts.
@@ -102,6 +106,7 @@ export function WalletBoard({ chat }: { chat: ChatResponse }) {
         </div>;
       })}
     </div>
+    {contextLine && <p className="mt-2 text-xs text-[var(--muted)]" data-testid="live-context">{contextLine}</p>}
     {!rows.length && <p className="wallet-empty" role="status">Waiting for birds...</p>}
   </section>;
 }

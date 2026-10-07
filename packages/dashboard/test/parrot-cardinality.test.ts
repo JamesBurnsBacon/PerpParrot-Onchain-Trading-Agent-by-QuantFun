@@ -33,3 +33,13 @@ test("chat and live evidence must have equal cardinality and the same ids", () =
     expect(isLiveStrategy({ ...value, evidence })).toBe(false);
   }
 });
+
+test("evidence optional metrics accept only finite numbers or null in chat and live", () => {
+  const value = response(5);
+  for (const metric of [undefined, null, 0, -.1234, 1.234, NaN, Infinity, "1", {}]) {
+    const candidate = { ...value, evidence: value.evidence.map(e => ({ ...e, periodReturn: metric, sharpe: metric })) };
+    const valid = metric === undefined || metric === null || (typeof metric === "number" && Number.isFinite(metric));
+    expect(isChatResponse(candidate)).toBe(valid);
+    expect(isLiveStrategy(candidate)).toBe(valid);
+  }
+});

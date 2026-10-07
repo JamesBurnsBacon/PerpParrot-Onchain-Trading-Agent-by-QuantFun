@@ -62,14 +62,17 @@ function envNumber(name: string, fallback: number, min: number, max: number): nu
 }
 
 // Paper books (README §4.10), stepped once per run when its snapshot is built.
+const paperStore = sql ? new PostgresPaperStore(sql) : new MemoryPaperStore();
 const paper = new PaperService({
-  store: sql ? new PostgresPaperStore(sql) : new MemoryPaperStore(),
+  store: paperStore,
   specs: defaultBooks(envNumber("PAPER_BALANCED_MULTIPLIER", 0.5, 0.05, 1)),
   cfg: { minOrderUsd: 10, driftFraction: 0.1, marginCap: 0.95, slippageBps: envNumber("PAPER_SLIPPAGE_BPS", 5, 0, 100) },
 });
 
 // The pinned file (the fixture) until the pipeline activates a configuration in Supabase.
 const fileConfiguration = new FileConfigurationSource(resolve(import.meta.dir, "..", required("CONFIGURATION_PATH")), required("FROZEN_CONFIGURATION_HASH"));
+
+const configurations = sql ? new ActiveConfigurationSource(sql, fileConfiguration) : fileConfiguration;
 
 // The selection pipeline (src/pipeline): needs Postgres. Reviews run under the fixture's
 // Aggressive policy, for our account (HL_ACCOUNT).
@@ -87,7 +90,7 @@ const pipeline = sql
 
 const service = new SnapshotService({
   // Relative to packages/backend, wherever the process starts (vercel.json bundles fixtures/ and frozen/).
-  configurations: sql ? new ActiveConfigurationSource(sql, fileConfiguration) : fileConfiguration,
+  configurations,
   eligibility: new EligibilityTracker(sql ? new PostgresEligibilityStore(sql) : new MemoryEligibilityStore(), undefined, (m) =>
     log("eligibility refused", { reason: m }),
   ),
@@ -147,7 +150,7 @@ const parrotFinalists = createFinalistsSource(sql ? () => sql`
   select address, kind, account_value, closed, portfolio, trade_count, maker_share from pipeline_accounts
   where listed_at >= (select max(listed_at) from pipeline_accounts) - interval '10 minutes'` as Promise<TrackedAccountRow[]> : undefined, { log });
 let chatDeps: Promise<ChatDeps> | undefined;
-const loadChatDeps = (): Promise<ChatDeps> => chatDeps ??= fileConfiguration.load(Date.now()).then(
+const loadChatDeps = (): Promise<ChatDeps> => chatDeps ??= configurations.load(Date.now()).then(
   ({ policy }): ChatDeps => {
     // The snapshot source types only the mirror's subset; chat needs the full policy.
     validateRuntimePolicy(policy);
@@ -182,6 +185,28 @@ const cronAuthorized = (req: Request) => !env.CRON_SECRET || req.headers.get("au
 
 let exposuresCache: { runAt: number; exposures: { asset: string; fraction: number }[] } | undefined;
 
+// Small named reads reuse the existing store queries; no snapshot generation on this path.
+async function readActiveSources(): Promise<string[]> {
+  return (await configurations.load(Date.now())).sources.map(s => s.sourceAddress);
+}
+async function readPaperPoints() {
+  return paperStore.points(Math.floor(Date.now() / 1000) - 30 * 86_400);
+}
+async function readLiveBookExposures() {
+  const { lastRunAt } = await paper.view(Number.MAX_SAFE_INTEGER);
+  if (!lastRunAt) return null;
+  if (exposuresCache?.runAt !== lastRunAt) {
+    const snapshot = await store.get(lastRunAt);
+    if (!snapshot) throw new SnapshotError(404, `run ${lastRunAt} has no snapshot`);
+    const exposures = exposuresFromSnapshot(JSON.parse(snapshot));
+    exposuresCache = { runAt: lastRunAt, exposures: [...exposures].map(([asset, fraction]) => ({ asset, fraction })) };
+  }
+  return exposuresCache;
+}
+async function readLiveExposures() {
+  return (await readLiveBookExposures())?.exposures ?? null;
+}
+
 const server = Bun.serve({
   port: Number(env.PORT ?? 8788),
   async fetch(req) {
@@ -194,7 +219,8 @@ const server = Bun.serve({
       let chat: ChatDeps;
       try { chat = await loadChatDeps(); }
       catch { return chatDisabled(); }
-      const deps = { ...chat, env: liveEnv, chatEnv, fetchImpl: fetch };
+      const deps = { ...chat, env: liveEnv, chatEnv, fetchImpl: fetch,
+        context: { activeSources: readActiveSources, paperPoints: readPaperPoints, liveExposures: readLiveExposures } };
       const response = await (pathname === "/live/session" ? handleLiveSession(req, deps) : handleLiveStrategy(req, deps));
       for (const [name, value] of Object.entries(chatCors)) response.headers.set(name, value);
       return response;
@@ -257,13 +283,9 @@ const server = Bun.serve({
     }
     // The target exposures of the last run the paper books stepped (once per run, not per request).
     if (req.method === "GET" && pathname === "/exposures") {
-      const { lastRunAt } = await paper.view(Number.MAX_SAFE_INTEGER);
-      if (!lastRunAt) return Response.json({ error: "no run yet" }, { status: 404, headers: cors });
-      if (exposuresCache?.runAt !== lastRunAt) {
-        const exposures = exposuresFromSnapshot(JSON.parse(await service.get(lastRunAt)));
-        exposuresCache = { runAt: lastRunAt, exposures: [...exposures].map(([asset, fraction]) => ({ asset, fraction })) };
-      }
-      return Response.json(exposuresCache, { headers: cors });
+      const exposures = await readLiveBookExposures();
+      if (!exposures) return Response.json({ error: "no run yet" }, { status: 404, headers: cors });
+      return Response.json(exposures, { headers: cors });
     }
     const artifact = /^\/artifacts\/(backtest|funnel)$/.exec(pathname);
     if (req.method === "GET" && artifact) {

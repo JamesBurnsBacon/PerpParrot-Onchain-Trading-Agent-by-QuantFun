@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { parsePortfolio, scoreCandidates } from "../src/score";
 import { createFinalistsSource, type FinalistsData, type TrackedAccountRow } from "../src/chat/finalists";
 
 // Synthetic tracked accounts (fake addresses). The stored shape is Hyperliquid's `portfolio` response (decimal strings).
@@ -29,7 +30,14 @@ test("scores the refreshed accounts with Score and reports them as live", async 
   expect(data.dataSource).toBe("live");
   expect(data.finalists.length).toBeGreaterThanOrEqual(5);
   expect(data.finalists.length).toBeLessThanOrEqual(25);
+  const candidates = scoreCandidates(rows(60).map(r => ({ address: r.address, kind: r.kind,
+    accountValue: r.account_value, closed: r.closed, ...parsePortfolio(r.portfolio),
+    history: null, tradeCount: r.trade_count, makerShare: r.maker_share }))).candidates;
   for (const f of data.finalists) {
+    const c = candidates.find(c => c.address === f.address)!;
+    expect(f.rank).toBe(c.rank);
+    expect(f.periodReturn).toBe(c.metrics?.periodReturn ?? null);
+    expect(f.sharpe).toBe(typeof c.metrics?.sharpe === "number" ? c.metrics.sharpe : null);
     expect(f.address).toMatch(/^0x[0-9a-f]{40}$/);
     expect(typeof f.cloneOf).toBe("boolean"); // Score decides clones; never left unknown
   }

@@ -215,3 +215,40 @@ test.each([null, 0.5, 1e-7, 1000])("requested leverage %s is formatted exactly o
   else expect(body.facts).toContain(`Requested leverage: ${requestedLeverage}x (preview only; nothing is applied or traded).`);
   expect(body.facts.length).toBeLessThanOrEqual(1200);
 });
+
+test("live strategy includes code-built context and passes the dashboard guard", async () => {
+  const d = deps();
+  d.context = { activeSources: async () => [`0x${"0".repeat(40)}`],
+    paperPoints: async () => [{ bookId: "aggressive-470", t: 0, equityUsd: 100 }, { bookId: "aggressive-470", t: 86400, equityUsd: 104.2 }],
+    liveExposures: async () => [{ asset: "ETH", fraction: .9 }],
+  };
+  const body = await check(await handleLiveStrategy(request({ intent: args }), d), 200);
+  expect(body.context).toMatchObject({ compare: { total: 10, existing: 1, new: 9 },
+    paper: [{ bookId: "aggressive-470", returnPct: 4.2, days: 1 }], book: { gross: .9 } });
+  for (const fact of body.context.facts) expect(body.facts).toContain(fact);
+  expect(body.facts.length).toBeLessThanOrEqual(1200);
+  expect(isLiveStrategy(body)).toBe(true);
+});
+
+test("failing context preserves the original strategy and code facts", async () => {
+  const baseline = await check(await handleLiveStrategy(request({ intent: args }), deps()), 200);
+  const d = deps();
+  d.context = { activeSources: async () => { throw new Error(); }, paperPoints: async () => { throw new Error(); }, liveExposures: async () => { throw new Error(); } };
+  const { context, ...body } = await check(await handleLiveStrategy(request({ intent: args }), d), 200);
+  expect(context).toEqual({ facts: [] });
+  expect(body).toEqual(baseline);
+});
+
+test("handler retains its base facts and safety at the 1200-char context budget", async () => {
+  const previous = (await deps().finalists()).finalists.slice(10, 20).map(f => f.address);
+  const baseline = await check(await handleLiveStrategy(request({ intent: args, previous }), deps()), 200);
+  const d = deps();
+  d.context = { activeSources: async () => [], paperPoints: async () => ["aggressive-470", "aggressive-10k", "balanced-470"].flatMap(bookId => [
+    { bookId, t: 0, equityUsd: 100 }, { bookId, t: 86400, equityUsd: 123.45 }]), liveExposures: async () => [{ asset: "ETH", fraction: .9 }] };
+  const body = await check(await handleLiveStrategy(request({ intent: args, previous }), d), 200);
+  expect(body.facts.startsWith(baseline.facts)).toBe(true);
+  expect(body.facts.length).toBeLessThanOrEqual(1200);
+  expect(body.context.facts.length).toBe(5);
+  expect(body.context.facts.some((f: string) => !body.facts.includes(f))).toBe(true);
+  expect(isLiveStrategy(body)).toBe(true);
+});

@@ -3,7 +3,8 @@ import type { FinalistLike } from "../../../shared/strategy-intent";
 import { parsePortfolio, scoreCandidates, type ScoreInput } from "../score";
 import { mapScoreFinalists } from "../strategy-intent-adapter";
 
-export type FinalistsData = { finalists: FinalistLike[]; dataSource: "live" | "sample" };
+export type DisplayFinalist = FinalistLike & { rank?: number | null; periodReturn?: number | null; sharpe?: number | null };
+export type FinalistsData = { finalists: DisplayFinalist[]; dataSource: "live" | "sample" };
 
 export const loadFinalists = async (): Promise<{ finalists: FinalistLike[]; dataSource: "sample" }> => ({
   finalists: await Bun.file(resolve(import.meta.dir, "../../fixtures/sample-finalists.json")).json() as FinalistLike[],
@@ -53,7 +54,12 @@ export function createFinalistsSource(
       });
       const result = scoreCandidates(inputs);
       const clones = new Map(result.candidates.map(c => [c.address, c.cloneOf !== null] as const));
-      const finalists = mapScoreFinalists(result.candidates, clones);
+      const byAddress = new Map(result.candidates.map(c => [c.address, c]));
+      const finalists = mapScoreFinalists(result.candidates, clones).map(f => {
+        const c = byAddress.get(f.address)!;
+        return { ...f, rank: c.rank, periodReturn: c.metrics?.periodReturn ?? null,
+          sharpe: typeof c.metrics?.sharpe === "number" && Number.isFinite(c.metrics.sharpe) ? c.metrics.sharpe : null };
+      });
       if (finalists.length < MIN_FINALISTS) { log("parrot finalists: using sample", { reason: "too few finalists", finalists: finalists.length }); return sample(); }
       return { finalists, dataSource: "live" };
     } catch (error) {

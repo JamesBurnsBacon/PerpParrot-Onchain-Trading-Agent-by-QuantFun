@@ -29,3 +29,17 @@ for (const [name, metric, tag, boundary] of [
     });
   }
 }
+
+test("live display evidence is rounded, nullable and cannot affect selection; sample has no extras", () => {
+  const finalists = Array.from({ length: 5 }, (_, i) => ({ address: `0x${String(i + 1).repeat(40)}`,
+    kind: "trader", score: 100 - i, flags: [], cloneOf: false, maxDrawdown: .1, realizedVol: .2,
+    rank: 20 + i, periodReturn: i ? null : .123456, sharpe: i ? Infinity : -1.234567 }));
+  const intent = { ...intents.balanced, riskStyle: "aggressive" as const, maxSources: 5 };
+  const live = explainSelection(intent, fixture.policy as Policy, { finalists, dataSource: "live" });
+  expect(live.evidence[0]).toMatchObject({ rank: 20, periodReturn: .1235, sharpe: -1.2346 });
+  expect(live.evidence[1]).toMatchObject({ periodReturn: null, sharpe: null });
+  const sample = explainSelection(intent, fixture.policy as Policy, { finalists, dataSource: "sample" });
+  expect(sample.evidence.map(e => e.address)).toEqual(live.evidence.map(e => e.address));
+  expect(sample.evidence[0]).not.toHaveProperty("periodReturn");
+  expect(sample.evidence[0]).not.toHaveProperty("sharpe");
+});

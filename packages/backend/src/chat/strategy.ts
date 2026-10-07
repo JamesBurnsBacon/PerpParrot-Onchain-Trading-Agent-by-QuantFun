@@ -1,6 +1,7 @@
 import type { Policy } from "../../../shared/src/contracts";
 import { shortlist, type FinalistLike, type StrategyIntent } from "../../../shared/strategy-intent";
 import type { WalletEvidence, WalletChanges } from "../../../shared/wallet-evidence";
+import type { DisplayFinalist } from "./finalists";
 import { VIBE_THRESHOLDS } from "../../../shared/wallet-persona";
 type Data = { finalists: FinalistLike[]; dataSource: "live" | "sample" };
 const excluded = ["overflow", "ruin", "low-coverage", "no-intervals"];
@@ -33,10 +34,14 @@ export const explainSelection = (intent: StrategyIntent, basePolicy: Policy, dat
   ];
   const evidence = addresses.map(address => {
     const f = data.finalists.find(f => f.address === address)!;
-    const originalRank = (f as FinalistLike & { rank?: number }).rank;
+    const display = f as DisplayFinalist;
+    const originalRank = display.rank;
     const metrics = { maxDrawdown: rounded(f.maxDrawdown), realizedVol: rounded(f.realizedVol) };
     return { address, rank: originalRank ?? scoreOrder.findIndex(f => f.address === address) + 1,
-      ...metrics, tags: tags(metrics) };
+      ...metrics, tags: tags(metrics), ...(data.dataSource === "live" ? {
+        periodReturn: rounded(typeof display.periodReturn === "number" && Number.isFinite(display.periodReturn) ? display.periodReturn : null),
+        sharpe: rounded(typeof display.sharpe === "number" && Number.isFinite(display.sharpe) ? display.sharpe : null),
+      } : {}) };
   });
   const reason = (address: string) => {
     const f = data.finalists.find(f => f.address === address)!;

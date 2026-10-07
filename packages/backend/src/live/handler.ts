@@ -1,3 +1,4 @@
+import { appendContextFacts, buildLiveContext, type LiveContextDeps } from "./context";
 import { parseStrategyIntent, type StrategyIntent } from "../../../shared/strategy-intent";
 import { walletNickname } from "../../../shared/wallet-persona";
 import { failure, type ChatDeps } from "../chat/handler";
@@ -7,6 +8,7 @@ import { selectStrategy, explainSelection } from "../chat/strategy";
 import { buildLiveConfig, liveReservationMicroUsd, SET_STRATEGY_TOOL, type LiveEnv } from "./config";
 
 export type LiveDeps = Pick<ChatDeps, "limiter" | "finalists" | "basePolicy" | "now" | "log"> & {
+  context?: LiveContextDeps;
   env: LiveEnv; chatEnv: Pick<ChatDeps["env"], "ipSalt" | "limits">; fetchImpl: typeof fetch; timeoutMs?: number;
 };
 const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { "Access-Control-Allow-Origin": "*" } });
@@ -128,7 +130,10 @@ export const handleLiveStrategy = async (req: Request, deps: LiveDeps): Promise<
     const { intent: effective, ...selected } = selectStrategy(intent, deps.basePolicy, data);
     const selection = { ...selected, ...explainSelection(intent, deps.basePolicy, data, previous) };
     buildPreview({ intent: effective, basePolicy: deps.basePolicy, addresses: selection.shortlist.addresses });
-    return json({ ok: true, intent: effective, ...selection, facts: strategyFacts(effective, selection) });
+    const context = deps.context ? await buildLiveContext({ ...deps.context, log: deps.log }, selection.shortlist.addresses) : undefined;
+    return json({ ok: true, intent: effective, ...selection,
+      facts: appendContextFacts(strategyFacts(effective, selection), context?.facts ?? []),
+      ...(context ? { context } : {}) });
   } catch (error) {
     const code = error instanceof PreviewError ? error.code : error instanceof RangeError ? "infeasible" : "unavailable";
     return failure(code === "unavailable" ? 503 : 422, code);

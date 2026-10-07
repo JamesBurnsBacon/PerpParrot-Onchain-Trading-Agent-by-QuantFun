@@ -1,6 +1,6 @@
 import { isChatResponse, type ChatResponse } from "./parrot";
 
-export type LiveStrategy = Pick<ChatResponse, "ok" | "intent" | "policy" | "shortlist" | "changes"> & { evidence: NonNullable<ChatResponse["evidence"]> } & { facts: string };
+export type LiveStrategy = Pick<ChatResponse, "ok" | "intent" | "policy" | "shortlist" | "changes" | "context"> & { evidence: NonNullable<ChatResponse["evidence"]> } & { facts: string };
 export type LiveSession = { ok: true; session: { id: string }; transport: { sdp: string }; maxSessionSeconds: number };
 const record = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v);
 const id = (v: unknown): v is string => typeof v === "string" && /^[\w-]{1,256}$/.test(v);
