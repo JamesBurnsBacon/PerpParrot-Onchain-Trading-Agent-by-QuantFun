@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { describeError, type ChatResponse } from "../../lib/parrot";
-import { functionResultMessages, hasUnfinishedLiveStrategy, initialLiveEvents, isLiveSession, isLiveStrategy, liveAsChat, pendingLiveCalls, reduceLiveEvent, type LiveEvents } from "../../lib/parrot-live";
+import { setMicEnabled, functionResultMessages, hasUnfinishedLiveStrategy, initialLiveEvents, isLiveSession, isLiveStrategy, liveAsChat, pendingLiveCalls, reduceLiveEvent, type LiveEvents } from "../../lib/parrot-live";
 import { post, type Failure } from "./api";
 
 type Phase = "idle" | "connecting" | "live" | "closing";
 type Runtime = {
-  controller: AbortController; peer?: RTCPeerConnection; channel?: RTCDataChannel; mic?: MediaStream;
+  controller: AbortController; peer?: RTCPeerConnection; channel?: RTCDataChannel; mic?: MediaStream; muted?: boolean;
   timers: Set<ReturnType<typeof setTimeout>>; events: LiveEvents; closing: boolean; draining: boolean;
   processedCalls: Set<string>; staleNotified?: boolean; deadline?: number;
 };
-export type LiveView = { phase: Phase; user: string; parrot: string; avatar: "listening" | "speaking" | "thinking"; remaining: number; status: string; failure: Failure | null; playbackBlocked: boolean };
-const idle: LiveView = { phase: "idle", user: "", parrot: "", avatar: "listening", remaining: 0, status: "", failure: null, playbackBlocked: false };
+export type LiveView = { phase: Phase; user: string; parrot: string; avatar: "listening" | "speaking" | "thinking"; remaining: number; status: string; failure: Failure | null; playbackBlocked: boolean; muted: boolean };
+const idle: LiveView = { phase: "idle", user: "", parrot: "", avatar: "listening", remaining: 0, status: "", failure: null, playbackBlocked: false, muted: false };
 
 export function useLiveTalk(onStrategy: (chat: ChatResponse) => void, onStale: () => void, previousIds: string[] = [], activity?: { gesture: () => void; input: () => void }) {
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
@@ -42,7 +42,7 @@ export function useLiveTalk(onStrategy: (chat: ChatResponse) => void, onStale: (
     if (audio.current) { audio.current.pause(); audio.current.srcObject = null; }
     if (status !== undefined) {
       notifyStale(run); // Unmount cleanup deliberately has no page callback.
-      setView(v => ({ ...v, phase: "idle", status, failure, playbackBlocked: false }));
+      setView(v => ({ ...v, phase: "idle", status, failure, playbackBlocked: false, muted: false }));
     }
   }, [notifyStale]);
 
@@ -217,6 +217,13 @@ export function useLiveTalk(onStrategy: (chat: ChatResponse) => void, onStale: (
         : "My voice could not connect; please try again.", micDenied || micMissing ? null : { code: "network" });
     }
   }
+  function toggleMute() {
+    const run = active.current;
+    if (!run || run.closing || !run.mic || !run.events.started) return;
+    run.muted = !run.muted;
+    setMicEnabled(run.mic, !run.muted);
+    setView(v => ({ ...v, muted: !!run.muted }));
+  }
   async function resumeAudio() {
     const run = active.current;
     if (!run || !audio.current) return;
@@ -225,5 +232,5 @@ export function useLiveTalk(onStrategy: (chat: ChatResponse) => void, onStale: (
       if (active.current === run) setView(v => ({ ...v, playbackBlocked: false }));
     } catch { /* Keep the user-gesture retry available if playback is still blocked. */ }
   }
-  return { view, audio, remoteStream, start, end, resumeAudio, active: view.phase !== "idle" };
+  return { view, audio, remoteStream, start, end, toggleMute, resumeAudio, active: view.phase !== "idle" };
 }

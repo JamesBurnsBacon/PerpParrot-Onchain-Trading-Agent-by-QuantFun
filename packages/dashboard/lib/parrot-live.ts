@@ -93,3 +93,8 @@ export const functionOutput = (callId: string, output: string) => ({
 export const continueResponse = (responseId: string) => ({ type: "response.create", event_id: `continue_${responseId}` } as const);
 export const functionResultMessages = (calls: { callId: string; output: string }[], responseId: string) =>
   [...calls.map(c => functionOutput(c.callId, c.output)), continueResponse(responseId)];
+
+// Muting only disables the microphone tracks: the session, the parrot's voice and the data channel keep running.
+export const setMicEnabled = (stream: { getAudioTracks: () => { enabled: boolean }[] } | null | undefined, enabled: boolean): void => {
+  stream?.getAudioTracks().forEach(track => { track.enabled = enabled; });
+};

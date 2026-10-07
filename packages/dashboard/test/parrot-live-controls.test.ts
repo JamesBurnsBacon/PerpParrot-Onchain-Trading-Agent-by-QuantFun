@@ -8,7 +8,7 @@ test("live connecting offers an enabled Cancel button that invokes end", () => {
     active: true, view: { phase: "connecting", avatar: "thinking", status: "Warming up my voice…" },
     audio: { current: null }, end: () => { ended++; }, start: () => { throw new Error("must cancel"); },
   } });
-  const [button, label] = tree.props.children;
+  const [row, label] = tree.props.children; const button = Array.isArray(row.props.children) ? row.props.children[0] : row.props.children;
   expect(button.props.disabled).toBe(false);
   expect(button.props["aria-label"]).toBe("Cancel connecting");
   expect(label.props.children).toBe("Cancel");

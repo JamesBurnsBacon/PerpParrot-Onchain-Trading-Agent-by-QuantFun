@@ -86,6 +86,12 @@
 .parrot-talk:not(:disabled):hover { transform: scale(1.04); box-shadow: 0 8px 28px #32722e35; }
 .parrot-talk--active { background: var(--surface); color: var(--ink); border-color: var(--ring); }
 .parrot-talk-label { font-size: 13px; font-weight: 650; }
+.parrot-talk-row { display: flex; align-items: center; justify-content: center; gap: 20px; }
+.parrot-mute { width: 56px; height: 56px; flex-shrink: 0; display: grid; place-items: center; border-radius: 50%; background: var(--surface); color: var(--ink); border: 1px solid var(--ring); cursor: pointer; transition: transform .12s ease, background .12s ease; }
+.parrot-mute:hover { transform: scale(1.05); }
+.parrot-mute:focus-visible { outline: 3px solid var(--ring); outline-offset: 3px; }
+.parrot-mute.is-muted { background: #f0a54a; color: #2a1a05; border-color: #b8741f; }
+.parrot-page[data-calm="true"] .parrot-mute { transition: none; }
 .parrot-live-status { min-height: 20px; max-width: 340px; text-align: center; font-size: 13px; line-height: 1.6; color: var(--ink-2); }
 .parrot-countdown { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ink-2); border: 1px solid var(--ring); border-radius: 999px; padding: 4px 10px; }
 .parrot-spinner { width: 26px; height: 26px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: parrot-orbit 1.2s linear infinite; }
