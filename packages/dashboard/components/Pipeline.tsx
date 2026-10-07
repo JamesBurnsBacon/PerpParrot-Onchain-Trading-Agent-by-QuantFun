@@ -86,6 +86,8 @@ export function Pipeline({ view }: { view: PipelineView }) {
   const funnel = latest?.finalists?.funnel ?? [];
   const overlap = latest?.finalists?.overlap;
   const guard = latest?.finalists?.overlapGuard;
+  const contractCheck = latest?.finalists?.contracts;
+  const contractSet = new Set((contractCheck?.contracts ?? []).map((c) => c.address.toLowerCase()));
   const funnelMax = Math.max(...funnel.map((f) => f.count), 1);
 
   return (
@@ -239,6 +241,12 @@ export function Pipeline({ view }: { view: PipelineView }) {
                 {guard.failed ? ` · ${guard.failed} reads failed` : ""}
               </p>
             )}
+            {contractCheck && (
+              <p className="mb-1 text-xs" style={{ color: "var(--ink-2)" }}>
+                Contract check (HyperEVM eth_getCode via NOWNodes): {contractCheck.contracts.length} of {contractCheck.checked} picks {contractCheck.contracts.length === 1 ? "is a contract" : "are contracts"} in {(contractCheck.ms / 1000).toFixed(1)} s
+                {contractCheck.unread.length ? ` · ${contractCheck.unread.length} could not be read` : ""} · evidence only, the pick is unchanged
+              </p>
+            )}
             <table className="tabular w-full whitespace-nowrap text-xs">
               <thead style={{ color: "var(--muted)" }}>
                 <tr>
@@ -263,7 +271,7 @@ export function Pipeline({ view }: { view: PipelineView }) {
                     <tr key={f.address} className="border-t" style={{ borderColor: "var(--grid)" }}>
                       <td className="py-1" style={{ color: "var(--muted)" }}>{f.rank ?? i + 1}</td>
                       <td className="py-1"><Explorer address={f.address} /></td>
-                      <td className="py-1 pl-2" style={{ color: "var(--ink-2)" }}>{f.kind ?? "—"}</td>
+                      <td className="py-1 pl-2" style={{ color: contractSet.has(f.address.toLowerCase()) ? "var(--warning)" : "var(--ink-2)" }} title={contractSet.has(f.address.toLowerCase()) ? "Has code on HyperEVM (eth_getCode via NOWNodes): a contract, not a person's wallet" : undefined}>{f.kind ?? "—"}{contractSet.has(f.address.toLowerCase()) ? " · contract" : ""}</td>
                       <td className="py-1 pl-2 text-right">{f.score === undefined ? "—" : f.score.toLocaleString(undefined, { maximumSignificantDigits: 3 })}</td>
                       <Heat v={v?.aggressiveFit ?? null} bad="low" />
                       <Heat v={v?.reject ?? null} bad="high" />

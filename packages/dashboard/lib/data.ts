@@ -125,6 +125,8 @@ export type PipelineView = {
       funnel: { stage: string; count: number }[];
       // Same-direction position overlap among the picks (absent on older runs).
       overlap?: { threshold: number; pairs: number; above: number; max: number; top: { a: string; b: string; overlap: number }[]; byAddress: Record<string, number> };
+      // Which picks are contracts on HyperEVM, via NOWNodes' /evm (CONTRACT_CHECK=on; evidence only, absent otherwise).
+      contracts?: { provider: "nownodes"; checked: number; contracts: { address: string; bytes: number }[]; unread: string[]; ms: number };
       // Present only when the overlap guard picked this run (PICK_OVERLAP_GUARD=on).
       overlapGuard?: { pool: number; reads: number; failed: number; excluded: number; toppedUp: number; threshold: number; ms: number; provider: { nownodes: number; official: number; fallbacks: number } };
     } | null;
