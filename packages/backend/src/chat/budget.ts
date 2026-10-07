@@ -1,3 +1,5 @@
+// Token reservation bounds used by the chat handler and server limits.
+// Estimates must cover provider framing; they never grant execution authority.
 import { STRATEGY_INTENT_JSON_SCHEMA } from "../../../shared/strategy-intent";
 import { buildMessages } from "./prompt";
 

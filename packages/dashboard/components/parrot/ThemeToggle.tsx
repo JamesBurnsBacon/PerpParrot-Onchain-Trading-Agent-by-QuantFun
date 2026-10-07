@@ -1,7 +1,7 @@
+// Theme control shared by the Parrot page and materials lab.
+// Changes display only, using the dashboard data-theme and theme query conventions.
 import { useEffect, useState } from "react";
 
-// The dashboard's toggle is private to app/page.tsx. Keep its data-theme and
-// ?theme= convention here without changing that page beyond the allowed link.
 export function ThemeToggle() {
   const [dark, setDark] = useState(false);
   useEffect(() => {

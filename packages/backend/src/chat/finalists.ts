@@ -1,3 +1,5 @@
+// Read-only finalist source for chat and Live handlers: pipeline accounts through Score, or sample.
+// Never write pipeline state or change the active configuration.
 import { resolve } from "node:path";
 import type { FinalistLike } from "../../../shared/strategy-intent";
 import { parsePortfolio, scoreCandidates, type ScoreInput } from "../score";

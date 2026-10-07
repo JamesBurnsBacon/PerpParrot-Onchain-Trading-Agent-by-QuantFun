@@ -357,7 +357,7 @@ test("safe, a few wallets keeps exactly five sources in chat and saved preview",
   d.callModel = async () => ({ intent: infeasibleIntent, promptTokens: 0, completionTokens: 0 });
   const chat = await handleChat(request(), d);
   expect(chat.status).toBe(200);
-  const body = await chat.json() as { policy: { maxSources: number; raisedFrom?: number }; shortlist: { addresses: string[] } };
+  const body = await chat.json() as { policy: { maxSources: number }; shortlist: { addresses: string[] } };
   expect(body.policy).not.toHaveProperty("raisedFrom");
   expect(body.policy.maxSources).toBe(5);
   expect(body.shortlist.addresses).toHaveLength(5);
@@ -366,7 +366,7 @@ test("safe, a few wallets keeps exactly five sources in chat and saved preview",
 });
 
 // Regression: requesting leverage must never rewrite any saved policy field.
-test("100x is context only: no clamp and the saved pending preview keeps the base policy", async () => {
+test("100x stays context only and the saved pending preview keeps the base policy", async () => {
   for (const requestedLeverage of [100, 0.5, null]) {
     for (const riskStyle of ["conservative", "balanced", "aggressive"] as const) {
       const d = deps();

@@ -1,7 +1,10 @@
+// Sound and motion context shared by the Parrot page, wallet board and labs.
+// Celebrate selection or a pending request only, never gains or execution.
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { ParrotSfx } from "../../lib/parrot-sfx";
 import { canTriggerEffect, motionAllowed, nextCombo, particleAlive, particleBudget, type EffectEvent } from "../../lib/wallet-board";
 
+// Clamp is retained for lab auditions; Fever names the existing visual banner, not a sound cue.
 type Celebration = { id: number; kind: "strategy" | "lock" | "clamp"; combo: number; animated: boolean };
 type Effects = { calm: boolean; sound: boolean; reduced: boolean; quiet: boolean; sfx: ParrotSfx;
   toggleCalm: () => void; toggleSound: () => void; trigger: (kind: EffectEvent, count?: number, removed?: number, clamped?: boolean) => void; celebration: Celebration | null };

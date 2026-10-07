@@ -1,3 +1,5 @@
+/* Layout for the development-only materials lab, imported by LabClient.
+ * Keep outside production bundles; styles have no effect on strategy or policy. */
 .materials-lab { max-width: 1120px; margin: auto; padding: 20px 16px 64px; }
 .materials-lab h1 { font-size: clamp(1.4rem, 5vw, 2rem); font-weight: 800; line-height: 1.2; }
 .materials-lab h2 { font-size: 1.4rem; font-weight: 750; margin: 12px 0; }

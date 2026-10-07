@@ -1,3 +1,5 @@
+// Hold-to-confirm interaction used by ExecutePanel for a pending request.
+// Cancel stale or interrupted holds; confirmation never grants trading authority.
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { holdProgress, isPointerOutside, canContinueHold, type ChatResponse } from "../../lib/parrot";
 

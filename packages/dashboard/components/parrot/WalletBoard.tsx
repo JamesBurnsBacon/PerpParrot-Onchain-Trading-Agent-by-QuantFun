@@ -1,3 +1,5 @@
+// Shortlist tiles, evidence and removal ghosts used by the Parrot page and labs.
+// Animate supplied membership only; never select wallets or infer trading outcomes.
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { shortenAddress, type ChatResponse } from "../../lib/parrot";
 import { changeSummary, diffWallets, reelSchedule, updateWalletBoard, type WalletBoardState, walletLabel, walletNickname, walletVibe } from "../../lib/wallet-board";

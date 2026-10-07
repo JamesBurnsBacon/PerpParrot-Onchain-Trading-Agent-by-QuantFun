@@ -1,3 +1,5 @@
+// Server-owned voice session configuration and reservation estimates used by Live handlers.
+// The browser may not reconfigure the session, and the model has no trading authority.
 import { STRATEGY_INTENT_JSON_SCHEMA } from "../../../shared/strategy-intent";
 import { STRATEGY_FIELD_GUIDE } from "../chat/prompt";
 
@@ -38,7 +40,7 @@ export const SET_STRATEGY_TOOL = {
 
 // The browser is untrusted: it may only return function results, continue a response and close the session.
 // It cannot send session.update or any *.append event, so it cannot change the model, prompts, tools or delegation.
-export const LIVE_ALLOWED_CLIENT_EVENTS = ["response.item.create", "response.create", "session.close"] as const;
+const LIVE_ALLOWED_CLIENT_EVENTS = ["response.item.create", "response.create", "session.close"] as const;
 
 export const buildLiveConfig = (env: LiveEnv) => ({
   model: env.model, instructions: LIVE_INSTRUCTIONS, audio: { output: { voice: env.voice.toLowerCase() } },

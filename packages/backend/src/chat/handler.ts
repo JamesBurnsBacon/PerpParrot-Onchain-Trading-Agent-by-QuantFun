@@ -1,3 +1,5 @@
+// HTTP chat and preview handlers called by the backend server.
+// Extract preferences or save pending simulation requests; never authorize trading.
 import type { SQL } from "bun";
 import type { Policy } from "../../../shared/src/contracts";
 import { parseStrategyIntent, type FinalistLike, type StrategyIntent } from "../../../shared/strategy-intent";
@@ -18,7 +20,7 @@ export type ChatDeps = {
   basePolicy: Policy; now: () => number; log: (msg: string, extra?: Record<string, unknown>) => void; newId: () => string;
 };
 type SavedRequest = { id: string; createdAtMs: number; previewHash: string; intent: StrategyIntent; preview: unknown };
-export interface RequestStore { save(r: SavedRequest): Promise<void> }
+interface RequestStore { save(r: SavedRequest): Promise<void> }
 
 export class MemoryRequestStore implements RequestStore {
   readonly requests = new Map<string, SavedRequest & { status: "pending" }>();

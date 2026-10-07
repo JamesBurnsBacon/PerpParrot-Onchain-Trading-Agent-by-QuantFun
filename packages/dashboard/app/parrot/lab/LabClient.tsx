@@ -1,12 +1,15 @@
 "use client";
 
+// Development-only sound and visual auditions using local synthetic flocks.
+// No backend or model calls; all picks remain local and never affect product policy.
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Fever, ParrotEffectsProvider, useParrotEffects } from "../../../components/parrot/ParrotEffects";
 import { ThemeToggle } from "../../../components/parrot/ThemeToggle";
 import { WalletBoard, WalletTile } from "../../../components/parrot/WalletBoard";
 import { labPresets, labWallet } from "../../../lib/parrot-lab-fixtures";
 import { CATALOG_MARKER, findSound, SOUND_CATALOG } from "../../../lib/parrot-sfx-catalog";
-import { buildScenario, copyPicks, DEFAULT_PICKS, MOMENTS, type Moment } from "../../../lib/parrot-lab-scenario";
+import { buildScenario, copyPicks, DEFAULT_PICKS, MOMENTS, type Moment, type ScenarioStep } from "../../../lib/parrot-lab-scenario";
 import { diffWallets } from "../../../lib/wallet-board";
 import "../parrot.css";
 import "./lab.css";
@@ -22,13 +25,19 @@ export function MaterialsLab() {
   const [running, setRunning] = useState(false);
   const [copyStatus, setCopyStatus] = useState("");
   const [flock, setFlock] = useState(0);
-  const generation = useRef(0), timers = useRef(new Set<ReturnType<typeof setTimeout>>());
+  const generation = useRef(0);
+  const timers = useRef(new Set<ReturnType<typeof setTimeout>>());
   const clear = useCallback(() => {
     generation.current++;
     for (const timer of timers.current) clearTimeout(timer);
-    timers.current.clear(); fx.sfx.cancel();
+    timers.current.clear();
+    fx.sfx.cancel();
   }, [fx.sfx]);
-  const stop = useCallback(() => { clear(); setRunning(false); setActive(null); }, [clear]);
+  const stop = useCallback(() => {
+    clear();
+    setRunning(false);
+    setActive(null);
+  }, [clear]);
   useEffect(() => {
     const hide = () => { if (document.hidden) stop(); };
     document.addEventListener("visibilitychange", hide);
@@ -42,40 +51,61 @@ export function MaterialsLab() {
     return ready;
   }
   async function audition(id: string) {
-    stop(); const run = generation.current;
+    stop();
+    const run = generation.current;
     if (!await unlock() || run !== generation.current || document.hidden) return;
     if (!fx.sfx.enabled) { setAudio("Sound is off. Turn Sound on to audition."); return; }
     findSound(id)?.play(fx.sfx.kit());
   }
   async function runScenario() {
-    stop(); const run = generation.current;
+    stop();
+    const run = generation.current;
     if (!await unlock() || run !== generation.current || document.hidden) return;
     const steps = buildScenario(picks, 6, fx.quiet);
     setRunning(true);
-    const later = (at: number, action: () => void) => {
-      const timer = setTimeout(() => { timers.current.delete(timer); if (generation.current === run) action(); }, at);
-      timers.current.add(timer);
-    };
-    for (const step of steps) later(step.at, () => {
-      setActive(step.moment);
-      const sound = findSound(step.soundId)!;
-      if (sound.cueKind) fx.sfx.kit().cue({ kind: sound.cueKind, at: 0, pitch: step.pitch });
-      else sound.play(fx.sfx.kit());
+    for (const step of steps) scheduleAction(run, step.at, () => playStep(step));
+    scheduleAction(run, steps.at(-1)!.at + 2000, () => {
+      setRunning(false);
+      setActive(null);
     });
-    later(steps.at(-1)!.at + 2000, () => { setRunning(false); setActive(null); });
   }
+  function scheduleAction(run: number, at: number, action: () => void) {
+    const timer = setTimeout(() => {
+      timers.current.delete(timer);
+      if (generation.current === run) action();
+    }, at);
+    timers.current.add(timer);
+  }
+  function playStep(step: ScenarioStep) {
+    setActive(step.moment);
+    const sound = findSound(step.soundId)!;
+    if (sound.cueKind) fx.sfx.kit().cue({ kind: sound.cueKind, at: 0, pitch: step.pitch });
+    else sound.play(fx.sfx.kit());
+  }
+  async function copySelections() {
+    try {
+      await navigator.clipboard.writeText(copyPicks(picks));
+      setCopyStatus("Picks copied.");
+    } catch {
+      setCopyStatus("Clipboard unavailable. Select and copy the text below.");
+    }
+  }
+  // The boundary banner and cue are lab auditions, not product policy adjustments.
   async function banner(kind: "strategy" | "clamp" | "lock") {
-    stop(); const run = generation.current;
+    stop();
+    const run = generation.current;
     await unlock();
     if (run === generation.current && !document.hidden) fx.trigger(kind, 6, 1, kind === "clamp");
   }
   async function swap() {
-    stop(); const run = generation.current;
+    stop();
+    const run = generation.current;
     await unlock();
     if (run !== generation.current || document.hidden) return;
     const next = (flock + 1) % labPresets.length;
     const diff = diffWallets(labPresets[flock].chat.shortlist.addresses, labPresets[next].chat.shortlist.addresses);
-    setFlock(next); fx.trigger("strategy", labPresets[next].chat.shortlist.addresses.length, diff.removed.length);
+    setFlock(next);
+    fx.trigger("strategy", labPresets[next].chat.shortlist.addresses.length, diff.removed.length);
   }
   return <main className="parrot-page materials-lab" data-calm={fx.quiet} data-materials={CATALOG_MARKER}>
     <header className="materials-header">
@@ -108,10 +138,7 @@ export function MaterialsLab() {
       <div className="materials-actions">
         <button type="button" onClick={() => void runScenario()}>{running ? "Restart scenario" : "Run scenario"}</button>
         <button type="button" onClick={stop}>Stop scenario</button>
-        <button type="button" onClick={async () => {
-          try { await navigator.clipboard.writeText(copyPicks(picks)); setCopyStatus("Picks copied."); }
-          catch { setCopyStatus("Clipboard unavailable. Select and copy the text below."); }
-        }}>Copy my picks</button>
+        <button type="button" onClick={() => void copySelections()}>Copy my picks</button>
       </div>
       <p role="status">{running ? `Scenario running${active ? `: ${active}` : ""}.` : "Scenario stopped."} {copyStatus}</p>
       <textarea aria-label="My sound picks" readOnly value={copyPicks(picks)} rows={4} />
@@ -141,7 +168,7 @@ export function MaterialsLab() {
         const evidence = labWallet(i+4);
         return <WalletTile key={change} address={evidence.address} evidence={evidence} quiet={fx.quiet} change={change} />;
       })}</div>
-      <h3>Fever banners + feathers</h3>
+      <h3>Celebration banners + feathers</h3>
       <div className="materials-actions">{(["strategy", "clamp", "lock"] as const).map((kind,i) =>
         <button key={kind} type="button" onClick={() => void banner(kind)}>{["STRATEGY SET", "BOUNDED BY CODE", "LOCKED IN"][i]}</button>)}</div>
       <Fever />

@@ -1,4 +1,5 @@
-// Development-only: imported only behind the lab route / overlay gates.
+// Synthetic flocks used by the development materials and effects labs.
+// Keep behind development import gates; fixtures are never live data or trading inputs.
 import { PARROT_PRESETS, type ParrotPreset } from "./parrot-presets";
 import type { WalletEvidence } from "../../shared/wallet-evidence";
 

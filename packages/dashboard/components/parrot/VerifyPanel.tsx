@@ -1,3 +1,5 @@
+// Read-only funnel and paper evidence panel used by StepRail.
+// Existing paper curves are not returns for the visitor shortlist or proof of execution.
 import { Funnel, Panel, Waiting } from "../Charts";
 import { LineChart } from "../LineChart";
 import { performanceSeries, pct, stamp } from "../../lib/data";

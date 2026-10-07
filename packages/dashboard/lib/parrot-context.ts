@@ -1,3 +1,5 @@
+// Read-context validation and summary text used by Parrot response guards and page.
+// Describe existing books only; never attribute their performance to the shortlist.
 import type { LiveContext } from "../../shared/live-context";
 
 const record = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v);

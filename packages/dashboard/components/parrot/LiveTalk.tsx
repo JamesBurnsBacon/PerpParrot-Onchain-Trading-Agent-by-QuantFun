@@ -1,3 +1,5 @@
+// Voice call controls rendered by the Parrot page from useLiveTalk state.
+// Controls manage the conversation only and cannot authorize trades.
 import type { useLiveTalk } from "./useLiveTalk";
 
 export function LiveTalk({ live, disabled }: { live: ReturnType<typeof useLiveTalk>; disabled: boolean }) {

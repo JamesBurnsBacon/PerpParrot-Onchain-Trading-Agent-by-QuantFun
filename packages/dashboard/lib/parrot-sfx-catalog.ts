@@ -1,8 +1,9 @@
-// Development-only recipes. Never import this module from product code.
+// Sound recipes used only by the development materials lab and its scenario builder.
+// Never import this catalog into production product code.
 import type { ParrotSoundKit } from "./parrot-sfx";
 import type { SfxCue } from "./wallet-board";
 export const CATALOG_MARKER = "PARROT_MATERIALS_RECIPES_DEV_ONLY_V1";
-export type SoundMaterial = {
+type SoundMaterial = {
   id: string; group: "Celebrate" | "Reels / cards" | "Alerts / limits" | "Character";
   label: string; usedNow: boolean; goodFor: string; cueKind?: SfxCue["kind"]; play: (kit: ParrotSoundKit) => void;
 };

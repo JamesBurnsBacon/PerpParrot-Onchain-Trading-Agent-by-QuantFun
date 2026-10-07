@@ -1,3 +1,5 @@
+// Run from root: bun packages/backend/scripts/live-context-mutations.ts.
+// Expect GREEN baseline/restoration, three RED assertions and matching SHA-256 hashes.
 // Offline RED/GREEN proof in a disposable copy. The workspace source is never mutated.
 import { cpSync, mkdtempSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -17,7 +19,7 @@ cpSync(resolve(root, "packages/backend/test/live-context.test.ts"), resolve(temp
 symlinkSync(resolve(root, "packages/backend/node_modules"), resolve(temp, "packages/backend/node_modules"));
 const cases = [
   { name: "overlap", pattern: "overlap counts", from: '[...new Set(shortlistAddresses.map(a => a.toLowerCase()))]', to: 'shortlistAddresses' },
-  { name: "failure-isolation", pattern: "per-dep failure isolation", from: '      return undefined;\n    } finally', to: '      throw new Error("read failure");\n    } finally' },
+  { name: "failure-isolation", pattern: "per-dep failure isolation", from: '    return undefined;\n  } finally', to: '    throw new Error("read failure");\n  } finally' },
   { name: "facts-cap", pattern: "1200-char cap", from: 'if (result.length + 1 + fact.length <= 1200)', to: 'if (true)' },
 ];
 function run(name: string, pattern?: string) {

@@ -1,3 +1,5 @@
+// WebRTC session lifecycle and strategy updates used by the Parrot page.
+// Close media on termination and clear unfinished selections; never configure trading.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { describeError, type ChatResponse } from "../../lib/parrot";
 import { setMicEnabled, functionResultMessages, hasUnfinishedLiveStrategy, initialLiveEvents, isLiveSession, isLiveStrategy, liveAsChat, pendingLiveCalls, reduceLiveEvent, type LiveEvents } from "../../lib/parrot-live";

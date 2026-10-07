@@ -1,3 +1,5 @@
+// Select, Verify and pending-request steps composed by the Parrot page.
+// The Execute label must never imply that confirming places orders.
 import type { ChatResponse, PreviewResponse } from "../../lib/parrot";
 import { SelectPanel } from "./SelectPanel";
 import { VerifyPanel } from "./VerifyPanel";

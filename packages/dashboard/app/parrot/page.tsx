@@ -1,5 +1,8 @@
 "use client";
 
+// Voice-first wallet exploration page over the existing selection pipeline.
+// Show checked facts and save pending requests only; never authorize execution.
+
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Badge } from "../../components/parrot/Badge";
 import { ParrotAvatar, type AvatarState } from "../../components/parrot/ParrotAvatar";

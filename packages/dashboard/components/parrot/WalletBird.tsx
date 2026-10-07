@@ -1,3 +1,5 @@
+// Inline clay bird used by WalletTile to display an evidence-based vibe.
+// Pure presentation; a bird style is never a risk guarantee or selection signal.
 import type { WalletVibe } from "../../../shared/wallet-persona";
 
 // Inline clay shapes keep each bird crisp at both compact and desktop sizes.

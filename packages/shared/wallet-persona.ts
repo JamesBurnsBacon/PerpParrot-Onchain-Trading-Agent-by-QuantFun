@@ -1,5 +1,6 @@
+// Display names and evidence-based vibes shared by spoken facts and wallet tiles.
+// Presentation only: never use names or vibes to score wallets, size positions or trade.
 import { SAMPLE_WALLET_IDS } from "./sample-wallet-ids";
-// Display-only personalities. Never use these names or vibes for scoring, policy or execution.
 export const BIRD_NAMES = [
   "Captain Cracker", "Sir Squawks-a-lot", "Feather Locksmith", "Wing Commander Wobble",
   "Professor Peep", "Duchess Fluff", "Major Macaw", "Noodle Beak",
@@ -34,7 +35,7 @@ function namesFor(ids: readonly string[]): ReadonlyMap<string, string> {
 const sampleNames = namesFor(SAMPLE_WALLET_IDS);
 const cachedNames = namesFor(Array.from({ length: 6 }, (_, i) => `0x${String(i + 1).repeat(40)}`));
 // Unknown ids retain stable hash names too. A finite vocabulary cannot guarantee
-// uniqueness for arbitrary live ids; the current server and cached demo are unique.
+// uniqueness for arbitrary live ids; only the fixed sample and cached demo are unique.
 export const walletNickname = (id: string): string => sampleNames.get(id) ?? cachedNames.get(id) ?? BIRD_NAMES[hashId(id) % BIRD_NAMES.length];
 
 export type WalletVibe = "calm" | "steady" | "wild";

@@ -1,3 +1,5 @@
+/* Styles for the Parrot page, wallet board and shared effects.
+ * Presentation only; motion rules must respect the existing Calm and reduced-motion states. */
 .parrot-page {
   --parrot-green: #6cc04a;
   --parrot-deep: #3f9a3a;
@@ -8,8 +10,8 @@
   --parrot-terminal-ink: #37f06b;
   --parrot-stage: #e4eacf;
   --parrot-chip: #f3eedf;
-  --parrot-clamp: #ffe0a8;
-  --parrot-clamp-ink: #57310c;
+  --parrot-warning: #ffe0a8;
+  --parrot-warning-ink: #57310c;
   --parrot-shadow: 0 8px 0 #30291b0a, 0 18px 45px #30291b0c;
   --surface: #fffcf5;
   --ink: #24283c;
@@ -26,8 +28,8 @@
     --parrot-beige: #171d19;
     --parrot-stage: #253427;
     --parrot-chip: #303b30;
-    --parrot-clamp: #513b22;
-    --parrot-clamp-ink: #ffe0a8;
+    --parrot-warning: #513b22;
+    --parrot-warning-ink: #ffe0a8;
     --parrot-deep: #85d563;
     --surface: #252c26;
     --ink: #f4f1e7;
@@ -43,8 +45,8 @@
   --parrot-beige: #171d19;
   --parrot-stage: #253427;
   --parrot-chip: #303b30;
-  --parrot-clamp: #513b22;
-  --parrot-clamp-ink: #ffe0a8;
+  --parrot-warning: #513b22;
+  --parrot-warning-ink: #ffe0a8;
   --parrot-deep: #85d563;
   --surface: #252c26;
   --ink: #f4f1e7;
@@ -113,21 +115,16 @@
 .parrot-stepper button.is-current { background: var(--parrot-navy); color: #fff; opacity: 1; }
 .parrot-step-number { width: 22px; height: 22px; display: grid; place-items: center; border: 1px solid currentColor; border-radius: 50%; font-size: 10px; }
 .parrot-terminal { background: var(--parrot-terminal); color: var(--parrot-terminal-ink); border-radius: 18px; border: 1px solid #37f06b30; padding: 20px; font-family: ui-monospace, monospace; font-size: 11px; line-height: 1.9; }
-.parrot-clamp { background: var(--parrot-clamp); color: var(--parrot-clamp-ink); border: 2px solid var(--parrot-orange); border-radius: 18px; padding: 16px; }
-.parrot-clamp .parrot-eyebrow { color: inherit; }
 .parrot-details { font-size: 12px; color: var(--ink-2); }
 .parrot-details summary { padding: 8px 0; font-weight: 650; }
 .parrot-details pre { background: var(--parrot-terminal); color: #d3eed1; padding: 15px; border-radius: 14px; max-height: 360px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; }
 .parrot-badge { display: inline-flex; align-items: center; flex-shrink: 0; border: 1px solid currentColor; border-radius: 7px; padding: 4px 7px; font-size: 9px; font-weight: 850; letter-spacing: .07em; white-space: nowrap; }
-.parrot-badge[data-kind="LIVE"] { color: #134622; background: #c5efcc; }
-.parrot-badge[data-kind="REPLAY"] { color: #193f5b; background: #cfeafb; }
-.parrot-badge[data-kind="PRECOMPUTED"] { color: #513179; background: #e8dafa; }
 .parrot-badge[data-kind="SAMPLE DATA"] { color: #65360b; background: #ffe5b5; }
 .parrot-badge[data-kind="CACHED DEMO"] { color: #742348; background: #fad4e6; }
 .parrot-rule { background: var(--parrot-chip); border: 1px solid var(--ring); border-radius: 16px; padding: 16px; }
 .parrot-hash { font-size: 11px; font-family: ui-monospace, monospace; word-break: break-all; color: var(--ink-2); line-height: 1.8; }
 .parrot-success { padding: 20px; border: 2px solid var(--parrot-deep); border-radius: 18px; background: var(--parrot-stage); }
-.parrot-error { padding: 15px; border: 1px solid var(--parrot-orange); background: var(--parrot-clamp); color: var(--parrot-clamp-ink); border-radius: 16px; font-size: 13px; }
+.parrot-error { padding: 15px; border: 1px solid var(--parrot-orange); background: var(--parrot-warning); color: var(--parrot-warning-ink); border-radius: 16px; font-size: 13px; }
 @keyframes parrot-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.04); } }
 @keyframes parrot-pulse { 0%, 100% { transform: scale(1.01); } 50% { transform: scale(1.08); } }
 @keyframes parrot-orbit { to { transform: rotate(360deg); } }
@@ -198,7 +195,6 @@
   .wallet-details { padding:0 6px 10px; font-size:10px; }
 }
 .parrot-policy-flash { animation:policy-highlight .8s ease-out; }
-.parrot-clamp.parrot-policy-flash { animation:clamp-slam .6s cubic-bezier(.15,1.4,.4,1); }
 .parrot-fever-slot { position:relative; height:48px; margin-bottom:8px; isolation:isolate; }
 .parrot-fever { position:absolute; inset:0; display:grid; place-items:center; pointer-events:none; }
 .fever-banner { position:relative; z-index:2; color:#283318; background:#f3d67b; border:1px solid #8f742b; border-radius:12px; padding:8px 16px; font-size:clamp(14px,2vw,20px); font-weight:950; letter-spacing:.03em; }
@@ -222,7 +218,6 @@
 @keyframes reel-roll { from { transform:translateY(-66.667%); } to { transform:translateY(0); filter:blur(0); } }
 @keyframes reel-cover { 0%,85% { opacity:1; } 100% { opacity:0; visibility:hidden; } }
 @keyframes policy-highlight { from { box-shadow:0 0 0 3px #d1ae5660; } to { box-shadow:0 0 0 0 transparent; } }
-@keyframes clamp-slam { from { transform:translateY(-10px) scale(1.03); } 55% { transform:translateX(-3px); } 80% { transform:translateX(2px); } to { transform:none; } }
 @keyframes fever-stamp { from { transform:scale(1.3) rotate(-5deg); opacity:0; } to { transform:scale(1) rotate(0); opacity:1; } }
 @keyframes fever-rays { from { transform:rotate(-25deg) scale(.5); opacity:0; } 25% { opacity:1; } to { transform:rotate(70deg) scale(1.5); opacity:0; } }
 @keyframes board-sweep { from { background-position:100% 0; } to { background-position:0% 0; } }

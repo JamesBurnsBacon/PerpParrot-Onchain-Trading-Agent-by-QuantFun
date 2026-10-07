@@ -1,3 +1,5 @@
+// Voice-state avatar used by the Parrot page, with optional audio level animation.
+// Presentation only; animation must not change session or strategy state.
 import { useEffect, useRef } from "react";
 import { useParrotEffects } from "./ParrotEffects";
 export type AvatarState = "idle" | "listening" | "thinking" | "speaking";

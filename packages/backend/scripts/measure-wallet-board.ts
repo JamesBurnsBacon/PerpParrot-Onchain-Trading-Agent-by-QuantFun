@@ -1,3 +1,5 @@
+// Run from root: bun packages/backend/scripts/measure-wallet-board.ts.
+// Prints synthetic shortlist turnover, not returns; no backend or provider calls.
 import { selectStrategy } from "../src/chat/strategy";
 import { loadFinalists } from "../src/chat/finalists";
 import fixture from "../fixtures/frozen-configuration.json";
@@ -8,7 +10,7 @@ export const intents: Record<string, StrategyIntent> = Object.fromEntries([
   ["balanced", {}], ["aggressive/many", { riskStyle: "aggressive", maxSources: 14, leverageComfort: "high" }],
   ["clones/on", { avoidClones: false }], ["clones/off", { avoidClones: true }],
   ["diverse", { diversification: "high" }], ["low leverage", { leverageComfort: "low" }],
-  ["clamped", { requestedLeverage: 100 }],
+  ["requestedLeverage", { requestedLeverage: 100 }],
 ].map(([name, patch]) => [name, { riskStyle: "balanced", maxSources: 12, diversification: "medium", leverageComfort: "medium",
   requestedLeverage: null, avoidClones: true, horizon: "medium", reply: "Code checked.", clarify: null, ...patch as object }]));
 if (import.meta.main) {

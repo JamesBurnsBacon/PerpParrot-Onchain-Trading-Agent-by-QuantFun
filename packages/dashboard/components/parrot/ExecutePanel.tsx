@@ -1,3 +1,5 @@
+// Pending-request review and confirmation panel used by StepRail.
+// Saving requires later operator review; this panel cannot place orders.
 import { Panel, StatTile } from "../Charts";
 import { describeError, type ChatResponse, type PreviewResponse } from "../../lib/parrot";
 import { Badge } from "./Badge";

@@ -1,3 +1,5 @@
+// Build pending preview allocations and hashes for the chat preview handler.
+// Keep the base policy in SIMULATION with approvalRequired; never apply requested leverage.
 import { keccak256, stringToBytes } from "viem";
 import { commitment } from "../../../shared/commitments";
 import type { StrategyIntent } from "../../../shared/strategy-intent";

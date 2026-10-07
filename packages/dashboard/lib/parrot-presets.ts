@@ -1,3 +1,5 @@
+// Cached illustrations used by the Parrot page when demo mode is chosen.
+// Never treat these examples as model output, verification evidence or saved requests.
 import type { StrategyIntent } from "../../shared/strategy-intent";
 import type { ChatResponse, PreviewResponse } from "./parrot";
 

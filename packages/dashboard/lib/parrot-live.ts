@@ -1,7 +1,9 @@
+// Live protocol reducer and browser helpers used by useLiveTalk.
+// Accept only checked strategy results; protocol events never grant trading authority.
 import { isChatResponse, type ChatResponse } from "./parrot";
 
-export type LiveStrategy = Pick<ChatResponse, "ok" | "intent" | "policy" | "shortlist" | "changes" | "context"> & { evidence: NonNullable<ChatResponse["evidence"]> } & { facts: string };
-export type LiveSession = { ok: true; session: { id: string }; transport: { sdp: string }; maxSessionSeconds: number };
+type LiveStrategy = Pick<ChatResponse, "ok" | "intent" | "policy" | "shortlist" | "changes" | "context"> & { evidence: NonNullable<ChatResponse["evidence"]> } & { facts: string };
+type LiveSession = { ok: true; session: { id: string }; transport: { sdp: string }; maxSessionSeconds: number };
 const record = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v);
 const id = (v: unknown): v is string => typeof v === "string" && /^[\w-]{1,256}$/.test(v);
 const bytes = (text: string) => new TextEncoder().encode(text).length;
@@ -12,8 +14,8 @@ export const liveAsChat = (v: LiveStrategy): ChatResponse => ({ ...v, reply: v.i
 export const isLiveStrategy = (v: unknown): v is LiveStrategy => record(v) && record(v.intent) && typeof v.facts === "string" &&
   Array.isArray(v.evidence) && v.facts.length <= 1200 && isChatResponse({ ...v, reply: v.intent.reply, clarify: null, model: "Live voice", latencyMs: 0 });
 
-export type Transcript = { delta: string; startMs: number; endMs: number; speaker: "user" | "parrot" };
-export type ToolCall = { callId: string; responseId: string; delegationId: string; args?: Record<string, unknown>; error?: string };
+type Transcript = { delta: string; startMs: number; endMs: number; speaker: "user" | "parrot" };
+type ToolCall = { callId: string; responseId: string; delegationId: string; args?: Record<string, unknown>; error?: string };
 type Delegation = { id: string; responseId?: string; running: boolean };
 export type LiveEvents = {
   started: boolean; closed: boolean; error: boolean; user: string; parrot: string;
@@ -87,10 +89,10 @@ export function reduceLiveEvent(state: LiveEvents, raw: unknown): LiveEvents {
   return { ...state, seenCalls: [...state.seenCalls, item.call_id], calls: [...state.calls, call] };
 }
 
-export const functionOutput = (callId: string, output: string) => ({
+const functionOutput = (callId: string, output: string) => ({
   type: "response.item.create", event_id: `tool_${callId}`, item: { type: "function_call_output", call_id: callId, output },
 } as const);
-export const continueResponse = (responseId: string) => ({ type: "response.create", event_id: `continue_${responseId}` } as const);
+const continueResponse = (responseId: string) => ({ type: "response.create", event_id: `continue_${responseId}` } as const);
 export const functionResultMessages = (calls: { callId: string; output: string }[], responseId: string) =>
   [...calls.map(c => functionOutput(c.callId, c.output)), continueResponse(responseId)];
 

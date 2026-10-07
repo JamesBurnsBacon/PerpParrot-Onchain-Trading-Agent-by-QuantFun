@@ -1,8 +1,10 @@
+// Intent-model adapter used by the chat handler, with strict output validation.
+// Model prose must never become policy or execution authority.
 import { parseStrategyIntent, STRATEGY_INTENT_JSON_SCHEMA, type StrategyIntent } from "../../../shared/strategy-intent";
 import type { Message } from "./prompt";
 import { MAX_COMPLETION_TOKENS } from "./budget";
 
-export type ModelErrorCode = "timeout" | "http" | "ambiguous" | "refusal" | "truncated" | "invalid_output";
+type ModelErrorCode = "timeout" | "http" | "ambiguous" | "refusal" | "truncated" | "invalid_output";
 export class ModelError extends Error {
   constructor(readonly code: ModelErrorCode) {
     // Only our fixed code crosses the provider error boundary.

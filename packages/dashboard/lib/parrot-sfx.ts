@@ -1,3 +1,5 @@
+// Web Audio synthesis and cleanup used by ParrotEffects and development auditions.
+// Keep gesture, speech and teardown guards; cues never indicate trading success.
 import { canSound, scheduleSfx, type EffectEvent, type SfxCue } from "./wallet-board";
 
 // Instantiated per page. No AudioContext or sound until a user gesture.

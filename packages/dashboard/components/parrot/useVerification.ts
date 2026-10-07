@@ -1,3 +1,5 @@
+// Read-only funnel and paper polling used by VerifyPanel.
+// Fetch backend evidence only; never contact the executor or treat demos as verified.
 import { useEffect, useState } from "react";
 import type { FunnelArtifact } from "../../../shared/dashboard";
 import type { PaperView } from "../../lib/data";

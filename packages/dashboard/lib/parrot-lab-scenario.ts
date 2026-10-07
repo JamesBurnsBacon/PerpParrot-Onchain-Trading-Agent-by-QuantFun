@@ -1,6 +1,8 @@
-// Development-only pure orchestration: the same six moments and reel timing as the product.
+// Development-only mock scenario used by MaterialsLab, reusing product cue timing.
+// The boundary cue is an audition only; this module must not enter production bundles.
 import { findSound, SOUND_CATALOG } from "./parrot-sfx-catalog";
 import { scheduleSfx, type SfxCue } from "./wallet-board";
+// Clamp and Wallet swoosh-in are lab moment labels; their cues remain nope and bubble.
 export const MOMENTS = ["Start", "Wallet swoosh-in", "Wallet out", "Strategy set", "Clamp", "Locked in"] as const;
 export type Moment = typeof MOMENTS[number];
 export type Picks = Record<Moment, string>;

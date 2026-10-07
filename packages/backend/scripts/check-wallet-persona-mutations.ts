@@ -1,3 +1,5 @@
+// Run from root: bun packages/backend/scripts/check-wallet-persona-mutations.ts.
+// Expect RED for each disposable mutation, then GREEN restoration with SHA-256 checks.
 // Offline negative controls run in a disposable copy, safe alongside a dev server.
 // Pure tests only: backend CI deliberately has no React installation.
 import { resolve, dirname } from "node:path";

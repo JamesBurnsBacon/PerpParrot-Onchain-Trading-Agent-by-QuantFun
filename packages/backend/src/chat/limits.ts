@@ -1,3 +1,5 @@
+// Shared chat, preview and Live reservation stores used by the HTTP handlers.
+// Keep rate and budget checks atomic; reservations are not trading approvals.
 import type { SQL } from "bun";
 
 export type LimitConfig = { ipHourly: number; previewIpHourly: number; previewGlobalDaily: number; globalDaily: number; dailyBudgetMicroUsd: number };

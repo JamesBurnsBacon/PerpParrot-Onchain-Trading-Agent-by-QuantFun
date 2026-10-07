@@ -1,3 +1,5 @@
+// Same-origin backend requests and response guards used by Parrot hooks and page.
+// Omit cookies, reject off-origin overrides and never call execution services.
 import { BACKEND } from "../../lib/data";
 import { isApiError, type ApiError } from "../../lib/parrot";
 

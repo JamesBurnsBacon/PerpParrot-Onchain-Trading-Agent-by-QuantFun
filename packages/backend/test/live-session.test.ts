@@ -193,7 +193,7 @@ test("live strategy rejects outer keys and maps feasibility, loader and preview 
 test("live safe, a few wallets keeps the requested maximum of five", async () => {
   const response = await handleLiveStrategy(request({ intent: { ...args, riskStyle: "conservative", maxSources: 5 } }), deps());
   expect(response.status).toBe(200);
-  const body = await response.json() as { policy: { maxSources: number; requiredSources: number; raisedFrom?: number }; shortlist: { addresses: string[] }; facts: string };
+  const body = await response.json() as { policy: { maxSources: number }; shortlist: { addresses: string[] }; facts: string };
   expect(body.policy).not.toHaveProperty("raisedFrom");
   expect(body.policy).not.toHaveProperty("requiredSources");
   expect(body.policy.maxSources).toBe(5);

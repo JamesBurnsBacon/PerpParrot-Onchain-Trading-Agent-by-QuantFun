@@ -1,3 +1,5 @@
+// Response guards and interaction helpers used by Parrot components and hooks.
+// Reject non-simulation previews; display data must never authorize trading.
 import type { LiveContext } from "../../shared/live-context";
 import { isLiveContext } from "./parrot-context";
 import { WALLET_TAGS, isSelectionReason, type WalletEvidence, type WalletChanges } from "../../shared/wallet-evidence";
@@ -13,6 +15,7 @@ export type ChatResponse = {
   intent: StrategyIntent;
   policy: {
     maxSources: number;
+    // Empty arrays are retained for response compatibility; selection never rewrites policy.
     changes: [];
     clamps: [];
   };
@@ -33,7 +36,7 @@ export type PreviewResponse = {
     previewHash: string;
   };
 };
-export const errorCodes = ["disabled", "bad_request", "too_large", "rate_limited", "budget", "model_unavailable", "invalid_model_output", "infeasible", "too_few_sources"] as const;
+const errorCodes = ["disabled", "bad_request", "too_large", "rate_limited", "budget", "model_unavailable", "invalid_model_output", "infeasible", "too_few_sources"] as const;
 export type ApiError = { ok: false; code: typeof errorCodes[number]; reply: string; retryAfterSec?: number };
 
 const record = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -63,12 +66,12 @@ export const isWalletEvidence = (v: unknown): v is WalletEvidence[] => Array.isA
     (e.realizedVol === null || nonnegative(e.realizedVol)) &&
     [e.periodReturn, e.sharpe].every(n => n === undefined || n === null || finite(n)) && Array.isArray(e.tags) && e.tags.length <= 6 &&
     e.tags.every(t => typeof t === "string" && (WALLET_TAGS as readonly string[]).includes(t)));
-export const isWalletChanges = (v: unknown): v is WalletChanges => record(v) && Object.keys(v).length === 2 &&
+const isWalletChanges = (v: unknown): v is WalletChanges => record(v) && Object.keys(v).length === 2 &&
   [v.added, v.removed].every(side => Array.isArray(side) && side.length <= 25 &&
     new Set(side.map(e => record(e) ? e.address : null)).size === side.length && side.every(e => record(e) &&
       Object.keys(e).length === 2 && walletId(e.address) && isSelectionReason(e.reason)));
 
-export type ChatClarification = Pick<ChatResponse, "ok" | "reply" | "intent" | "model" | "latencyMs"> & { clarify: string };
+type ChatClarification = Pick<ChatResponse, "ok" | "reply" | "intent" | "model" | "latencyMs"> & { clarify: string };
 export function isChatClarification(v: unknown): v is ChatClarification {
   return record(v) && v.ok === true && str(v.reply) && str(v.clarify) && isIntent(v.intent) &&
     v.intent.clarify === v.clarify && str(v.model) && nonnegative(v.latencyMs) &&

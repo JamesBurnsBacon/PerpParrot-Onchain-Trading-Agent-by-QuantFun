@@ -1,3 +1,5 @@
+// Preference summary and selected wallets displayed by StepRail.
+// Show the supplied selection; preferences must not be presented as policy changes.
 import { useEffect, useState } from "react";
 import { Panel, StatTile } from "../Charts";
 import { intentChips, type ChatResponse } from "../../lib/parrot";

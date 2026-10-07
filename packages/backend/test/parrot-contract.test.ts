@@ -47,7 +47,7 @@ test("parrot preview preserves every base limit and always simulates", async () 
   const tight = { ...base, maxSourceWeight: .08, cashBuffer: .4000001, maxGrossLeverage: .8,
     maxPairCorrelation: .3, maxExposureOverlap: .2 };
   for (const riskStyle of ["aggressive", "balanced", "conservative"] as const) {
-    const intent: StrategyIntent = { ...intents.clamped, riskStyle, maxSources: 25, requestedLeverage: 100 };
+    const intent: StrategyIntent = { ...intents.requestedLeverage, riskStyle, maxSources: 25, requestedLeverage: 100 };
     const { policy, shortlist: { addresses } } = selectStrategy(intent, tight, data);
     const preview = buildPreview({ intent, basePolicy: tight, addresses });
     expect(preview.policy).toEqual({ ...tight, mode: "SIMULATION" });

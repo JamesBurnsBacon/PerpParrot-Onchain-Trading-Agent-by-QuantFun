@@ -1,8 +1,7 @@
-export type BadgeKind = "LIVE" | "REPLAY" | "PRECOMPUTED" | "SAMPLE DATA" | "CACHED DEMO";
+// Sample and cached-demo labels used by Parrot panels and wallet tiles.
+// Normal operation has no status badge; labels never imply execution authority.
+type BadgeKind = "SAMPLE DATA" | "CACHED DEMO";
 const descriptions: Record<BadgeKind, string> = {
-  LIVE: "Current backend data. This badge does not authorize trading.",
-  REPLAY: "Simulated paper-book history, not account execution or a forecast.",
-  PRECOMPUTED: "A published artifact computed earlier, not a fresh check of this request.",
   "SAMPLE DATA": "Sample wallets, not a current selection from live wallet data.",
   "CACHED DEMO": "Hand-authored illustration. No model call, verification or server save.",
 };

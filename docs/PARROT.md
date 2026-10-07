@@ -1,131 +1,210 @@
-# Talk to the Parrot
+# Parrot: wallet exploration over the existing pipeline
 
-`/parrot` is a voice-first demo page: a visitor talks to an animated clay parrot (OpenAI GPT-Live), and the parrot turns the conversation into a
-**wallet-exploration conversation** that code uses to shortlist wallets and can save as a **pending request**. It sits **outside** the 10-minute trading loop
-and has no trading authority. It is an extra view over the existing pipeline: it reuses Score, the pipeline's tracked accounts and the active configuration, and keeps no selection logic of its own; the pipeline's names (Score fields, `kind`, `sources`) are used as they are, and only the presentation (nicknames, the flock) is Parrot's.
+`/parrot` is a voice-first wallet explorer with an optional text-chat path. It is **an extra view over the existing pipeline**: it reuses tracked Hyperliquid accounts, Score, the shared shortlist contract and read-only book evidence. The Parrot adds presentation—nicknames, bird tiles and explanations—and can save a pending simulation request. It sits outside the ten-minute execution loop and has no trading authority.
 
+```text
+Existing pipeline on our infrastructure:
+Hyperliquid → Score → AI review (Role / Risk / Red-Team) → frozen configuration
+                                                             ↓
+                      snapshots + target exposures → executor → recorded runs / paper books
+                             │                            (separate authority)
+                             └──────── read-only evidence ──────────┐
+Score finalists + active configuration ─────────────────────────────┤
+                                                                   ↓
+Visitor → WebRTC GPT-Live → delegated backend model → set_strategy → Parrot
+          gpt-live-1        gpt-5.6-terra                │            ↓
+                                               POST /live/strategy  shortlist + facts
+Visitor → hold to confirm → POST /chat/preview → PENDING simulation request
+                                                 ↓
+                                     separate operator review and freeze
 ```
-visitor voice ──WebRTC──► GPT-Live (gpt-live-1) ──delegates──► backend model (gpt-5.6-terra)
-                                                                   │ may call ONE tool: set_strategy
-browser ◄── facts + result ◄── POST /live/strategy (our code: validate → shortlist) ◄──┘
-browser ── hold to confirm ──► POST /chat/preview ──► PENDING request (hash). An operator must still review and freeze.
-```
 
-## What it can and cannot do
+Architecture and operations: [README §§4.7, 4.8, 4.14](../README.md), [runbook](ops/RUNBOOK.md), [deployment](ops/DEPLOY.md), [AI review integration](agents/INTEGRATION.md), [verified integration status](agents/PRODUCTION_INTEGRATION.md). Chainlink CRE and its DON are removed; do not reintroduce that architecture.
 
-- **Can:** hear a strategy idea, map it to enums and bounded numbers (`StrategyIntent`), show a wallet shortlist,
-  explain the picks in the parrot's voice, and save a pending request.
-- **Cannot:** place orders, hold keys, freeze or change a frozen configuration, call `/reports`, or read admin tokens. The code under `packages/backend/src/chat`
-  and `src/live` references none of `ADMIN_TOKEN`, `HL_API_WALLET_KEY`, `CRE_API_KEY`.
-- **The model never allocates.** Requested leverage (including 100x) is display/context only: it is never applied, clamped, traded, or written into policy. Every saved preview copies the **base policy unchanged except `mode: "SIMULATION"`**, with `approvalRequired: true`. An operator must review and freeze separately; confirmation creates only a PENDING request. Only code builds the facts the parrot speaks. Visitor text and model prose never enter state or the prompt as facts.
-- **Honest labels.** With Postgres and enough refreshed accounts the finalists are **live**: Score (unchanged) run over `pipeline_accounts`, the accounts the selection pipeline refreshed (read-only, cached 5 minutes, up to 25 finalists). Otherwise (no database, fewer than 30 refreshed accounts, fewer than 5 finalists, or any failure) the **sample data** is used and the page shows the `SAMPLE DATA` badge; `dataSource` in every response says which. Nothing on the page is a forecast.
+## Invariants
 
-## What the Parrot knows
+1. **No trading authority.** No orders, signing keys, administrative credentials, execution endpoints or configuration freeze operations belong in Parrot code. Keep `parrot-no-authority.test.ts` unchanged.
+2. **Confirmation saves only a PENDING request.** Every saved preview has `approvalRequired: true` and the base policy unchanged except `mode: "SIMULATION"`. Requested leverage never enters that policy. Only separate operator review and freeze can lead to execution.
+3. **Code owns selection and facts.** Validate the shared `StrategyIntent`; treat model prose and visitor text as untrusted data. Never change Score, frozen policy or allocation rules through a prompt, nickname, vibe or retrieved context.
+4. **The server owns the voice session.** The browser data channel permits exactly `response.item.create`, `response.create`, `session.close`; it cannot replace prompts, tools, models or delegation.
+5. **Keep controls intact.** `CHAT_ENABLED` and `LIVE_ENABLED` default off and are independent. Preserve rate limits, reservations, shared daily budget, microphone teardown, response guards and speech suppression of sound effects.
+6. **Keep development materials out of production.** Preserve the `NODE_ENV`-guarded dynamic imports and the `/parrot/lab` `outputFileTracingExcludes` entry in `next.config.ts`.
 
-The Parrot can state the wallet list and its code-built evidence (Score rank and risk metrics,
-plus period return and Sharpe when available for live finalists), how many selected wallets
-are already in the active live book, the existing copy paper books' returns over their available
-points in the last 30 days, and the live book's gross and top three exposures from its last stepped
-snapshot targets. Paper returns belong to those existing books, never to the new shortlist;
-snapshot targets are not a fresh measurement of executed positions. These are all read-only,
-code-built facts, and nothing is a forecast. Missing or slow reads are omitted independently.
-A question about the live book, paper performance or comparison refreshes the same preferences.
-One muted line beneath the flock summarizes available context; it remains plain text in Calm mode.
-Sample/demo fixtures have no context or extra return/Sharpe details. Saved previews stay SIMULATION.
+### Instructions for agents editing this feature
 
-## Strategy contract
+Read root `AGENTS.md` and `packages/dashboard/AGENTS.md` first. Check current source and tests rather than older PRs or memory. Keep changes behavior-preserving unless a feature change is explicitly requested; preserve sound mapping, persona text and HTTP shapes. Do not add dependencies.
 
-`packages/shared/strategy-intent.ts` is the team's single source for `StrategyIntent`, validation and `shortlist`. `packages/backend/src/strategy-intent-adapter.ts` maps real Score outputs to that contract; Parrot does not alter either module and does not call the shared tightening compiler `intentToPreview`. The strict `set_strategy` schema remains unchanged. Diversification and leverage comfort use `low | medium | high`.
+These files belong to other workstreams: `packages/shared/strategy-intent.ts`, `packages/backend/src/strategy-intent-adapter.ts`, `packages/backend/test/strategy-intent.test.ts`, `packages/backend/scripts/review-input.ts`, backend `src/pipeline/*`, `src/paper/*`, `src/score/*`, `packages/executor/**`, `.github/workflows/*`, root `AGENTS.md`, root `README.md`, and `vercel.json`. Read them to understand integration; do not edit them for a Parrot cleanup.
 
-The policy summary is `{ changes: [], clamps: [], maxSources }`. N is exactly the visitor's source limit (5–25); there is no feasibility lift or automatic source-count raising. The shortlist contains up to N eligible wallets: aggressive uses top Score, balanced uses the lowest maxDrawdown in the top-2N Score window, and conservative uses the widened window described below then lowest realizedVol. The clone filter still applies. Only style, source limit and clone filter shape these picks. Diversification, leverage comfort, horizon and requested leverage are noted as context only.
+Run both packages' type checks and tests, then the dashboard webpack build and production marker scan below. For selection, context or scheduler refactors, also run the relevant mutation script. Use local tools for offline work; do not install packages or run provider evaluations without network authorization. Make small English commits when Git permissions allow.
 
-Text-chat clarification returns reply, clarify, intent, model and latency, without policy or shortlist. Every saved PENDING preview contains the base policy in SIMULATION mode and `approvalRequired: true`, rounds cash up to millionths, and has exact integer allocation totals. The base runtime policy validator and allocation checks still apply: a preview that cannot fit the base allocation is rejected with HTTP 422, without rewriting policy or raising N. The deterministic hash retains the `perpparrot:parrot-preview:v1` domain and binds the structured intent, base simulation policy and allocation; it never grants execution authority. The live freeze validators remain unchanged and do not accept a simulation preview as a live configuration.
+## Visitor preferences and available facts
 
-Code-built facts say `Requested leverage: Nx (preview only; nothing is applied or traded).` when leverage is provided, and always distinguish the variables used for picking wallets from those noted only.
+The seven intent variables come from `packages/shared/strategy-intent.ts`; `reply` and `clarify` are conversation fields, not additional selection variables.
 
-## Endpoints
-
-| Route | Purpose | Switch |
+| Variable | Values | Effect |
 | --- | --- | --- |
-| `POST /live/session` | Exchange the browser's SDP for a GPT-Live session. The session config (model, voice, prompts, tools, delegation) is **server-owned**; the body is `{sdp}` only | `LIVE_ENABLED=true` |
-| `POST /live/strategy` | Body `{ intent, previous? }`: optional `previous` is up to 25 distinct known finalist ids. Unknown keys/ids are rejected. Validate, shortlist, return code-built facts. No model call | `LIVE_ENABLED=true` |
-| `POST /chat`, `POST /chat/preview` | Text intent extraction (strict JSON schema) and the pending-request preview | `CHAT_ENABLED=true` |
+| `riskStyle` | `aggressive`, `balanced`, `conservative` | Changes wallet ordering/window |
+| `maxSources` | Integer 5–25 | Requested maximum N; never automatically increased |
+| `avoidClones` | Boolean | Excludes clone or unknown clone status when true |
+| `diversification` | `low`, `medium`, `high` | Noted only |
+| `leverageComfort` | `low`, `medium`, `high` | Noted only |
+| `horizon` | `short`, `medium` | Noted only |
+| `requestedLeverage` | `null` or number >0 and ≤1000 | Display/context only, including requests such as 100x |
 
-Both switches are **off by default** and independent. Turn Live on only for recording and judging.
-Run migrations in order: `20261006140000_chat.sql`, then `20261007000000_live_usage.sql`.
+Aggressive uses top Score; balanced uses lowest maxDrawdown in the top-2N Score window. Conservative calls the shared shortlist with `M = min(25, ceil(1.2 × N))`, uses its top-2M window and lowest realizedVol ordering, then retains at most N. Eligibility and clone filters still apply. Parrot never calls the shared policy-tightening compiler `intentToPreview`.
 
-## Environment
+The response policy summary remains `{ changes: [], clamps: [], maxSources }`. The empty arrays are retained for wire compatibility, not policy adjustments. Saved previews use the same selector, round cash upward to millionths and require exact integer allocation totals. Infeasible base-policy allocations return HTTP 422; the service does not rewrite policy or increase N. The deterministic `perpparrot:parrot-preview:v1` hash binds the structured intent, simulation policy and allocation; it grants no authority. Clarification responses contain no policy or shortlist and do not load candidates.
 
-Reused: `OPENAI_API_KEY`, `CHAT_IP_SALT`, `CHAT_DAILY_BUDGET_USD` (default 5, shared by chat and Live), `CHAT_PREVIEW_IP_HOURLY_LIMIT`.
-Chat: `CHAT_MODEL` (gpt-5.4-mini), `CHAT_IP_HOURLY_LIMIT` (10), `CHAT_GLOBAL_DAILY_LIMIT` (100), `CHAT_PREVIEW_GLOBAL_DAILY_LIMIT` (500; invalid values use default), `CHAT_PRICE_IN_PER_M_USD` (1), `CHAT_PRICE_OUT_PER_M_USD` (4).
-
-| Live variable | Default |
+| What the Parrot can explain | Source and limits |
 | --- | --- |
-| `LIVE_ENABLED` | off (only the literal `true` enables it) |
+| Shortlist and changes | Selected addresses, stable nicknames, original Score rank, rounded drawdown/volatility, code-owned tags and membership reasons |
+| Score period return / Sharpe | Optional finite metrics from live finalists; not forecasts or annualised volatility |
+| Live-book comparison | Unique, case-insensitive overlap with active configuration sources |
+| Paper performance | Up to three existing copy books, first-to-last available points within the last 30 days; never performance of the new shortlist |
+| Live-book exposures | Gross and top three absolute exposures from the last stepped snapshot targets; not a fresh measurement of executed positions |
+
+Live questions about comparison, paper performance or the live book refresh facts using the same preferences. Facts retain the no-orders/operator-review statement, mention at most three added and three removed wallets and fit within 1200 characters; context is appended only if it fits. The board displays available context as a muted line, including in Calm mode. React renders text as text; no live transcript is shown.
+
+## Data, caches and fallbacks
+
+| Read | Current behavior |
+| --- | --- |
+| Finalist pool | `server.ts` reads `pipeline_accounts` rows whose `listed_at` is within ten minutes of the latest stored listing. `chat/finalists.ts` runs unchanged `scoreCandidates`, then the team's `mapScoreFinalists` (up to 25), with clone status from Score. This is stored pipeline data, not a fresh Hyperliquid fetch on each conversation. |
+| Finalist cache | Process-local five-minute cache, including fallback results; concurrent callers share one in-flight computation. |
+| Sample fallback | No database, fewer than 30 rows with portfolios, fewer than five mapped finalists, or a read/Score failure uses the labelled bundled sample. Malformed individual portfolios are skipped. |
+| Preview base policy | `configurations.load` uses the same configuration source as snapshots. Chat dependencies retain the validated policy after a successful load; failed loads can retry. |
+| Comparison | Independently loads active configuration source addresses on each context request. |
+| Paper | `paperStore.points(nowSeconds - 30 days)`; only default copy books with at least two usable points and positive initial equity. |
+| Exposures | `paper.view(...).lastRunAt` identifies the last stepped run; the stored snapshot yields targets via `exposuresFromSnapshot`. Cache is keyed by that run timestamp. No snapshot is generated here. |
+| Context failure | Three parallel reads, each with a two-second deadline; unavailable parts are independently omitted and logs contain only the part name. Context never enters previews. |
+| Verify panel | Read-only `/artifacts/funnel` and `/paper` requests every minute while enabled; cached demos supply no verification evidence. |
+
+Only **SAMPLE DATA** and **CACHED DEMO** are badges. Normal live data, paper replay and published artifacts have no badges. `shortlist.dataSource` still identifies `live` or `sample` in responses. Cached demo is an explicit browser fallback for disabled/unavailable/network conditions, with hand-authored examples and no server save. Backend sample fallback can coexist with available read-only book context; bundled sample and cached-demo fixtures themselves contain no context or extra return/Sharpe evidence.
+
+The sample contains 40 deterministic synthetic rows: 36 generated equity paths (including eight clone copies) processed by Score and four exclusion controls. Seed 20261006 generates fake addresses from SHA-256(seed:index). The generated identity registry keeps all sample nicknames stable and unique; the six cached-demo identities are also stable and unique. Arbitrary live ids use a finite hash-name vocabulary and may collide.
+
+Vibes are presentation only. Calm requires drawdown <3% **and** native, non-annualised realizedVol <1.5%; Wild requires drawdown ≥8% **or** realizedVol ≥3%; otherwise Steady. Missing or invalid either metric is neutral Steady. `VIBE_THRESHOLDS` also supplies evidence-tag thresholds. Measurements of sample membership changes are in [Wallet board verification](WALLET-BOARD-VERIFICATION.md).
+
+## Endpoints and configuration
+
+Local backend paths below are served under `/api/backend` on Vercel. Browser requests stay on the same origin and omit cookies.
+
+| Endpoint | Input → result | Switch |
+| --- | --- | --- |
+| `POST /live/session` | `{sdp}` only → server-created session id, answer SDP, browser countdown; no client config forwarding | `LIVE_ENABLED=true` plus API key |
+| `POST /live/strategy` | `{intent, previous?}` → checked shortlist, evidence, changes, facts and optional context; no model call | `LIVE_ENABLED=true` |
+| `POST /chat` | `{message, history?}` → strict model intent and selection, or clarification without selection | `CHAT_ENABLED=true` plus API key |
+| `POST /chat/preview` | `{intent}` → saved pending request id and simulation preview | `CHAT_ENABLED=true` |
+
+`previous` accepts up to 25 distinct known finalist ids; unknown ids/keys are rejected. The shared preview limiter also covers `/live/strategy`. Rate/budget rejections return 429 with `retryAfterSec`. Only a definite provider 4xx releases the reservation; 5xx, timeouts and unusable bodies retain it. Provider bodies and keys never reach the browser.
+
+| Environment variable | Default / purpose |
+| --- | --- |
+| `OPENAI_API_KEY` | Server-only key for text intent extraction and voice sessions |
+| `CHAT_ENABLED` / `LIVE_ENABLED` | Off; only literal `true` enables each |
+| `CHAT_MODEL` | `gpt-5.4-mini` |
+| `CHAT_IP_SALT` | `perpparrot-chat-v1`; hashes client IP for limiter storage |
+| `CHAT_DAILY_BUDGET_USD` | 5; shared chat/Live reservation budget |
+| `CHAT_IP_HOURLY_LIMIT` / `CHAT_GLOBAL_DAILY_LIMIT` | 10 / 100 |
+| `CHAT_PREVIEW_IP_HOURLY_LIMIT` / `CHAT_PREVIEW_GLOBAL_DAILY_LIMIT` | 30 / 500 |
+| `CHAT_PRICE_IN_PER_M_USD` / `CHAT_PRICE_OUT_PER_M_USD` | 1 / 4; reservation estimates |
 | `LIVE_MODEL` / `LIVE_BACKEND_MODEL` | `gpt-live-1` / `gpt-5.6-terra` |
-| `LIVE_VOICE` | `gleam` (any built-in voice name) |
-| `LIVE_BACKEND_REASONING` | `medium` |
-| `LIVE_MAX_SESSION_SECONDS` | 180 (browser countdown; 1–900) |
+| `LIVE_VOICE` / `LIVE_BACKEND_REASONING` | `gleam` / `medium` |
+| `LIVE_MAX_SESSION_SECONDS` | 180; integer 1–900, browser countdown only |
 | `LIVE_IP_HOURLY_LIMIT` / `LIVE_GLOBAL_DAILY_LIMIT` | 3 / 30 sessions |
-| `LIVE_VOICE_PRICE_PER_MIN_USD` / `LIVE_BACKEND_ALLOWANCE_USD` | 0.05 / 0.15 (reservation per session) |
+| `LIVE_VOICE_PRICE_PER_MIN_USD` / `LIVE_BACKEND_ALLOWANCE_USD` | 0.05 / 0.15; per-minute estimate plus per-session allowance |
 
-Invalid optional values fall back to the defaults and never block startup. On Vercel the key and switches must be added by someone with team access
-(interactive masked prompt, after confirming the project and environment scope); they are not read from GitHub Actions secrets.
+Invalid optional numeric settings fall back to defaults. Session reservations use at least 15 seconds plus the backend allowance. Database configuration and frozen-configuration loading follow the runbook. Apply migrations `20261006140000_chat.sql`, then `20261007000000_live_usage.sql`; without a database, request/limiter stores are in-memory and do not provide durable or cross-instance state.
 
-## Safety controls
+### Run locally
 
-- **The browser is untrusted.** The session is created with `client.data_channel.allowed_client_events = [response.item.create, response.create, session.close]`;
-  verified against the real API: `session.update` and `session.*.append` from the data channel return `event_not_allowed`. The browser cannot change the model, prompts, tools or delegation.
-- Per-IP hourly and global daily session limits, a reserved cost per session against a shared daily budget (Postgres advisory-lock limiter), 429 with `retryAfterSec`.
-  A definite 4xx from OpenAI releases the cost; 5xx, timeouts and invalid bodies keep it. Upstream bodies are never echoed to clients; the key never reaches the browser.
-- The microphone is closed on End, on Cancel while connecting, on tab hidden, on error and when the countdown ends. If a strategy update is unfinished when the call ends,
-  the page clears the plan instead of leaving a stale, confirmable one.
-- Text from the model or transcripts is rendered only as React text; the page shows no live transcript.
+Backend, from `packages/backend` (memory stores and labelled sample; no database required):
 
-## Residual risks (known, accepted for a time-boxed demo)
-
-1. **Call duration is enforced by the browser only.** The API offers no server-side duration setting; the platform has its own limit (`expired`). A modified client can keep a session
-   longer than 180 s. Mitigations: Live is off except during recording/judging, session counts are capped, and **set a spend limit on the OpenAI key**.
-2. **Backend-model cost per session is not capped.** A modified client can ask for many strategy changes in one call. Each is a short model call, comparable to the voice cost per minute; the key's spend limit is the backstop.
-3. **Client IP.** Limits key on the first `x-forwarded-for` value. On Vercel the platform sets it; behind any other ingress, verify it cannot be spoofed before enabling Live publicly.
-
-## Run locally
-
-Backend (from `packages/backend`, memory stores, no database needed):
-
-```
-CONFIGURATION_PATH=fixtures/frozen-configuration.json FROZEN_CONFIGURATION_HASH=<configurationHash of that file> \
-CHAT_ENABLED=true LIVE_ENABLED=true OPENAI_API_KEY=… PORT=8788 bun run src/server.ts
+```sh
+CONFIGURATION_PATH=fixtures/frozen-configuration.json \
+FROZEN_CONFIGURATION_HASH=<configurationHash from that file> \
+CHAT_ENABLED=true LIVE_ENABLED=true OPENAI_API_KEY=<local secret> \
+PORT=8788 bun run src/server.ts
 ```
 
-Dashboard (from `packages/dashboard`): `bun run dev` (its dev rewrite sends `/api/backend` to `localhost:8788`). Open `/parrot` in Chrome and allow the microphone.
+Dashboard, from `packages/dashboard`: `bun run dev`, then open `http://localhost:3000/parrot`. The development rewrite points `/api/backend` to port 8788. Real voice/text calls require provider access; offline inspection can use cached demo or the labs. Allow microphone access in the browser for voice testing. End, cancellation, hidden tab, errors and countdown expiry close media; unfinished strategy updates clear the confirmable plan.
 
-## Offline contract migration (2026-10-07)
+Deployment uses the existing Vercel project and service routing. Someone with Vercel team access must add `OPENAI_API_KEY` and the desired switches to the correct project/environment; GitHub Actions secrets are not automatically Vercel environment variables. Keep Live disabled outside the intended demo window. No deployment is implied by an offline build.
 
-The recorded Live event fixture is a protocol replay adapted from the earlier recording: its enum spelling is migrated to `medium`. This is not a new real-provider verification. The real-model evaluation script imports the team schema; Claude will rerun it, Postgres tests and Linux checks separately. No network was used for this migration.
+### Verify offline
 
-## Earlier verification record (2026-10-06)
+With existing local dependencies (no installation/network required):
 
-- Real API, text-driven through the real WebRTC protocol: session creation (201), delegated `set_strategy` call and spoken explanation grounded in the then-current facts (the earlier recording does not verify today's wallet-exploration behavior),
-  `event_not_allowed` for browser reconfiguration, 429 after the per-IP limit, normal and requested close with usage.
-- Offline: backend suite against a real Postgres 16 (701 tests), recorded real GPT-Live events replayed through the event reducer, mutation controls for the limiter, kill switch, body validation and config forwarding.
-- **Not verified:** live microphone calls and voice quality in a browser, a deployment on Vercel, and the default Turbopack build (the webpack build passes).
+```sh
+(cd packages/backend && bunx --no-install tsc --noEmit && bun test)
+(cd packages/dashboard && bunx --no-install tsc --noEmit && bun test && NEXT_TELEMETRY_DISABLED=1 bun run build --webpack)
+# Expected: no matches (rg exit status 1). Do not ignore an rg error.
+rg -l 'Copy my picks|Run scenario|parrot-sfx-catalog|PARROT_MATERIALS_RECIPES_DEV_ONLY_V1|lab-safe' \
+  packages/dashboard/.next/static packages/dashboard/.next/server
+bun packages/backend/scripts/check-wallet-board-mutations.ts
+bun packages/backend/scripts/live-context-mutations.ts
+```
 
-## Wallet board
+Mutation scripts must report GREEN baseline, assertion failures for each intentional RED mutation, then GREEN restoration and matching SHA-256 hashes. They edit disposable copies only. Database tests skip without `TEST_DATABASE_URL`; provider evaluation scripts are separate, networked checks.
 
-The wallet board uses 40 deterministic synthetic finalists. Their fake `0x` + 40 hex addresses are SHA-256(seed:index) prefixes, generated with seed 20261006 by `scripts/make-sample-finalists.ts`; no venue accounts are fetched. Cards show shortened ids such as `0x1234...abcd` beside nicknames. The generated shared id registry keeps nickname collision resolution independent of the current selection. Evidence includes original Score rank, rounded risk metrics and fixed code tags; `changes` explains membership against `previous`. Spoken facts include at most three wallets per side, stay within 1200 characters and retain the no-orders statement. Conservative selection calls the team shortlist with `M = min(25, ceil(1.2 * N))`, an intent maximum of M, then takes N; the team function uses its fixed top-2M score window. Other styles call it directly with N; Score is unchanged, and pending previews use the same selector. Reels, feathers and sound celebrate strategy selection or a pending request, never gains. SAMPLE DATA stays visible; Calm/reduced motion keep static states, and visitor speech suppresses effects.
+## File map
 
-“The Flock” shows three bird tiles per row: an inline clay bird, a deterministic nickname, a muted wallet id and one three-zone meter. Tap or keyboard-activate a tile to expand its original Score rank, exact supplied risk metrics, server tags and change reason. NEW! and Bye! stickers mark additions and ~2.5-second removal ghosts; kept birds do not roll again. The initial/connecting board says “Waiting for birds...”.
+Paths below are relative to the repository root; wildcard entries group files with one responsibility.
 
-`packages/shared/wallet-persona.ts` is presentation-only and has no backend/dashboard imports. It supplies the same nickname to cards and spoken added/removed facts. Hash collisions are resolved over the fixed 40-id sample universe, keeping all sample names unique and stable across selection changes; the six cached-demo identities are similarly stable and unique. Arbitrary future ids use a stable hash fallback and can collide with the finite name vocabulary. Evidence uses Score’s native non-annualised `realizedVol`. Vibe uses fractional evidence: Calm requires drawdown <15% AND realized volatility <45%; Wild requires drawdown ≥30% OR volatility ≥80%; otherwise Steady. Missing/invalid either metric is neutral Steady. These buckets have no policy, Score or trading authority.
+| Area | Path | Responsibility |
+| --- | --- | --- |
+| Backend wiring (read for integration) | `packages/backend/src/server.ts` | Routes, environment, configuration policy and named read-only data dependencies |
+| Chat | `packages/backend/src/chat/handler.ts` | Intent extraction, limiter use and pending-request persistence |
+| Chat model / limits | `packages/backend/src/chat/{prompt,openai,budget,limits}.ts` | Prompt/schema boundary, provider adapter and atomic reservations |
+| Finalists | `packages/backend/src/chat/finalists.ts` | Score stored pipeline accounts; cache or fall back to sample |
+| Selection / preview | `packages/backend/src/chat/{strategy,preview}.ts` | Shared shortlist projection, evidence/reasons, simulation allocations and hash |
+| Live | `packages/backend/src/live/{config,handler}.ts` | Server-owned WebRTC session and code-built strategy response |
+| Context | `packages/backend/src/live/context.ts` | Independent comparison, paper and exposure summaries |
+| Shared presentation | `packages/shared/wallet-persona.ts` | Stable nicknames and cosmetic vibe thresholds |
+| Shared evidence | `packages/shared/wallet-evidence.ts` | Display evidence and closed reason vocabulary |
+| Shared context | `packages/shared/live-context.ts` | Read-only context wire shape |
+| Shared sample | `packages/shared/sample-wallet-ids.ts` | Generated synthetic nickname collision registry |
+| Dashboard page | `packages/dashboard/app/parrot/{page.tsx,parrot.css}` | Conversation, selection state, demo fallback and page styling |
+| Dashboard interaction | `packages/dashboard/components/parrot/{useLiveTalk,LiveTalk,ParrotAvatar,api}.tsx` or `.ts` | Voice lifecycle, checked same-origin requests and call UI |
+| Dashboard review | `packages/dashboard/components/parrot/{StepRail,SelectPanel,VerifyPanel,ExecutePanel,HoldButton,useVerification}.*` | Selection, existing evidence and pending-request confirmation |
+| Dashboard presentation | `packages/dashboard/components/parrot/{WalletBoard,WalletBird,ParrotEffects,Badge,ThemeToggle}.tsx` | Tiles, ghosts, sound/motion controls, two fallback badges and theme |
+| Dashboard contracts | `packages/dashboard/lib/{parrot,parrot-live,parrot-context,parrot-presets}.ts` | Guards, event reducer, context line and cached examples |
+| Dashboard effects | `packages/dashboard/lib/{wallet-board,parrot-sfx}.ts` | Pure diffs/schedules and Web Audio synthesis/cleanup |
+| Development labs | `packages/dashboard/app/parrot/lab/*`, `components/parrot/EffectsLab.tsx`, `lib/parrot-lab-*.ts`, `lib/parrot-sfx-catalog.ts` (dashboard) | Local auditions, scenario, fixtures and alternative recipes |
+| Backend contract tests | `packages/backend/test/{chat-*,parrot-contract,parrot-policy-source,parrot-no-authority}.test.ts` | Request validation, preview invariants, shared ownership and source scan |
+| Backend Live tests | `packages/backend/test/{live-*,parrot-live-*}.test.ts` | Config, provider mock/replay, reducer and independent context failures |
+| Backend wallet/UI helper tests | `packages/backend/test/{wallet-*,parrot-ui-helpers,parrot-hold-review}.test.ts` | Selection/evidence, vibe boundaries, pure effects and confirmation guards |
+| Dashboard tests | `packages/dashboard/test/*` | Rendered labels/controls, protocol guards, materials timing and mocked audio cleanup |
+| Synthetic data / measurements | `packages/backend/scripts/{make-sample-finalists,measure-wallet-board}.ts` | Regenerate sample and print pairwise membership turnover |
+| Disposable mutation checks | `packages/backend/scripts/{live-mutations,live-context-mutations,check-wallet-board-mutations,check-wallet-persona-mutations}.ts` | Named RED/GREEN controls; not discovered by `bun test` |
+| Provider evaluation (networked) | `packages/backend/scripts/eval-chat-prompt.ts` | Real-model extraction checks; not part of offline verification |
 
-Offline implementation evidence and full pairwise measurements: [Wallet board verification](WALLET-BOARD-VERIFICATION.md).
+## Development-only labs
 
-Materials lab: `/parrot/lab`, development only. Unlock audio, audition sounds, and run a mock scenario.
-Copy picks as plain text; selections stay in component state only. Synthetic flock swaps reuse the real tiles, stickers and Fever effects.
-Calm / Sound controls apply here; reduced motion is respected. This page makes no backend or OpenAI calls.
-Production returns 404 and webpack excludes the lab client, fixtures and extra recipes. Sound quality and visual appearance still need human audition.
+- **Materials:** open `/parrot/lab` under `bun run dev`. Unlock audio, audition catalog entries, choose sounds for a mock scenario, copy picks as text and swap synthetic flocks. Picks live only in component state; there are no backend or OpenAI calls.
+- **Effects:** open `/parrot?fx=1` in development for preset swaps, banners and individual sound auditions in the product layout. The boundary cue/banner is retained for lab use; it does not mean product policy is adjusted.
+- **Production:** `/parrot/lab` returns 404. `/parrot?fx=1` remains the ordinary product page with no lab overlay. Both dynamic imports remain behind `NODE_ENV` guards; file tracing separately excludes the raw lab client.
 
-## Live finalists (2026-10-07)
+Production sound mapping stays whistle (start), bubble (arrival), pop (removal), ticks then metallic sprinkle (reels), and ta-da (pending request). The `clamp` event maps to the lab's soft nope. `Fever` names the existing visual banner; it is not an additional sound cue. Reels and feathers celebrate selection or pending requests, never returns. Speech suppresses sound, removed tiles last about 2.5 seconds, and Calm/reduced motion retain static states. Product Sound/Calm buttons are currently hidden; defaults are sound on/Calm off, with `?sound=0` and `?calm=1` overrides. Labs expose audition controls.
 
-`src/chat/finalists.ts` `createFinalistsSource` reads the pipeline's tracked accounts, runs `scoreCandidates` and maps the result with the team's `mapScoreFinalists`; clone status comes from Score itself. It never writes to the pipeline tables or touches the active configuration, and chat previews still use the pinned configuration's policy. Vibe thresholds (`VIBE_THRESHOLDS`) were calibrated to the sample data and have **not** been checked against a real Score distribution yet.
+## Verification record
+
+| Date | Verified and how | Not established |
+| --- | --- | --- |
+| 2026-10-06 | Prior real-provider text-driven WebRTC recording: session creation, delegated tool, blocked reconfiguration, limiter and close events | Current exploration behavior, real browser microphone/voice or deployment |
+| 2026-10-07 | Offline refactor: backend 659 pass / 20 skip, dashboard 65 pass; both TypeScript checks, webpack build, production marker scan and disposable scheduler/context RED/GREEN with SHA-256 restoration | Database tests, provider rerun, live Hyperliquid distribution, deployment, audio or visual acceptance |
+
+The recorded protocol fixture is a replay with enum spelling adapted to the shared contract, not a new provider recording. [Wallet board verification](WALLET-BOARD-VERIFICATION.md) preserves the synthetic swap measurements.
+
+## Residual risks and unverified items
+
+| Item | Boundary / remaining check |
+| --- | --- |
+| Session duration | Browser-only countdown; a modified client can stay connected longer. Session counts and reservations do not impose a server-side duration cap. |
+| Backend-model cost | Per-session cost is uncapped; repeated delegated calls can exceed the allowance. Provider spend controls are an operational backstop. |
+| Client IP trust | Limiter uses the first `x-forwarded-for` value. Verify the deployment ingress overwrites untrusted values before enabling public access. |
+| Vibe calibration | Thresholds are calibrated to synthetic data, not a real Score distribution. |
+| Live data | Real Hyperliquid finalists/context have not been observed in this offline verification. Stored-data freshness and finite nickname collisions need live inspection. |
+| Browser acceptance | Real microphone, voice quality, sound, animation, layout, focus, screen-reader behavior and photosensitivity remain unverified. Mock audio/render tests cannot hear or see. |
+| Infrastructure | Postgres tests skip without `TEST_DATABASE_URL`; Linux, Vercel deployment and default Turbopack build were not verified here. |

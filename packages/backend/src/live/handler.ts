@@ -1,3 +1,5 @@
+// Voice session exchange and code-built strategy facts called by the backend server.
+// Validate browser inputs and keep context read-only; never authorize execution.
 import { appendContextFacts, buildLiveContext, type LiveContextDeps } from "./context";
 import { parseStrategyIntent, type StrategyIntent } from "../../../shared/strategy-intent";
 import { walletNickname } from "../../../shared/wallet-persona";

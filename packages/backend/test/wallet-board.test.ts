@@ -41,8 +41,8 @@ test("selection reasons describe actual pipeline exclusions and additions", asyn
 });
 test("facts preserve policy and safety, cap each side at three and total at 1200", async () => {
   const data = await loadFinalists();
-  const selection = { ...strategy.selectStrategy(intents.clamped, base, data), ...strategy.explainSelection(intents.clamped, base, data, data.finalists.slice(15, 40).map(f => f.address)) };
-  const facts = strategyFacts(intents.clamped, selection);
+  const selection = { ...strategy.selectStrategy(intents.requestedLeverage, base, data), ...strategy.explainSelection(intents.requestedLeverage, base, data, data.finalists.slice(15, 40).map(f => f.address)) };
+  const facts = strategyFacts(intents.requestedLeverage, selection);
   expect(facts).toContain("Added "); expect(facts).toContain("Removed ");
   for (const side of ["Added", "Removed"]) expect((facts.split(side)[1].split(".")[0].match(/\(0x[0-9a-f]{40}\)/g) ?? []).length).toBeLessThanOrEqual(3);
   for (const side of ["added", "removed"] as const) {
