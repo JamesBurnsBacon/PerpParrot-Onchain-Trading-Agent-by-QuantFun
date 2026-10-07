@@ -103,3 +103,8 @@ The wallet board uses 40 deterministic synthetic finalists. Their fake `0x` + 40
 `packages/shared/wallet-persona.ts` is presentation-only and has no backend/dashboard imports. It supplies the same nickname to cards and spoken added/removed facts. Hash collisions are resolved over the fixed 40-id sample universe, keeping all sample names unique and stable across selection changes; the six cached-demo identities are similarly stable and unique. Arbitrary future ids use a stable hash fallback and can collide with the finite name vocabulary. Evidence uses Score’s native non-annualised `realizedVol`. Vibe uses fractional evidence: Calm requires drawdown <15% AND realized volatility <45%; Wild requires drawdown ≥30% OR volatility ≥80%; otherwise Steady. Missing/invalid either metric is neutral Steady. These buckets have no policy, Score or trading authority.
 
 Offline implementation evidence and full pairwise measurements: [Wallet board verification](WALLET-BOARD-VERIFICATION.md).
+
+Materials lab: `/parrot/lab`, development only. Unlock audio, audition sounds, and run a mock scenario.
+Copy picks as plain text; selections stay in component state only. Synthetic flock swaps reuse the real tiles, stickers and Fever effects.
+Calm / Sound controls apply here; reduced motion is respected. This page makes no backend or OpenAI calls.
+Production returns 404 and webpack excludes the lab client, fixtures and extra recipes. Sound quality and visual appearance still need human audition.

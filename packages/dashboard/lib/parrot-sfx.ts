@@ -43,7 +43,7 @@ export class ParrotSfx {
   }
   private tone(at: number, duration: number, from: number, to: number, type: OscillatorType = "sine", volume = .22, fm = false) {
     const ctx = this.context, master = this.master;
-    if (!ctx || !master) return;
+    if (!ctx || !master || !this.enabled || ctx.state !== "running" || this.voices.size + (fm ? 2 : 1) > 192) return;
     const osc = ctx.createOscillator(), gain = ctx.createGain();
     osc.type = type; osc.frequency.setValueAtTime(from, at); osc.frequency.exponentialRampToValueAtTime(Math.max(20, to), at + duration);
     gain.gain.setValueAtTime(0, at); gain.gain.linearRampToValueAtTime(volume, at + .012); gain.gain.exponentialRampToValueAtTime(.001, at + duration);
@@ -56,7 +56,7 @@ export class ParrotSfx {
   // Filtered noise burst: cymbal crash, whoosh, cracks and coin shimmer.
   private noise(at: number, duration: number, kind: BiquadFilterType, from: number, to: number, volume: number) {
     const ctx = this.context, master = this.master;
-    if (!ctx || !master) return;
+    if (!ctx || !master || !this.enabled || ctx.state !== "running" || this.voices.size >= 192) return;
     if (!this.noiseBuffer) {
       this.noiseBuffer = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * 1.2), ctx.sampleRate);
       const data = this.noiseBuffer.getChannelData(0);
@@ -91,6 +91,11 @@ export class ParrotSfx {
     this.noise(at, decay, "highpass", 5500, 3300, .38 * volume); this.noise(at, decay * .65, "bandpass", 8200, 6200, .2 * volume);
     [2130, 3290, 4870].forEach(f => this.tone(at, .35, f, f * .98, "square", .025 * volume));
   }
+  // Small bound surface for the dev catalog; all sources retain the same limiter and cancellation.
+  kit() {
+    return { now: () => this.context?.currentTime ?? 0, tone: this.tone.bind(this), noise: this.noise.bind(this),
+      applause: this.applause.bind(this), cracker: this.cracker.bind(this), cymbal: this.cymbal.bind(this), cue: this.synth.bind(this) };
+  }
   // Play one building block on its own (used by the development-only effects lab).
   solo(name: "cracker" | "cymbal" | "applause") {
     if (!this.context || !this.master || this.context.state !== "running") return;
@@ -115,3 +120,5 @@ export class ParrotSfx {
   cancel() { for (const timer of this.timers) clearTimeout(timer); this.timers.clear(); for (const voice of this.voices) { try { voice.stop(); } catch {} } this.voices.clear(); }
   dispose() { this.cancel(); this.master?.disconnect(); this.master = null; this.limiter?.disconnect(); this.limiter = null; this.noiseBuffer = null; void this.context?.close().catch(() => {}); this.context = null; }
 }
+
+export type ParrotSoundKit = ReturnType<ParrotSfx["kit"]>;

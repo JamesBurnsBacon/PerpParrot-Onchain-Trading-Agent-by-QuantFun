@@ -1,19 +1,8 @@
-import { expect, mock, test } from "bun:test";
+import { expect, test } from "bun:test";
 import { ParrotSfx } from "../lib/parrot-sfx";
 
-const param = () => ({ value: 0, setValueAtTime: mock(() => {}), linearRampToValueAtTime: mock(() => {}), exponentialRampToValueAtTime: mock(() => {}) });
-const node = () => ({ connect: mock(() => {}), disconnect: mock(() => {}), start: mock(() => {}), stop: mock((at?: number) => {}), onended: null as null | (() => void) });
-function fakeContext() {
-  const made = { sources: [] as ReturnType<typeof node>[], oscillators: 0 };
-  const context = { state: "running", currentTime: 0, sampleRate: 8000, destination: {}, resume: mock(async () => {}), close: mock(async () => {}),
-    createGain: () => ({ gain: param(), connect: mock(() => {}), disconnect: mock(() => {}) }),
-    createDynamicsCompressor: () => ({ ...node(), threshold: param(), knee: param(), ratio: param(), attack: param(), release: param() }),
-    createBuffer: (_c: number, length: number) => ({ getChannelData: () => new Float32Array(length) }),
-    createBufferSource: () => { const v = { ...node(), buffer: null as unknown }; made.sources.push(v); return v; },
-    createBiquadFilter: () => ({ ...node(), type: "lowpass", frequency: param() }),
-    createOscillator: () => { made.oscillators++; const v = { ...node(), frequency: param(), type: "sine" }; made.sources.push(v); return v; } };
-  return { context, made };
-}
+import { fakeContext } from "./fake-audio-context";
+
 type Synth = { synth: (cue: { kind: string; at: number; pitch: number }) => void };
 
 test("every cue kind synthesizes without throwing, and the celebration sounds stay within a sane node budget", async () => {

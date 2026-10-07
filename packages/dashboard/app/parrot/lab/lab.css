@@ -1,0 +1,25 @@
+.materials-lab { max-width: 1120px; margin: auto; padding: 20px 16px 64px; }
+.materials-lab h1 { font-size: clamp(1.4rem, 5vw, 2rem); font-weight: 800; line-height: 1.2; }
+.materials-lab h2 { font-size: 1.4rem; font-weight: 750; margin: 12px 0; }
+.materials-lab h3 { font-size: 1.1rem; font-weight: 700; margin: 20px 0 12px; }
+.materials-lab h4 { font-weight: 700; }
+.materials-lab p { line-height: 1.6; margin: 10px 0; }
+.materials-header { display: flex; align-items: flex-start; gap: 16px; justify-content: space-between; flex-wrap: wrap; margin-bottom: 24px; }
+.materials-panel { border: 1px solid var(--ring); border-radius: 16px; padding: 16px; margin: 16px 0; background: var(--surface); min-width: 0; }
+.materials-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 16px; }
+.materials-card { display: flex; flex-direction: column; margin: 0; }
+.materials-card .materials-actions { margin-top: auto; }
+.materials-actions { display: flex; gap: 10px; flex-wrap: wrap; padding-top: 10px; }
+.materials-lab button, .materials-lab select, .materials-lab textarea { min-height: 44px; min-width: 44px; border: 1px solid var(--ring); border-radius: 10px; color: var(--ink); background: var(--surface); padding: 10px 14px; font: inherit; }
+.materials-lab button { cursor: pointer; font-weight: 650; }
+.materials-card button:first-child { flex: 1; }
+.materials-lab :is(button, select, textarea, summary):focus-visible { outline: 3px solid var(--parrot-deep); outline-offset: 3px; }
+.materials-lab button[aria-pressed="true"] { border-color: var(--parrot-deep); box-shadow: inset 0 0 0 1px var(--parrot-deep); }
+.materials-pick { display: grid; gap: 8px; min-width: 0; font-weight: 650; }
+.materials-lab select, .materials-lab textarea { width: 100%; max-width: 100%; }
+.materials-lab textarea { resize: vertical; font-size: .9rem; }
+.materials-badge { display: inline-block; font-size: .75rem; border: 1px solid var(--parrot-deep); padding: 2px 7px; border-radius: 20px; white-space: nowrap; }
+.materials-moods { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.materials-moods .wallet-face { min-height: 44px; }
+@media (max-width: 480px) { .materials-moods { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { .materials-lab *, .materials-lab *::before, .materials-lab *::after { animation: none !important; transition: none !important; } }
