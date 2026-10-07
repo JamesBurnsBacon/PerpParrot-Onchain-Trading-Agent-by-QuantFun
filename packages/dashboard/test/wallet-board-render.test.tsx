@@ -45,3 +45,13 @@ test("board retains sample provenance, hidden announcements and the short waitin
   expect(waiting).toContain("SAMPLE DATA");
   expect(waiting).toContain("Waiting for birds...");
 });
+
+test("expanded details contain the full selectable wrapped address as plain text", () => {
+  const address = "0x448bbd0cfd9c8aa81c4db28a36edca446d5e3609";
+  const html = renderToStaticMarkup(<WalletTile address={address} quiet />);
+  const [face, details] = html.split("</summary>");
+  expect(face).toContain("0x448b...3609");
+  expect(face).not.toContain(address);
+  expect(details).toContain(`<p class="select-text whitespace-normal break-all">${address}</p>`);
+  expect(details).not.toMatch(/<a(?:\s|>)/);
+});

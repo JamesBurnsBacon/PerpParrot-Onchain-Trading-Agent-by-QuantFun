@@ -1,22 +1,31 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { ParrotSfx } from "../../lib/parrot-sfx";
-import { flashTimeline, motionAllowed, nextCombo, particleAlive, particleBudget, type EffectEvent } from "../../lib/wallet-board";
+import { canTriggerEffect, motionAllowed, nextCombo, particleAlive, particleBudget, type EffectEvent } from "../../lib/wallet-board";
 
 type Celebration = { id: number; kind: "strategy" | "lock" | "clamp"; combo: number; animated: boolean };
 type Effects = { calm: boolean; sound: boolean; reduced: boolean; quiet: boolean; sfx: ParrotSfx;
   toggleCalm: () => void; toggleSound: () => void; trigger: (kind: EffectEvent, count?: number, removed?: number, clamped?: boolean) => void; celebration: Celebration | null };
 const Context = createContext<Effects | null>(null);
 export const useParrotEffects = () => useContext(Context)!;
+// The Sound / Calm toggles are hidden for now: sound ON and full motion (calm OFF) are the fixed defaults. The toggle logic stays;
+// set this to true to bring the buttons (and the remembered choice in localStorage) back. Demo overrides without buttons: ?calm=1, ?sound=0.
+export const SHOW_FUN_CONTROLS = false;
 export function ParrotEffectsProvider({ children }: { children: ReactNode }) {
   const [sfx] = useState(() => new ParrotSfx());
   const [calm, setCalm] = useState(false), [sound, setSound] = useState(true), [reduced, setReduced] = useState(false);
   const [celebration, setCelebration] = useState<Celebration | null>(null);
   const combo = useRef({ count: 0, at: -Infinity });
-  const flashes = useRef<number[]>([]), serial = useRef(0);
+  const lastFlash = useRef<number | null>(null), serial = useRef(0);
   const expire = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const quiet = !motionAllowed(calm, reduced);
   useEffect(() => {
-    try { setCalm(localStorage.getItem("parrot-calm") === "true"); setSound(localStorage.getItem("parrot-sound") !== "false"); } catch {}
+    if (SHOW_FUN_CONTROLS) {
+      try { setCalm(localStorage.getItem("parrot-calm") === "true"); setSound(localStorage.getItem("parrot-sound") !== "false"); } catch {}
+    } else {
+      // A choice remembered while the buttons existed must not stick with no way to undo it.
+      const query = new URLSearchParams(location.search);
+      setCalm(query.get("calm") === "1"); setSound(query.get("sound") !== "0");
+    }
     const media = matchMedia("(prefers-reduced-motion: reduce)");
     const update = () => setReduced(media.matches); update(); media.addEventListener("change", update);
     const hide = () => { if (document.hidden) { sfx.cancel(); setCelebration(null); clearTimeout(expire.current); } };
@@ -25,16 +34,15 @@ export function ParrotEffectsProvider({ children }: { children: ReactNode }) {
   }, [sfx]);
   useEffect(() => { sfx.enabled = sound; if (!sound) sfx.cancel(); }, [sound, sfx]);
   useEffect(() => { sfx.calm = quiet; if (quiet) { combo.current = { count: 0, at: -Infinity }; setCelebration(c => c ? { ...c, animated: false, combo: 1 } : c); } }, [quiet, sfx]);
-  const remember = (key: string, value: boolean) => { try { localStorage.setItem(key, String(value)); } catch {} };
+  const remember = (key: string, value: boolean) => { if (!SHOW_FUN_CONTROLS) return; try { localStorage.setItem(key, String(value)); } catch {} };
   function trigger(kind: EffectEvent, count = 1, removed = 0, clamped = false) {
     if (document.hidden) return;
     sfx.play(kind, count, removed, clamped);
     if (kind !== "strategy" && kind !== "lock" && kind !== "clamp") return;
     const now = performance.now();
     combo.current = nextCombo(combo.current, now, quiet);
-    const accepted = flashTimeline([...flashes.current.filter(t => now - t < 2000), now]);
-    const animated = !quiet && accepted.at(-1) === now;
-    flashes.current = accepted;
+    const animated = !quiet && canTriggerEffect(now, lastFlash.current);
+    if (animated) lastFlash.current = now;
     setCelebration({ id: ++serial.current, kind, combo: combo.current.count, animated });
     clearTimeout(expire.current); expire.current = setTimeout(() => setCelebration(null), 1800);
   }
@@ -45,6 +53,7 @@ export function ParrotEffectsProvider({ children }: { children: ReactNode }) {
 }
 export function FunControls() {
   const fx = useParrotEffects();
+  if (!SHOW_FUN_CONTROLS) return null;
   return <div className="parrot-fun-controls">
     <button type="button" className="parrot-button parrot-button--small" aria-label={`Sound effects ${fx.sound ? "on" : "off"}`} aria-pressed={fx.sound} onClick={fx.toggleSound}><span aria-hidden="true">{fx.sound ? "🔊" : "🔇"}</span> Sound {fx.sound ? "on" : "off"}</button>
     <button type="button" className="parrot-button parrot-button--small" aria-pressed={fx.calm} onClick={fx.toggleCalm}>Calm mode {fx.calm ? "on" : "off"}</button>

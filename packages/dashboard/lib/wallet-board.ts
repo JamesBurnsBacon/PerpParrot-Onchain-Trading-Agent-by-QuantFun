@@ -1,3 +1,4 @@
+import type { ChatResponse } from "./parrot";
 import type { WalletVibe } from "../../shared/wallet-persona";
 export { walletNickname, walletVibe } from "../../shared/wallet-persona";
 export const walletLabel = (nickname: string, vibe: WalletVibe, change?: "new" | "removed") =>
@@ -6,6 +7,15 @@ export const walletLabel = (nickname: string, vibe: WalletVibe, change?: "new" |
 export function diffWallets(previous: readonly string[], next: readonly string[]) {
   const before = new Set(previous), after = new Set(next);
   return { added: [...after].filter(id => !before.has(id)), removed: [...before].filter(id => !after.has(id)), kept: [...after].filter(id => before.has(id)) };
+}
+export type WalletGhost = { expiresAt: number; address: string; evidence: ChatResponse["evidence"]; reason?: string };
+export type WalletBoardState = { chat: ChatResponse; before: string[]; ghosts: WalletGhost[]; epoch: number; labels: boolean };
+export function updateWalletBoard(state: WalletBoardState, chat: ChatResponse, now: number): WalletBoardState {
+  const diff = diffWallets(state.chat.shortlist.addresses, chat.shortlist.addresses);
+  return { chat, before: state.chat.shortlist.addresses, epoch: state.epoch + 1, labels: true,
+    ghosts: [...state.ghosts.filter(g => !chat.shortlist.addresses.includes(g.address)), ...diff.removed.map(address => ({
+      address, expiresAt: now + 2500, evidence: state.chat.evidence, reason: chat.changes?.removed.find(e => e.address === address)?.reason,
+    }))].slice(-25) };
 }
 export const barScale = (value: number | null, cap: number) => value === null || !Number.isFinite(value) || !Number.isFinite(cap) || cap <= 0 ? 0 : Math.max(0, Math.min(100, value / cap * 100));
 export const changeSummary = (added: number, removed: number) => ({ chip: `+${added} in / −${removed} out`, announcement: `${added} wallets added, ${removed} removed` });
@@ -20,9 +30,11 @@ export const nextCombo = (previous: { count: number; at: number }, now: number, 
 });
 // One luminance envelope per effect, at least 1000ms apart, including rapid retriggers.
 // Reels/rays move without toggling visibility; no individual card flashes.
+export const canTriggerEffect = (now: number, lastAccepted: number | null): boolean =>
+  Number.isFinite(now) && (lastAccepted === null || now - lastAccepted >= 1000);
 export function flashTimeline(requested: number[]): number[] {
   const accepted: number[] = [];
-  for (const at of requested.filter(Number.isFinite).sort((a, b) => a - b)) if (!accepted.length || at - accepted.at(-1)! >= 1000) accepted.push(at);
+  for (const at of requested) if (canTriggerEffect(at, accepted.at(-1) ?? null)) accepted.push(at);
   return accepted;
 }
 export type EffectEvent = "strategy" | "lock" | "clamp" | "start" | "in" | "out";

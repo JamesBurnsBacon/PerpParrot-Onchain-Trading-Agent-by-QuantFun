@@ -82,7 +82,7 @@ export function isChatResponse(v: unknown): v is ChatResponse {
   return integer(p.requiredSources) && integer(p.maxSources) && p.requiredSources <= p.maxSources && p.maxSources >= 5 && p.maxSources <= 25 && p.maxSources === v.intent.maxSources &&
     Array.isArray(p.changes) && p.changes.every(c => record(c) && str(c.field) && scalar(c.from) && scalar(c.to)) &&
     Array.isArray(p.clamps) && p.clamps.every(c => record(c) && str(c.field) && finite(c.requested) && finite(c.applied)) &&
-    Array.isArray(v.shortlist.addresses) && v.shortlist.addresses.length <= 25 && new Set(v.shortlist.addresses).size === v.shortlist.addresses.length && v.shortlist.addresses.every(walletId) &&
+    Array.isArray(v.shortlist.addresses) && v.shortlist.addresses.length <= p.maxSources && new Set(v.shortlist.addresses).size === v.shortlist.addresses.length && v.shortlist.addresses.every(walletId) &&
     oneOf(v.shortlist.dataSource, ["live", "sample"]);
 }
 

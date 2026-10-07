@@ -41,7 +41,7 @@ export const explainSelection = (intent: StrategyIntent, basePolicy: Policy, dat
   const addresses = selection.shortlist.addresses;
   const scoreOrder = [...data.finalists].filter(f => f.score !== null && Number.isFinite(f.score)).sort((a, b) => b.score! - a.score! || (a.address < b.address ? -1 : 1));
   const eligible = scoreOrder.filter(f => !f.flags.some(flag => excluded.includes(flag)) && !(intent.avoidClones && f.cloneOf !== false));
-  const tags = (f: FinalistLike): string[] => [
+  const tags = (f: Pick<WalletEvidence, "maxDrawdown" | "realizedVol">): string[] => [
     ...(f.maxDrawdown !== null && f.maxDrawdown < VIBE_THRESHOLDS.calmDrawdown ? ["low drawdown"] : f.maxDrawdown !== null && f.maxDrawdown >= VIBE_THRESHOLDS.wildDrawdown ? ["high drawdown"] : []),
     ...(f.realizedVol !== null && f.realizedVol < VIBE_THRESHOLDS.calmVol ? ["low vol"] : f.realizedVol !== null && f.realizedVol >= VIBE_THRESHOLDS.wildVol ? ["high vol"] : []),
     ...(intent.avoidClones ? ["clone-checked"] : []), "score selected",
@@ -49,8 +49,9 @@ export const explainSelection = (intent: StrategyIntent, basePolicy: Policy, dat
   const evidence = addresses.map(address => {
     const f = data.finalists.find(f => f.address === address)!;
     const originalRank = (f as FinalistLike & { rank?: number }).rank;
+    const metrics = { maxDrawdown: rounded(f.maxDrawdown), realizedVol: rounded(f.realizedVol) };
     return { address, rank: originalRank ?? scoreOrder.findIndex(f => f.address === address) + 1,
-      maxDrawdown: rounded(f.maxDrawdown), realizedVol: rounded(f.realizedVol), tags: tags(f) };
+      ...metrics, tags: tags(metrics) };
   });
   const reason = (address: string) => {
     const f = data.finalists.find(f => f.address === address)!;

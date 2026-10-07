@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { shortenAddress, type ChatResponse } from "../../lib/parrot";
-import { changeSummary, diffWallets, reelSchedule, walletLabel, walletNickname, walletVibe } from "../../lib/wallet-board";
+import { changeSummary, diffWallets, reelSchedule, updateWalletBoard, type WalletBoardState, walletLabel, walletNickname, walletVibe } from "../../lib/wallet-board";
 import type { WalletEvidence } from "../../../shared/wallet-evidence";
 import { Badge } from "./Badge";
 import { useParrotEffects } from "./ParrotEffects";
@@ -34,6 +34,7 @@ export function WalletTile({ address, evidence, reason, change, quiet = false, i
       {change && <span className={`wallet-sticker ${change === "removed" ? "is-bye" : ""}`} aria-hidden="true">{change === "new" ? "NEW!" : "Bye!"}</span>}
     </summary>
     <div className="wallet-details">
+      <p className="select-text whitespace-normal break-all">{address}</p>
       {evidence ? <>
         <p>Score rank: {evidence.rank}</p>
         <p>Drawdown: {metric(evidence.maxDrawdown)}</p>
@@ -45,17 +46,12 @@ export function WalletTile({ address, evidence, reason, change, quiet = false, i
   </details>;
 }
 
-type Ghost = { expiresAt: number; address: string; evidence: ChatResponse["evidence"]; reason?: string };
 export function WalletBoard({ chat }: { chat: ChatResponse }) {
   const { quiet, celebration } = useParrotEffects();
-  const [state, setState] = useState(() => ({ chat, before: [] as string[], ghosts: [] as Ghost[], epoch: 1, labels: true }));
+  const [state, setState] = useState<WalletBoardState>(() => ({ chat, before: [], ghosts: [], epoch: 1, labels: true }));
   // Preserve card identity across strategy revisions; only removed identities become ghosts.
   if (state.chat !== chat) {
-    const diff = diffWallets(state.chat.shortlist.addresses, chat.shortlist.addresses);
-    setState({ chat, before: state.chat.shortlist.addresses, epoch: state.epoch + 1, labels: true,
-      ghosts: [...state.ghosts.filter(g => !chat.shortlist.addresses.includes(g.address)), ...diff.removed.map(address => ({
-        address, expiresAt: Date.now() + 2500, evidence: state.chat.evidence, reason: chat.changes?.removed.find(e => e.address === address)?.reason,
-      }))].slice(-25) });
+    setState(updateWalletBoard(state, chat, Date.now()));
   }
   const board = useRef<HTMLDivElement>(null);
   const positions = useRef(new Map<string, { x: number; y: number }>());
