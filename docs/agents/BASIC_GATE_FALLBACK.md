@@ -4,9 +4,11 @@
 
 ## What happened
 
-The roster's bench is built from each review of Score's 25 picks (`review()` in
+At the time of this incident, the roster's bench was built from each review of Score's 25 picks (`review()` in
 `packages/backend/src/pipeline/index.ts`, the `const approved =` block). Three reviews of the same
 250-account qualified list:
+
+The current pipeline picks 40 finalists; the run counts below are historical evidence of the fallback bug.
 
 | Run | Started (UTC) | Review core manifest | Path taken | Wallets approved |
 |---|---|---|---|---|
@@ -65,6 +67,7 @@ const approved =
   verdicts take earlier approvals of those wallets off the bench.
 - `INSUFFICIENT_EVIDENCE` with `REVIEW_GATE=basic` still uses `approvedCandidates`.
 - `VALID` is unchanged: the manifest's sources only.
+- An invalid seat re-review preserves the existing seats and is retried after the failed-review cooldown.
 - The dashboard labels the actual `strict`, `basic`, or `none` path and the manifest reason.
 
 ## Interim (owner's call)
