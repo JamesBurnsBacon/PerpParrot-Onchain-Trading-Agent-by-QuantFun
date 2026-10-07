@@ -41,8 +41,13 @@ export function buildRunStatus({ runs, status, exposures }: RunInputs, now = Dat
     return unavailable("get_run_status", "No run data yet", "Run status: not available right now (the executor returned nothing). Say you cannot see it; never guess.");
   }
   const parts: string[] = [];
-  if (status) parts.push(`${status.dryRun ? "Dry run: no real orders are sent" : "Live trading"}${status.controls.paused ? ", currently paused" : ""}`);
   const last = mirror[0];
+  // The latest run's own flag outranks the executor status (the run card already does this), but when the two disagree the mode
+  // is stated as unknown rather than guessed either way.
+  const disagree = !!status && !!last && status.dryRun !== last.dryRun;
+  const dry = last?.dryRun ?? status?.dryRun;
+  if (disagree) parts.push("Mode: the executor status and the latest run disagree on dry-run versus live; say you are not sure which applies, and do not claim either");
+  else if (dry !== undefined) parts.push(`${dry ? "Dry run: no real orders are sent" : "Live trading: the latest run was recorded as live"}${status?.controls.paused ? ", currently paused" : ""}`);
   if (last) {
     parts.push(`last run ${utc(runTime(last))}: ${last.status.replace("_", " ")}, ${ordersOf(last)} orders${last.error ? ", with an error" : ""}`);
     const counts = (s: Run["status"]) => mirror.filter(r => r.status === s).length;

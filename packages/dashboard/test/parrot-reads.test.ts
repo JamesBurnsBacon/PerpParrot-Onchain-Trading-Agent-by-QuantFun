@@ -26,6 +26,16 @@ describe("get_run_status", () => {
     expect(card.kind).toBe("run");
     expect(facts.length).toBeLessThanOrEqual(1200);
   });
+  test("a live run is never described as a dry run just because the status says dry (and a disagreement is stated)", () => {
+    const live = buildRunStatus({ runs: [run({ dryRun: false })], status: status({ dryRun: true }), exposures: null }).facts;
+    expect(live).toContain("disagree");
+    expect(live).not.toContain("no real orders are sent");
+    expect(live).not.toContain("Live trading");
+    const agree = buildRunStatus({ runs: [run({ dryRun: false })], status: status({ dryRun: false }), exposures: null }).facts;
+    expect(agree).toContain("Live trading");
+    expect(agree).not.toContain("disagree");
+    expect(buildRunStatus({ runs: [run()], status: status(), exposures: null }).facts).toContain("Dry run: no real orders are sent");
+  });
   test("says paused, and says nothing invented when the executor returned nothing (negative control)", () => {
     expect(buildRunStatus({ runs: [run()], status: status({ controls: { paused: true } }), exposures: null }).facts).toContain("currently paused");
     const none = buildRunStatus({ runs: null, status: null, exposures: null });
