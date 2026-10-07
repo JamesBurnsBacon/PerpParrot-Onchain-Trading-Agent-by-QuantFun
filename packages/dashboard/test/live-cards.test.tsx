@@ -49,6 +49,18 @@ test("an awaiting request card shows the dry-run sketch, says nothing is sent, a
   expect(out).not.toContain("PENDING ·");
 });
 
+test("while the request is saving the Confirm button says so and cannot be pressed again (positive control: idle is enabled)", () => {
+  const card = { kind: "request" as const, stage: "awaiting" as const, plan: PLAN, previewHash: `0x${"ab".repeat(32)}`, requestId: null, sources: 5 };
+  const render = (saving: boolean) => renderToStaticMarkup(<LiveCards card={card} onClose={() => {}} onConfirm={() => {}} saving={saving} />);
+  const idle = render(false);
+  expect(idle).toContain("Confirm");
+  expect(idle).not.toContain("Saving");
+  expect(idle).not.toMatch(/<button[^>]*disabled[^>]*aria-label="Confirm/);
+  const busy = render(true);
+  expect(busy).toContain("Saving");
+  expect(busy).toMatch(/<button[^>]*disabled/);
+});
+
 test("a saved request card shows the SAVED stamp (pending, awaiting a human) with the request id, no order wording and no Confirm button", () => {
   const out = renderToStaticMarkup(<LiveCards card={{ kind: "request", stage: "saved", plan: PLAN, previewHash: `0x${"ab".repeat(32)}`, requestId: "req-9", sources: 5 }} onClose={() => {}} onConfirm={() => {}} />);
   expect(out).toContain("PENDING"); // the accessible label keeps the plain status word

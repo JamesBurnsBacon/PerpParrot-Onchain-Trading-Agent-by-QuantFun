@@ -40,6 +40,7 @@ function ParrotContent() {
   const [preview, setPreview] = useState<PreviewResponse | null>(null);
   const [demo, setDemo] = useState<ParrotPreset | null>(null);
   const [step, setStep] = useState<0 | 2>(0);
+  const [confirming, setConfirming] = useState(false); // the voice-path Confirm is saving: the button answers at once
   const [previewError, setPreviewError] = useState<Failure | null>(null);
   const [busy, setBusy] = useState(false);
   const [stale, setStale] = useState(false);
@@ -60,6 +61,7 @@ function ParrotContent() {
     if (demo) { setChat(null); setDemo(null); setPreview(null); setStep(0); }
     void fx.sfx.unlock().then(() => fx.sfx.play("start"));
   }, input: () => fx.sfx.input() }, { ...receipts.observers, onCard: setCard, onRequestSaved: saved => { setPreview(saved); setPreviewError(null); setStep(2); } });
+  const confirmLive = async () => { setConfirming(true); try { await live.confirmNow(); } finally { setConfirming(false); } };
 
   useEffect(() => {
     if (chat && chat !== lastChat.current) {
@@ -125,7 +127,7 @@ function ParrotContent() {
             <button type="button" className="parrot-button parrot-button--primary" disabled={!chat.shortlist.addresses.length} onClick={() => setStep(2)}><DryBird />{preview ? "Saved" : "Lock it?"}</button>
             {!card && step === 0 && <p className="sr-only" role="status">Strategy ready. Review the flock and hold to save a pending request.</p>}
           </div>}
-          {card ? <LiveCards card={card} onClose={() => setCard(null)} onConfirm={() => void live.confirmNow()} />
+          {card ? <LiveCards card={card} onClose={() => setCard(null)} onConfirm={() => void confirmLive()} saving={confirming} />
           : chat ? step === 2 ? <>
             <button type="button" className="stage-close" aria-label="Back to flock" onClick={() => setStep(0)}><Icon kind="back" /></button>
             <ExecutePanel chat={chat} demo={!!demo} result={preview} busy={busy} failure={previewError} onConfirm={() => void confirm()} executionDisabled={live.active} />
