@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  countedGross,
   leverageScaleE6,
   cappedNotional,
   capGrossExposure,
@@ -119,16 +120,26 @@ describe("capGrossExposure", () => {
     { asset: "ETH", exposureE9: -1_000_000_000n },
   ];
 
-  test("scales pro-rata when gross exceeds the cap", () => {
-    // Gross 4× capped at 2× → halve everything.
-    expect(capGrossExposure(exposures, 2_000_000_000n)).toEqual([
+  test("counts the minority side at half: offsetting longs and shorts are partly hedged", () => {
+    expect(countedGross([3_000_000_000n, -1_000_000_000n])).toBe(3_500_000_000n); // 3 + ½ × 1
+    expect(countedGross([3_000_000_000n, -2_000_000_000n])).toBe(4_000_000_000n); // 3 + ½ × 2
+    expect(countedGross([-3_000_000_000n, 1_000_000_000n, 1_000_000_000n])).toBe(4_000_000_000n); // short majority
+    expect(countedGross([2_000_000_000n, 3_000_000_000n])).toBe(5_000_000_000n); // all long: in full
+    expect(countedGross([2_000_000_000n, -2_000_000_000n])).toBe(3_000_000_000n); // balanced
+  });
+
+  test("scales pro-rata when the counted gross exceeds the cap", () => {
+    // Counted 3.5× capped at 1.75× → halve everything.
+    expect(capGrossExposure(exposures, 1_750_000_000n)).toEqual([
       { asset: "BTC", exposureE9: 1_500_000_000n },
       { asset: "ETH", exposureE9: -500_000_000n },
     ]);
   });
 
-  test("leaves exposures under the cap untouched", () => {
-    expect(capGrossExposure(exposures, 5_000_000_000n)).toBe(exposures);
+  test("leaves exposures under the cap untouched: long BTC / short ETH fits where long both wouldn't", () => {
+    expect(capGrossExposure(exposures, 3_500_000_000n)).toBe(exposures); // raw gross 4×, counted 3.5×
+    const both = [{ asset: "BTC", exposureE9: 3_000_000_000n }, { asset: "ETH", exposureE9: 1_000_000_000n }];
+    expect(capGrossExposure(both, 3_500_000_000n)).not.toBe(both);
   });
 
   test("preserves signs and never exceeds the cap across generated signed exposures", () => {
@@ -137,8 +148,7 @@ describe("capGrossExposure", () => {
       seed = (Math.imul(seed, 1_664_525) + 1_013_904_223) >>> 0;
       return seed;
     };
-    const grossOf = (items: { exposureE9: bigint }[]): bigint =>
-      items.reduce((sum, item) => sum + (item.exposureE9 < 0n ? -item.exposureE9 : item.exposureE9), 0n);
+    const grossOf = (items: { exposureE9: bigint }[]): bigint => countedGross(items.map((item) => item.exposureE9));
 
     for (let sample = 0; sample < 250; sample++) {
       const input = Array.from({ length: 1 + next() % 8 }, (_, index) => ({

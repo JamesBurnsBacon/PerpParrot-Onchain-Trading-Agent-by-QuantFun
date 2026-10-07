@@ -53,10 +53,10 @@ export const computeExposures = (sources: WeightedSource[]): { asset: string; ex
     const held = s.positions
       .map((p) => ({ asset: p.asset, notional: s.caps ? cappedNotional(BigInt(p.notionalE6), s.caps.get(p.asset), equity) : BigInt(p.notionalE6) }))
       .filter((p) => p.notional !== 0n);
-    // Normalized, but never counting for more than the policy's gross cap on its own: past it, the
-    // wallet's book counts at exactly the cap (each perp by its share of the wallet's gross).
+    // Normalized, but never counting for more than the policy's gross cap on its own (counted the same
+    // way: hedged minority at half): past it, the wallet's book is scaled to exactly the cap.
     const scale = s.scaleE6 ?? E6;
-    const heldGross = held.reduce((sum, p) => sum + abs(p.notional), 0n);
+    const heldGross = countedGross(held.map((p) => p.notional)); // as the policy cap counts it
     const capped = s.scaleE6 !== undefined && s.maxGrossE9 !== undefined && heldGross * scale * EXPOSURE_SCALE > s.maxGrossE9 * equity * E6;
     for (const p of held) {
       const term = capped
@@ -79,12 +79,25 @@ export const cappedNotional = (notionalE6: bigint, capE9: bigint | undefined, eq
   return abs(notionalE6) <= limit ? notionalE6 : notionalE6 < 0n ? -limit : limit;
 };
 
-// Scales all exposures down pro-rata so gross (Σ |exposure|) ≤ the policy's maxGrossLeverage.
+// What counts against the gross cap (owner, 2026-10-07): offsetting longs and shorts are partly
+// hedged, so the side in the minority counts at half its value: majority + ½ × minority, each side
+// summed over perps. 3× long and 2× short count 4×; 3× long and nothing short count 3×.
+export const countedGross = (signed: bigint[]): bigint => {
+  let long = 0n;
+  let short = 0n;
+  for (const x of signed) {
+    if (x > 0n) long += x;
+    else short -= x;
+  }
+  return long >= short ? long + short / 2n : short + long / 2n;
+};
+
+// Scales all exposures down pro-rata so the counted gross ≤ the policy's maxGrossLeverage.
 export const capGrossExposure = (
   exposures: { asset: string; exposureE9: bigint }[],
   maxGrossE9: bigint,
 ): { asset: string; exposureE9: bigint }[] => {
-  const gross = exposures.reduce((sum, e) => sum + abs(e.exposureE9), 0n);
+  const gross = countedGross(exposures.map((e) => e.exposureE9));
   if (gross <= maxGrossE9) return exposures;
   return exposures.map((e) => ({ asset: e.asset, exposureE9: (e.exposureE9 * maxGrossE9) / gross }));
 };
