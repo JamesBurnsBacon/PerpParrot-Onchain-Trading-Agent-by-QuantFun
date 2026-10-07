@@ -115,7 +115,7 @@ export default function Page() {
       </div>
 
       <div className="mb-4">
-        <Panel title="Selection pipeline" meta="discover → refresh 5 min → Score → AI review → activate · twice a day">
+        <Panel title="Selection pipeline" meta="scan 12 h → refresh 5 min → qualify ~250 → pick 25 every 10 min → AI review → activate">
           {data?.pipeline ? <Pipeline view={data.pipeline} /> : <Waiting what="Pipeline not running yet" source="backend /pipeline" />}
         </Panel>
       </div>

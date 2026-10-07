@@ -137,8 +137,9 @@ const server = Bun.serve({
       }
     }
     // The selection pipeline: Vercel Cron (vercel.json), or an operator with ADMIN_TOKEN
-    // (POST /admin/pipeline/discover|refresh|select; select runs even when not due).
-    const step = /^\/(?:cron|admin)\/pipeline\/(discover|refresh|select)$/.exec(pathname);
+    // (POST /admin/pipeline/scan|refresh|select; an operator's select qualifies on partial data and
+    // reviews an unchanged pick).
+    const step = /^\/(?:cron|admin)\/pipeline\/(scan|refresh|select)$/.exec(pathname);
     if (step && pipeline) {
       const admin = req.method === "POST" && pathname.startsWith("/admin/");
       if (admin ? !env.ADMIN_TOKEN || req.headers.get("authorization") !== `Bearer ${env.ADMIN_TOKEN}` : req.method !== "GET" || !cronAuthorized(req))
@@ -146,7 +147,7 @@ const server = Bun.serve({
       try {
         const started = Date.now();
         const result =
-          step[1] === "discover" ? await pipeline.discover()
+          step[1] === "scan" ? await pipeline.scan()
           : step[1] === "refresh" ? await pipeline.refresh(started + 240_000)
           : await pipeline.select(admin);
         return Response.json(result);
