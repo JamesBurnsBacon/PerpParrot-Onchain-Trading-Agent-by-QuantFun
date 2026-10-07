@@ -396,10 +396,10 @@ Budget ~1 h of testing per 2 h of features. Integrate only tested modules.
 - When a vault trades on HyperCore via CoreWriter, its HyperCore account shares the contract's address, so on the leaderboard it **looks like a normal address**. Hence the `eth_getCode` check.
 
 ### NOWNodes (our Multichain Infrastructure Challenge entry)
-- **Where we use it** (all opt-in, set with `NOWNODES_API_KEY`; with nothing set the backend uses Hyperliquid only, as before):
+- **Available integrations** (opt-in and off by default; each needs `NOWNODES_API_KEY` plus the flag named in its bullet; with nothing set the backend uses Hyperliquid only, as before):
   - **Failover**: with `INFO_ROUTING=overflow`, an official-API read that fails (429, 5xx, timeout) is retried on NOWNodes for the eight methods it serves (`packages/backend/src/pipeline/info-router.ts`).
   - **Shadow check**: `INFO_SHADOW_PERCENT=N` compares N% of official `clearinghouseState` reads with NOWNodes in the background (account value, position count).
-  - **First choice for bulk reads**: with `PICK_OVERLAP_GUARD=on`, the top 60 candidates' positions are read NOWNodes first (about 120 reads in ~2 s, none of the official API's 1,200 weight/min) so the pick can leave out candidates that overlap one already chosen (`packages/backend/src/pipeline/overlap-pick.ts`).
+  - **First choice for bulk reads**: with `PICK_OVERLAP_GUARD=on`, the top 60 candidates' positions are read NOWNodes first (in a local benchmark on 2026-10-07, about 120 reads took ~2 s, all on NOWNodes, so none of the official API's 1,200 weight/min; a read that falls back to the official API does count against it) so the pick can leave out candidates that overlap one already chosen (`packages/backend/src/pipeline/overlap-pick.ts`).
   - **Dashboard**: the Pipeline panel shows reads, latency and failovers per provider when NOWNodes is in use, and the overlap guard's summary above the finalists table.
   - **Limits, stated plainly**: NOWNodes is slower per read (below) and does not serve `portfolio` or fills, so the existing paths stay on Hyperliquid; the defaults are Hyperliquid only; the guard's effect on returns is not measured.
 - `hype.nownodes.io` has two parts (key in the `api-key` header; measured 2026-10-07):
