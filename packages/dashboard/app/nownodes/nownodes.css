@@ -132,3 +132,10 @@
 .nn-logic dt { font-size: 12.5px; font-weight: 800; color: var(--ink-2); }
 .nn-logic dd { margin: 0; font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; }
 @media (max-width: 760px) { .nn-logic dl > div { grid-template-columns: 1fr; gap: 2px; } }
+
+/* Wide diagrams keep a readable size on a phone and scroll sideways instead of shrinking their labels. */
+.nn-scroll { overflow-x: auto; }
+@media (max-width: 760px) {
+  .nn-scroll > svg.nn-svg { min-width: 680px; }
+  .nn-scroll.m > svg.nn-svg { min-width: 480px; }
+}

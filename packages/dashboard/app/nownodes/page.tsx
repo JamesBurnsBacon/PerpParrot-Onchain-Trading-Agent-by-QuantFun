@@ -379,10 +379,10 @@ function CrossCheck() {
         <rect x={620} y={178} width={360} height={90} rx={28} fill="#f8d6c8" stroke="#d9582f" strokeWidth={3.5} />
         <path d="M648 208L674 234M674 208L648 234" stroke="#a83a1a" strokeWidth={6} fill="none" strokeLinecap="round" />
         <text x={706} y={216} fontSize={17} fontWeight={950} fill="#a83a1a">
-          Nothing stored
+          Mismatch: nothing stored
         </text>
         <text x={706} y={240} fontSize={12.5} fontWeight={700} fill="#a83a1a">
-          the run fails, the next one rebuilds
+          confirmed by a re-read; next run rebuilds
         </text>
       </g>
     </svg>
@@ -494,30 +494,35 @@ const SAMPLE: Proof = {
   verification: { mode: "on", verified: 0, mismatches: 0 },
 };
 
-function useProof(): { proof: Proof; live: boolean } {
-  const [state, setState] = useState<{ proof: Proof; live: boolean }>({ proof: SAMPLE, live: false });
+function useProof(): { proof: Proof; live: boolean; at: Date | null } {
+  const [state, setState] = useState<{ proof: Proof; live: boolean; at: Date | null }>({ proof: SAMPLE, live: false, at: null });
   useEffect(() => {
     let off = false;
-    fetch("/api/backend/pipeline")
+    const load = () =>
+      fetch("/api/backend/pipeline")
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((d) => {
         if (off || !d?.routing || !d?.verification) return;
         const { routing: r, verification: v } = d;
         setState({
           live: true,
+          at: new Date(),
           proof: { mode: r.mode, official: r.official, nownodes: r.nownodes, fallbacks: r.fallbacks, breakerOpen: r.breakerOpen, verification: { mode: v.mode, verified: v.verified, mismatches: v.mismatches } },
         });
       })
       .catch(() => {});
+    load();
+    const timer = setInterval(load, 30_000);
     return () => {
       off = true;
+      clearInterval(timer);
     };
   }, []);
   return state;
 }
 
 function ProofPanel() {
-  const { proof, live } = useProof();
+  const { proof, live, at } = useProof();
   const max = Math.max(proof.official.requests, proof.nownodes.requests, 1);
   const avg = (p: Provider) => (p.requests ? `${Math.round(p.totalMs / p.requests)} ms avg` : "no reads yet");
   const rows = [
@@ -543,7 +548,7 @@ function ProofPanel() {
           routing: {proof.mode}
         </span>
         <span className="nn-badge">
-          <i className={proof.fallbacks ? "" : ""} />
+          <i />
           failovers: {proof.fallbacks}
         </span>
         <span className="nn-badge">
@@ -554,7 +559,7 @@ function ProofPanel() {
           <i className={proof.verification.mode === "off" ? "off" : ""} />
           cross-check: {proof.verification.mode} · {proof.verification.verified} verified · {proof.verification.mismatches} mismatches
         </span>
-        <span className="nn-badge">{live ? "live, this instance" : "sample"}</span>
+        <span className="nn-badge">{live && at ? `live, this instance · ${at.toLocaleTimeString()}` : "sample"}</span>
       </div>
     </div>
   );
@@ -582,7 +587,7 @@ function WhyBoth() {
             <path d="M42 40V46M42 56V62" {...stroke} strokeWidth={4} />
           </svg>
           <b>Redundancy</b>
-          <span>either road can carry the other</span>
+          <span>either road can carry the other, for the methods both serve</span>
         </div>
         <div>
           <svg viewBox="0 0 84 84" aria-hidden="true">
@@ -594,7 +599,7 @@ function WhyBoth() {
             <path d="M28 62L38 70L58 54" {...stroke} strokeWidth={5} stroke="#286324" />
           </svg>
           <b>Second opinion</b>
-          <span>a snapshot is checked before it trades</span>
+          <span>a snapshot is checked before it is stored</span>
         </div>
       </div>
       <div className="nn-honest">
@@ -663,7 +668,9 @@ export default function NowNodesPage() {
         <main className="lp-dash">
           <div className="mb-4">
             <Panel id="flow" tone={1} title="How the data moves" meta="every 10 minutes">
-              <FlowDiagram />
+              <div className="nn-scroll">
+                <FlowDiagram />
+              </div>
               <Logic rows={FLOW_ROWS} />
             </Panel>
           </div>
@@ -674,14 +681,18 @@ export default function NowNodesPage() {
             </Panel>
           </div>
           <div className="mb-4">
-            <Panel id="check" tone={2} title="A second opinion before every trade">
-              <CrossCheck />
+            <Panel id="check" tone={2} title="A second opinion before a snapshot is stored">
+              <div className="nn-scroll">
+                <CrossCheck />
+              </div>
               <Logic rows={CHECK_ROWS} />
             </Panel>
           </div>
           <div className="nn-duo mb-4">
             <Panel tone={3} title="Bulk reads">
-              <BulkGuard />
+              <div className="nn-scroll m">
+                <BulkGuard />
+              </div>
               <Logic rows={BULK_ROWS} />
             </Panel>
             <Panel tone={5} title="Contract check">
