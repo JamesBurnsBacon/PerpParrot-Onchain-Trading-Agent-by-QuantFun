@@ -3,6 +3,7 @@ import { holdMeasures, type HlFill } from "../src/pipeline/evidence";
 import {
   capsFrom, impliedTurnover, lossBreached, observe, passesHoldGate, planAdmissions, pnlAndEquity, ratchetCaps, reviewSeat, ROSTER,
   targetSeats, tenureMs, transition, type BenchEntry, type Seat, type Verdict,
+  netShare, rosterTilt, tiltedFit,
 } from "../src/pipeline/roster";
 
 const HOUR = 3_600_000;
@@ -196,5 +197,40 @@ describe("admissions (owner D3, D6, D8)", () => {
   test("implied turnover is Σ weight × traded per day ÷ equity, over seats that know it", () => {
     expect(impliedTurnover([seat({ weightUnits: 100_000, tradedPerDayOverEquity: 0.5 }), seat({ weightUnits: 200_000, tradedPerDayOverEquity: null })])).toBeCloseTo(0.05);
     expect(impliedTurnover([])).toBeNull();
+  });
+});
+
+describe("the market-neutral tilt (owner, 2026-10-15)", () => {
+  test("a book's direction is net over gross; flat is unknown", () => {
+    expect(netShare([100, -100])).toBe(0);
+    expect(netShare([300, -100])).toBe(0.5);
+    expect(netShare([-50])).toBe(-1);
+    expect(netShare([])).toBeNull();
+  });
+
+  test("all else equal, a long roster seats the short book first", () => {
+    const active = [0, 1, 2, 3, 4].map((i) => seat({ address: addr(i), weightUnits: 75_000 }));
+    const seatNet = new Map(active.map((s, i) => [s.address, i === 0 ? null : 0.8])); // the roster leans long
+    const b = [bench(5, 60, { netShare: 1 }), bench(6, 60, { netShare: -1 })];
+    const once = { admittedLastHour: 1 }; // the pace leaves one admission this hour
+    expect(planAdmissions(admissionInput(active, b, { seatNet, ...once })).map((a) => a.entry.address)).toEqual([addr(6)]);
+    // Without a known direction, the tie goes by address, as before.
+    expect(planAdmissions(admissionInput(active, b, once)).map((a) => a.entry.address)).toEqual([addr(5)]);
+  });
+
+  test("the preference is slight: a clearly better fit still wins", () => {
+    expect(tiltedFit(70, 1, 1)).toBeCloseTo(63);
+    expect(tiltedFit(60, 1, -1)).toBeCloseTo(66);
+    const active = [0, 1, 2, 3, 4].map((i) => seat({ address: addr(i), weightUnits: 75_000 }));
+    const seatNet = new Map(active.map((s) => [s.address, 1]));
+    const b = [bench(5, 80, { netShare: 1 }), bench(6, 60, { netShare: -1 })]; // 72 beats 66
+    expect(planAdmissions(admissionInput(active, b, { seatNet, admittedLastHour: 1 })).map((a) => a.entry.address)).toEqual([addr(5)]);
+  });
+
+  test("each admission re-ranks the rest, so a long, a short and a long alternate", () => {
+    const b = [bench(2, 61, { netShare: 1 }), bench(3, 60, { netShare: 1 }), bench(4, 58, { netShare: -1 })];
+    const out = planAdmissions(admissionInput([], b, { seatNet: new Map() })); // bootstrap: all three at once
+    expect(out.map((a) => a.entry.address)).toEqual([addr(2), addr(4), addr(3)]);
+    expect(rosterTilt([{ weightUnits: 1, net: 1 }, { weightUnits: 1, net: -1 }, { weightUnits: 2, net: null }])).toBe(0);
   });
 });
