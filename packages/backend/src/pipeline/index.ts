@@ -2,9 +2,10 @@
 //   scan:    every leaderboard trader and HyperCore vault with ≥ $10k (~14k; every 12 h)
 //   refresh: portfolios of the scan within 12 h; portfolio + fills of the qualified list hourly
 //            (every 5 min, within a weight budget)
-//   select:  every 10 min: Score qualifies ~250 once the scan is refreshed, picks 25 from them
-//            (high-frequency traders left out) → AI review (Role, Risk, Red-Team) when the 25
-//            change → the bench: the wallets the AI approves, with their hold measures
+//   select:  every 10 min: Score qualifies ~250 once the scan is refreshed, picks 40 from them
+//            (high-frequency traders left out) → AI review (Role, Risk, Red-Team) when the 40
+//            change, or the classical committee when the models can't answer → the bench: the
+//            wallets the review approves, with their hold measures
 //   roster:  every 10 min (docs/ingest/ROSTER.md): seats with a minimum tenure, released at exits,
 //            filled from the bench → freeze → activate when the seats change
 // The active configuration is what the 10-minute mirror loop copies from its next run on.
@@ -26,6 +27,8 @@ import { parsePortfolio, scoreCandidates, toFrameCandidates, type ScoreInput, ty
 import { buildReviewInput, positionsFromStates, type LivePosition } from "../../review/input.ts";
 import { exposureOverlap, summarizeOverlap } from "../../review/overlap.ts";
 import { openAIPaperCommittee } from "../../review/models/openai-paper.ts";
+import { classicalCommittee } from "../../review/models/classical.ts";
+import type { PaperModelCore } from "../../review/models/types.ts";
 import { runCommitteeReview } from "../../review/committee/workflow.ts";
 import { MAX_SOURCES, type Assessment } from "../../review/workflow.ts";
 import { commitment, policyCommitment } from "../../../shared/src/commitments.ts";
@@ -41,7 +44,7 @@ const HOUR = 3_600_000;
 export const MAX_GROSS_LEVERAGE = 5;
 const LEADERBOARD = "https://stats-data.hyperliquid.xyz/Mainnet/leaderboard";
 const QUALIFIED = 250; // Score's top distinct accounts over the scan
-const PICKS = 25; // picked every 10 minutes from the qualified list, and reviewed
+const PICKS = 40; // picked every 10 minutes from the qualified list, and reviewed
 const GUARD_POOL = 60; // candidates whose books the overlap guard reads (PICK_OVERLAP_GUARD=on)
 const CLAIMS = 200; // accounts one refresh claims; unprocessed ones are released
 const WORKERS = 3; // concurrent Hyperliquid reads in one refresh, sharing its weight budget
@@ -66,6 +69,9 @@ export type PipelineOptions = {
   // "strict": only the review core's VALID manifest activates. "basic" (default): when the core
   // rejects for missing measured evidence, keep the finalists the AI rated acceptable (below).
   gate?: "strict" | "basic";
+  // REVIEW_CLASSICAL_ONLY=true: skip the models; the classical committee reviews (review/models/classical.ts).
+  classicalOnly?: boolean;
+  modelFetcher?: typeof fetch; // the models' transport (tests)
 };
 
 type AccountRow = {
@@ -199,7 +205,7 @@ export class Pipeline {
       from pipeline_accounts`;
     const runs = await sql`
       select id, started_at, finished_at, status, accounts, configuration_hash, error,
-        review -> 'manifest' as manifest, review ->> 'gate' as gate
+        review -> 'manifest' as manifest, review ->> 'gate' as gate, review ->> 'reviewer' as reviewer, review -> 'agentErrors' as agent_errors
       from selection_runs order by started_at desc limit 10`;
     const [active] = await sql`select hash, activated_at, configuration -> 'sources' as sources from configurations where status = 'active'`;
     // The latest run's finalists, funnel and per-candidate AI verdicts (dashboard).
@@ -209,7 +215,7 @@ export class Pipeline {
     return { accounts: counts, selections: runs, active: active ?? null, latest: latest ?? null, roster: await this.rosterStatus(), routing: routingStats(), verification: verificationStats() };
   }
 
-  // Every 10 minutes: qualify when due, then pick 25 and review them if they changed. `force`
+  // Every 10 minutes: qualify when due, then pick 40 and review them if they changed. `force`
   // (operator) qualifies on partial data and reviews an unchanged pick.
   async select(force = false): Promise<{ id?: number; status: string; reason?: string }> {
     const { sql, log } = this.o;
@@ -231,16 +237,16 @@ export class Pipeline {
     const guard = await this.guarded(inputs, result);
     if (guard) result = guard.result;
 
-    // The AI review runs when the 25 change, and at least every 12 h so the roster's bench of approvals
+    // The AI review runs when the 40 change, and at least every 12 h so the roster's bench of approvals
     // stays fresh (ROSTER.md §4.1). A rejected set isn't reviewed again within that time.
     const [last] = await sql`select finalists -> 'finalists' as finalists, started_at, status from selection_runs
       where status <> 'failed' and finalists is not null and (finalists ->> 'scope') is distinct from 'seats' order by started_at desc limit 1`;
     const lastPicks = ((last?.finalists ?? []) as { address: string }[]).map((f) => f.address);
-    // Only a review that produced a bench (or rejected the 25) counts: one from before the roster has none.
+    // Only a review that produced a bench (or rejected the 40) counts: one from before the roster has none.
     const fresh = last && (last.status === "benched" || last.status === "rejected") &&
-      this.now() - new Date(last.started_at as string | Date).getTime() < ROSTER.approvalFreshHours * HOUR;
+      this.now() - new Date(last.started_at as string | Date).getTime() < ROSTER.reviewEveryHours * HOUR;
     // A requested fresh start (ROSTER.md §4.6) reviews the current picks once more, so the bench
-    // gains approvals even when the 25 haven't changed.
+    // gains approvals even when the 40 haven't changed.
     const control = await this.freshStartControl();
     const freshStartReview = control?.pending === true && (control.reviewedAt === null || control.reviewedAt < control.requestedAt);
     if (!force && !freshStartReview && fresh && sameAddresses(lastPicks, result.finalists)) return { status: "unchanged" };
@@ -390,24 +396,55 @@ export class Pipeline {
       return { executableTargets, grossLeverage, withinPolicy: grossLeverage <= policy.maxGrossLeverage };
     };
 
-    const audit: unknown[] = [];
-    const stageRows: Record<string, Row[][]> = {};
-    const deps = openAIPaperCommittee(
-      { apiKey: this.o.openAiKey ?? "", model: this.o.model ?? "gpt-4.1-mini-2025-04-14" },
-      {
-        clock: this.now,
-        agentTimeoutMs: 60_000,
-        assess,
-        audit: async (stage, evidence, outputs, draft) =>
-          outputs.map((output) => {
-            const record = { stage, evidenceHash: evidence.evidenceHash, output, ...(draft ? { draftHash: draft.draftHash } : {}) };
-            audit.push(record);
-            if ("results" in output) (stageRows[stage] ??= []).push(output.results);
-            return commitment("perpparrot:audit-record:v1", record);
-          }),
-      },
-    );
-    const receipt = await runCommitteeReview(built.frame, policy, built.addresses, built.evidence, this.now(), deps);
+    let audit: unknown[] = [];
+    let stageRows: Record<string, Row[][]> = {};
+    const core: PaperModelCore = {
+      clock: this.now,
+      agentTimeoutMs: 60_000,
+      assess,
+      audit: async (stage, evidence, outputs, draft) =>
+        outputs.map((output) => {
+          const record = { stage, evidenceHash: evidence.evidenceHash, output, ...(draft ? { draftHash: draft.draftHash } : {}) };
+          audit.push(record);
+          if ("results" in output) (stageRows[stage] ??= []).push(output.results);
+          return commitment("perpparrot:audit-record:v1", record);
+        }),
+    };
+    // The models first; when they can't answer (no key, out of credits, an error), the classical
+    // committee reviews the same evidence (owner, 2026-10-15). The models' errors are kept for /pipeline.
+    const agentErrors: string[] = [];
+    const note = (e: unknown) => agentErrors.push(String((e as Error)?.message ?? e).slice(0, 300));
+    const fetcher = (async (url: string | URL | Request, init?: RequestInit) => {
+      const response = await (this.o.modelFetcher ?? fetch)(url, init);
+      if (!response.ok) agentErrors.push(`HTTP ${response.status}: ${(await response.clone().text().catch(() => "")).slice(0, 300)}`);
+      return response;
+    }) as typeof fetch;
+    let receipt: Awaited<ReturnType<typeof runCommitteeReview>> | undefined;
+    let reviewer: "ai" | "classical" = "classical";
+    if (!this.o.classicalOnly) {
+      try {
+        const ai = openAIPaperCommittee({ apiKey: this.o.openAiKey ?? "", model: this.o.model ?? "gpt-4.1-mini-2025-04-14", fetcher }, core);
+        const noted = <A extends unknown[], R>(f: (...args: A) => Promise<R>) => async (...args: A): Promise<R> => {
+          try {
+            return await f(...args);
+          } catch (e) {
+            note(e);
+            throw e;
+          }
+        };
+        receipt = await runCommitteeReview(built.frame, policy, built.addresses, built.evidence, this.now(), { ...ai, role: noted(ai.role), risk: noted(ai.risk), redTeam: noted(ai.redTeam) });
+        reviewer = "ai";
+      } catch (e) {
+        note(e); // e.g. no key configured
+      }
+    }
+    if (!receipt || receipt.manifest.reason === "AGENT_FAILURE") {
+      if (agentErrors.length) log("AI review unavailable; classical review", { id, errors: agentErrors.slice(0, 3) });
+      audit = [];
+      stageRows = {};
+      reviewer = "classical";
+      receipt = await runCommitteeReview(built.frame, policy, built.addresses, built.evidence, this.now(), classicalCommittee(core, policy.minHistoryDays));
+    }
     const { manifest } = receipt;
     const field = (stage: string, candidate: number, name: string) => stageRows[stage]?.[0]?.find((r) => r.candidate === candidate)?.[name] ?? null;
     const summary = built.frame.candidates.map(({ candidate }) => ({
@@ -423,17 +460,21 @@ export class Pipeline {
       skipped: [...score.skipped, ...built.skipped],
       manifest: { status: manifest.status, reason: manifest.reason, sources: manifest.sources.map((s) => ({ address: s.sourceAddress, weight: s.weight })) },
       receiptHash: receipt.receiptHash,
+      reviewer,
+      ...(agentErrors.length ? { agentErrors: agentErrors.slice(0, 5) } : {}),
       audit,
     };
     await sql`update selection_runs set review = ${JSON.stringify(review)}::text::jsonb where id = ${id}`;
     // The bench (ROSTER.md §4.1): the wallets the AI approves, with their fit and hold measures. The
     // roster step seats them into open seats; nothing is activated here.
     const fitKey = `${policy.bucket.toLowerCase()}Fit`;
-    const gate = reviewGate(manifest, this.o.gate);
+    // The classical committee's rows always pass through the basic filter: its compile is a draft
+    // portfolio, while the roster seats every approved wallet (owner: fill to 12–15).
+    const gate = reviewer === "classical" ? "classical" : reviewGate(manifest, this.o.gate);
     const approved =
       gate === "strict"
         ? manifest.sources.map((s) => ({ sourceAddress: s.sourceAddress, fit: Number(field("role", s.candidate, fitKey) ?? 0) }))
-        : gate === "basic"
+        : gate === "basic" || gate === "classical"
           ? approvedCandidates(built.frame.candidates.map((c) => c.candidate), stageRows.role?.[0] ?? [], stageRows.risk?.[0] ?? [], policy, built.addresses)
           : [];
     const bench: BenchEntry[] = approved.map((a) => {
@@ -487,7 +528,7 @@ export class Pipeline {
     const [{ qualifiedAt }] = await sql`select max(qualified_at) as "qualifiedAt" from pipeline_accounts`;
     const since = control?.pending && qualifiedAt ? new Date(qualifiedAt as Date).getTime() : undefined;
 
-    // The fresh bench (every approval of the last 12 h) and the wallets cooling down. Wallets released
+    // The fresh bench (every approval of the last 24 h) and the wallets cooling down. Wallets released
     // by a fresh start don't cool down: an approved one can be seated again at once.
     const bench = await this.freshBench(now, since);
     const cooling = new Set<string>(
@@ -717,20 +758,20 @@ export class Pipeline {
     this.o.log("roster fresh start done; paper books restart", { seats: seated.length });
   }
 
-  // The bench (ROSTER.md §4.1): every wallet a review of the picks approved in the last 12 h (and
+  // The bench (ROSTER.md §4.1): every wallet a review of the picks approved in the last 24 h (and
   // after `sinceMs`, when given), as of its latest review. A later review that didn't approve it takes it off.
   private async freshBench(nowMs: number, sinceMs?: number): Promise<(BenchEntry & { runId: number })[]> {
     const from = Math.max(nowMs - ROSTER.approvalFreshHours * HOUR, sinceMs ?? 0);
-    const runs = await this.o.sql`select id, review -> 'bench' as bench, review -> 'verdicts' as verdicts, review -> 'manifest' as manifest from selection_runs
+    const runs = await this.o.sql`select id, review -> 'bench' as bench, review -> 'verdicts' as verdicts, review -> 'manifest' as manifest, review ->> 'gate' as gate from selection_runs
       where status in ('benched', 'rejected') and (review ->> 'scope') is distinct from 'seats'
         and started_at > ${new Date(from).toISOString()}
       order by started_at desc`;
     const decided = new Set<string>();
     const bench: (BenchEntry & { runId: number })[] = [];
-    for (const run of runs as { id: string | number; bench: BenchEntry[] | null; verdicts: { address: string }[] | null; manifest: Pick<Manifest, "status" | "reason"> | null }[]) {
+    for (const run of runs as { id: string | number; bench: BenchEntry[] | null; verdicts: { address: string }[] | null; manifest: Pick<Manifest, "status" | "reason"> | null; gate: string | null }[]) {
       // An invalid committee run (e.g. POLICY_VIOLATION) approves no one, even with a bench recorded
       // before that rule (#94); its verdicts still take earlier approvals off.
-      const valid = !run.manifest || reviewGate(run.manifest, this.o.gate) !== "none";
+      const valid = run.gate === "classical" || !run.manifest || reviewGate(run.manifest, this.o.gate) !== "none";
       const approved = new Map((valid ? run.bench ?? [] : []).map((b) => [b.address, b]));
       const reviewed = run.verdicts?.length ? run.verdicts.map((v) => v.address) : [...approved.keys()];
       for (const address of reviewed) {
@@ -762,11 +803,11 @@ export class Pipeline {
       const result = scoreCandidates(inputs, { finalists: inputs.length, allowUnknown: ["minTrades"] });
       if (result.finalists.length === 0) throw new Error("no seat passed Score's filters");
       await this.review(id as number, inputs, result, 0, undefined, "seats");
-      const [run] = await sql`select review -> 'manifest' as manifest, review -> 'verdicts' as verdicts,
+      const [run] = await sql`select review -> 'manifest' as manifest, review -> 'verdicts' as verdicts, review ->> 'gate' as gate,
         finalists -> 'holds' as holds, finalists -> 'measured' as measured from selection_runs where id = ${id}`;
       // An invalid committee run is not a decision to wind down every existing seat.
       // Keep the manifest for audit and use the existing 30-minute failed-review retry.
-      if (!run?.manifest || reviewGate(run.manifest as Pick<Manifest, "status" | "reason">, this.o.gate) === "none") {
+      if (run?.gate !== "classical" && (!run?.manifest || reviewGate(run.manifest as Pick<Manifest, "status" | "reason">, this.o.gate) === "none")) {
         const reason = run?.manifest?.reason ?? "missing manifest";
         await sql`update selection_runs set status = 'failed', error = ${`seat review without decision: ${reason}`}, finished_at = now() where id = ${id}`;
         log("seat review produced no admission decision", { id, reason });

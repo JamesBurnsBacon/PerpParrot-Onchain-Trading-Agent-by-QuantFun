@@ -185,7 +185,7 @@ describe("admissions (owner D3, D6, D8)", () => {
 
   test("skips seated, cooling, stale and non-copyable wallets; never fills past 90%", () => {
     const active = [0, 1, 2, 3, 4].map((i) => seat({ address: addr(i), weightUnits: 150_000 })); // 75% used
-    const b = [bench(0, 99), bench(5, 90), bench(6, 80, { approvedAt: NOW - 13 * HOUR }), bench(7, 70, { passesHold: false }), bench(8, 60), bench(9, 50)];
+    const b = [bench(0, 99), bench(5, 90), bench(6, 80, { approvedAt: NOW - 25 * HOUR }), bench(7, 70, { passesHold: false }), bench(8, 60), bench(9, 50)];
     const out = planAdmissions(admissionInput(active, b, { cooling: new Set([addr(5)]) }));
     // Target 12 (seat 75,000); mean fit 74.75: addr(8) at 0.80×, addr(9) at 0.67×, within the 15% room.
     expect(out.map((a) => [a.entry.address, a.weightUnits])).toEqual([[addr(8), 60_200], [addr(9), 50_167]]);

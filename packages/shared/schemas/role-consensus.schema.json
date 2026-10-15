@@ -35,7 +35,7 @@
           "candidate": {
             "type": "integer",
             "minimum": 0,
-            "maximum": 24
+            "maximum": 39
           },
           "preserver": {
             "type": "integer",
@@ -110,7 +110,7 @@
         "additionalProperties": false
       },
       "minItems": 1,
-      "maxItems": 25
+      "maxItems": 40
     }
   },
   "required": [

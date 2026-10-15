@@ -102,6 +102,7 @@ const pipeline = sql
       openAiKey: env.OPENAI_API_KEY,
       model: env.REVIEW_MODEL,
       gate: env.REVIEW_GATE === "strict" ? "strict" : "basic",
+      classicalOnly: env.REVIEW_CLASSICAL_ONLY === "true",
       log,
     })
   : undefined;

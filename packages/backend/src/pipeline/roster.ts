@@ -20,7 +20,8 @@ export const ROSTER = {
   admissionsPerHour: 2,
   admissionsPerDay: 8,
   cooldownHours: 24, // before a released wallet can be admitted again
-  approvalFreshHours: 12,
+  approvalFreshHours: 24, // owner 2026-10-15 (was 12): one failed review cycle doesn't empty the bench
+  reviewEveryHours: 12, // the picks are reviewed at least this often
   removeAtLoss: 0.5, // trading loss since admission ÷ equity at admission; withdrawals don't count
   copyableShareMin: 0.5,
   turnoverMaxWithoutCloses: 1, // per day, for wallets with no closed position to measure
