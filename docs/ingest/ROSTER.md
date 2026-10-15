@@ -70,8 +70,8 @@ The active configuration becomes a **roster**: a set of seats, each holding one 
 ## 4. Seat lifecycle
 
 ### 4.1 Admission: filling an open seat
-- **The bench.** The top approved candidates are kept as a ranked bench: Score's 25, reviewed by the AI, filtered by the copyability gates of §5. It holds every wallet a review of the picks approved in the last 12 h, as of that wallet's latest review (a later review that didn't approve it takes it off).
-- **Filling a seat.** When a seat is open, the highest-fit bench candidate whose approval is fresh (reviewed within 12 h) is admitted by the next 10-minute roster job (`:x6`). A fresh approval needs no new AI call.
+- **The bench.** The top approved candidates are kept as a ranked bench: Score's 40, reviewed by the AI (or, when the models can't answer, by the classical committee: §5.4), filtered by the copyability gates of §5. It holds every wallet a review of the picks approved in the last 24 h (owner, 2026-10-15; was 12 h), as of that wallet's latest review (a later review that didn't approve it takes it off). The picks are still reviewed at least every 12 h.
+- **Filling a seat.** When a seat is open, the highest-fit bench candidate whose approval is fresh (reviewed within 24 h) is admitted by the next 10-minute roster job (`:x6`). A fresh approval needs no new AI call.
 - **Rate limit:** at most **2 admissions per hour** and **8 per day**. The cap keeps the roster from turning over in a burst, as it did this morning. Below 5 seats the limit doesn't apply, so the roster can always be frozen.
 - **Cooldown:** a released wallet can't be re-admitted for 24 h, so a wallet can't ping-pong in and out.
 - **Late entry:** a wallet admitted while holding positions is copied at once, whole book (owner: copy everything).
@@ -225,3 +225,19 @@ The owner chose **on as soon as built** during dry-run development. The phases b
 | — | Risk | Only a 50% trading loss (PnL since admission) removes; withdrawals never count; the other signs wind down |
 | — | Re-review | Every 12 h |
 | — | Rollout | On as soon as built |
+
+## 5.4 The classical committee (owner, 2026-10-15)
+
+Every AI review failed from 2026-10-12 23:26 UTC (`AGENT_FAILURE`), so no one was approved and the roster fell to 2 seats.
+The owner chose not to depend on a model key: when the models can't answer (no key, an HTTP error such as exhausted
+credits, an invalid response), `review/models/classical.ts` reviews the same evidence deterministically and returns the
+same Role, Risk and Red-Team rows (0–100) under the same principles (SYSTEM_PROMPTS.md):
+
+- **Fit** (`aggressiveFit`): repeatable risk-adjusted performance, from 0.45 × OOS Sharpe (capped at 1) + 0.25 × OOS Sortino ÷ 5 + 0.3 × cross-window stability, × the hold discount (< 60 min ½, < 3 h ¾, < 6 h 0.9), × (1 − ½ × drawdown ÷ 50%).
+- **Risk**, each dimension separate, never offset by returns: drawdown (100 at 60%), leverage (100 at 10× average or a 3% liquidation distance), concentration (at most 70, never a reject alone), path (at most 75), execution (100 − execution fit; unknown = 70), evidence (rises with missing measures).
+- **Reject**: losing out of sample (Sharpe and Sortino < 0) or under half the minimum history.
+- **Red team**: no penalties of its own (correlation and overlap are the compiler's).
+
+Its rows go through the basic filter (no Role reject, no Risk score above 80, fit > 0) whatever the compiler's manifest,
+and the run is stored with `gate: "classical"`. Seat reviews use it the same way, so a risk reject still winds a seat down.
+The models' errors are kept in `review.agentErrors` and shown in `/pipeline` (`agent_errors`). `REVIEW_CLASSICAL_ONLY=true` skips the models.

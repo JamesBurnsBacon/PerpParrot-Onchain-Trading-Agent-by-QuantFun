@@ -11,7 +11,7 @@ const position = z.object({
   liquidationDistance: ratio.nullable(),
 }).strict();
 export const finalistSchema = z.object({
-  candidate: z.number().int().min(0).max(24),
+  candidate: z.number().int().min(0).max(39),
   kind: z.enum(['TRADER', 'HYPERCORE_VAULT', 'ERC4626_HYPERCORE']),
   historyDays: z.number().int().min(0).max(10000),
   timeInMarket: ratio.nullable(),
@@ -28,11 +28,11 @@ export const finalistSchema = z.object({
 }).strict();
 export const evidenceSchema = z.object({
   asOfMs: timestamp,
-  finalists: z.array(finalistSchema).min(1).max(25),
+  finalists: z.array(finalistSchema).min(1).max(40),
   pairs: z.array(z.object({
-    a: z.number().int().min(0).max(24), b: z.number().int().min(0).max(24),
+    a: z.number().int().min(0).max(39), b: z.number().int().min(0).max(39),
     correlation: z.number().finite().min(-1).max(1).nullable(), linkedSource: z.boolean(),
-  }).strict()).max(300),
+  }).strict()).max(780),
 }).strict();
 export type Evidence = z.infer<typeof evidenceSchema>;
 export function byteLength(value: unknown): number {return new TextEncoder().encode(JSON.stringify(value)).length;}

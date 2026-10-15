@@ -32,7 +32,7 @@
           "candidate": {
             "type": "integer",
             "minimum": 0,
-            "maximum": 24
+            "maximum": 39
           },
           "kind": {
             "enum": [
@@ -316,7 +316,7 @@
         "additionalProperties": false
       },
       "minItems": 1,
-      "maxItems": 25
+      "maxItems": 40
     },
     "pairs": {
       "type": "array",
@@ -326,12 +326,12 @@
           "a": {
             "type": "integer",
             "minimum": 0,
-            "maximum": 24
+            "maximum": 39
           },
           "b": {
             "type": "integer",
             "minimum": 0,
-            "maximum": 24
+            "maximum": 39
           },
           "correlation": {
             "anyOf": [
@@ -371,7 +371,7 @@
         "additionalProperties": false
       },
       "minItems": 0,
-      "maxItems": 300
+      "maxItems": 780
     }
   },
   "required": [
