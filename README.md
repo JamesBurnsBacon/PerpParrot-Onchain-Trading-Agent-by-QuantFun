@@ -4,12 +4,47 @@ PerpParrot screens Hyperliquid traders and HyperCore vaults, reviews candidates 
 an AI committee, and copies an approved roster's positions every ten minutes.
 
 **TOKEN2049 Origins Hackathon:** AI x Crypto and NOWNodes Multichain Infrastructure
-Challenge. [Dashboard](https://perpparrot.vercel.app/) ·
+Challenge. [Dashboard](https://perpparrot.vercel.app/) (offline since the shutdown) ·
 [Documentation map](docs/README.md) · [Operations](docs/ops/RUNBOOK.md).
 
 This page describes the checked-in implementation. Deployed configuration and run
 results must be checked separately. Paper results and successful dry runs do not
 establish funded returns or predictive edge.
+
+## Live record (shut down 2026-10-16)
+
+![Performance at shutdown](docs/images/performance-at-shutdown.jpg)
+
+*The dashboard at 17:00 UTC on 2026-10-16. Aggressive is the live account;
+Balanced ×0.5 and Conservative ×0.25 are modeled at lower leverage; BTC is the benchmark.*
+
+PerpParrot traded the team's own Hyperliquid account (0x7269…70f7) live from
+2026-10-07 12:20 UTC until a flatten at 2026-10-16 17:17 UTC. It was shut down when
+the database's free-plan quota ran out; the dashboard is offline since then.
+
+| | |
+| --- | --- |
+| Period | 9.2 days, 1,319 executed mirror runs (1 failed) |
+| Equity | $449.50 → $471.64: **+$22.15 (+4.9%)**, no deposits or withdrawals; BTC −3.2% over the same period |
+| Range | peak $483.98 (Oct 15), low $439.76 (Oct 12); max drawdown 7.4% |
+| Trading | 143 fills, $5.4k volume across 21 perps (crypto and equity perps); fees $2.18, funding +$0.32 |
+
+**Significance.** These are 10-minute equity returns over 1,320 runs. Standard errors are Newey–West
+with a 6 h lag window, since copied positions carry over from run to run.
+
+| Test | Result |
+| --- | --- |
+| Annualized Sharpe | 4.0 (annualized volatility 48%) |
+| Mean return > 0 | t = 0.64, one-sided p ≈ 0.26 (block bootstrap p ≈ 0.41) |
+| Return in excess of BTC | t = 0.72 |
+| Beta to BTC | −0.44 (correlation −0.30) |
+| Alpha after beta | t = 0.55 |
+| Daily record | up on 6 of 10 days; ahead of BTC on 5 of 10 |
+
+The point estimate is strong, but nine days is too short for any of these tests to be
+significant. At this Sharpe, about 91 days of live trading would be needed for t = 2. Part of
+the margin over BTC came from net short exposure while BTC fell. The results tables are in
+[data/final-export-2026-10-16](data/final-export-2026-10-16/).
 
 ## 1. Scope
 
