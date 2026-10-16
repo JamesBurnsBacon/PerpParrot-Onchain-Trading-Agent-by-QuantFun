@@ -9,7 +9,7 @@ It traded live with ~450$ USDC, and in a short track record showed returns of 4.
 Challenge. [Dashboard](https://perpparrot.vercel.app/) (offline since the shutdown) ·
 [Documentation map](docs/README.md) · [Operations](docs/ops/RUNBOOK.md).
 
-## Live record (shut down 2026-10-16)
+## Live record right before shut down (2026-10-16)
 
 ![Performance right before shutdown](docs/images/performance-at-shutdown.jpg)
 
