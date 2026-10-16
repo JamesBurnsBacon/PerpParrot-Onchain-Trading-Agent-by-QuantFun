@@ -4,12 +4,33 @@ PerpParrot screens Hyperliquid traders and HyperCore vaults, reviews candidates 
 an AI committee, and copies an approved roster's positions every ten minutes.
 
 **TOKEN2049 Origins Hackathon:** AI x Crypto and NOWNodes Multichain Infrastructure
-Challenge. [Dashboard](https://perpparrot.vercel.app/) ·
+Challenge. [Dashboard](https://perpparrot.vercel.app/) (offline since the shutdown) ·
 [Documentation map](docs/README.md) · [Operations](docs/ops/RUNBOOK.md).
 
 This page describes the checked-in implementation. Deployed configuration and run
 results must be checked separately. Paper results and successful dry runs do not
 establish funded returns or predictive edge.
+
+## Live record (shut down 2026-10-16)
+
+![Performance at shutdown](docs/images/performance-at-shutdown.jpg)
+
+*The dashboard at 17:00 UTC on 2026-10-16. Aggressive is the live account;
+Balanced ×0.5 and Conservative ×0.25 are modeled at lower leverage; BTC is the benchmark.*
+
+PerpParrot traded the team's own Hyperliquid account (0x7269…70f7) live from
+2026-10-07 12:20 UTC until a flatten at 2026-10-16 17:17 UTC. It was shut down when
+the database's free-plan quota ran out; the dashboard is offline since then.
+
+| | |
+| --- | --- |
+| Period | 9.2 days, 1,319 executed mirror runs (1 failed) |
+| Equity | $449.50 → $471.64: **+$22.15 (+4.9%)**, no deposits or withdrawals; BTC −2.95% over the same period |
+| Range | peak $483.98 (Oct 15), low $439.76 (Oct 12); max drawdown 7.4% |
+| Trading | 143 fills, $5.4k volume across 21 perps (crypto and equity perps); fees $2.18, funding +$0.32 |
+
+One small account over nine days is not evidence of edge. The results tables are in
+[data/final-export-2026-10-16](data/final-export-2026-10-16/).
 
 ## 1. Scope
 
