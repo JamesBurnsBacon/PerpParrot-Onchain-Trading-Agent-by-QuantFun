@@ -1,4 +1,4 @@
-# PerpParrot 🦜
+# PerpParrot Trader 🦜
 
 PerpParrot screens Hyperliquid traders and HyperCore vaults, reviews candidates with
 an AI committee, and copies an approved roster's positions every ten minutes.
@@ -6,10 +6,6 @@ an AI committee, and copies an approved roster's positions every ten minutes.
 **TOKEN2049 Origins Hackathon:** AI x Crypto and NOWNodes Multichain Infrastructure
 Challenge. [Dashboard](https://perpparrot.vercel.app/) (offline since the shutdown) ·
 [Documentation map](docs/README.md) · [Operations](docs/ops/RUNBOOK.md).
-
-This page describes the checked-in implementation. Deployed configuration and run
-results must be checked separately. Paper results and successful dry runs do not
-establish funded returns or predictive edge.
 
 ## Live record (shut down 2026-10-16)
 
@@ -19,8 +15,7 @@ establish funded returns or predictive edge.
 Balanced ×0.5 and Conservative ×0.25 are modeled at lower leverage; BTC is the benchmark.*
 
 PerpParrot traded the team's own Hyperliquid account (0x7269…70f7) live from
-2026-10-07 12:20 UTC until a flatten at 2026-10-16 17:17 UTC. It was shut down when
-the database's free-plan quota ran out; the dashboard is offline since then.
+2026-10-07 12:20 UTC until a flatten at 2026-10-16 17:17 UTC. It was shut down around a week after the hackathon ended; the dashboard is offline.
 
 | | |
 | --- | --- |
