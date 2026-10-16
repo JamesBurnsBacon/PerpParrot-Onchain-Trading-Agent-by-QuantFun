@@ -1,7 +1,9 @@
 # PerpParrot Trader 🦜
 
-PerpParrot screens Hyperliquid traders and HyperCore vaults, reviews candidates with
-an AI committee, and copies an approved roster's positions every ten minutes.
+PerpParrot screened Hyperliquid traders and HyperCore vaults, reviews candidates with
+an AI committee, and copied an approved roster's positions every ten minutes. 
+
+It traded live with ~450$ USDC, and in a short track record showed returns of 4.9% (195% annualized) with a sharpe of 4.
 
 **TOKEN2049 Origins Hackathon:** AI x Crypto and NOWNodes Multichain Infrastructure
 Challenge. [Dashboard](https://perpparrot.vercel.app/) (offline since the shutdown) ·
@@ -9,7 +11,7 @@ Challenge. [Dashboard](https://perpparrot.vercel.app/) (offline since the shutdo
 
 ## Live record (shut down 2026-10-16)
 
-![Performance at shutdown](docs/images/performance-at-shutdown.jpg)
+![Performance right before shutdown](docs/images/performance-at-shutdown.jpg)
 
 *The dashboard at 17:00 UTC on 2026-10-16. Aggressive is the live account;
 Balanced ×0.5 and Conservative ×0.25 are modeled at lower leverage; BTC is the benchmark.*
