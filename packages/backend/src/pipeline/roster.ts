@@ -26,6 +26,9 @@ export const ROSTER = {
   copyableShareMin: 0.5,
   turnoverMaxWithoutCloses: 1, // per day, for wallets with no closed position to measure
   fitModifier: [0.5, 1.5] as const,
+  // Owner, 2026-10-15: all else equal, prefer a mix of longs and shorts to a book that is all long or
+  // all short. A candidate leaning against the roster's net direction ranks up to 10% higher.
+  neutralTilt: 0.1,
 } as const;
 
 export type SeatState = "probation" | "seated" | "winding_down" | "released" | "removed";
@@ -61,6 +64,14 @@ export type BenchEntry = HoldMeasures & {
   passesHold: boolean;
   // 30-day average gross leverage (evidence.ts averageLeverage): the snapshot's normalization.
   averageLeverage?: number | null;
+  // The book's direction at review: net ÷ gross notional, −1 (all short) to 1 (all long); null when flat.
+  netShare?: number | null;
+};
+
+// A book's direction: net ÷ gross notional (signed notionals), or null when it holds nothing.
+export const netShare = (notionals: number[]): number | null => {
+  const gross = notionals.reduce((sum, n) => sum + Math.abs(n), 0);
+  return gross > 0 ? notionals.reduce((sum, n) => sum + n, 0) / gross : null;
 };
 
 export type Transition = { to: SeatState; reason: string };
@@ -184,7 +195,22 @@ export type AdmissionInput = {
   nowMs: number;
   cashBuffer: number;
   maxSourceWeight: number;
+  // Each seat's book direction now (netShare of its latest snapshot), for the neutral tilt.
+  seatNet?: ReadonlyMap<string, number | null>;
 };
+
+// The roster's net direction: seat weights × their book directions over the weight with a known
+// direction, −1 to 1 (0 when nothing is known).
+export const rosterTilt = (books: { weightUnits: number; net: number | null | undefined }[]): number => {
+  const known = books.filter((b) => b.net !== null && b.net !== undefined);
+  const weight = known.reduce((sum, b) => sum + b.weightUnits, 0);
+  return weight > 0 ? known.reduce((sum, b) => sum + b.weightUnits * b.net!, 0) / weight : 0;
+};
+
+// A candidate's fit for ranking: up to ±10% for leaning against (or with) the roster's tilt. Ranking
+// only; a seat's weight still comes from its fit.
+export const tiltedFit = (fit: number, tilt: number, net: number | null | undefined): number =>
+  fit * (1 - ROSTER.neutralTilt * tilt * (net ?? 0));
 
 // The seat count to size seats for: every wallet the AI currently approves (the fresh bench that
 // passes the hold gate, plus seats not winding down), within the owner's 12–15 target. With fewer
@@ -194,9 +220,10 @@ export const targetSeats = (active: Seat[], approved: BenchEntry[]): number => {
   return Math.min(Math.max(wallets.size, ROSTER.targetSeatsMin), ROSTER.maxSeats);
 };
 
-// Which bench wallets to seat now, best fit first, each at a fixed weight: 90% ÷ the target count ×
-// its fit relative to the approved mean (0.5–1.5), within the per-source cap and the room left
-// under 90%. Pace: 2 an hour and 8 a day, except while fewer than 5 seats are filled.
+// Which bench wallets to seat now, best fit first (tilted toward a market-neutral mix: each pick
+// re-ranks the rest), each at a fixed weight: 90% ÷ the target count × its fit relative to the
+// approved mean (0.5–1.5), within the per-source cap and the room left under 90%. Pace: 2 an hour
+// and 8 a day, except while fewer than 5 seats are filled.
 export const planAdmissions = (input: AdmissionInput): Admission[] => {
   const { active, nowMs } = input;
   const fresh = input.bench.filter((b) => nowMs - b.approvedAt <= ROSTER.approvalFreshHours * HOUR && b.passesHold);
@@ -214,7 +241,15 @@ export const planAdmissions = (input: AdmissionInput): Admission[] => {
   let hour = input.admittedLastHour;
   let day = input.admittedLastDay;
   const out: Admission[] = [];
-  for (const entry of candidates) {
+  const books = active.filter((s) => s.state !== "winding_down").map((s) => ({ weightUnits: s.weightUnits, net: input.seatNet?.get(s.address) }));
+  const remaining = [...candidates];
+  while (remaining.length) {
+    const tilt = rosterTilt(books);
+    let best = 0;
+    for (let i = 1; i < remaining.length; i++) {
+      if (tiltedFit(remaining[i]!.fit, tilt, remaining[i]!.netShare) > tiltedFit(remaining[best]!.fit, tilt, remaining[best]!.netShare)) best = i;
+    }
+    const [entry] = remaining.splice(best, 1) as [BenchEntry];
     if (open <= 0) break;
     const bootstrap = filled < ROSTER.minSeats;
     if (!bootstrap && (hour >= ROSTER.admissionsPerHour || day >= ROSTER.admissionsPerDay)) break;
@@ -222,6 +257,7 @@ export const planAdmissions = (input: AdmissionInput): Admission[] => {
     const weightUnits = Math.min(Math.floor(seatUnits * modifier), capUnits, room);
     if (weightUnits < seatUnits / 2) break; // under half a seat of room: wait for weight to free up
     out.push({ entry, weightUnits, minTenureUntil: nowMs + tenureMs(entry.turnoverPerDay) });
+    books.push({ weightUnits, net: entry.netShare });
     room -= weightUnits;
     open--;
     filled++;

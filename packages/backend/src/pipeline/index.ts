@@ -13,7 +13,7 @@ import type { SQL } from "bun";
 import { FILLS_PAGE, fillStats, isHighFrequency, pickLeaderboard, sameAddresses, scoringWindows, type Fill, type LeaderboardRow, type Tracked } from "./derive";
 import { EVIDENCE_DAYS, holdMeasures, measure, type HlFill, type HoldMeasures, type Measured } from "./evidence";
 import {
-  ACTIVE, capsFrom, impliedTurnover, lossBreached, observe, passesHoldGate, planAdmissions, pnlAndEquity, reviewSeat, ROSTER, SEAT_REVIEW_HOURS,
+  ACTIVE, capsFrom, impliedTurnover, lossBreached, netShare, observe, passesHoldGate, planAdmissions, pnlAndEquity, reviewSeat, ROSTER, SEAT_REVIEW_HOURS,
   targetSeats, transition, type BenchEntry, type Seat, type SnapshotEntry, type Transition, type Verdict,
 } from "./roster";
 import { ENTER_OI_USD, fetchOpenInterest } from "../eligibility";
@@ -480,7 +480,10 @@ export class Pipeline {
     const bench: BenchEntry[] = approved.map((a) => {
       const address = a.sourceAddress.toLowerCase();
       const h = holds.get(address) ?? { copyableShare: null, closedPositions: 0, turnoverPerDay: null, tradedPerDayOverEquity: null };
-      return { address, fit: a.fit, approvedAt: this.now(), ...h, passesHold: passesHoldGate(h), averageLeverage: measured.get(address)?.averageLeverage ?? null };
+      return {
+        address, fit: a.fit, approvedAt: this.now(), ...h, passesHold: passesHoldGate(h), averageLeverage: measured.get(address)?.averageLeverage ?? null,
+        netShare: netShare((positions.get(address) ?? []).map((p) => p.signedNotionalUsd)),
+      };
     });
     // Every reviewed wallet's verdict, for the roster's seat review (warning signs, approval, fit).
     const approvedSet = new Set(bench.map((b) => b.address));
@@ -664,6 +667,7 @@ export class Pipeline {
     const admissions = freshStartWaiting ? [] : planAdmissions({
       active, bench, cooling, admittedLastHour: counts.hour, admittedLastDay: counts.day, nowMs: now,
       cashBuffer: policy.cashBuffer, maxSourceWeight: policy.maxSourceWeight,
+      seatNet: new Map(active.map((s) => [s.address, entries.has(s.address) ? netShare(entries.get(s.address)!.positions.map((p) => p.notional)) : null])),
     });
     for (const a of admissions) {
       let reading: ReturnType<typeof pnlAndEquity> = null;
