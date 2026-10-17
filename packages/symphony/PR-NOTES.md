@@ -1,0 +1,1 @@
+This package is an independently runnable React/Vite frontend for review. It does not replace packages/dashboard or alter deployment configuration. Run pnpm install --frozen-lockfile, pnpm typecheck, pnpm test and pnpm build from this directory. Demo is the default; live adapters are read-only. No wallet connection, signing, orders or fills are implemented.
