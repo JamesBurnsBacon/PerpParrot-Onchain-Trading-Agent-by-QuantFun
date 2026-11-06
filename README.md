@@ -1,6 +1,6 @@
 # PerpParrot Trader 🦜
 
-PerpParrot screened Hyperliquid traders and HyperCore vaults, reviews candidates with
+PerpParrot screened over 10,000 Hyperliquid traders and HyperCore vaults, reviewed candidates with
 an AI committee, and copied an approved roster's positions every ten minutes. 
 
 It traded live with ~450$ USDC, and in a short track record showed returns of 4.9% (195% annualized) with a sharpe of 4.
