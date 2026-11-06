@@ -9,12 +9,14 @@ It traded live with ~450$ USDC, and in a short track record showed returns of 4.
 Challenge. [Dashboard](https://perpparrot.vercel.app/) (offline since the shutdown) ·
 [Documentation map](docs/README.md) · [Operations](docs/ops/RUNBOOK.md).
 
-## Live UI minutes before shut down (2026-10-16)
+## Live UI at shutdown (2026-10-16)
 
-![Performance right before shutdown](docs/images/performance-at-shutdown.jpg)
+![Performance at shutdown](docs/images/performance-at-shutdown.jpg)
 
-*The dashboard at 17:00 UTC on 2026-10-16. Aggressive is the live account;
-Balanced ×0.5 and Conservative ×0.25 are modeled at lower leverage; BTC is the benchmark.*
+*The dashboard as of the 17:17 UTC flatten, rendered from the
+[final export](data/final-export-2026-10-16/) because the site is offline. Aggressive is the
+live account, and its last point is the flatten equity. Balanced ×0.5 and Conservative ×0.25 are
+modeled at lower leverage, and BTC is the benchmark; those three end at the 17:10 run.*
 
 PerpParrot traded the team's own Hyperliquid account (0x7269…70f7) live from
 2026-10-07 12:20 UTC until a flatten at 2026-10-16 17:17 UTC. It was shut down around a week after the hackathon ended; the dashboard is offline.
