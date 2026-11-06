@@ -13,7 +13,7 @@ Challenge. [Dashboard](https://perpparrot.vercel.app/) (offline since the shutdo
 
 ![Performance at shutdown](docs/images/performance-at-shutdown.jpg)
 
-*The dashboard as of the 17:17 UTC flatten, re-rendered from the
+*The dashboard as of the 17:17 UTC flatten, rendered from the
 [final export](data/final-export-2026-10-16/) because the site is offline. Aggressive is the
 live account, and its last point is the flatten equity. Balanced ×0.5 and Conservative ×0.25 are
 modeled at lower leverage, and BTC is the benchmark; those three end at the 17:10 run.*
